@@ -51,8 +51,12 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.AgentInput;
 import org.opensearch.ml.common.agent.AgentInputProcessor;
+import org.opensearch.ml.common.agent.ContentBlock;
+import org.opensearch.ml.common.agent.ContentType;
+import org.opensearch.ml.common.agent.InputType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.Message;
 import org.opensearch.ml.common.agent.ModelProvider;
 import org.opensearch.ml.common.agent.ModelProviderFactory;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -218,6 +222,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         }
 
                                         processAgentInput(agentMLInput, mlAgent);
+
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
                                             .getInputDataset();
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
@@ -277,7 +282,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         outputs,
                                                                         modelTensors,
                                                                         mlAgent,
-                                                                        channel
+                                                                        channel,
+                                                                        agentMLInput
                                                                     );
                                                                 }, e -> {
                                                                     log.error("Failed to get existing interaction for regeneration", e);
@@ -294,7 +300,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                             outputs,
                                                             modelTensors,
                                                             mlAgent,
-                                                            channel
+                                                            channel,
+                                                            agentMLInput
                                                         );
                                                     }
                                                 }, ex -> {
@@ -381,6 +388,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * @param memory memory instance
      * @param inputDataSet input
      * @param mlAgent agent to run
+     * @param agentMLInput the original agent input
      */
     private void saveRootInteractionAndExecute(
         ActionListener<Output> listener,
@@ -391,12 +399,19 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         MLAgent mlAgent,
-        TransportChannel channel
+        TransportChannel channel,
+        AgentMLInput agentMLInput
     ) {
         String appType = mlAgent.getAppType();
         String question = inputDataSet.getParameters().get(QUESTION);
         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
-        // Create root interaction ID
+
+        // Store message pairs if input is of type MESSAGES
+        if (agentMLInput.getAgentInput() != null && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES) {
+            storeMessagesInMemory(memory, (List<Message>) agentMLInput.getAgentInput().getInput(), appType);
+        }
+
+        // Create root interaction ID for the current question
         ConversationIndexMessage msg = ConversationIndexMessage
             .conversationIndexMessageBuilder()
             .type(appType)
@@ -452,6 +467,44 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             log.error("Failed to create parent interaction", ex);
             listener.onFailure(ex);
         }));
+    }
+
+    private void storeMessagesInMemory(ConversationIndexMemory memory, List<Message> messages, String appType) {
+        // Process messages in pairs, excluding the last one
+        for (int i = 0; i < messages.size() - 1; i += 2) {
+            if (i + 1 < messages.size()) {
+                Message userMessage = messages.get(i);
+                Message assistantMessage = messages.get(i + 1);
+
+                // Extract text from content blocks
+                String userText = extractTextFromMessage(userMessage);
+                String assistantText = extractTextFromMessage(assistantMessage);
+
+                // Create completed interaction
+                ConversationIndexMessage msg = ConversationIndexMessage
+                    .conversationIndexMessageBuilder()
+                    .type(appType)
+                    .question(userText)
+                    .response(assistantText)
+                    .finalAnswer(true)
+                    .sessionId(memory.getConversationId())
+                    .build();
+
+                // Save to memory
+                memory
+                    .save(
+                        msg,
+                        null,
+                        null,
+                        null,
+                        ActionListener
+                            .<CreateInteractionResponse>wrap(
+                                interaction -> log.debug("Stored message pair in memory with interaction ID: {}", interaction.getId()),
+                                ex -> log.error("Failed to store message pair in memory", ex)
+                            )
+                    );
+            }
+        }
     }
 
     private void executeAgent(
@@ -743,16 +796,19 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * This method handles the conversion from AgentInput to parameters that can be used
      * by the existing agent execution logic.
      */
-    private void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+    void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        // old style agent registration
+        if (mlAgent.getModel() == null) {
+            return;
+        }
+
         // If legacy question input is provided, parse to new standard input
         if (agentMLInput.getInputDataset() != null) {
             RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-            if (!remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
-                throw new IllegalArgumentException("Question not found in parameters.");
+            if (remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
+                AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
+                agentMLInput.setAgentInput(standardInput);
             }
-
-            AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
-            agentMLInput.setAgentInput(standardInput);
         }
 
         try {
@@ -775,5 +831,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
             throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Helper method to extract text from a message's content blocks.
+     */
+    private String extractTextFromMessage(Message message) {
+        if (message == null || message.getContent() == null) {
+            return "";
+        }
+
+        StringBuilder textBuilder = new StringBuilder();
+        for (ContentBlock block : message.getContent()) {
+            if (block.getType() == ContentType.TEXT && block.getText() != null) {
+                textBuilder.append(block.getText().trim());
+                textBuilder.append("\n");
+            }
+        }
+
+        return textBuilder.toString().trim();
     }
 }

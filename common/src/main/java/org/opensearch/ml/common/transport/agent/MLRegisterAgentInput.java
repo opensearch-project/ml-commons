@@ -39,7 +39,7 @@ public class MLRegisterAgentInput implements ToXContentObject, Writeable {
     public static final String TOOLS_FIELD = "tools";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String MEMORY_FIELD = "memory";
-    
+
     // Legacy fields for backward compatibility
     public static final String LLM_FIELD = "llm";
 
@@ -50,7 +50,7 @@ public class MLRegisterAgentInput implements ToXContentObject, Writeable {
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
-    
+
     // Legacy support
     private String legacyModelId; // For backward compatibility with existing LLM spec
 
@@ -221,7 +221,8 @@ public class MLRegisterAgentInput implements ToXContentObject, Writeable {
             }
         }
 
-        return MLRegisterAgentInput.builder()
+        return MLRegisterAgentInput
+            .builder()
             .name(name)
             .type(type)
             .description(description)

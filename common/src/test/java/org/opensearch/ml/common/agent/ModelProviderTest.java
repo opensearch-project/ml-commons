@@ -14,7 +14,6 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -23,15 +22,15 @@ public class ModelProviderTest {
     @Test
     public void testBedrockConverseProvider() {
         BedrockConverseModelProvider provider = new BedrockConverseModelProvider();
-        
+
         String modelName = "us.anthropic.claude-3-7-sonnet-20250219-v1:0";
         Map<String, String> credential = new HashMap<>();
         credential.put(ACCESS_KEY_FIELD, "test_key");
         credential.put(SECRET_KEY_FIELD, "test_secret");
-        
+
         Map<String, String> modelParameters = new HashMap<>();
         modelParameters.put("region", "us-west-2");
-        
+
         // Test connector creation
         Connector connector = provider.createConnector(modelName, credential, modelParameters);
         assertNotNull(connector);
@@ -40,7 +39,7 @@ public class ModelProviderTest {
         assertEquals("us-west-2", connector.getParameters().get("region"));
         assertEquals(modelName, connector.getParameters().get("model"));
         assertTrue(connector instanceof org.opensearch.ml.common.connector.AwsConnector);
-        
+
         // Test model input creation
         MLRegisterModelInput modelInput = provider.createModelInput(modelName, connector, modelParameters);
         assertNotNull(modelInput);
@@ -56,7 +55,7 @@ public class ModelProviderTest {
         ModelProvider provider = ModelProviderFactory.getProvider("bedrock/converse");
         assertNotNull(provider);
         assertTrue(provider instanceof BedrockConverseModelProvider);
-        
+
         // Test unsupported provider
         try {
             ModelProviderFactory.getProvider("unsupported/provider");
@@ -68,13 +67,14 @@ public class ModelProviderTest {
 
     @Test
     public void testAgentModelService() {
-        MLAgentModelSpec modelSpec = MLAgentModelSpec.builder()
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
             .modelId("us.anthropic.claude-3-7-sonnet-20250219-v1:0")
             .modelProvider("bedrock/converse")
             .credential(new HashMap<>())
             .modelParameters(new HashMap<>())
             .build();
-        
+
         // Test model creation
         MLRegisterModelInput modelInput = AgentModelService.createModelFromSpec(modelSpec);
         assertNotNull(modelInput);

@@ -5,11 +5,9 @@
 
 package org.opensearch.ml.action.agents;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.HashMap;
-import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -30,19 +28,19 @@ public class TransportRegisterAgentActionTest {
 
     @Mock
     private Client client;
-    
+
     @Mock
     private SdkClient sdkClient;
-    
+
     @Mock
     private MLIndicesHandler mlIndicesHandler;
-    
+
     @Mock
     private ClusterService clusterService;
-    
+
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    
+
     @Mock
     private ActionListener<MLRegisterAgentResponse> listener;
 
@@ -54,22 +52,24 @@ public class TransportRegisterAgentActionTest {
     @Test
     public void testSimplifiedAgentRegistration() {
         // Test that the new simplified format is properly handled
-        MLAgentModelSpec modelSpec = MLAgentModelSpec.builder()
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
             .modelId("us.anthropic.claude-3-7-sonnet-20250219-v1:0")
             .modelProvider("bedrock/converse")
             .credential(new HashMap<>())
             .modelParameters(new HashMap<>())
             .build();
-            
-        MLRegisterAgentInput agentInput = MLRegisterAgentInput.builder()
+
+        MLRegisterAgentInput agentInput = MLRegisterAgentInput
+            .builder()
             .name("Test Agent")
             .type("conversational")
             .description("Test agent with simplified format")
             .model(modelSpec)
             .build();
-            
+
         MLRegisterAgentRequest request = new MLRegisterAgentRequest(agentInput, "test-tenant");
-        
+
         // Verify the request contains the agent input
         assert request.getAgentInput() != null;
         assert request.getAgentInput().getModel() != null;

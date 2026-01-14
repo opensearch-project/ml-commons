@@ -45,8 +45,8 @@ public class BedrockConverseModelProvider extends ModelProvider {
     private static final String DEFAULT_REGION = "us-east-1";
 
     private static final String REQUEST_BODY_TEMPLATE = "{\"system\": [{\"text\": \"${parameters.system_prompt}\"}], "
-            + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
-            + "${parameters.tool_configs:-} }";
+        + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
+        + "${parameters.tool_configs:-} }";
 
     // Body templates for different input types
     private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_text}\"}]}";
@@ -57,13 +57,13 @@ public class BedrockConverseModelProvider extends ModelProvider {
     private static final String TEXT_CONTENT_TEMPLATE = "{\"text\":\"${parameters.content_text}\"}";
 
     private static final String IMAGE_CONTENT_TEMPLATE =
-            "{\"image\":{\"format\":\"${parameters.image_format}\",\"source\":{\"${parameters.image_source_type}\":\"${parameters.image_data}\"}}}";
+        "{\"image\":{\"format\":\"${parameters.image_format}\",\"source\":{\"${parameters.image_source_type}\":\"${parameters.image_data}\"}}}";
 
     private static final String DOCUMENT_CONTENT_TEMPLATE =
-            "{\"document\":{\"format\":\"${parameters.doc_format}\",\"name\":\"${parameters.doc_name}\",\"source\":{\"${parameters.doc_source_type}\":\"${parameters.doc_data}\"}}}";
+        "{\"document\":{\"format\":\"${parameters.doc_format}\",\"name\":\"${parameters.doc_name}\",\"source\":{\"${parameters.doc_source_type}\":\"${parameters.doc_data}\"}}}";
 
     private static final String VIDEO_CONTENT_TEMPLATE =
-            "{\"video\":{\"format\":\"${parameters.video_format}\",\"source\":{\"${parameters.video_source_type}\":\"${parameters.video_data}\"}}}";
+        "{\"video\":{\"format\":\"${parameters.video_format}\",\"source\":{\"${parameters.video_source_type}\":\"${parameters.video_data}\"}}}";
 
     private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"content\":[${parameters.msg_content_array}]}";
 
@@ -83,40 +83,40 @@ public class BedrockConverseModelProvider extends ModelProvider {
         headers.put("content-type", "application/json");
 
         ConnectorAction predictAction = ConnectorAction
-                .builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse")
-                .headers(headers)
-                .requestBody(REQUEST_BODY_TEMPLATE)
-                .build();
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse")
+            .headers(headers)
+            .requestBody(REQUEST_BODY_TEMPLATE)
+            .build();
 
         // Set agent connector to have default 3 retries
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
         connectorClientConfig.setMaxRetryTimes(3);
 
         return AwsConnector
-                .awsConnectorBuilder()
-                .name("Auto-generated Bedrock Converse connector for Agent")
-                .description("Auto-generated connector for Bedrock Converse API")
-                .version("1")
-                .protocol(ConnectorProtocols.AWS_SIGV4)
-                .parameters(parameters)
-                .credential(credential != null ? credential : new HashMap<>())
-                .actions(List.of(predictAction))
-                .connectorClientConfig(connectorClientConfig)
-                .build();
+            .awsConnectorBuilder()
+            .name("Auto-generated Bedrock Converse connector for Agent")
+            .description("Auto-generated connector for Bedrock Converse API")
+            .version("1")
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .parameters(parameters)
+            .credential(credential != null ? credential : new HashMap<>())
+            .actions(List.of(predictAction))
+            .connectorClientConfig(connectorClientConfig)
+            .build();
     }
 
     @Override
     public MLRegisterModelInput createModelInput(String modelName, Connector connector, Map<String, String> modelParameters) {
         return MLRegisterModelInput
-                .builder()
-                .functionName(FunctionName.REMOTE)
-                .modelName("Auto-generated model for " + modelName)
-                .description("Auto-generated model for agent")
-                .connector(connector)
-                .build();
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .modelName("Auto-generated model for " + modelName)
+            .description("Auto-generated model for agent")
+            .connector(connector)
+            .build();
     }
 
     @Override
