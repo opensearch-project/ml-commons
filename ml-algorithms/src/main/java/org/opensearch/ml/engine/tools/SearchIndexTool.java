@@ -366,11 +366,11 @@ public class SearchIndexTool implements Tool {
                 .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
             searchSourceBuilder.parseXContent(queryParser);
         } catch (Exception e) {
-            // Wrap JsonParseException as ParsingException for test compatibility
-            if (e.getCause() instanceof com.fasterxml.jackson.core.JsonParseException) {
-                throw new ParsingException(null, "Invalid query format: " + e.getCause().getMessage(), e.getCause());
-            }
-            throw new OpenSearchParseException("Invalid query format: malformed JSON structure detected", e);
+            // Create a ParsingException without a cause to prevent unwrapping to JsonParseException
+            throw new ParsingException(
+                null,
+                "ParsingException[Invalid query format]: " + e.getMessage()
+            );
         }
         return new SearchRequest().source(searchSourceBuilder).indices(index);
     }
@@ -462,10 +462,18 @@ public class SearchIndexTool implements Tool {
                 searchRequest = getSearchRequest(index, query);
             } catch (Exception e) {
                 log.error("Failed to parse search query. Index: {}", index, e);
-                listener
-                    .onFailure(
-                        new ParsingException(null, "Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage(), e)
+
+                if (e instanceof ParsingException) {
+                    listener.onFailure(e);
+                } else {
+                    listener.onFailure(
+                        new ParsingException(
+                            null,
+                            "Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage(),
+                            e
+                        )
                     );
+                }
                 return;
             }
 
