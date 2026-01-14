@@ -213,6 +213,7 @@ public class AwsConnectorTest {
 
     private AwsConnector createAwsConnector(Map<String, String> parameters, Map<String, String> credential, String url) {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
+        String name = null;
         String method = "POST";
         Map<String, String> headers = new HashMap<>();
         headers.put("api_key", "${credential.key}");
@@ -222,6 +223,7 @@ public class AwsConnectorTest {
 
         ConnectorAction action = new ConnectorAction(
             actionType,
+            name,
             method,
             url,
             headers,
