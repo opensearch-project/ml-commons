@@ -39,6 +39,7 @@ public class MLCreateConnectorRequestTests {
     @Before
     public void setUp() {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
+        String name = null;
         String method = "POST";
         String url = "https://test.com";
         Map<String, String> headers = new HashMap<>();
@@ -48,6 +49,7 @@ public class MLCreateConnectorRequestTests {
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(
             actionType,
+            name,
             method,
             url,
             headers,
