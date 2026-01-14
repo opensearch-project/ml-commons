@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -78,7 +79,11 @@ public class RemoteModelTest extends MLStaticMockBase {
         remoteModel = new RemoteModel();
 
         encryptor = mock(Encryptor.class);
-        when(encryptor.decrypt(any(), any())).thenReturn("test_api_key");
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onResponse("test_api_key");
+            return null;
+        }).when(encryptor).decrypt(any(), any(), any());
         when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(true));
     }
 
@@ -209,7 +214,7 @@ public class RemoteModelTest extends MLStaticMockBase {
         exceptionRule.expectMessage(expExceptionMessage);
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        doThrow(actualException).when(encryptor).decrypt(any(), any());
+        doThrow(actualException).when(encryptor).decrypt(any(), any(), any());
         remoteModel
             .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
             .toCompletableFuture()

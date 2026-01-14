@@ -80,7 +80,12 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
-                    connector.decrypt(connectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
+                    connector
+                        .decrypt(
+                            connectorAction,
+                            (credential, tenantId, decryptListener) -> encryptor.decrypt(credential, null, decryptListener),
+                            null
+                        );
                     RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
                     connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
