@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.apache.commons.lang3.StringUtils;
-import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -367,10 +366,7 @@ public class SearchIndexTool implements Tool {
             searchSourceBuilder.parseXContent(queryParser);
         } catch (Exception e) {
             // Create a ParsingException without a cause to prevent unwrapping to JsonParseException
-            throw new ParsingException(
-                null,
-                "ParsingException[Invalid query format]: " + e.getMessage()
-            );
+            throw new ParsingException(null, "ParsingException[Invalid query format]: " + e.getMessage());
         }
         return new SearchRequest().source(searchSourceBuilder).indices(index);
     }
@@ -466,13 +462,14 @@ public class SearchIndexTool implements Tool {
                 if (e instanceof ParsingException) {
                     listener.onFailure(e);
                 } else {
-                    listener.onFailure(
-                        new ParsingException(
-                            null,
-                            "Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage(),
-                            e
-                        )
-                    );
+                    listener
+                        .onFailure(
+                            new ParsingException(
+                                null,
+                                "Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage(),
+                                e
+                            )
+                        );
                 }
                 return;
             }
