@@ -255,4 +255,64 @@ public class TransportSearchMemoryContainerActionTests extends OpenSearchTestCas
         assertArrayEquals(new String[] { "index1", "index2", "index3" }, requestCaptor.getValue().indices());
     }
 
+    @Test
+    public void testDoExecuteWithNullUser() {
+        // Arrange - empty thread context means user is null
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchRequest searchRequest = new SearchRequest(new String[] { ML_MEMORY_CONTAINER_INDEX });
+        searchRequest.source(searchSourceBuilder);
+        MLSearchActionRequest request = MLSearchActionRequest.builder().searchRequest(searchRequest).tenantId(null).build();
+
+        // Mock search response
+        doAnswer(invocation -> CompletableFuture.completedFuture(null)).when(sdkClient).searchDataObjectAsync(any());
+
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        // Act
+        action.doExecute(task, request, listener);
+
+        // Assert - when user is null, isAdminUser should NOT be called and filter should NOT be applied
+        verify(memoryContainerHelper, never()).isAdminUser(any());
+        verify(memoryContainerHelper, never()).addUserBackendRolesFilter(any(), any());
+        verify(sdkClient).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testDoExecuteWithNonAdminUser() {
+        // Arrange - setup thread context with non-admin user
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        // Set user in thread context
+        ThreadContext threadContext = new ThreadContext(Settings.builder().build());
+        threadContext
+            .putTransient(
+                org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT,
+                "regular_user|backend_role1,backend_role2|role1,role2"
+            );
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Mock non-admin user check
+        when(memoryContainerHelper.isAdminUser(any())).thenReturn(false);
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchRequest searchRequest = new SearchRequest(new String[] { ML_MEMORY_CONTAINER_INDEX });
+        searchRequest.source(searchSourceBuilder);
+        MLSearchActionRequest request = MLSearchActionRequest.builder().searchRequest(searchRequest).tenantId(null).build();
+
+        // Mock search response
+        doAnswer(invocation -> CompletableFuture.completedFuture(null)).when(sdkClient).searchDataObjectAsync(any());
+
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        // Act
+        action.doExecute(task, request, listener);
+
+        // Assert - non-admin user should have backend roles filter applied
+        verify(memoryContainerHelper).isAdminUser(any());
+        verify(memoryContainerHelper).addUserBackendRolesFilter(any(), any());
+        verify(sdkClient).searchDataObjectAsync(any());
+    }
+
 }
