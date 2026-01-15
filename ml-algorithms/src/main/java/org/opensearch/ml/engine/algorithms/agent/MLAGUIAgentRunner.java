@@ -280,10 +280,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     }
                 }
 
-                if (recentToolResults.isEmpty()) {
-                    recentToolResults = new ArrayList<>(toolResults);
-                }
-
                 String toolResultsJson = gson.toJson(recentToolResults);
                 params.put(AGUI_PARAM_TOOL_CALL_RESULTS, toolResultsJson);
 
