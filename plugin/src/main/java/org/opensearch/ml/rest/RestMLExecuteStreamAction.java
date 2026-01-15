@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -159,7 +160,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         final StreamingRestChannelConsumer consumer = (channel) -> {
 
-            final ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+            Supplier<ThreadContext.StoredContext> supplier = client.threadPool().getThreadContext().newRestorableContext(true);
 
             Map<String, List<String>> headers = Map
                 .of(
@@ -173,8 +174,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             channel.prepareResponse(RestStatus.OK, headers);
 
             Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
-                try (ThreadContext.StoredContext context = storedContext) {
-                    context.restore();
+                try (ThreadContext.StoredContext context = supplier.get()) {
 
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent, client);
@@ -237,7 +237,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     log.error("Failed to parse or process request", e);
                     return Mono.error(e);
                 }
-            }).doOnNext(channel::sendChunk).doFinally(signalType -> { storedContext.close(); }).onErrorResume(ex -> {
+            }).doOnNext(channel::sendChunk).onErrorResume(ex -> {
                 log.error("Error occurred", ex);
                 try {
                     String errorMessage = ex instanceof IOException
