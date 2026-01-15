@@ -266,9 +266,19 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     lastToolCallMessage = assistantToolCallMessages.getLast();
                 }
 
-                // Only include the last tool result
-                Map<String, String> lastToolResult = toolResults.getLast();
-                List<Map<String, String>> recentToolResults = List.of(lastToolResult);
+                // Include tool results from the most recent tool execution
+                List<Map<String, String>> recentToolResults = new ArrayList<>();
+                if (!toolCallMessageIndices.isEmpty()) {
+                    int lastToolCallIndex = toolCallMessageIndices.getLast();
+
+                    // Collect all tool results that come after the last assistant tool call message
+                    for (int i = 0; i < toolResultMessageIndices.size(); i++) {
+                        int toolResultIndex = toolResultMessageIndices.get(i);
+                        if (toolResultIndex > lastToolCallIndex) {
+                            recentToolResults.add(toolResults.get(i));
+                        }
+                    }
+                }
 
                 String toolResultsJson = gson.toJson(recentToolResults);
                 params.put(AGUI_PARAM_TOOL_CALL_RESULTS, toolResultsJson);
