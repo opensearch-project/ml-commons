@@ -148,7 +148,7 @@ public class SearchIndexTool implements Tool {
             return PLAIN_NUMBER_GSON.toJson(queryElement);
         } else if (queryElement.isJsonPrimitive() && queryElement.getAsJsonPrimitive().isString()) {
             String queryString = queryElement.getAsString();
-            log.info("Processing query as string (backward compatibility mode). Consider using object format for better reliability.");
+            log.debug("Processing query as string (backward compatibility mode). Consider using object format for better reliability.");
             return normalizeQueryString(queryString);
         } else {
             Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
@@ -191,7 +191,7 @@ public class SearchIndexTool implements Tool {
         if (!multiQuoteFixed.equals(fixedQuery)) {
             try {
                 Object parsed = PLAIN_NUMBER_GSON.fromJson(multiQuoteFixed, Object.class);
-                log.info("Successfully fixed query by removing outer quotes");
+                log.debug("Successfully fixed query by removing outer quotes");
                 return PLAIN_NUMBER_GSON.toJson(parsed);
             } catch (JsonSyntaxException ignored) {
                 // Continue with other fixes
@@ -203,7 +203,7 @@ public class SearchIndexTool implements Tool {
         if (!braceFixed.equals(fixedQuery)) {
             try {
                 Object parsed = PLAIN_NUMBER_GSON.fromJson(braceFixed, Object.class);
-                log.info("Successfully fixed malformed query through brace balancing");
+                log.debug("Successfully fixed malformed query through brace balancing");
                 return PLAIN_NUMBER_GSON.toJson(parsed);
             } catch (JsonSyntaxException ignored) {
                 // Continue with escape sequence fixes
@@ -215,7 +215,7 @@ public class SearchIndexTool implements Tool {
         if (!escapeFixed.equals(queryString)) {
             try {
                 Object parsed = PLAIN_NUMBER_GSON.fromJson(escapeFixed, Object.class);
-                log.info("Successfully fixed malformed query through conservative escape correction");
+                log.debug("Successfully fixed malformed query through conservative escape correction");
                 return PLAIN_NUMBER_GSON.toJson(parsed);
             } catch (JsonSyntaxException ignored) {
                 // All fixes failed, return original
@@ -424,7 +424,7 @@ public class SearchIndexTool implements Tool {
                         }
                     }
                 } catch (JsonSyntaxException e) {
-                    log.error("Invalid JSON input: {}", input, e);
+                    log.error("Invalid JSON input (length: {}): {}", input != null ? input.length() : 0, e.getMessage());
                 }
             }
 
@@ -436,7 +436,7 @@ public class SearchIndexTool implements Tool {
                 String rawQuery = parameters.get(QUERY_FIELD);
                 if (!StringUtils.isEmpty(rawQuery)) {
                     log
-                        .info(
+                        .debug(
                             "Processing query parameter as string (backward compatibility mode). Consider using object format for better reliability."
                         );
                     query = normalizeQueryString(rawQuery);
