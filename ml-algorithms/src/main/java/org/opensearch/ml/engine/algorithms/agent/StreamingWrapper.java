@@ -83,11 +83,23 @@ public class StreamingWrapper {
         client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
     }
 
-    public void sendCompletionChunk(String sessionId, String parentInteractionId) {
+    public void sendCompletionChunk(
+        String sessionId,
+        String parentInteractionId,
+        String executorMemoryId,
+        String executorParentInteractionId
+    ) {
         if (!isStreaming) {
             return;
         }
-        MLTaskResponse completionChunk = createStreamChunk("", sessionId, parentInteractionId, true);
+        MLTaskResponse completionChunk = createStreamChunk(
+            "",
+            sessionId,
+            parentInteractionId,
+            executorMemoryId,
+            executorParentInteractionId,
+            true
+        );
         try {
             channel.sendResponseBatch(completionChunk);
         } catch (Exception e) {
@@ -114,7 +126,7 @@ public class StreamingWrapper {
     public void sendToolResponse(String toolOutput, String sessionId, String parentInteractionId) {
         if (isStreaming) {
             try {
-                MLTaskResponse toolChunk = createStreamChunk(toolOutput, sessionId, parentInteractionId, false);
+                MLTaskResponse toolChunk = createStreamChunk(toolOutput, sessionId, parentInteractionId, null, null, false);
                 channel.sendResponseBatch(toolChunk);
             } catch (Exception e) {
                 log.error("Failed to send tool response chunk", e);
@@ -122,12 +134,21 @@ public class StreamingWrapper {
         }
     }
 
-    private MLTaskResponse createStreamChunk(String toolOutput, String sessionId, String parentInteractionId, boolean isLast) {
+    private MLTaskResponse createStreamChunk(
+        String toolOutput,
+        String sessionId,
+        String parentInteractionId,
+        String executorMemoryId,
+        String executorParentInteractionId,
+        boolean isLast
+    ) {
         List<ModelTensor> tensors = Arrays
             .asList(
                 ModelTensor.builder().name("response").dataAsMap(Map.of("content", toolOutput, "is_last", isLast)).build(),
                 ModelTensor.builder().name("memory_id").result(sessionId).build(),
-                ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build()
+                ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
+                ModelTensor.builder().name("executor_agent_memory_id").result(executorMemoryId).build(),
+                ModelTensor.builder().name("executor_agent_parent_interaction_id").result(executorParentInteractionId).build()
             );
 
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(tensors).build();

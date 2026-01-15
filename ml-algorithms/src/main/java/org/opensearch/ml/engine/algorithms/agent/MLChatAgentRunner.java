@@ -725,7 +725,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String finalAnswer
     ) {
         // Send completion chunk for streaming
-        streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
+        streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId, null, null);
 
         if (conversationIndexMemory != null) {
             String copyOfFinalAnswer = finalAnswer;
@@ -800,6 +800,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
     @VisibleForTesting
     static Map<String, String> constructLLMParams(LLMSpec llm, Map<String, String> parameters) {
         Map<String, String> tmpParameters = new HashMap<>();
+
+        // Set agent type for Chat agent for streaming
+        tmpParameters.put("agent_type", "chat");
+
         if (llm.getParameters() != null) {
             tmpParameters.putAll(llm.getParameters());
         }
