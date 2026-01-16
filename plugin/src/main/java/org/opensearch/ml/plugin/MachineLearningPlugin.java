@@ -1368,7 +1368,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
                 MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE
+                MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
+                MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED
             );
         return settings;
     }
