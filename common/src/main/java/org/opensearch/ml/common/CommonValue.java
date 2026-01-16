@@ -126,6 +126,15 @@ public class CommonValue {
     public static final String MCP_TOOLS_FIELD = "tools";
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
+
+    // MCP Request Header Constants
+    public static final String MCP_HEADER_AWS_ACCESS_KEY_ID = "aws-access-key-id";
+    public static final String MCP_HEADER_AWS_SECRET_ACCESS_KEY = "aws-secret-access-key";
+    public static final String MCP_HEADER_AWS_SESSION_TOKEN = "aws-session-token";
+    public static final String MCP_HEADER_AWS_REGION = "aws-region";
+    public static final String MCP_HEADER_AWS_SERVICE_NAME = "aws-service-name";
+    public static final String MCP_HEADER_OPENSEARCH_URL = "opensearch-url";
+
     public static final String MCP_DEFAULT_SSE_ENDPOINT = "/sse";
     public static final String SSE_ENDPOINT_FIELD = "sse_endpoint";
     public static final String MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT = "/mcp/";

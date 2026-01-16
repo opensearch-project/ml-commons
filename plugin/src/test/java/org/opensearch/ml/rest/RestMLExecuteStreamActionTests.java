@@ -283,7 +283,7 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
 
         String agentId = "test_agent_id";
 
-        MLExecuteTaskRequest executeTaskRequest = restAction.getRequest(agentId, request, request.content());
+        MLExecuteTaskRequest executeTaskRequest = restAction.getRequest(agentId, request, request.content(), client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);

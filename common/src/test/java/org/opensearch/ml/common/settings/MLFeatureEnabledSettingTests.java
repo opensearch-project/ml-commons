@@ -51,7 +51,8 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE
+                    MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
+                    MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
