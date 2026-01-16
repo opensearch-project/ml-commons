@@ -90,6 +90,10 @@ public final class AgentTracer {
     private static volatile boolean initialized = false;
     private static volatile boolean enabled = true;
 
+    // Map to store active agent spans by runId for streaming completion
+    private static final java.util.concurrent.ConcurrentHashMap<String, Span> activeAgentSpans =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     private AgentTracer() {}
 
     /**
@@ -159,14 +163,21 @@ public final class AgentTracer {
             log.debug("[AgentTracer] Normalized endpoint: {}, region: {}", endpoint, effectiveRegion);
 
             // Create AWS credentials provider from explicit credentials
-            log.debug("[AgentTracer] Creating AWS credentials provider from explicit credentials...");
-            final AwsCredentials credentials = (sessionToken != null && !sessionToken.isEmpty())
+            boolean hasSessionToken = sessionToken != null && !sessionToken.isEmpty();
+            log
+                .info(
+                    "[AgentTracer] Creating AWS credentials provider: accessKey={}..., hasSessionToken={}",
+                    accessKey.substring(0, Math.min(4, accessKey.length())),
+                    hasSessionToken
+                );
+            final AwsCredentials credentials = hasSessionToken
                 ? AwsSessionCredentials.create(accessKey, secretKey, sessionToken)
                 : AwsBasicCredentials.create(accessKey, secretKey);
             final AwsCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(credentials);
             log
-                .debug(
-                    "[AgentTracer] AWS credentials provider created (access key: {}...)",
+                .info(
+                    "[AgentTracer] AWS credentials provider created: type={}, accessKey={}...",
+                    credentials.getClass().getSimpleName(),
                     accessKey.substring(0, Math.min(4, accessKey.length()))
                 );
 
@@ -260,7 +271,13 @@ public final class AgentTracer {
                 // Get AWS credentials with privileged access to read credentials files
                 AwsCredentials credentials = AccessController
                     .doPrivileged((PrivilegedAction<AwsCredentials>) credentialsProvider::resolveCredentials);
-                log.debug("[SigV4Interceptor] Resolved AWS credentials");
+                boolean hasSessionToken = credentials instanceof AwsSessionCredentials;
+                log
+                    .debug(
+                        "[SigV4Interceptor] Resolved AWS credentials: accessKey={}..., hasSessionToken={}",
+                        credentials.accessKeyId().substring(0, Math.min(4, credentials.accessKeyId().length())),
+                        hasSessionToken
+                    );
 
                 // Build SDK HTTP request
                 URI uri = originalRequest.url().uri();
@@ -302,7 +319,11 @@ public final class AgentTracer {
 
                 // Sign the request
                 SdkHttpFullRequest signedRequest = signer.sign(sdkRequest, signingParams);
-                log.debug("[SigV4Interceptor] Request signed successfully");
+                log.debug("[SigV4Interceptor] Request signed successfully. Headers added: {}", signedRequest.headers().keySet());
+                if (log.isDebugEnabled()) {
+                    boolean hasSecurityToken = signedRequest.headers().containsKey("X-Amz-Security-Token");
+                    log.debug("[SigV4Interceptor] X-Amz-Security-Token header present: {}", hasSecurityToken);
+                }
 
                 // Build new OkHttp request with signed headers
                 Request.Builder newRequestBuilder = originalRequest.newBuilder();
@@ -500,13 +521,43 @@ public final class AgentTracer {
         }
 
         log.info("[AgentTracer] Starting agent span: type={}, sessionId={}, runId={}", agentType, sessionId, runId);
-        return tracer
+        Span span = tracer
             .spanBuilder(SpanNames.AGENT_RUN)
             .setSpanKind(SpanKind.SERVER)
             .setAttribute(AGENT_TYPE, agentType)
             .setAttribute(CONVERSATION_ID, sessionId != null ? sessionId : "")
             .setAttribute(REQUEST_ID, runId != null ? runId : "")
             .startSpan();
+
+        // Register span by runId for streaming completion
+        if (runId != null && !runId.isEmpty()) {
+            activeAgentSpans.put(runId, span);
+            log.debug("[AgentTracer] Registered agent span for runId={}", runId);
+        }
+
+        return span;
+    }
+
+    /**
+     * End an agent span by runId. Used by streaming handlers when they complete.
+     *
+     * @param runId The AG-UI run ID
+     * @param success Whether the agent completed successfully
+     * @param output The output/result (optional)
+     */
+    public static void endAgentSpanByRunId(String runId, boolean success, String output) {
+        if (runId == null || runId.isEmpty()) {
+            log.debug("[AgentTracer] endAgentSpanByRunId called with null/empty runId");
+            return;
+        }
+
+        Span span = activeAgentSpans.remove(runId);
+        if (span != null) {
+            log.info("[AgentTracer] Ending agent span by runId={}, spanId={}", runId, span.getSpanContext().getSpanId());
+            endSpan(span, success, output);
+        } else {
+            log.debug("[AgentTracer] No active span found for runId={}", runId);
+        }
     }
 
     /**
@@ -662,6 +713,10 @@ public final class AgentTracer {
             log.warn("[AgentTracer] endSpan: span is null or invalid, skipping");
             return;
         }
+
+        // Remove from activeAgentSpans if this is an agent span
+        String spanId = span.getSpanContext().getSpanId();
+        activeAgentSpans.entrySet().removeIf(entry -> entry.getValue().getSpanContext().getSpanId().equals(spanId));
 
         span.setAttribute(RESULT_SUCCESS, success);
         if (output != null) {

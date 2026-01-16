@@ -32,6 +32,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.agent.tracing.AgentTracer;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorThrottlingException;
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -433,6 +434,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
                         sendAGUIEvent(runFinishedEvent, true, listener);
                         log.debug("{}RestMLExecuteStreamAction: Added RUN_FINISHED event - ReAct loop completed", logPrefix);
+
+                        // End agent tracing span when streaming completes
+                        AgentTracer.endAgentSpanByRunId(runId, true, null);
                     }
 
                     currentState.set(StreamState.COMPLETED);
