@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.settings;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -49,8 +48,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE
+                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -189,44 +187,5 @@ public class MLFeatureEnabledSettingTests {
 
         verify(mockListener).onStaticMetricCollectionEnabledChanged(true);
         assertTrue(setting.isStaticMetricCollectionEnabled());
-    }
-
-    @Test
-    public void testMaxJsonSizeDefaultValue() {
-        Settings settings = Settings.EMPTY;
-        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
-
-        // Default value should be 100MB
-        assertEquals(100_000_000, setting.getMaxJsonSize());
-    }
-
-    @Test
-    public void testMaxJsonSizeCustomValue() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", 50_000_000).build();
-        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
-
-        assertEquals(50_000_000, setting.getMaxJsonSize());
-    }
-
-    @Test
-    public void testMaxJsonSizeUnlimited() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", -1).build();
-        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
-
-        // -1 means unlimited
-        assertEquals(-1, setting.getMaxJsonSize());
-    }
-
-    @Test
-    public void testMaxJsonSizeDynamicUpdate() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", 100_000_000).build();
-        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
-
-        assertEquals(100_000_000, setting.getMaxJsonSize());
-
-        // Update the setting dynamically
-        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.max_json_size", 75_000_000).build());
-
-        assertEquals(75_000_000, setting.getMaxJsonSize());
     }
 }

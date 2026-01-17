@@ -107,24 +107,4 @@ public class MLCommonsSettingsTests {
     public void testStreamDisabledByDefault() {
         assertFalse(MLCommonsSettings.ML_COMMONS_STREAM_ENABLED.getDefault(null));
     }
-
-    @Test
-    public void testMaxJsonSizeDefaultValue() {
-        assertEquals(100_000_000, MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getDefault(null).intValue());
-    }
-
-    @Test
-    public void testMaxJsonSizeSettingProperties() {
-        assertEquals("plugins.ml_commons.max_json_size", MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getKey());
-
-        // Test setting is dynamic
-        assertTrue(
-            MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getProperties().contains(org.opensearch.common.settings.Setting.Property.Dynamic)
-        );
-
-        // Test setting is node scope
-        assertTrue(
-            MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getProperties().contains(org.opensearch.common.settings.Setting.Property.NodeScope)
-        );
-    }
 }
