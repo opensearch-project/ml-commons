@@ -18,7 +18,6 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CON
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
@@ -81,8 +80,7 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                             ML_COMMONS_MCP_CONNECTOR_ENABLED,
                             ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
-                            ML_COMMONS_STREAM_ENABLED,
-                            ML_COMMONS_MAX_JSON_SIZE
+                            ML_COMMONS_STREAM_ENABLED
                         )
                 )
             );

@@ -423,6 +423,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 String reActAgentId = allParams.get(EXECUTOR_AGENT_ID_FIELD);
                 Map<String, String> reactParams = new HashMap<>();
                 reactParams.put(QUESTION_FIELD, stepToExecute);
+                // required for agent revamp input
+                reactParams.put(PROMPT_FIELD, stepToExecute);
                 if (allParams.containsKey(EXECUTOR_AGENT_MEMORY_ID_FIELD)) {
                     reactParams.put(MEMORY_ID_FIELD, allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD));
                 }

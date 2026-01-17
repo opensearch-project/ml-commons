@@ -63,8 +63,6 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isStreamEnabled;
 
-    private volatile Integer maxJsonSize;
-
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -85,7 +83,6 @@ public class MLFeatureEnabledSetting {
         isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
-        maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -121,7 +118,6 @@ public class MLFeatureEnabledSetting {
                 listener.onStaticMetricCollectionEnabledChanged(it);
             }
         });
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE, it -> maxJsonSize = it);
     }
 
     /**
@@ -248,13 +244,5 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isStreamEnabled() {
         return isStreamEnabled;
-    }
-
-    /**
-     * Gets the maximum allowed JSON string size in bytes for parsing.
-     * @return the maximum size in bytes, or -1 for unlimited
-     */
-    public int getMaxJsonSize() {
-        return maxJsonSize;
     }
 }

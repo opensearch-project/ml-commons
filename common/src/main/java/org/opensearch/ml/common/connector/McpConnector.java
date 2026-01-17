@@ -206,25 +206,19 @@ public class McpConnector implements Connector {
 
     @Override
     public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
-        if (credential != null) {
-            Map<String, String> decrypted = new HashMap<>();
-            for (String key : credential.keySet()) {
-                decrypted.put(key, function.apply(credential.get(key), tenantId));
-            }
-            this.decryptedCredential = decrypted;
-        } else {
-            this.decryptedCredential = new HashMap<>();
+        Map<String, String> decrypted = new HashMap<>();
+        for (String key : credential.keySet()) {
+            decrypted.put(key, function.apply(credential.get(key), tenantId));
         }
+        this.decryptedCredential = decrypted;
         this.decryptedHeaders = createDecryptedHeaders(headers);
     }
 
     @Override
     public void encrypt(BiFunction<String, String, String> function, String tenantId) {
-        if (credential != null) {
-            for (String key : credential.keySet()) {
-                String encrypted = function.apply(credential.get(key), tenantId);
-                credential.put(key, encrypted);
-            }
+        for (String key : credential.keySet()) {
+            String encrypted = function.apply(credential.get(key), tenantId);
+            credential.put(key, encrypted);
         }
     }
 

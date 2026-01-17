@@ -85,7 +85,7 @@ public class BedrockConverseDeepseekR1FunctionCalling implements FunctionCalling
             dataAsMap = removeJsonPath(dataAsMap, llmResponseExcludePath, true);
         }
         Object response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
-        Map<String, Object> llmResponse = StringUtils.fromJson(StringUtils.toJson(response), "response");
+        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
         String llmFinishReason = JsonPath.read(llmResponse, FINISH_REASON_PATH);
         if (!llmFinishReason.contentEquals(FINISH_REASON)) {
             return output;

@@ -13,8 +13,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
@@ -37,7 +35,6 @@ import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.TypeAdapter;
@@ -104,7 +101,7 @@ public class StringUtilsTest {
         assertEquals("nested_value", nestedMap.get("nested_key"));
         List list = (List) nestedMap.get("nested_array");
         assertEquals(2, list.size());
-        assertEquals(1, list.get(0));
+        assertEquals(1.0, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -114,7 +111,7 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
-        assertEquals(1, list.get(0));
+        assertEquals(1.0, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -124,7 +121,7 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
-        assertEquals(1, list.get(0));
+        assertEquals(1.0, list.get(0));
         assertEquals("a", list.get(1));
         assertTrue(list.get(2) instanceof List);
         assertTrue(list.get(3) instanceof Map);
@@ -1269,62 +1266,5 @@ public class StringUtilsTest {
 
         // Normal messages should be handled properly
         assertTrue("Normal messages should be handled properly", escapedMessage.length() > 0);
-    }
-
-    @Test
-    public void testFromJson_NullInput() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> StringUtils.fromJson(null, "response"));
-        assertEquals("JSON string cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testFromJson_ExceedsMaxSize() {
-        // Create a mock MLFeatureEnabledSetting with a small limit for testing
-        MLFeatureEnabledSetting mockSetting = mock(MLFeatureEnabledSetting.class);
-        when(mockSetting.getMaxJsonSize()).thenReturn(100);
-
-        StringUtils.setMLFeatureEnabledSetting(mockSetting);
-
-        try {
-            // Create a JSON string larger than the limit (100 bytes)
-            StringBuilder largeJson = new StringBuilder("{\"data\":\"");
-            for (int i = 0; i < 200; i++) {
-                largeJson.append("a");
-            }
-            largeJson.append("\"}");
-
-            IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> StringUtils.fromJson(largeJson.toString(), "response")
-            );
-            assertTrue(exception.getMessage().contains("JSON string size exceeds maximum allowed size"));
-        } finally {
-            StringUtils.setMLFeatureEnabledSetting(null);
-        }
-    }
-
-    @Test
-    public void testFromJson_DuplicateKeys() {
-        // JSON with duplicate keys should be rejected due to STRICT_DUPLICATE_DETECTION
-        String jsonWithDuplicateKeys = "{\"user\": \"test\", \"role\": \"admin\", \"user\": \"malicious\"}";
-
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> StringUtils.fromJson(jsonWithDuplicateKeys, "response")
-        );
-        assertTrue(exception.getMessage().contains("Invalid JSON format"));
-        assertTrue(exception.getCause() instanceof com.fasterxml.jackson.core.JsonParseException);
-    }
-
-    @Test
-    public void testFromJson_DuplicateKeysNested() {
-        // Test duplicate keys in nested objects
-        String jsonWithNestedDuplicates = "{\"config\": {\"timeout\": 30, \"retries\": 3, \"timeout\": 60}}";
-
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> StringUtils.fromJson(jsonWithNestedDuplicates, "response")
-        );
-        assertTrue(exception.getMessage().contains("Invalid JSON format"));
     }
 }
