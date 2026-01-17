@@ -126,24 +126,6 @@ public class MLAgent implements ToXContentObject, Writeable {
         this(name, type, description, llm, null, tools, parameters, memory, createdTime, lastUpdateTime, appType, isHidden, tenantId);
     }
 
-    // Backward compatible constructor for existing tests
-    public MLAgent(
-        String name,
-        String type,
-        String description,
-        LLMSpec llm,
-        List<MLToolSpec> tools,
-        Map<String, String> parameters,
-        MLMemorySpec memory,
-        Instant createdTime,
-        Instant lastUpdateTime,
-        String appType,
-        Boolean isHidden,
-        String tenantId
-    ) {
-        this(name, type, description, llm, null, tools, parameters, memory, createdTime, lastUpdateTime, appType, isHidden, tenantId);
-    }
-
     private void validate() {
         if (name == null) {
             throw new IllegalArgumentException("Agent name can't be null");

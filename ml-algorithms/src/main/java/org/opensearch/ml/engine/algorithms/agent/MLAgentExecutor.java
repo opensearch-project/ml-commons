@@ -797,6 +797,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * by the existing agent execution logic.
      */
     void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        if (agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES
+            && MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
+            throw new IllegalArgumentException("Messages input is not supported for Plan Execute and Reflect Agent.");
+        }
+
         // old style agent registration
         if (mlAgent.getModel() == null) {
             return;
@@ -823,7 +828,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             // Set parameters to processed params
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-            Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput());
+            Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), MLAgentType.from(mlAgent.getType()));
             // set question to questionText for memory
             parameters.put(QUESTION, question);
             remoteDataSet.getParameters().putAll(parameters);

@@ -12,6 +12,7 @@ import java.util.Map;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -125,12 +126,17 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     @Override
-    public Map<String, String> mapTextInput(String text) {
+    public Map<String, String> mapTextInput(String text, MLAgentType type) {
         Map<String, String> parameters = new HashMap<>();
 
         // Use StringSubstitutor for parameter replacement
         Map<String, String> templateParams = new HashMap<>();
-        templateParams.put("user_text", StringEscapeUtils.escapeJson(text));
+        // ToDo: Remove workaround once PER supports messages format
+        if (type == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
+            templateParams.put("user_text", "${parameters.prompt}");
+        } else {
+            templateParams.put("user_text", StringEscapeUtils.escapeJson(text));
+        }
 
         StringSubstitutor substitutor = new StringSubstitutor(templateParams, "${parameters.", "}");
         String body = substitutor.replace(TEXT_INPUT_BODY_TEMPLATE);
@@ -140,11 +146,11 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     @Override
-    public Map<String, String> mapContentBlocks(List<ContentBlock> contentBlocks) {
+    public Map<String, String> mapContentBlocks(List<ContentBlock> contentBlocks, MLAgentType type) {
         Map<String, String> parameters = new HashMap<>();
 
         // Use StringSubstitutor for parameter replacement
-        String contentArray = buildContentArrayFromBlocks(contentBlocks);
+        String contentArray = buildContentArrayFromBlocks(contentBlocks, type);
         Map<String, String> templateParams = new HashMap<>();
         templateParams.put("content_array", contentArray);
 
@@ -156,9 +162,9 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     @Override
-    public Map<String, String> mapMessages(List<Message> messages) {
+    public Map<String, String> mapMessages(List<Message> messages, MLAgentType type) {
         Map<String, String> parameters = new HashMap<>();
-        String messagesString = buildMessagesArray(messages);
+        String messagesString = buildMessagesArray(messages, type);
         parameters.put("body", messagesString);
         // todo: Merge function calling code into this class
         // body is added to no_escape_params as the json constructed is a sequence of objects and not a valid json
@@ -171,7 +177,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
      * Builds content array from content blocks using templates for Bedrock Converse API.
      * Supports text, image, document, and video content types.
      */
-    private String buildContentArrayFromBlocks(List<ContentBlock> blocks) {
+    private String buildContentArrayFromBlocks(List<ContentBlock> blocks, MLAgentType type) {
         if (blocks == null || blocks.isEmpty()) {
             return "";
         }
@@ -187,7 +193,12 @@ public class BedrockConverseModelProvider extends ModelProvider {
             switch (block.getType()) {
                 case TEXT:
                     Map<String, Object> textParams = new HashMap<>();
-                    textParams.put("content_text", StringEscapeUtils.escapeJson(block.getText()));
+                    // ToDo: Remove workaround after PER supports messages format
+                    if (type == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
+                        textParams.put("content_text", "${parameters.prompt}");
+                    } else {
+                        textParams.put("content_text", StringEscapeUtils.escapeJson(block.getText()));
+                    }
                     StringSubstitutor textSubstitutor = new StringSubstitutor(textParams, "${parameters.", "}");
                     contentArray.append(textSubstitutor.replace(TEXT_CONTENT_TEMPLATE));
                     break;
@@ -239,7 +250,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
      * Converts messages to conversation history format, excluding the last user message
      * which becomes the current input.
      */
-    private String buildMessagesArray(List<Message> messages) {
+    private String buildMessagesArray(List<Message> messages, MLAgentType type) {
         if (messages == null || messages.isEmpty()) {
             return "";
         }
@@ -252,7 +263,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
             }
             first = false;
 
-            String contentArray = buildContentArrayFromBlocks(message.getContent());
+            String contentArray = buildContentArrayFromBlocks(message.getContent(), type);
             Map<String, Object> msgParams = new HashMap<>();
             msgParams.put("msg_role", message.getRole());
             msgParams.put("msg_content_array", contentArray);

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.agent;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -49,7 +50,7 @@ public abstract class ModelProvider {
      * @param text the text input
      * @return Map of parameters for the provider's request body template
      */
-    public abstract Map<String, String> mapTextInput(String text);
+    public abstract Map<String, String> mapTextInput(String text, MLAgentType type);
 
     /**
      * Maps multi-modal content blocks to provider-specific request body parameters.
@@ -58,7 +59,7 @@ public abstract class ModelProvider {
      * @param contentBlocks the list of content blocks
      * @return Map of parameters for the provider's request body template
      */
-    public abstract Map<String, String> mapContentBlocks(List<ContentBlock> contentBlocks);
+    public abstract Map<String, String> mapContentBlocks(List<ContentBlock> contentBlocks, MLAgentType type);
 
     /**
      * Maps message-based conversation to provider-specific request body parameters.
@@ -67,7 +68,7 @@ public abstract class ModelProvider {
      * @param messages the list of messages
      * @return Map of parameters for the provider's request body template
      */
-    public abstract Map<String, String> mapMessages(List<Message> messages);
+    public abstract Map<String, String> mapMessages(List<Message> messages, MLAgentType type);
 
     /**
      * Maps standardized AgentInput to provider-specific request body parameters.
@@ -77,23 +78,23 @@ public abstract class ModelProvider {
      * @return Map of parameters for the provider's request body template
      * @throws IllegalArgumentException if input type is unsupported
      */
-    public Map<String, String> mapAgentInput(AgentInput agentInput) {
+    public Map<String, String> mapAgentInput(AgentInput agentInput, MLAgentType type) {
         if (agentInput == null || agentInput.getInput() == null) {
             throw new IllegalArgumentException("AgentInput and its input field cannot be null");
         }
 
         InputType inputType = agentInput.getInputType();
         return switch (inputType) {
-            case TEXT -> mapTextInput((String) agentInput.getInput());
+            case TEXT -> mapTextInput((String) agentInput.getInput(), type);
             case CONTENT_BLOCKS -> {
                 @SuppressWarnings("unchecked")
                 List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
-                yield mapContentBlocks(blocks);
+                yield mapContentBlocks(blocks, type);
             }
             case MESSAGES -> {
                 @SuppressWarnings("unchecked")
                 List<Message> messages = (List<Message>) agentInput.getInput();
-                yield mapMessages(messages);
+                yield mapMessages(messages, type);
             }
             default -> throw new IllegalArgumentException("Unsupported input type: " + inputType);
         };
