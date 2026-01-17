@@ -8,7 +8,6 @@ package org.opensearch.ml.common.input.execute.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_3_0;
 
 import java.io.IOException;
 import java.util.Map;
@@ -37,6 +36,7 @@ public class AgentMLInput extends MLInput {
     public static final String ASYNC_FIELD = "isAsync";
 
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION = CommonValue.VERSION_3_0_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_INTERFACE_REVAMP = CommonValue.VERSION_3_5_0;
 
     @Getter
     @Setter
@@ -98,8 +98,7 @@ public class AgentMLInput extends MLInput {
         if (streamOutputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             out.writeOptionalBoolean(isAsync);
         }
-        // Todo: finalize the version
-        if (streamOutputVersion.onOrAfter(VERSION_3_3_0)) {
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_AGENT_INTERFACE_REVAMP)) {
             out.writeBoolean(agentInput != null);
             if (agentInput != null) {
                 agentInput.writeTo(out);
@@ -115,7 +114,7 @@ public class AgentMLInput extends MLInput {
         if (streamInputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             this.isAsync = in.readOptionalBoolean();
         }
-        if (streamInputVersion.onOrAfter(VERSION_3_3_0)) {
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_AGENT_INTERFACE_REVAMP)) {
             if (in.readBoolean()) {
                 this.agentInput = new AgentInput(in);
             }
