@@ -56,7 +56,7 @@ public class McpStreamableHttpToolTests {
         tool.run(validParams, listener);
 
         // Assert
-        verify(listener).onResponse("[{\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\"}]");
+        verify(listener).onResponse("[{\"annotations\":null,\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\",\"meta\":null}]");
         verify(listener, never()).onFailure(any());
     }
 
