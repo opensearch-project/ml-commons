@@ -7,8 +7,6 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
-import static org.opensearch.ml.common.input.Constants.CMK_ASSUME_ROLE_FIELD;
-import static org.opensearch.ml.common.input.Constants.CMK_ROLE_FIELD;
 
 import java.util.Map;
 
@@ -82,9 +80,7 @@ public class IndexInsightTool implements Tool {
             MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
                 indexName,
                 taskType,
-                parameters.getOrDefault(TENANT_ID_FIELD, null),
-                parameters.getOrDefault(CMK_ROLE_FIELD, null),
-                parameters.getOrDefault(CMK_ASSUME_ROLE_FIELD, null)
+                parameters.getOrDefault(TENANT_ID_FIELD, null)
             );
             client.execute(MLIndexInsightGetAction.INSTANCE, mlIndexInsightGetRequest, ActionListener.wrap(r -> {
                 IndexInsight indexInsight = r.getIndexInsight();
