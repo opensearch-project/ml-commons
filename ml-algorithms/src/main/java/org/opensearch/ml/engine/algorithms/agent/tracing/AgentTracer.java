@@ -540,6 +540,7 @@ public final class AgentTracer {
 
     /**
      * End an agent span by runId. Used by streaming handlers when they complete.
+     * Thread-safe: only the thread that successfully removes the span from the map will end it.
      *
      * @param runId The AG-UI run ID
      * @param success Whether the agent completed successfully
@@ -551,10 +552,18 @@ public final class AgentTracer {
             return;
         }
 
+        // Atomic remove ensures only one thread can end this span
         Span span = activeAgentSpans.remove(runId);
-        if (span != null) {
+        if (span != null && span.getSpanContext().isValid()) {
             log.info("[AgentTracer] Ending agent span by runId={}, spanId={}", runId, span.getSpanContext().getSpanId());
-            endSpan(span, success, output);
+            // End span directly here instead of calling endSpan() to avoid redundant map operations
+            span.setAttribute(RESULT_SUCCESS, success);
+            if (output != null) {
+                span.setAttribute(RESULT_OUTPUT, truncate(output, 500));
+            }
+            span.setStatus(success ? StatusCode.OK : StatusCode.ERROR);
+            span.end();
+            log.info("[AgentTracer] Agent span ended successfully for runId={}", runId);
         } else {
             log.debug("[AgentTracer] No active span found for runId={}", runId);
         }
