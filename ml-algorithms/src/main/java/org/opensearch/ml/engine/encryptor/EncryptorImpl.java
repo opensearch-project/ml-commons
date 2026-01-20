@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLConfig.CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES;
 import static org.opensearch.ml.common.utils.StringUtils.hashString;
 
 import java.io.IOException;
@@ -22,9 +23,6 @@ import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 
 import javax.crypto.spec.SecretKeySpec;
 
@@ -54,6 +52,10 @@ import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.jce.JceMasterKey;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -67,23 +69,61 @@ public class EncryptorImpl implements Encryptor {
     private SdkClient sdkClient;
     private final Cache<String, String> tenantMasterKeys;
     private MLIndicesHandler mlIndicesHandler;
+    private final Object lock = new Object();
+    private volatile long masterKeyCacheTtlMinutes;
 
     // concurrent map can't have null as a key. This is to support single tenancy
     // assigning some random string so that it can't be duplicate
     public static final String DEFAULT_TENANT_ID = "03000200-0400-0500-0006-000700080009";
-    
-    // TTL for master key cache entries (5 minutes)
-    private static final long MASTER_KEY_CACHE_TTL_MINUTES = 5;
 
     public EncryptorImpl(ClusterService clusterService, Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler) {
-        this(clusterService, client, sdkClient, mlIndicesHandler, MASTER_KEY_CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+        this.masterKeyCacheTtlMinutes = ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES.get(clusterService.getSettings());
+        this.tenantMasterKeys = CacheBuilder
+            .newBuilder()
+            .expireAfterWrite(masterKeyCacheTtlMinutes, TimeUnit.MINUTES)
+            .removalListener(new RemovalListener<String, String>() {
+                @Override
+                public void onRemoval(RemovalNotification<String, String> notification) {
+                    log.info("Master key cache entry removed - Tenant: {}, Cause: {}", notification.getKey(), notification.getCause());
+                }
+            })
+            .build();
+        this.clusterService = clusterService;
+        this.client = client;
+        this.sdkClient = sdkClient;
+        this.mlIndicesHandler = mlIndicesHandler;
+
+        // Register listener for dynamic setting updates
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES, this::updateCacheTtl);
+    }
+
+    /**
+     * Updates the cache TTL when the cluster setting changes.
+     * Note: This only affects new cache entries. Existing entries will expire based on their original TTL.
+     */
+    private void updateCacheTtl(Integer newTtlMinutes) {
+        this.masterKeyCacheTtlMinutes = newTtlMinutes;
+        log.info("Master key cache TTL updated to {} minutes. Note: Existing cache entries retain their original TTL.", newTtlMinutes);
     }
 
     // Package-private constructor for testing with custom TTL
-    EncryptorImpl(ClusterService clusterService, Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler, 
-                  long cacheTtl, TimeUnit timeUnit) {
-        this.tenantMasterKeys = CacheBuilder.newBuilder()
+    EncryptorImpl(
+        ClusterService clusterService,
+        Client client,
+        SdkClient sdkClient,
+        MLIndicesHandler mlIndicesHandler,
+        long cacheTtl,
+        TimeUnit timeUnit
+    ) {
+        this.tenantMasterKeys = CacheBuilder
+            .newBuilder()
             .expireAfterWrite(cacheTtl, timeUnit)
+            .removalListener(new RemovalListener<String, String>() {
+                @Override
+                public void onRemoval(RemovalNotification<String, String> notification) {
+                    log.info("Master key cache entry removed - Tenant: {}, Cause: {}", notification.getKey(), notification.getCause());
+                }
+            })
             .build();
         this.clusterService = clusterService;
         this.client = client;
@@ -92,13 +132,20 @@ public class EncryptorImpl implements Encryptor {
     }
 
     public EncryptorImpl(String tenantId, String masterKey) {
-        this(tenantId, masterKey, MASTER_KEY_CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+        this(tenantId, masterKey, 5, TimeUnit.MINUTES);  // Default 5 minutes for testing
     }
 
     // Package-private constructor for testing with custom TTL
     EncryptorImpl(String tenantId, String masterKey, long cacheTtl, TimeUnit timeUnit) {
-        this.tenantMasterKeys = CacheBuilder.newBuilder()
+        this.tenantMasterKeys = CacheBuilder
+            .newBuilder()
             .expireAfterWrite(cacheTtl, timeUnit)
+            .removalListener(new RemovalListener<String, String>() {
+                @Override
+                public void onRemoval(RemovalNotification<String, String> notification) {
+                    log.info("Master key cache entry removed - Tenant: {}, Cause: {}", notification.getKey(), notification.getCause());
+                }
+            })
             .build();
         this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
     }
@@ -148,14 +195,22 @@ public class EncryptorImpl implements Encryptor {
     }
 
     private String getOrInitMasterKey(String tenantId) {
-        String masterKey = tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
+        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
+        String masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
         if (masterKey != null) {
             return masterKey;
         }
-        initMasterKey(tenantId);
-        masterKey = tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
-        if (masterKey == null) {
-            throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
+
+        // Double-checked locking to prevent duplicate index writes under high concurrency
+        synchronized (lock) {
+            masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
+            if (masterKey == null) {
+                initMasterKey(tenantId);
+                masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
+                if (masterKey == null) {
+                    throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
+                }
+            }
         }
         return masterKey;
     }

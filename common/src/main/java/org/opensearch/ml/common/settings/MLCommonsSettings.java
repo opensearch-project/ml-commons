@@ -433,6 +433,37 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "multi_tenancy_enabled", false, Setting.Property.NodeScope);
 
+    /**
+     * TTL (Time To Live) for master key cache entries in minutes.
+     * 
+     * This setting controls how long encryption master keys are cached before being refreshed from the datastore.
+     * A shorter TTL provides better security by ensuring keys are refreshed more frequently, which is important
+     * in multi-tenant environments where domains may be recreated with new keys. A longer TTL reduces datastore
+     * access overhead but may result in using stale keys for a longer period.
+     * 
+     * Default: 5 minutes
+     * Range: 1 to 1440 minutes (1 day)
+     * 
+     * This is a dynamic setting that can be updated without restarting the cluster:
+     * <pre>
+     * PUT _cluster/settings
+     * {
+     *   "persistent": {
+     *     "plugins.ml_commons.master_key_cache_ttl_minutes": 10
+     *   }
+     * }
+     * </pre>
+     */
+    public static final Setting<Integer> ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "master_key_cache_ttl_minutes",
+            5,
+            1,
+            1440,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
     /** This setting sets the remote metadata type */
     public static final Setting<String> REMOTE_METADATA_TYPE = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_TYPE_KEY, Setting.Property.NodeScope, Setting.Property.Final);

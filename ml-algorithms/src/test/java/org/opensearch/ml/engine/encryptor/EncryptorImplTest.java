@@ -38,6 +38,7 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -50,6 +51,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -131,6 +133,15 @@ public class EncryptorImplTest {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Mock cluster settings for the new TTL setting
+        when(clusterService.getSettings()).thenReturn(settings);
+        ClusterSettings clusterSettings = new ClusterSettings(
+            settings,
+            Collections.singleton(MLCommonsSettings.ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES)
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
     }
 
@@ -799,19 +810,19 @@ public class EncryptorImplTest {
         }).when(client).get(any(), any());
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        
+
         // First encryption caches the key - should call DDB
         String encrypted1 = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted1);
-        
+
         // Verify key is cached
         String cachedKey1 = encryptor.getMasterKey(TENANT_ID);
         Assert.assertNotNull(cachedKey1);
-        
+
         // Second encryption should use cached key (no additional DDB call)
         String encrypted2 = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted2);
-        
+
         // Verify DDB (client.get) was called only once, not twice
         verify(client, times(1)).get(any(), any());
     }
@@ -819,7 +830,7 @@ public class EncryptorImplTest {
     @Test
     public void testCacheExpiryConfiguration() throws Exception {
         // This test verifies that the cache is configured with TTL and reuses cached keys
-        
+
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -832,24 +843,24 @@ public class EncryptorImplTest {
             listener.onResponse(response);
             return null;
         }).when(client).get(any(), any());
-        
+
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        
+
         // Initially no key should be cached
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-        
+
         // First encryption fetches from DDB and caches
         String encrypted1 = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted1);
         Assert.assertNotNull(encryptor.getMasterKey(TENANT_ID));
-        
+
         // Second encryption uses cache, not DDB
         String encrypted2 = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted2);
-        
+
         // Verify DDB was called only once (first time), not on second encryption
         verify(client, times(1)).get(any(), any());
-        
+
         // Note: In production, this key would expire after 5 minutes and be re-fetched from DDB
         // The actual expiry behavior is tested in testStaleMasterKeyScenarioWithCacheExpiry
     }
@@ -858,7 +869,7 @@ public class EncryptorImplTest {
     public void testStaleMasterKeyScenarioWithCacheExpiry() throws Exception {
         // This test simulates the bug scenario from GitHub issue #4542 with actual cache expiry
         // Using a 1-second TTL to make the test practical
-        
+
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -869,11 +880,11 @@ public class EncryptorImplTest {
         Encryptor tempEncryptor = new EncryptorImpl(null, GENERATED_MASTER_KEY);
         String oldMasterKey = tempEncryptor.generateMasterKey();
         GetResponse oldResponse = prepareMLConfigResponseWithKey(TENANT_ID, oldMasterKey);
-        
+
         // New master key (new domain after recreation)
         String newMasterKey = GENERATED_MASTER_KEY;
         GetResponse newResponse = prepareMLConfigResponse(TENANT_ID);
-        
+
         // First call returns old key, subsequent calls return new key
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -887,26 +898,26 @@ public class EncryptorImplTest {
 
         // Create encryptor with 1-second TTL for testing
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler, 1, TimeUnit.SECONDS);
-        
+
         // T1: First encryption with old key
         String encrypted1 = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted1);
         String cachedKey = encryptor.getMasterKey(TENANT_ID);
         Assert.assertEquals(oldMasterKey, cachedKey);
-        
+
         // Wait for cache to expire (1 second + buffer)
         Thread.sleep(1500);
-        
+
         // T4: After expiry, key should be null in cache
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-        
+
         // T5: Next encryption should fetch the NEW key from DDB (simulating domain recreation)
         String encrypted2 = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted2);
         String newCachedKey = encryptor.getMasterKey(TENANT_ID);
         Assert.assertEquals(newMasterKey, newCachedKey);
         Assert.assertNotEquals(oldMasterKey, newCachedKey);
-        
+
         // Verify DDB was called twice: once for old key, once for new key after expiry
         verify(client, times(2)).get(any(), any());
     }
@@ -922,10 +933,10 @@ public class EncryptorImplTest {
 
         String tenant1 = "tenant1";
         String tenant2 = "tenant2";
-        
+
         GetResponse response1 = prepareMLConfigResponse(tenant1);
         GetResponse response2 = prepareMLConfigResponse(tenant2);
-        
+
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             // Return appropriate response based on which tenant is being requested
@@ -938,17 +949,17 @@ public class EncryptorImplTest {
         }).when(client).get(any(), any());
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        
+
         // Encrypt for tenant1
         String encrypted1 = encryptor.encrypt("test1", tenant1);
         Assert.assertNotNull(encrypted1);
         Assert.assertNotNull(encryptor.getMasterKey(tenant1));
-        
+
         // Encrypt for tenant2
         String encrypted2 = encryptor.encrypt("test2", tenant2);
         Assert.assertNotNull(encrypted2);
         Assert.assertNotNull(encryptor.getMasterKey(tenant2));
-        
+
         // Both keys should be cached independently
         Assert.assertNotNull(encryptor.getMasterKey(tenant1));
         Assert.assertNotNull(encryptor.getMasterKey(tenant2));
@@ -958,7 +969,7 @@ public class EncryptorImplTest {
     public void testCacheReturnsNullForExpiredKey() {
         // Verify that getMasterKey returns null for non-existent/expired keys
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        
+
         // Key should not exist in cache initially
         Assert.assertNull(encryptor.getMasterKey("nonexistent-tenant"));
         Assert.assertNull(encryptor.getMasterKey(null));
@@ -993,12 +1004,7 @@ public class EncryptorImplTest {
             masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
         }
 
-        Map<String, Object> sourceMap = Map.of(
-            MASTER_KEY,
-            masterKey,
-            CREATE_TIME_FIELD,
-            Instant.now().toEpochMilli()
-        );
+        Map<String, Object> sourceMap = Map.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli());
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
