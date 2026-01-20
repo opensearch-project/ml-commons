@@ -929,7 +929,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         // Set agent type for Chat agent for streaming
         tmpParameters.put("agent_type", "chat");
-        
+
         tmpParameters.putAll(parameters);
         if (!tmpParameters.containsKey("stop")) {
             tmpParameters.put("stop", gson.toJson(new String[] { "\nObservation:", "\n\tObservation:" }));
