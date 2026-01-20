@@ -42,40 +42,20 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
 
         ThreadContext threadContext = getClient().threadPool().getThreadContext();
 
-        String accessKeyId = threadContext.getHeader(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID);
-        if (accessKeyId != null && !accessKeyId.isEmpty()) {
-            builder.header(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID, accessKeyId);
-            log.debug("Get MCP header: {}", CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID);
-        }
+        String[] mcpHeaders = {
+            CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID,
+            CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY,
+            CommonValue.MCP_HEADER_AWS_SESSION_TOKEN,
+            CommonValue.MCP_HEADER_AWS_REGION,
+            CommonValue.MCP_HEADER_AWS_SERVICE_NAME,
+            CommonValue.MCP_HEADER_OPENSEARCH_URL };
 
-        String secretAccessKey = threadContext.getHeader(CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY);
-        if (secretAccessKey != null && !secretAccessKey.isEmpty()) {
-            builder.header(CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY, secretAccessKey);
-            log.debug("Get MCP header: {}", CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY);
-        }
-
-        String sessionToken = threadContext.getHeader(CommonValue.MCP_HEADER_AWS_SESSION_TOKEN);
-        if (sessionToken != null && !sessionToken.isEmpty()) {
-            builder.header(CommonValue.MCP_HEADER_AWS_SESSION_TOKEN, sessionToken);
-            log.debug("Get MCP header: {}", CommonValue.MCP_HEADER_AWS_SESSION_TOKEN);
-        }
-
-        String region = threadContext.getHeader(CommonValue.MCP_HEADER_AWS_REGION);
-        if (region != null && !region.isEmpty()) {
-            builder.header(CommonValue.MCP_HEADER_AWS_REGION, region);
-            log.debug("Get MCP header: {}", CommonValue.MCP_HEADER_AWS_REGION);
-        }
-
-        String serviceName = threadContext.getHeader(CommonValue.MCP_HEADER_AWS_SERVICE_NAME);
-        if (serviceName != null && !serviceName.isEmpty()) {
-            builder.header(CommonValue.MCP_HEADER_AWS_SERVICE_NAME, serviceName);
-            log.debug("Get MCP header: {}", CommonValue.MCP_HEADER_AWS_SERVICE_NAME);
-        }
-
-        String opensearchUrl = threadContext.getHeader(CommonValue.MCP_HEADER_OPENSEARCH_URL);
-        if (opensearchUrl != null && !opensearchUrl.isEmpty()) {
-            builder.header(CommonValue.MCP_HEADER_OPENSEARCH_URL, opensearchUrl);
-            log.debug("Get MCP header: {}", CommonValue.MCP_HEADER_OPENSEARCH_URL);
+        for (String headerName : mcpHeaders) {
+            String headerValue = threadContext.getHeader(headerName);
+            if (headerValue != null && !headerValue.isEmpty()) {
+                builder.setHeader(headerName, headerValue);
+                log.debug("Get MCP header: {}", headerName);
+            }
         }
     }
 }

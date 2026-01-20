@@ -177,7 +177,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 try (ThreadContext.StoredContext context = supplier.get()) {
 
                     BytesReference completeContent = combineChunks(chunks);
-                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent, client);
+                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
 
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
                     StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
@@ -322,11 +322,10 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
      * @param agentId Agent ID
      * @param request RestRequest
      * @param content Request content
-     * @param client NodeClient
      * @return MLExecuteTaskRequest
      */
     @VisibleForTesting
-    MLExecuteTaskRequest getRequest(String agentId, RestRequest request, BytesReference content, NodeClient client) throws IOException {
+    MLExecuteTaskRequest getRequest(String agentId, RestRequest request, BytesReference content) throws IOException {
         XContentParser parser = request
             .getMediaType()
             .xContent()

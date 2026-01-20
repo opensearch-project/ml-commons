@@ -15,6 +15,9 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_REGION;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.TestHelper.getAnomalyLocalizationRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteToolRestRequest;
@@ -532,5 +535,74 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
             .build();
+    }
+
+    public void testAgentExecutionWithMcpHeaders_FeatureDisabled() throws IOException {
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(false);
+        
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withParams(params)
+            .withHeaders(headers)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> restMLExecuteAction.getRequest(request, client)
+        );
+        assertTrue(exception.getMessage().contains("MCP header passthrough is not enabled"));
+        assertTrue(exception.getMessage().contains("plugins.ml_commons.mcp_header_passthrough_enabled"));
+    }
+
+    public void testAgentExecutionWithMcpHeaders_FeatureEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+        
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withParams(params)
+            .withHeaders(headers)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
+
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
+
+        // Verify request was created successfully
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
+
+        // Verify headers were put into ThreadContext
+        assertEquals("test-key", client.threadPool().getThreadContext().getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader(MCP_HEADER_AWS_REGION));
+    }
+
+    public void testAgentExecutionWithoutMcpHeaders() throws IOException {
+        // No MCP headers, feature flag state shouldn't matter
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(false);
+        
+        RestRequest request = getExecuteAgentRestRequest();
+
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
+
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
     }
 }

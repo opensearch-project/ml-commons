@@ -367,40 +367,20 @@ public class RestActionUtils {
 
         ThreadContext threadContext = client.threadPool().getThreadContext();
 
-        String accessKeyId = request.header(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID);
-        if (accessKeyId != null && !accessKeyId.isEmpty()) {
-            threadContext.putHeader(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID, accessKeyId);
-            log.debug("Put MCP header: {}", CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID);
-        }
+        String[] mcpHeaders = {
+            CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID,
+            CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY,
+            CommonValue.MCP_HEADER_AWS_SESSION_TOKEN,
+            CommonValue.MCP_HEADER_AWS_REGION,
+            CommonValue.MCP_HEADER_AWS_SERVICE_NAME,
+            CommonValue.MCP_HEADER_OPENSEARCH_URL };
 
-        String secretAccessKey = request.header(CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY);
-        if (secretAccessKey != null && !secretAccessKey.isEmpty()) {
-            threadContext.putHeader(CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY, secretAccessKey);
-            log.debug("Put MCP header: {}", CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY);
-        }
-
-        String sessionToken = request.header(CommonValue.MCP_HEADER_AWS_SESSION_TOKEN);
-        if (sessionToken != null && !sessionToken.isEmpty()) {
-            threadContext.putHeader(CommonValue.MCP_HEADER_AWS_SESSION_TOKEN, sessionToken);
-            log.debug("Put MCP header: {}", CommonValue.MCP_HEADER_AWS_SESSION_TOKEN);
-        }
-
-        String region = request.header(CommonValue.MCP_HEADER_AWS_REGION);
-        if (region != null && !region.isEmpty()) {
-            threadContext.putHeader(CommonValue.MCP_HEADER_AWS_REGION, region);
-            log.debug("Put MCP header: {}", CommonValue.MCP_HEADER_AWS_REGION);
-        }
-
-        String serviceName = request.header(CommonValue.MCP_HEADER_AWS_SERVICE_NAME);
-        if (serviceName != null && !serviceName.isEmpty()) {
-            threadContext.putHeader(CommonValue.MCP_HEADER_AWS_SERVICE_NAME, serviceName);
-            log.debug("Put MCP header: {}", CommonValue.MCP_HEADER_AWS_SERVICE_NAME);
-        }
-
-        String opensearchUrl = request.header(CommonValue.MCP_HEADER_OPENSEARCH_URL);
-        if (opensearchUrl != null && !opensearchUrl.isEmpty()) {
-            threadContext.putHeader(CommonValue.MCP_HEADER_OPENSEARCH_URL, opensearchUrl);
-            log.debug("Put MCP header: {}", CommonValue.MCP_HEADER_OPENSEARCH_URL);
+        for (String headerName : mcpHeaders) {
+            String headerValue = request.header(headerName);
+            if (headerValue != null && !headerValue.isEmpty()) {
+                threadContext.putHeader(headerName, headerValue);
+                log.debug("Put MCP header: {}", headerName);
+            }
         }
     }
 
