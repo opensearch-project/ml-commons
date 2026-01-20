@@ -8,6 +8,12 @@ package org.opensearch.ml.utils;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_REGION;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_SERVICE_NAME;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_SESSION_TOKEN;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_OPENSEARCH_URL;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.OPENSEARCH_DASHBOARDS_USER_AGENT;
@@ -394,5 +400,165 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         public synchronized Throwable getCause() {
             return new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
         }
+    }
+
+    @Test
+    public void testHasMcpHeaders_NoHeaders() {
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .build();
+        assertFalse(RestActionUtils.hasMcpHeaders(request));
+    }
+
+    @Test
+    public void testHasMcpHeaders_WithOpensearchUrl() {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_OPENSEARCH_URL, Arrays.asList("https://localhost:9200"));
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+        assertTrue(RestActionUtils.hasMcpHeaders(request));
+    }
+
+    @Test
+    public void testHasMcpHeaders_WithMultipleHeaders() {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        headers.put(MCP_HEADER_AWS_SECRET_ACCESS_KEY, Arrays.asList("test-secret-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+        assertTrue(RestActionUtils.hasMcpHeaders(request));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_NullClient() {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+        // Should not throw exception when client is null
+        RestActionUtils.putMcpRequestHeaders(request, null);
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_AllHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        headers.put(MCP_HEADER_AWS_SECRET_ACCESS_KEY, Arrays.asList("test-secret-key"));
+        headers.put(MCP_HEADER_AWS_SESSION_TOKEN, Arrays.asList("test-session-token"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+        headers.put(MCP_HEADER_AWS_SERVICE_NAME, Arrays.asList("bedrock"));
+        headers.put(MCP_HEADER_OPENSEARCH_URL, Arrays.asList("https://localhost:9200"));
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        assertEquals("test-access-key", threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertEquals("test-secret-key", threadContext.getHeader(MCP_HEADER_AWS_SECRET_ACCESS_KEY));
+        assertEquals("test-session-token", threadContext.getHeader(MCP_HEADER_AWS_SESSION_TOKEN));
+        assertEquals("us-west-2", threadContext.getHeader(MCP_HEADER_AWS_REGION));
+        assertEquals("bedrock", threadContext.getHeader(MCP_HEADER_AWS_SERVICE_NAME));
+        assertEquals("https://localhost:9200", threadContext.getHeader(MCP_HEADER_OPENSEARCH_URL));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_PartialHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        assertEquals("test-access-key", threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertEquals("us-west-2", threadContext.getHeader(MCP_HEADER_AWS_REGION));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SECRET_ACCESS_KEY));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SESSION_TOKEN));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_EmptyHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList(""));
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        // Empty headers should not be put into ThreadContext
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_NoMcpHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SECRET_ACCESS_KEY));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SESSION_TOKEN));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_REGION));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SERVICE_NAME));
+        assertNull(threadContext.getHeader(MCP_HEADER_OPENSEARCH_URL));
     }
 }

@@ -235,4 +235,47 @@ public class MLFeatureEnabledSettingTests {
 
         assertEquals(75_000_000, setting.getMaxJsonSize());
     }
+
+    @Test
+    public void testMcpHeaderPassthroughDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to enable
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build());
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to disable again
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build());
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
 }

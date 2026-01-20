@@ -52,4 +52,16 @@ public class AbstractConnectorExecutorTest {
         executor.getMcpRequestHeaders(builder);
         verify(builder, never()).header(anyString(), anyString());
     }
+
+    @Test
+    public void testGetMcpRequestHeaders_ClientNotSet() {
+        HttpRequest.Builder builder = mock(HttpRequest.Builder.class);
+
+        // Client is null by default
+        assertNull(executor.getClient());
+        executor.getMcpRequestHeaders(builder);
+
+        // No headers should be added when client is null
+        verify(builder, never()).header(anyString(), anyString());
+    }
 }
