@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOOL_NAMES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_FRONTEND_TOOL_NAMES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
@@ -1159,10 +1160,32 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool> unifiedToolsMap = new HashMap<>(backendToolsMap);
         unifiedToolsMap.putAll(wrapFrontendToolsAsToolObjects(frontendTools));
 
-        // Store backend tool names so streaming handler can filter them out from AG-UI events
-        if (!backendToolsMap.isEmpty()) {
+        // Store tool names in parameters for AG-UI agent
+        if (isAGUIAgent(params)) {
+            List<String> frontendToolNames = new ArrayList<>();
+            for (Map<String, Object> frontendTool : frontendTools) {
+                String toolName = (String) frontendTool.get("name");
+                if (toolName != null) {
+                    frontendToolNames.add(toolName);
+                }
+            }
+
+            params.put(AGUI_PARAM_FRONTEND_TOOL_NAMES, String.join(", ", frontendToolNames));
+            log
+                .debug(
+                    "AG-UI: Setting frontend tools in params - frontendToolNames: {}, toolCount: {}",
+                    frontendToolNames,
+                    frontendToolNames.size()
+                );
+
             List<String> backendToolNames = new ArrayList<>(backendToolsMap.keySet());
-            params.put(AGUI_PARAM_BACKEND_TOOL_NAMES, gson.toJson(backendToolNames));
+            params.put(AGUI_PARAM_BACKEND_TOOL_NAMES, String.join(", ", backendToolNames));
+            log
+                .debug(
+                    "AG-UI: Setting backend tools in params - backendToolNames: {}, toolCount: {}",
+                    backendToolNames,
+                    backendToolNames.size()
+                );
         }
 
         // Call runReAct with unified tools - both frontend and backend tools will be visible to LLM

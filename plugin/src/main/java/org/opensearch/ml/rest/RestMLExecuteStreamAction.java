@@ -9,7 +9,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOOL_NAMES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
@@ -26,7 +25,6 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -55,7 +53,6 @@ import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agui.*;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
@@ -84,7 +81,6 @@ import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.transport.stream.StreamTransportResponse;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -201,40 +197,6 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
                         channel.sendChunk(startChunk);
                         log.debug("AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", threadId, runId);
-                    }
-
-                    // Extract backend tool names from agent configuration and add to request for AG-UI filtering
-                    List<String> backendToolNames = extractBackendToolNamesFromAgent(agent);
-                    if (isAGUI && !backendToolNames.isEmpty()) {
-                        // Add backend tool names to request parameters so they're available during streaming
-                        try {
-                            if (!(mlExecuteTaskRequest.getInput() instanceof AgentMLInput)) {
-                                throw new IllegalArgumentException(
-                                    "Invalid input type. Expected: AgentMLInput, Received: "
-                                        + mlExecuteTaskRequest.getInput().getClass().getSimpleName()
-                                );
-                            }
-                            AgentMLInput agentInput = (AgentMLInput) mlExecuteTaskRequest.getInput();
-
-                            if (!(agentInput.getInputDataset() instanceof RemoteInferenceInputDataSet)) {
-                                throw new IllegalArgumentException(
-                                    "Invalid dataset type. Expected: RemoteInferenceInputDataSet, Received: "
-                                        + agentInput.getInputDataset().getClass().getSimpleName()
-                                );
-                            }
-                            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
-
-                            inputDataSet.getParameters().put(AGUI_PARAM_BACKEND_TOOL_NAMES, new Gson().toJson(backendToolNames));
-                            log
-                                .info(
-                                    "AG-UI: Added {} backend tool names to request for streaming filter: {}",
-                                    backendToolNames.size(),
-                                    backendToolNames
-                                );
-                        } catch (ClassCastException e) {
-                            log.error("Failed to cast input types for backend tool names extraction", e);
-                            throw new IllegalArgumentException("Invalid input type configuration for AG-UI request", e);
-                        }
                     }
 
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
@@ -428,18 +390,6 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 || inputDataSet.getParameters().containsKey(AGUI_PARAM_RUN_ID);
         }
         return false;
-    }
-
-    private List<String> extractBackendToolNamesFromAgent(MLAgent agent) {
-        List<String> backendToolNames = new ArrayList<>();
-        if (agent != null && agent.getTools() != null) {
-            for (MLToolSpec toolSpec : agent.getTools()) {
-                if (toolSpec.getName() != null) {
-                    backendToolNames.add(toolSpec.getName());
-                }
-            }
-        }
-        return backendToolNames;
     }
 
     private String extractThreadId(MLExecuteTaskRequest request) {
