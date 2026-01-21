@@ -85,7 +85,8 @@ jobs:
                                echo "::add-mask::$COHERE_KEY" &&
                                echo "build and run tests" && ./gradlew build -x spotlessJava &&
                                echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
-                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava'
+                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava &&
+                               echo "Tenant Aware Integration Testing" && ./gradlew integTest -Dtests.rest.tenantaware=true -x spotlessJava'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
@@ -236,6 +237,9 @@ jobs:
           echo "::add-mask::$OPENAI_KEY"
           echo "::add-mask::$COHERE_KEY"
           ./gradlew.bat build -x spotlessJava
+      - name: Tenant Aware Tests
+        shell: bash
+        run: ./gradlew.bat integTest -Dtests.rest.tenantaware=true -x spotlessJava
       - name: Publish to Maven Local
         run: |
           ./gradlew publishToMavenLocal -x spotlessJava
