@@ -37,8 +37,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.hooks.HookRegistry;
-import org.opensearch.ml.common.memory.Memory;
+import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
@@ -64,7 +63,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private final SdkClient sdkClient;
     private final Encryptor encryptor;
-    private final HookRegistry hookRegistry;
 
     public MLAGUIAgentRunner(
         Client client,
@@ -76,20 +74,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
         SdkClient sdkClient,
         Encryptor encryptor
     ) {
-        this(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap, sdkClient, encryptor, null);
-    }
-
-    public MLAGUIAgentRunner(
-        Client client,
-        Settings settings,
-        ClusterService clusterService,
-        NamedXContentRegistry xContentRegistry,
-        Map<String, Tool.Factory> toolFactories,
-        Map<String, Memory.Factory> memoryFactoryMap,
-        SdkClient sdkClient,
-        Encryptor encryptor,
-        HookRegistry hookRegistry
-    ) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
@@ -98,7 +82,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
-        this.hookRegistry = hookRegistry;
     }
 
     @Override
@@ -127,8 +110,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 toolFactories,
                 memoryFactoryMap,
                 sdkClient,
-                encryptor,
-                hookRegistry
+                encryptor
             );
 
             // Execute with streaming - events are generated in RestMLExecuteStreamAction
@@ -301,41 +283,8 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
             String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
 
-            if (chatHistoryQuestionTemplate == null || chatHistoryResponseTemplate == null) {
-
-                StringBuilder chatHistoryBuilder = new StringBuilder();
-
-                for (int i = 0; i < messageArray.size() - 1; i++) {
-                    JsonElement messageElement = messageArray.get(i);
-                    if (messageElement.isJsonObject()) {
-                        JsonObject message = messageElement.getAsJsonObject();
-                        String role = getStringField(message, AGUI_FIELD_ROLE);
-                        String content = getStringField(message, AGUI_FIELD_CONTENT);
-
-                        // Skip tool messages - they're not part of chat history
-                        if (AGUI_ROLE_TOOL.equals(role)) {
-                            continue;
-                        }
-
-                        // Skip assistant messages with tool_calls - they're not part of chat history
-                        if (AGUI_ROLE_ASSISTANT.equals(role) && message.has(AGUI_FIELD_TOOL_CALLS)) {
-                            continue;
-                        }
-
-                        // Include user messages and assistant messages with content (final answers)
-                        if ((AGUI_ROLE_USER.equals(role) || AGUI_ROLE_ASSISTANT.equals(role)) && content != null && !content.isEmpty()) {
-                            if (chatHistoryBuilder.length() > 0) {
-                                chatHistoryBuilder.append("\n");
-                            }
-                            chatHistoryBuilder.append(role.equals(AGUI_ROLE_USER) ? "Human: " : "Assistant: ").append(content);
-                        }
-                    }
-                }
-
-                if (chatHistoryBuilder.length() > 0) {
-                    params.put(NEW_CHAT_HISTORY, chatHistoryBuilder.toString());
-                }
-            } else {
+            // Build chat history using templates (templates are required for AG-UI)
+            if (chatHistoryQuestionTemplate != null && chatHistoryResponseTemplate != null) {
                 List<String> chatHistory = new ArrayList<>();
 
                 for (int i = 0; i < messageArray.size() - 1; i++) {
@@ -344,11 +293,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                         JsonObject message = messageElement.getAsJsonObject();
                         String role = getStringField(message, AGUI_FIELD_ROLE);
                         String content = getStringField(message, AGUI_FIELD_CONTENT);
-
-                        // Skip tool messages - they're never part of chat history
-                        if (AGUI_ROLE_TOOL.equals(role)) {
-                            continue;
-                        }
 
                         if (AGUI_ROLE_USER.equals(role) && content != null && !content.isEmpty()) {
                             // When we have recent tool results, skip the user message that triggered the tool call
@@ -368,12 +312,17 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                             String chatMessage = substitutor.replace(chatHistoryQuestionTemplate);
                             chatHistory.add(chatMessage);
                         } else if (AGUI_ROLE_ASSISTANT.equals(role)) {
-                            // Skip ALL assistant messages with tool_calls - they're never part of chat history
-                            // (matching backend behavior where only final answers are in chat history)
-                            if (message.has(AGUI_FIELD_TOOL_CALLS)) {
-                                // Skip - not part of chat history
-                            } else if (content != null && !content.isEmpty()) {
-                                // Regular assistant message with content (final answer)
+                            // Include ALL assistant messages (both with and without tool calls)
+                            if (content != null && !content.isEmpty()) {
+                                Map<String, String> messageParams = new HashMap<>();
+                                messageParams.put("response", processTextDoc(content));
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatMessage = substitutor.replace(chatHistoryResponseTemplate);
+                                chatHistory.add(chatMessage);
+                            }
+                        } else if (AGUI_ROLE_TOOL.equals(role)) {
+                            // Include tool result messages in chat history
+                            if (content != null && !content.isEmpty()) {
                                 Map<String, String> messageParams = new HashMap<>();
                                 messageParams.put("response", processTextDoc(content));
                                 StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
