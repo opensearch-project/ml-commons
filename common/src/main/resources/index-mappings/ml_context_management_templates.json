@@ -1,11 +1,10 @@
-{
+{  "_meta": {
+  "schema_version": 1
+},
   "dynamic": false,
   "properties": {
     "name": {
       "type": "keyword"
-    },
-    "schema_version": {
-        "type": "integer"
     },
     "description": {
       "type": "text"
