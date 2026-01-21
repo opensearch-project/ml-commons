@@ -10,14 +10,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
-import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
@@ -34,7 +30,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
-import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -42,8 +37,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.bulk.BulkRequest;
-import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -71,8 +64,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
-import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -87,7 +78,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 public class MLSyncUpCronTests extends OpenSearchTestCase {
@@ -112,7 +102,6 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
     private final String mlNode2Id = "mlNode2";
 
     private ClusterState testState;
-    private Encryptor encryptor;
 
     @Mock
     ThreadPool threadPool;
@@ -124,16 +113,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlNode1 = new DiscoveryNode(mlNode1Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         mlNode2 = new DiscoveryNode(mlNode2Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
-        encryptor = spy(new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
 
         testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = invocation.getArgument(0);
-            actionListener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLConfigIndex(any());
 
         Settings settings = Settings.builder().build();
         sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap()));
@@ -141,47 +123,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        syncUpCron = new MLSyncUpCron(client, sdkClient, clusterService, nodeHelper, mlIndicesHandler, encryptor, mlFeatureEnabledSetting);
-    }
-
-    public void testInitMlConfig_MasterKeyNotExist() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            listener.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> listener = invocation.getArgument(1);
-            IndexResponse indexResponse = mock(IndexResponse.class);
-            listener.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
-        syncUpCron.initMLConfig();
-        verify(encryptor, times(1)).setMasterKey(any(), any());
-    }
-
-    public void testInitMlConfig_MasterKeyExists() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(true);
-            String masterKey = encryptor.generateMasterKey();
-            when(response.getSourceAsMap())
-                .thenReturn(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
-            listener.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-
-        syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
-        syncUpCron.initMLConfig();
-        verify(encryptor, times(1)).setMasterKey(any(), any());
+        syncUpCron = new MLSyncUpCron(client, sdkClient, clusterService, nodeHelper, mlIndicesHandler, mlFeatureEnabledSetting);
     }
 
     public void testRun_NoMLModelIndex() {
