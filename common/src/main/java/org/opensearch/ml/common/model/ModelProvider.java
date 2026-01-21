@@ -3,13 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.agent;
+package org.opensearch.ml.common.model;
 
 import java.util.List;
 import java.util.Map;
 
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.input.execute.agent.AgentInput;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.InputType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 /**

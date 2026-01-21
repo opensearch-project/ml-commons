@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.agent;
+package org.opensearch.ml.common.input.execute.agent;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
