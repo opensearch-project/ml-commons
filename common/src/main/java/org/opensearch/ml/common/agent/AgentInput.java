@@ -40,7 +40,14 @@ public class AgentInput implements Writeable {
      * Supports all input types including images, videos, and documents.
      */
     public AgentInput(StreamInput in) throws IOException {
-        InputType inputType = InputType.valueOf(in.readString());
+        String inputTypeStr = in.readString();
+        InputType inputType;
+        try {
+            inputType = InputType.valueOf(inputTypeStr);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Invalid input type. Supported types: TEXT, CONTENT_BLOCKS, MESSAGES", e);
+        }
+
         switch (inputType) {
             case TEXT:
                 this.input = in.readString();
@@ -52,7 +59,7 @@ public class AgentInput implements Writeable {
                 this.input = readMessagesList(in);
                 break;
             default:
-                throw new IOException("Unsupported input type: " + inputType);
+                throw new IOException("Unsupported input type. Supported types: TEXT, CONTENT_BLOCKS, MESSAGES");
         }
     }
 
@@ -190,12 +197,36 @@ public class AgentInput implements Writeable {
         if (!items.isEmpty()) {
             Object firstItem = items.getFirst();
             if (firstItem instanceof Message) {
+                // Validate all items are Messages before casting
+                for (int i = 0; i < items.size(); i++) {
+                    Object item = items.get(i);
+                    if (!(item instanceof Message)) {
+                        throw new IllegalArgumentException(
+                            "Mixed array types detected. Expected all items to be Messages, but item at index "
+                                + i
+                                + " is of type "
+                                + item.getClass().getSimpleName()
+                        );
+                    }
+                }
                 List<Message> messages = new ArrayList<>();
                 for (Object item : items) {
                     messages.add((Message) item);
                 }
                 return messages;
             } else if (firstItem instanceof ContentBlock) {
+                // Validate all items are ContentBlocks before casting
+                for (int i = 0; i < items.size(); i++) {
+                    Object item = items.get(i);
+                    if (!(item instanceof ContentBlock)) {
+                        throw new IllegalArgumentException(
+                            "Mixed array types detected. Expected all items to be ContentBlocks, but item at index "
+                                + i
+                                + " is of type "
+                                + item.getClass().getSimpleName()
+                        );
+                    }
+                }
                 List<ContentBlock> contentBlocks = new ArrayList<>();
                 for (Object item : items) {
                     contentBlocks.add((ContentBlock) item);
@@ -265,11 +296,18 @@ public class AgentInput implements Writeable {
 
         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
 
+        int index = 0;
         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
 
-            ContentBlock contentBlock = (ContentBlock) parseArrayItem(parser);
-            contentBlocks.add(contentBlock);
+            Object item = parseArrayItem(parser);
+            if (!(item instanceof ContentBlock)) {
+                throw new IllegalArgumentException(
+                    "Invalid content array. Expected ContentBlock at index " + index + " but found " + item.getClass().getSimpleName()
+                );
+            }
+            contentBlocks.add((ContentBlock) item);
+            index++;
         }
 
         return contentBlocks;
@@ -322,7 +360,9 @@ public class AgentInput implements Writeable {
                 }
                 return list;
             default:
-                throw new IllegalArgumentException("Unexpected token: " + token);
+                throw new IllegalArgumentException(
+                    "Unexpected token. Expected: VALUE_STRING, VALUE_NUMBER, VALUE_BOOLEAN, VALUE_NULL, START_OBJECT, or START_ARRAY"
+                );
         }
     }
 
@@ -379,11 +419,31 @@ public class AgentInput implements Writeable {
      * Creates ImageContent from source data.
      */
     private ImageContent createImageContent(Map<String, Object> source) {
-        String format = (String) source.get("format");
-        String type = (String) source.get("type");
-        String data = (String) source.get("data");
+        if (source == null) {
+            throw new IllegalArgumentException("Image source cannot be null");
+        }
 
-        SourceType sourceType = SourceType.valueOf(type.toUpperCase());
+        String format = (String) source.get("format");
+        if (format == null || format.trim().isEmpty()) {
+            throw new IllegalArgumentException("Image format is required");
+        }
+
+        String type = (String) source.get("type");
+        if (type == null || type.trim().isEmpty()) {
+            throw new IllegalArgumentException("Image source type is required");
+        }
+
+        String data = (String) source.get("data");
+        if (data == null || data.trim().isEmpty()) {
+            throw new IllegalArgumentException("Image data is required");
+        }
+
+        SourceType sourceType;
+        try {
+            sourceType = SourceType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid source type. Supported types: BYTES, URL", e);
+        }
 
         ImageContent imageContent = new ImageContent();
         imageContent.setFormat(format);
@@ -396,11 +456,31 @@ public class AgentInput implements Writeable {
      * Creates VideoContent from source data.
      */
     private VideoContent createVideoContent(Map<String, Object> source) {
-        String format = (String) source.get("format");
-        String type = (String) source.get("type");
-        String data = (String) source.get("data");
+        if (source == null) {
+            throw new IllegalArgumentException("Video source cannot be null");
+        }
 
-        SourceType sourceType = SourceType.valueOf(type.toUpperCase());
+        String format = (String) source.get("format");
+        if (format == null || format.trim().isEmpty()) {
+            throw new IllegalArgumentException("Video format is required");
+        }
+
+        String type = (String) source.get("type");
+        if (type == null || type.trim().isEmpty()) {
+            throw new IllegalArgumentException("Video source type is required");
+        }
+
+        String data = (String) source.get("data");
+        if (data == null || data.trim().isEmpty()) {
+            throw new IllegalArgumentException("Video data is required");
+        }
+
+        SourceType sourceType;
+        try {
+            sourceType = SourceType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid source type. Supported types: BYTES, URL", e);
+        }
 
         VideoContent videoContent = new VideoContent();
         videoContent.setFormat(format);
@@ -413,11 +493,31 @@ public class AgentInput implements Writeable {
      * Creates DocumentContent from source data.
      */
     private DocumentContent createDocumentContent(Map<String, Object> source) {
-        String format = (String) source.get("format");
-        String type = (String) source.get("type");
-        String data = (String) source.get("data");
+        if (source == null) {
+            throw new IllegalArgumentException("Document source cannot be null");
+        }
 
-        SourceType sourceType = SourceType.valueOf(type.toUpperCase());
+        String format = (String) source.get("format");
+        if (format == null || format.trim().isEmpty()) {
+            throw new IllegalArgumentException("Document format is required");
+        }
+
+        String type = (String) source.get("type");
+        if (type == null || type.trim().isEmpty()) {
+            throw new IllegalArgumentException("Document source type is required");
+        }
+
+        String data = (String) source.get("data");
+        if (data == null || data.trim().isEmpty()) {
+            throw new IllegalArgumentException("Document data is required");
+        }
+
+        SourceType sourceType;
+        try {
+            sourceType = SourceType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid source type. Supported types: BYTES, URL", e);
+        }
 
         DocumentContent documentContent = new DocumentContent();
         documentContent.setFormat(format);
@@ -550,6 +650,6 @@ public class AgentInput implements Writeable {
             }
         }
 
-        throw new IllegalArgumentException("Input type not supported: " + input);
+        throw new IllegalArgumentException("Input type not supported. Expected String, List<ContentBlock>, or List<Message>");
     }
 }

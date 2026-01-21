@@ -906,15 +906,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * by the existing agent execution logic.
      */
     void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        // old style agent registration
+        if (mlAgent.getModel() == null) {
+            return;
+        }
+
         if (agentMLInput.getAgentInput() != null
             && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES
             && MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
             throw new IllegalArgumentException("Messages input is not supported for Plan Execute and Reflect Agent.");
-        }
-
-        // old style agent registration
-        if (mlAgent.getModel() == null) {
-            return;
         }
 
         // If legacy question input is provided, parse to new standard input

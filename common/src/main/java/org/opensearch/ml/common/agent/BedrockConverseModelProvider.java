@@ -206,9 +206,9 @@ public class BedrockConverseModelProvider extends ModelProvider {
                     ImageContent image = block.getImage();
                     Map<String, Object> imageParams = new HashMap<>();
                     imageParams.put("image_format", image.getFormat());
-                    imageParams.put("image_data", image.getData());
+                    imageParams.put("image_data", StringEscapeUtils.escapeJson(image.getData()));
                     // Map SourceType to Bedrock Converse API source type
-                    String imageSourceType = mapSourceTypeToBedrock(image.getType());
+                    String imageSourceType = mapSourceTypeToBedrock(image.getType(), image.getData());
                     imageParams.put("image_source_type", imageSourceType);
                     StringSubstitutor imageSubstitutor = new StringSubstitutor(imageParams, "${parameters.", "}");
                     contentArray.append(imageSubstitutor.replace(IMAGE_CONTENT_TEMPLATE));
@@ -218,9 +218,9 @@ public class BedrockConverseModelProvider extends ModelProvider {
                     Map<String, Object> docParams = new HashMap<>();
                     docParams.put("doc_format", document.getFormat());
                     docParams.put("doc_name", "document");
-                    docParams.put("doc_data", document.getData());
+                    docParams.put("doc_data", StringEscapeUtils.escapeJson(document.getData()));
                     // Map SourceType to Bedrock Converse API source type
-                    String docSourceType = mapSourceTypeToBedrock(document.getType());
+                    String docSourceType = mapSourceTypeToBedrock(document.getType(), document.getData());
                     docParams.put("doc_source_type", docSourceType);
                     StringSubstitutor docSubstitutor = new StringSubstitutor(docParams, "${parameters.", "}");
                     contentArray.append(docSubstitutor.replace(DOCUMENT_CONTENT_TEMPLATE));
@@ -229,9 +229,9 @@ public class BedrockConverseModelProvider extends ModelProvider {
                     VideoContent video = block.getVideo();
                     Map<String, Object> videoParams = new HashMap<>();
                     videoParams.put("video_format", video.getFormat());
-                    videoParams.put("video_data", video.getData());
+                    videoParams.put("video_data", StringEscapeUtils.escapeJson(video.getData()));
                     // Map SourceType to Bedrock Converse API source type
-                    String videoSourceType = mapSourceTypeToBedrock(video.getType());
+                    String videoSourceType = mapSourceTypeToBedrock(video.getType(), video.getData());
                     videoParams.put("video_source_type", videoSourceType);
                     StringSubstitutor videoSubstitutor = new StringSubstitutor(videoParams, "${parameters.", "}");
                     contentArray.append(videoSubstitutor.replace(VIDEO_CONTENT_TEMPLATE));
@@ -276,13 +276,23 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     /**
      * Maps SourceType to Bedrock Converse API source field names.
+     * Validates that URL-based sources are S3 URIs.
      *
      * @param sourceType the source type from content
+     * @param dataUrl the data URL (only validated when sourceType is URL)
      * @return the corresponding Bedrock API source field name
+     * @throws IllegalArgumentException if sourceType is URL but dataUrl is not an S3 URI
      */
-    private String mapSourceTypeToBedrock(SourceType sourceType) {
+    private String mapSourceTypeToBedrock(SourceType sourceType, String dataUrl) {
         if (sourceType == SourceType.URL) {
-            return "s3Location"; // Bedrock Converse API uses s3Location for URL-based content
+            // s3Location for S3 URIs (must be s3://...)
+            if (dataUrl == null || !dataUrl.startsWith("s3://")) {
+                throw new IllegalArgumentException(
+                    "URL-based content must use S3 URIs (s3://...). Other URL schemes are not supported by Bedrock Converse API"
+                );
+            }
+
+            return "s3Location";
         }
 
         return "bytes";

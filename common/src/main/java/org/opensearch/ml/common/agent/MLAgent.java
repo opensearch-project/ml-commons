@@ -146,7 +146,8 @@ public class MLAgent implements ToXContentObject, Writeable {
             );
         }
         validateMLAgentType(type);
-        if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null && model == null) {
+        if ((type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString())
+            || type.equalsIgnoreCase(MLAgentType.PLAN_EXECUTE_AND_REFLECT.toString())) && llm == null && model == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }
         Set<String> toolNames = new HashSet<>();
@@ -283,6 +284,16 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
+        }
+    }
+
+    /**
+     * Remove credentials from the agent's model spec.
+     * Should be called before returning to user-facing APIs.
+     */
+    public void removeCredential() {
+        if (this.model != null) {
+            this.model.removeCredential();
         }
     }
 

@@ -11,6 +11,5 @@ package org.opensearch.ml.common.agent;
 public enum InputType {
     TEXT,
     CONTENT_BLOCKS,
-    MESSAGES,
-    UNKNOWN
+    MESSAGES
 }

@@ -123,8 +123,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
-    private static final String DEFAULT_SYSTEM_PROMPT = "You are an helpful assistant."; // empty system prompt
-
+    private static final String DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant.";
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
 

@@ -101,6 +101,14 @@ public class MLAgentModelSpec implements ToXContentObject {
         return builder;
     }
 
+    /**
+     * Remove credentials from this model spec.
+     * Should be called before returning to user-facing APIs.
+     */
+    public void removeCredential() {
+        this.credential = null;
+    }
+
     public static MLAgentModelSpec parse(XContentParser parser) throws IOException {
         String model = null;
         String modelProvider = null;
