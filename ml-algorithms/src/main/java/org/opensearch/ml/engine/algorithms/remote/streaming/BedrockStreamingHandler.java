@@ -34,6 +34,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -156,7 +157,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         return error instanceof ValidationException || error instanceof InvalidRequestException || error instanceof AuthenticationException;
     }
 
-    private ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
+    @VisibleForTesting
+    ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode payloadJson = mapper.readTree(payload);
@@ -510,7 +512,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         return Document.fromString(node.toString());
     }
 
-    private GuardrailStreamConfiguration parseGuardrailConfig(JsonNode guardrailConfig) {
+    @VisibleForTesting
+    GuardrailStreamConfiguration parseGuardrailConfig(JsonNode guardrailConfig) {
         GuardrailStreamConfiguration.Builder builder = GuardrailStreamConfiguration.builder();
 
         if (guardrailConfig.has("guardrailIdentifier")) {
