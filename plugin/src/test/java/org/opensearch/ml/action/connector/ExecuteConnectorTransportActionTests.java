@@ -150,8 +150,21 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testExecute_NullMLInput() {
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        // Test the early return when MLInput is null (line 77-80)
+        when(request.getMlInput()).thenReturn(null);
+
+        action.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(argCaptor.capture());
+        assertTrue(argCaptor.getValue().getMessage().contains("MLInput cannot be null"));
+    }
+
+    public void testExecute_AccessDenied() {
         when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+            .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
 
         doAnswer(invocation -> {
@@ -160,9 +173,80 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
 
+        // Connector access validation returns false
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+
         action.doExecute(task, request, actionListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener, times(1)).onFailure(argCaptor.capture());
+
+        // When access is denied, no action should be taken on the listener
+        verify(actionListener, times(0)).onResponse(any());
+        verify(actionListener, times(0)).onFailure(any());
+    }
+
+    public void testExecute_WithCustomConnectorAction() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        // Set custom connector action in parameters
+        Map<String, String> params = new java.util.HashMap<>();
+        params.put("connector_action", "CUSTOM_ACTION");
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(params, null))
+            .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        // Verify that getConnector was called
+        verify(connectorAccessControlHelper).getConnector(eq(client), eq("test_connector_id"), any());
+    }
+
+    public void testExecute_SuccessfulExecution() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+            .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        // Verify connector access was validated
+        verify(connectorAccessControlHelper).validateConnectorAccess(eq(client), eq(connector));
+    }
+
+    public void testExecute_WithNullParameters() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        // Test with null parameters to cover the null check branch
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(null, null))
+            .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        verify(connectorAccessControlHelper).getConnector(eq(client), eq("test_connector_id"), any());
     }
 
 }
