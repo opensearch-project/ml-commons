@@ -738,7 +738,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         if (e instanceof IllegalArgumentException) {
             return false;
         }
-        
+
         // Don't track any 4xx client errors (user/configuration issues)
         if (e instanceof OpenSearchStatusException) {
             RestStatus status = ((OpenSearchStatusException) e).status();

@@ -775,7 +775,9 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         // Test OpenSearchStatusException with 5xx status codes - should track
         assertTrue(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Server error", RestStatus.INTERNAL_SERVER_ERROR)));
-        assertTrue(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Service unavailable", RestStatus.SERVICE_UNAVAILABLE)));
+        assertTrue(
+            taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Service unavailable", RestStatus.SERVICE_UNAVAILABLE))
+        );
 
         // Test other exceptions - should track
         assertTrue(taskRunner.shouldTrackRemoteFailure(new RuntimeException("Runtime error")));
