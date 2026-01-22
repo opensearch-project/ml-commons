@@ -56,7 +56,7 @@ public class McpSseToolTests {
         tool.run(validParams, listener);
 
         // Assert
-        verify(listener).onResponse("[{\"annotations\":null,\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\",\"meta\":null}]");
+        verify(listener).onResponse("[{\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\"}]");
         verify(listener, never()).onFailure(any());
     }
 

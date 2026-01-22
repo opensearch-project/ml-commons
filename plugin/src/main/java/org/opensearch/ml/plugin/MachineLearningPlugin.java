@@ -251,6 +251,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
@@ -647,7 +648,8 @@ public class MachineLearningPlugin extends Plugin
         Path dataPath = environment.dataFiles()[0];
 
         mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
-        mlFeatureEnabledSetting.addListener(mlTaskManager);
+
+        StringUtils.setMLFeatureEnabledSetting(mlFeatureEnabledSetting);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
 
@@ -716,6 +718,7 @@ public class MachineLearningPlugin extends Plugin
         this.mlStats = new MLStats(stats);
 
         mlTaskManager = new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler);
+        mlFeatureEnabledSetting.addListener(mlTaskManager);
         modelHelper = new ModelHelper(mlEngine);
 
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
@@ -1364,7 +1367,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
-                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
+                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE
             );
         return settings;
     }
