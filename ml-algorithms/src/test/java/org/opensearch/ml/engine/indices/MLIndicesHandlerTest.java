@@ -204,11 +204,17 @@ public class MLIndicesHandlerTest {
     @Test
     public void initMLAgentIndex() {
         ActionListener<Boolean> listener = mock(ActionListener.class);
+        when(agentmappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, 3)));
         doAnswer(invocation -> {
             ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(new AcknowledgedResponse(true));
             return null;
         }).when(indicesAdminClient).putMapping(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).updateSettings(any(), any());
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         indicesHandler.initMLAgentIndex(listener);
 
