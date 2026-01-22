@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,9 @@ import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FI
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.SKIP_SSL_VERIFICATION;
 
 import java.util.Arrays;
 import java.util.List;
@@ -962,5 +966,47 @@ public class AwsConnectorExecutorTest {
         verify(actionListener).onFailure(captor.capture());
         assertTrue(captor.getValue() instanceof MLException);
         assertEquals("Fail to execute streaming", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_With_SkipSslVerification_True() {
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+        when(mockConnector.getParameters()).thenReturn(Map.of(SKIP_SSL_VERIFICATION, "true"));
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map
+            .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+        String payload = "{\"input\": \"test input\"}";
+        ExecutionContext executionContext = new ExecutionContext(123);
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_With_SkipSslVerification_False() {
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+        when(mockConnector.getParameters()).thenReturn(Map.of(SKIP_SSL_VERIFICATION, "false"));
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map
+            .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+        String payload = "{\"input\": \"test input\"}";
+        ExecutionContext executionContext = new ExecutionContext(123);
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+
+        verify(actionListener, never()).onFailure(any());
     }
 }

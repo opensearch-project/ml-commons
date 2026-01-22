@@ -15,6 +15,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.SKIP_SSL_VERIFICATION;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -238,6 +239,52 @@ public class HttpJsonConnectorExecutorTest {
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         executor
             .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
+    }
+
+    @Test
+    public void invokeRemoteService_SkipSslVerification_True() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of(SKIP_SSL_VERIFICATION, "true"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor
+            .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void invokeRemoteService_SkipSslVerification_False() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of(SKIP_SSL_VERIFICATION, "false"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor
+            .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
+        verify(actionListener, never()).onFailure(any());
     }
 
     @Test
