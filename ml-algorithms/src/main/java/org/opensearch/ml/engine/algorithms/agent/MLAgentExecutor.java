@@ -168,6 +168,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
+        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        if (dataSet.getParameters() == null && !agentMLInput.hasStandardInput()) {
+            throw new IllegalArgumentException("Agent input data can not be empty.");
+        }
+
         if (isMultiTenancyEnabled && tenantId == null) {
             throw new OpenSearchStatusException("You don't have permission to access this resource", RestStatus.FORBIDDEN);
         }
