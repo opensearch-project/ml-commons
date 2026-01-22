@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_4_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -110,7 +110,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.requestBody = input.readOptionalString();
         this.preProcessFunction = input.readOptionalString();
         this.postProcessFunction = input.readOptionalString();
-        if (input.getVersion().onOrAfter(VERSION_3_4_0)) {
+        if (input.getVersion().onOrAfter(VERSION_3_5_0)) {
             this.name = input.readOptionalString();
         }
     }
@@ -129,7 +129,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         out.writeOptionalString(requestBody);
         out.writeOptionalString(preProcessFunction);
         out.writeOptionalString(postProcessFunction);
-        if (out.getVersion().onOrAfter(VERSION_3_4_0)) {
+        if (out.getVersion().onOrAfter(VERSION_3_5_0)) {
             out.writeOptionalString(name);
         }
     }
