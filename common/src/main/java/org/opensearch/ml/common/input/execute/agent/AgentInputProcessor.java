@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.input.execute.agent;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import lombok.extern.log4j.Log4j2;
@@ -135,6 +136,12 @@ public class AgentInputProcessor {
             // Validate each content block in the message
             validateContentBlocks(message.getContent());
         }
+
+        // Validate that the last message is from user
+        Message lastMessage = messages.getLast();
+        if (!lastMessage.getRole().equalsIgnoreCase("user")) {
+            throw new IllegalArgumentException("Last message must be from role 'user'");
+        }
     }
 
     /**
@@ -186,14 +193,61 @@ public class AgentInputProcessor {
     }
 
     /**
-     * Extracts text content from last message.
+     * Extracts text content from last consecutive user messages.
+     * Processes messages backwards from the end, combining all consecutive user messages
+     * until hitting an assistant message or the beginning of the list.
      */
     private static String extractTextFromMessages(List<Message> messages) {
         if (messages == null || messages.isEmpty()) {
             throw new IllegalArgumentException("Messages cannot be null or empty");
         }
 
-        Message message = messages.getLast();
-        return extractTextFromContentBlocks(message.getContent());
+        // Filter to only trailing user messages
+        List<Message> trailingUserMessages = filterTrailingUserMessages(messages);
+
+        // Combine text from all trailing user messages
+        StringBuilder combinedText = new StringBuilder();
+        for (Message message : trailingUserMessages) {
+            String text = extractTextFromContentBlocks(message.getContent());
+            if (!text.isEmpty()) {
+                if (combinedText.length() > 0) {
+                    combinedText.append("\n");
+                }
+                combinedText.append(text);
+            }
+        }
+
+        return combinedText.toString();
+    }
+
+    /**
+     * Filters messages to only include trailing user messages.
+     * Parses backwards from the end until hitting an assistant message.
+     * Historical conversation pairs are fetched from memory separately.
+     *
+     * @param messages the full list of messages
+     * @return new list containing only trailing user messages
+     */
+    public static List<Message> filterTrailingUserMessages(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Find the index where trailing user messages start
+        int startIndex = 0;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message message = messages.get(i);
+            if (message != null && message.getRole() != null) {
+                String role = message.getRole().toLowerCase();
+                if (role.equals("assistant")) {
+                    // Found an assistant, trailing users start after this
+                    startIndex = i + 1;
+                    break;
+                }
+            }
+        }
+
+        // Return new list of trailing user messages
+        return new ArrayList<>(messages.subList(startIndex, messages.size()));
     }
 }

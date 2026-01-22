@@ -203,8 +203,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
+        // Check if this is a fresh conversation (memory was just created, not provided by user)
+        boolean isFreshConversation = "true".equals(params.getOrDefault("fresh_memory", "false"));
+
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+            // Skip memory fetch for fresh conversations to avoid race condition with newly stored messages
+            if (isFreshConversation) {
+                log.info("Fresh conversation detected (memory just created), skipping memory fetch");
+                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                return;
+            }
+
             // TODO: call runAgent directly if messageHistoryLimit == 0
             memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();

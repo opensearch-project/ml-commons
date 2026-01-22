@@ -294,10 +294,20 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
+        // Check if this is a fresh conversation (memory was just created, not provided by user)
+        boolean isFreshConversation = "true".equals(allParams.getOrDefault("fresh_memory", "false"));
+
         // todo: use chat history instead of completed steps
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory
-            .create(allParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+            .create(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+                // Skip memory fetch for fresh conversations to avoid race condition with newly stored messages
+                if (isFreshConversation) {
+                    log.info("Fresh conversation detected (memory just created), skipping memory fetch to avoid race condition");
+                    setToolsAndRunAgent(mlAgent, allParams, new ArrayList<>(), memory, memory.getConversationId(), listener);
+                    return;
+                }
+
                 memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
                     final List<String> completedSteps = new ArrayList<>();
                     for (Interaction interaction : interactions) {

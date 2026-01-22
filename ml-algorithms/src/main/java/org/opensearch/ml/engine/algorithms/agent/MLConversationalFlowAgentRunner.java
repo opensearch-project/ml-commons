@@ -109,8 +109,18 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String title = params.get(QUESTION);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
+        // Check if this is a fresh conversation (memory was just created, not provided by user)
+        boolean isFreshConversation = "true".equals(params.getOrDefault("fresh_memory", "false"));
+
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.wrap(memory -> {
+            // Skip memory fetch for fresh conversations to avoid race condition with newly stored messages
+            if (isFreshConversation) {
+                log.info("Fresh conversation detected (memory just created), skipping memory fetch to avoid race condition");
+                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), parentInteractionId);
+                return;
+            }
+
             memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 for (Interaction next : r) {
