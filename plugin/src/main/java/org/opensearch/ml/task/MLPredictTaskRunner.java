@@ -735,9 +735,16 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
     boolean shouldTrackRemoteFailure(Exception e) {
         // Don't track failures for user configuration issues
-        if (e instanceof IllegalArgumentException
-            || e instanceof OpenSearchStatusException && ((OpenSearchStatusException) e).status() == RestStatus.BAD_REQUEST) {
+        if (e instanceof IllegalArgumentException) {
             return false;
+        }
+        
+        // Don't track any 4xx client errors (user/configuration issues)
+        if (e instanceof OpenSearchStatusException) {
+            RestStatus status = ((OpenSearchStatusException) e).status();
+            if (status.getStatus() >= 400 && status.getStatus() < 500) {
+                return false;
+            }
         }
 
         // Track failures for infrastructure/service issues

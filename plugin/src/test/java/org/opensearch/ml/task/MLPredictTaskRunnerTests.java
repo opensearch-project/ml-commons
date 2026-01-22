@@ -767,11 +767,15 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         // Test IllegalArgumentException - should not track
         assertFalse(taskRunner.shouldTrackRemoteFailure(new IllegalArgumentException("Invalid argument")));
 
-        // Test OpenSearchStatusException with BAD_REQUEST - should not track
+        // Test OpenSearchStatusException with 4xx status codes - should not track
         assertFalse(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Bad request", RestStatus.BAD_REQUEST)));
+        assertFalse(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Unauthorized", RestStatus.UNAUTHORIZED)));
+        assertFalse(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Forbidden", RestStatus.FORBIDDEN)));
+        assertFalse(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Not found", RestStatus.NOT_FOUND)));
 
-        // Test OpenSearchStatusException with other status - should track
+        // Test OpenSearchStatusException with 5xx status codes - should track
         assertTrue(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Server error", RestStatus.INTERNAL_SERVER_ERROR)));
+        assertTrue(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Service unavailable", RestStatus.SERVICE_UNAVAILABLE)));
 
         // Test other exceptions - should track
         assertTrue(taskRunner.shouldTrackRemoteFailure(new RuntimeException("Runtime error")));
