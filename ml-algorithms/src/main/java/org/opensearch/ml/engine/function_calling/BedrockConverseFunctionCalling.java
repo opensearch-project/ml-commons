@@ -135,12 +135,19 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
 
             // Keep only text and first toolUse
             List<Object> filteredContent = new ArrayList<>();
+            List<String> allToolNames = new ArrayList<>();
+            String selectedToolName = null;
             boolean foundFirstToolUse = false;
 
             for (Object item : contentList) {
                 if (item instanceof Map && ((Map<?, ?>) item).containsKey("toolUse")) {
+                    Map<?, ?> toolUseMap = (Map<?, ?>) ((Map<?, ?>) item).get("toolUse");
+                    String toolName = toolUseMap != null ? String.valueOf(toolUseMap.get("name")) : "unknown";
+                    allToolNames.add(toolName);
+                    
                     if (!foundFirstToolUse) {
                         filteredContent.add(item);
+                        selectedToolName = toolName;
                         foundFirstToolUse = true;
                     }
                 } else {
@@ -152,13 +159,17 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
                 return dataAsMap;
             }
 
+            if (allToolNames.size() > 1) {
+                log.info("LLM suggested {} tool(s): {}. Selected first tool: {}", allToolNames.size(), allToolNames, selectedToolName);
+            }
+
             // Create mutable copy using JSON serialization for efficiency
             Map<String, Object> mutableCopy = gson.fromJson(StringUtils.toJson(dataAsMap), Map.class);
             DocumentContext context = JsonPath.parse(mutableCopy);
             context.set("$.output.message.content", filteredContent);
             return context.json();
         } catch (Exception e) {
-            log.error("Failed to filter out first tool call", e);
+            log.error("Failed to filter out to only first tool call", e);
             return dataAsMap;
         }
     }
