@@ -144,7 +144,7 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
                     Map<?, ?> toolUseMap = (Map<?, ?>) ((Map<?, ?>) item).get("toolUse");
                     String toolName = toolUseMap != null ? String.valueOf(toolUseMap.get("name")) : "unknown";
                     allToolNames.add(toolName);
-                    
+
                     if (!foundFirstToolUse) {
                         filteredContent.add(item);
                         selectedToolName = toolName;
