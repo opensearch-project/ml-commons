@@ -7,40 +7,68 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
+import java.io.IOException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.google.common.collect.ImmutableMap;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
+import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.InputType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.output.Output;
+import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.ConversationIndexMessage;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
@@ -88,6 +116,26 @@ public class MLAgentExecutorTest {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
     private Settings settings;
+
+    @Mock
+    private MLAgentRunner mlAgentRunner;
+
+    @Mock
+    private ConversationIndexMemory memory;
+
+    @Mock
+    private ConversationIndexMemory.Factory mockMemoryFactory;
+
+    @Captor
+    private ArgumentCaptor<Output> objectCaptor;
+
+    @Captor
+    private ArgumentCaptor<Exception> exceptionCaptor;
+
+    @Mock
+    private ActionListener<Output> agentActionListener;
+
+    MLAgent mlAgent;
 
     @Before
     public void setup() {
@@ -300,5 +348,876 @@ public class MLAgentExecutorTest {
             .lastUpdateTime(Instant.now())
             .appType("test-app")
             .build();
+    }
+
+    @Test
+    public void test_ProcessAgentInput_OldStyleAgent_NoModel() {
+        MLAgent oldStyleAgent = MLAgent.builder().name("old_agent").type("flow").build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, null);
+        
+        // Should not throw exception for old style agent without model
+        mlAgentExecutor.processAgentInput(agentMLInput, oldStyleAgent);
+        
+        // Verify no changes were made
+        Assert.assertNull(agentMLInput.getInputDataset());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_ProcessAgentInput_MessagesInput_PlanExecuteReflectAgent() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+        
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Hello");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+        
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+    }
+
+    @Test
+    public void test_ProcessAgentInput_LegacyQuestionInput() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+        
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "What is the weather?");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+        
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+        
+        // Verify AgentInput was created from legacy question
+        Assert.assertNotNull(agentMLInput.getAgentInput());
+        Assert.assertEquals(InputType.TEXT, agentMLInput.getAgentInput().getInputType());
+    }
+
+    @Test
+    public void test_ProcessAgentInput_StandardInput_CreatesDataset() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+        
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("What is machine learning?");
+        
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+        
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+        
+        // Verify dataset was created
+        Assert.assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        Assert.assertNotNull(dataset.getParameters());
+        Assert.assertTrue(dataset.getParameters().containsKey(QUESTION));
+        Assert.assertEquals("What is machine learning?", dataset.getParameters().get(QUESTION));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_StandardInput_UpdatesExistingDataset() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+        
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("Explain neural networks");
+        Map<String, String> existingParams = new HashMap<>();
+        existingParams.put("existing_key", "existing_value");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(existingParams).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, dataset, false);
+        
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+        
+        // Verify existing dataset was updated
+        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        Assert.assertTrue(updatedDataset.getParameters().containsKey(QUESTION));
+        Assert.assertEquals("Explain neural networks", updatedDataset.getParameters().get(QUESTION));
+        Assert.assertTrue(updatedDataset.getParameters().containsKey("existing_key"));
+        Assert.assertEquals("existing_value", updatedDataset.getParameters().get("existing_key"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_ProcessAgentInput_InvalidModelProvider() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .model(MLAgentModelSpec.builder().modelId("model-123").modelProvider("invalid_provider").build())
+            .build();
+        
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("Test question");
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+        
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+    }
+
+    @Test
+    public void test_ProcessAgentInput_MessagesInput_ConversationalAgent() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+        
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Hello, how are you?");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+        
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+        
+        // Verify dataset was created with processed parameters
+        Assert.assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        Assert.assertNotNull(dataset.getParameters());
+        Assert.assertTrue(dataset.getParameters().containsKey(QUESTION));
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_SingleTextBlock() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Hello world");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("Hello world", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_MultipleTextBlocks() {
+        ContentBlock textBlock1 = new ContentBlock();
+        textBlock1.setType(ContentType.TEXT);
+        textBlock1.setText("First block");
+        
+        ContentBlock textBlock2 = new ContentBlock();
+        textBlock2.setType(ContentType.TEXT);
+        textBlock2.setText("Second block");
+        
+        List<ContentBlock> blocks = Arrays.asList(textBlock1, textBlock2);
+        Message message = new Message("user", blocks);
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("First block\nSecond block", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_MixedContentBlocks() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Text content");
+        
+        ContentBlock imageBlock = new ContentBlock();
+        imageBlock.setType(ContentType.IMAGE);
+        
+        List<ContentBlock> blocks = Arrays.asList(textBlock, imageBlock);
+        Message message = new Message("user", blocks);
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("Text content", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_NullMessage() {
+        String result = mlAgentExecutor.extractTextFromMessage(null);
+        
+        Assert.assertEquals("", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_NullContent() {
+        Message message = new Message("user", null);
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_EmptyContentList() {
+        Message message = new Message("user", Collections.emptyList());
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_TextWithWhitespace() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("  Hello world  ");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("Hello world", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_NullTextInBlock() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText(null);
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("", result);
+    }
+
+    @Test
+    public void test_ExtractTextFromMessage_OnlyNonTextBlocks() {
+        ContentBlock imageBlock = new ContentBlock();
+        imageBlock.setType(ContentType.IMAGE);
+        
+        ContentBlock videoBlock = new ContentBlock();
+        videoBlock.setType(ContentType.VIDEO);
+        
+        List<ContentBlock> blocks = Arrays.asList(imageBlock, videoBlock);
+        Message message = new Message("user", blocks);
+        
+        String result = mlAgentExecutor.extractTextFromMessage(message);
+        
+        Assert.assertEquals("", result);
+    }
+
+    public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
+
+        mlAgent = new MLAgent(
+                "test",
+                MLAgentType.CONVERSATIONAL.name(),
+                "test",
+                new LLMSpec("test_model", Map.of("test_key", "test_value")),
+                List
+                        .of(
+                                new MLToolSpec(
+                                        "memoryType",
+                                        "test",
+                                        "test",
+                                        Collections.emptyMap(),
+                                        Collections.emptyMap(),
+                                        false,
+                                        Collections.emptyMap(),
+                                        null,
+                                        null
+                                )
+                        ),
+                Map.of("test", "test"),
+                new MLMemorySpec("memoryType", "123", 0),
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "test",
+                isHidden,
+                tenantId
+        );
+
+        XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", agentId, 111l, 111l, 111l, true, bytesReference, null, null);
+        return new GetResponse(getResult);
+    }
+
+    @Test
+    public void test_Execute_FreshMemory_AddsParameter() throws IOException {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        
+        // Mock the agent runner to capture parameters
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+        
+        // Mock memory.save to return interaction
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction_id");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseActionListener = invocation.getArgument(4);
+            responseActionListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+        
+        // Setup memory factory to simulate fresh conversation (memoryId = null)
+        Mockito.doAnswer(invocation -> {
+            Mockito.when(memory.getConversationId()).thenReturn("new-conversation-id");
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.any(), Mockito.eq(null), Mockito.any(), Mockito.any());
+
+        // Setup agent with memory spec
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        // Setup agent runner
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), null);
+
+        // Create input without memory_id (fresh conversation)
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        // Execute
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        // Verify fresh_memory parameter was added
+        ArgumentCaptor<Map> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(mlAgentRunner).run(Mockito.any(), paramsCaptor.capture(), Mockito.any(), Mockito.any());
+        
+        Map<String, String> capturedParams = paramsCaptor.getValue();
+        Assert.assertNotNull(capturedParams);
+        Assert.assertTrue(capturedParams.containsKey("fresh_memory"));
+        Assert.assertEquals("true", capturedParams.get("fresh_memory"));
+        Assert.assertTrue(capturedParams.containsKey(MEMORY_ID));
+        Assert.assertEquals("new-conversation-id", capturedParams.get(MEMORY_ID));
+    }
+
+    // ==================== Tests for storeMessagesInMemory ====================
+
+    @Test
+    public void test_StoreMessagesInMemory_EmptyMessages() {
+        List<Message> messages = Collections.emptyList();
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail with empty messages")
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        // Verify no save operations were called
+        Mockito.verify(memory, Mockito.never()).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void test_StoreMessagesInMemory_OnlyUserMessages() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("User question");
+        Message userMessage = new Message("user", Collections.singletonList(textBlock));
+        List<Message> messages = Collections.singletonList(userMessage);
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail with only user messages")
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        // Verify no save operations were called (trailing user messages are skipped)
+        Mockito.verify(memory, Mockito.never()).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void test_StoreMessagesInMemory_SingleUserAssistantPair() {
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What is AI?");
+        Message userMessage = new Message("user", Collections.singletonList(userBlock));
+
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("AI stands for Artificial Intelligence");
+        Message assistantMessage = new Message("assistant", Collections.singletonList(assistantBlock));
+
+        List<Message> messages = Arrays.asList(userMessage, assistantMessage);
+
+        Mockito.when(memory.getConversationId()).thenReturn("conv-123");
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        // Verify save was called once
+        ArgumentCaptor<ConversationIndexMessage> messageCaptor = ArgumentCaptor.forClass(ConversationIndexMessage.class);
+        Mockito.verify(memory, Mockito.times(1)).save(messageCaptor.capture(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ConversationIndexMessage savedMessage = messageCaptor.getValue();
+        Assert.assertEquals("What is AI?", savedMessage.getQuestion());
+        Assert.assertEquals("AI stands for Artificial Intelligence", savedMessage.getResponse());
+        Assert.assertEquals("conv-123", savedMessage.getSessionId());
+        Assert.assertEquals("test-app", savedMessage.getType());
+        Assert.assertTrue(savedMessage.getFinalAnswer());
+    }
+
+    @Test
+    public void test_StoreMessagesInMemory_MultipleUserAssistantPairs() {
+        ContentBlock user1Block = new ContentBlock();
+        user1Block.setType(ContentType.TEXT);
+        user1Block.setText("First question");
+        Message user1 = new Message("user", Collections.singletonList(user1Block));
+
+        ContentBlock assistant1Block = new ContentBlock();
+        assistant1Block.setType(ContentType.TEXT);
+        assistant1Block.setText("First answer");
+        Message assistant1 = new Message("assistant", Collections.singletonList(assistant1Block));
+
+        ContentBlock user2Block = new ContentBlock();
+        user2Block.setType(ContentType.TEXT);
+        user2Block.setText("Second question");
+        Message user2 = new Message("user", Collections.singletonList(user2Block));
+
+        ContentBlock assistant2Block = new ContentBlock();
+        assistant2Block.setType(ContentType.TEXT);
+        assistant2Block.setText("Second answer");
+        Message assistant2 = new Message("assistant", Collections.singletonList(assistant2Block));
+
+        List<Message> messages = Arrays.asList(user1, assistant1, user2, assistant2);
+
+        Mockito.when(memory.getConversationId()).thenReturn("conv-456");
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        // Verify save was called twice (two pairs)
+        ArgumentCaptor<ConversationIndexMessage> messageCaptor = ArgumentCaptor.forClass(ConversationIndexMessage.class);
+        Mockito.verify(memory, Mockito.times(2)).save(messageCaptor.capture(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        List<ConversationIndexMessage> savedMessages = messageCaptor.getAllValues();
+        Assert.assertEquals(2, savedMessages.size());
+
+        // First pair
+        Assert.assertEquals("First question", savedMessages.get(0).getQuestion());
+        Assert.assertEquals("First answer", savedMessages.get(0).getResponse());
+
+        // Second pair
+        Assert.assertEquals("Second question", savedMessages.get(1).getQuestion());
+        Assert.assertEquals("Second answer", savedMessages.get(1).getResponse());
+    }
+
+    @Test
+    public void test_StoreMessagesInMemory_SkipsTrailingUserMessages() {
+        ContentBlock user1Block = new ContentBlock();
+        user1Block.setType(ContentType.TEXT);
+        user1Block.setText("First question");
+        Message user1 = new Message("user", Collections.singletonList(user1Block));
+
+        ContentBlock assistant1Block = new ContentBlock();
+        assistant1Block.setType(ContentType.TEXT);
+        assistant1Block.setText("First answer");
+        Message assistant1 = new Message("assistant", Collections.singletonList(assistant1Block));
+
+        ContentBlock user2Block = new ContentBlock();
+        user2Block.setType(ContentType.TEXT);
+        user2Block.setText("Trailing question");
+        Message user2 = new Message("user", Collections.singletonList(user2Block));
+
+        List<Message> messages = Arrays.asList(user1, assistant1, user2);
+
+        Mockito.when(memory.getConversationId()).thenReturn("conv-789");
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        // Verify save was called once (only the complete pair, trailing user is skipped)
+        ArgumentCaptor<ConversationIndexMessage> messageCaptor = ArgumentCaptor.forClass(ConversationIndexMessage.class);
+        Mockito.verify(memory, Mockito.times(1)).save(messageCaptor.capture(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ConversationIndexMessage savedMessage = messageCaptor.getValue();
+        Assert.assertEquals("First question", savedMessage.getQuestion());
+        Assert.assertEquals("First answer", savedMessage.getResponse());
+    }
+
+    @Test
+    public void test_StoreMessagesInMemory_MultipleContentBlocks() {
+        ContentBlock user1Block = new ContentBlock();
+        user1Block.setType(ContentType.TEXT);
+        user1Block.setText("Part 1");
+        ContentBlock user2Block = new ContentBlock();
+        user2Block.setType(ContentType.TEXT);
+        user2Block.setText("Part 2");
+        Message userMessage = new Message("user", Arrays.asList(user1Block, user2Block));
+
+        ContentBlock assistant1Block = new ContentBlock();
+        assistant1Block.setType(ContentType.TEXT);
+        assistant1Block.setText("Response 1");
+        ContentBlock assistant2Block = new ContentBlock();
+        assistant2Block.setType(ContentType.TEXT);
+        assistant2Block.setText("Response 2");
+        Message assistantMessage = new Message("assistant", Arrays.asList(assistant1Block, assistant2Block));
+
+        List<Message> messages = Arrays.asList(userMessage, assistantMessage);
+
+        Mockito.when(memory.getConversationId()).thenReturn("conv-multi");
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        ArgumentCaptor<ConversationIndexMessage> messageCaptor = ArgumentCaptor.forClass(ConversationIndexMessage.class);
+        Mockito.verify(memory, Mockito.times(1)).save(messageCaptor.capture(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ConversationIndexMessage savedMessage = messageCaptor.getValue();
+        Assert.assertEquals("Part 1\nPart 2", savedMessage.getQuestion());
+        Assert.assertEquals("Response 1\nResponse 2", savedMessage.getResponse());
+    }
+
+    @Test
+    public void test_StoreMessagesInMemory_IgnoresNonUserAssistantRoles() {
+        ContentBlock systemBlock = new ContentBlock();
+        systemBlock.setType(ContentType.TEXT);
+        systemBlock.setText("System message");
+        Message systemMessage = new Message("system", Collections.singletonList(systemBlock));
+
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("User question");
+        Message userMessage = new Message("user", Collections.singletonList(userBlock));
+
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("Assistant answer");
+        Message assistantMessage = new Message("assistant", Collections.singletonList(assistantBlock));
+
+        List<Message> messages = Arrays.asList(systemMessage, userMessage, assistantMessage);
+
+        Mockito.when(memory.getConversationId()).thenReturn("conv-system");
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        // System message should be ignored
+        ArgumentCaptor<ConversationIndexMessage> messageCaptor = ArgumentCaptor.forClass(ConversationIndexMessage.class);
+        Mockito.verify(memory, Mockito.times(1)).save(messageCaptor.capture(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ConversationIndexMessage savedMessage = messageCaptor.getValue();
+        Assert.assertEquals("User question", savedMessage.getQuestion());
+        Assert.assertEquals("Assistant answer", savedMessage.getResponse());
+    }
+
+    @Test
+    public void test_StoreMessagesInMemory_HandlesNullMessages() {
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        Message userMessage = new Message("user", Collections.singletonList(userBlock));
+
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("Answer");
+        Message assistantMessage = new Message("assistant", Collections.singletonList(assistantBlock));
+
+        List<Message> messages = Arrays.asList(userMessage, null, assistantMessage);
+
+        Mockito.when(memory.getConversationId()).thenReturn("conv-null");
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
+
+        // Should handle null message gracefully
+        Mockito.verify(memory, Mockito.times(1)).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    // ==================== Tests for saveMessagePairsSequentially ====================
+
+    @Test
+    public void test_SaveMessagePairsSequentially_EmptyList() {
+        List<ConversationIndexMessage> messagePairs = Collections.emptyList();
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail with empty list")
+        );
+
+        mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
+
+        // Verify no save operations were called
+        Mockito.verify(memory, Mockito.never()).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void test_SaveMessagePairsSequentially_SinglePair() {
+        ConversationIndexMessage msg = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type("test-app")
+            .question("Question")
+            .response("Answer")
+            .finalAnswer(true)
+            .sessionId("session-1")
+            .build();
+
+        List<ConversationIndexMessage> messagePairs = Collections.singletonList(msg);
+
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
+
+        // Verify save was called once
+        Mockito.verify(memory, Mockito.times(1)).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void test_SaveMessagePairsSequentially_MultiplePairs() {
+        ConversationIndexMessage msg1 = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type("test-app")
+            .question("Question 1")
+            .response("Answer 1")
+            .finalAnswer(true)
+            .sessionId("session-1")
+            .build();
+
+        ConversationIndexMessage msg2 = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type("test-app")
+            .question("Question 2")
+            .response("Answer 2")
+            .finalAnswer(true)
+            .sessionId("session-1")
+            .build();
+
+        List<ConversationIndexMessage> messagePairs = Arrays.asList(msg1, msg2);
+
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
+
+        // Verify save was called twice
+        Mockito.verify(memory, Mockito.times(2)).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void test_SaveMessagePairsSequentially_ContinuesOnFailure() {
+        ConversationIndexMessage msg1 = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type("test-app")
+            .question("Question 1")
+            .response("Answer 1")
+            .finalAnswer(true)
+            .sessionId("session-1")
+            .build();
+
+        ConversationIndexMessage msg2 = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type("test-app")
+            .question("Question 2")
+            .response("Answer 2")
+            .finalAnswer(true)
+            .sessionId("session-1")
+            .build();
+
+        List<ConversationIndexMessage> messagePairs = Arrays.asList(msg1, msg2);
+
+        // First save fails, second succeeds
+        Mockito.doAnswer(invocation -> {
+            ConversationIndexMessage msg = invocation.getArgument(0);
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            if (msg.getQuestion().equals("Question 1")) {
+                responseListener.onFailure(new RuntimeException("Save failed"));
+            } else {
+                CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+                Mockito.when(interaction.getId()).thenReturn("interaction-2");
+                responseListener.onResponse(interaction);
+            }
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
+
+        // Verify save was called twice (continues even after first failure)
+        Mockito.verify(memory, Mockito.times(2)).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    // ==================== Tests for saveNextMessagePair ====================
+
+    @Test
+    public void test_SaveNextMessagePair_IndexOutOfBounds() {
+        List<ConversationIndexMessage> messagePairs = Collections.emptyList();
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail when index >= size")
+        );
+
+        mlAgentExecutor.saveNextMessagePair(memory, messagePairs, 0, listener);
+
+        // Verify no save operations were called
+        Mockito.verify(memory, Mockito.never()).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void test_SaveNextMessagePair_SavesAtIndex() {
+        ConversationIndexMessage msg = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type("test-app")
+            .question("Question")
+            .response("Answer")
+            .finalAnswer(true)
+            .sessionId("session-1")
+            .build();
+
+        List<ConversationIndexMessage> messagePairs = Collections.singletonList(msg);
+
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction-1");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not fail: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.saveNextMessagePair(memory, messagePairs, 0, listener);
+
+        // Verify save was called once
+        ArgumentCaptor<ConversationIndexMessage> messageCaptor = ArgumentCaptor.forClass(ConversationIndexMessage.class);
+        Mockito.verify(memory, Mockito.times(1)).save(messageCaptor.capture(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ConversationIndexMessage savedMessage = messageCaptor.getValue();
+        Assert.assertEquals("Question", savedMessage.getQuestion());
+        Assert.assertEquals("Answer", savedMessage.getResponse());
+    }
+
+    @Test
+    public void test_SaveNextMessagePair_HandlesFailure() {
+        ConversationIndexMessage msg = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type("test-app")
+            .question("Question")
+            .response("Answer")
+            .finalAnswer(true)
+            .sessionId("session-1")
+            .build();
+
+        List<ConversationIndexMessage> messagePairs = Collections.singletonList(msg);
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseListener = invocation.getArgument(4);
+            responseListener.onFailure(new RuntimeException("Save failed"));
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        ActionListener<Void> listener = ActionListener.wrap(
+            response -> {},
+            exception -> Assert.fail("Should not propagate failure: " + exception.getMessage())
+        );
+
+        mlAgentExecutor.saveNextMessagePair(memory, messagePairs, 0, listener);
+
+        // Verify save was called and failure was handled
+        Mockito.verify(memory, Mockito.times(1)).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
     }
 }

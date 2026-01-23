@@ -573,6 +573,52 @@ public class MLChatAgentRunnerTest {
     }
 
     @Test
+    public void testFreshConversationSkipsMemoryFetch() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .tools(Arrays.asList(firstToolSpec))
+            .build();
+
+        // Mock memory factory to return a fresh memory (just created)
+        ConversationIndexMemory freshMemory = Mockito.mock(ConversationIndexMemory.class);
+        when(freshMemory.getConversationId()).thenReturn("new_conversation_id");
+        when(freshMemory.getMemoryManager()).thenReturn(mlMemoryManager);
+        
+        doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> listener = invocation.getArgument(4);
+            listener.onResponse(createInteractionResponse);
+            return null;
+        }).when(freshMemory).save(any(), any(), any(), any(), any());
+
+        // Mock the memory factory to indicate this is a fresh conversation
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(freshMemory);
+            return null;
+        }).when(memoryFactory).create(any(), any(), any(), any());
+
+        HashMap<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
+        params.put("fresh_memory", "true");
+        
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        // Verify that getMessages was never called on the fresh memory (memory fetch was skipped)
+        verify(freshMemory, never()).getMessages(any(), any());
+        
+        // Verify that the agent still completes successfully
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
     public void testToolValidationSuccess() {
         // Mock tool validation to return true
         when(firstTool.validate(any())).thenReturn(true);

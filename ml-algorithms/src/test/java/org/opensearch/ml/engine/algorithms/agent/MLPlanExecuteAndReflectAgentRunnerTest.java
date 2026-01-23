@@ -17,6 +17,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
@@ -856,5 +857,103 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         // Verify that onFailure was called with the expected exception
         verify(agentActionListener).onFailure(any(IllegalStateException.class));
+    }
+
+    @Test
+    public void testFreshConversationSkipsMemoryFetch() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Mock a fresh memory instance
+        ConversationIndexMemory freshMemory = mock(ConversationIndexMemory.class);
+        when(freshMemory.getConversationId()).thenReturn("new_conversation_id");
+        when(freshMemory.getMemoryManager()).thenReturn(mlMemoryManager);
+
+        // Mock the memory factory to return the fresh memory
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(freshMemory);
+            return null;
+        }).when(memoryFactory).create(any(), any(), any(), any());
+
+        // Setup LLM response for planning phase
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor
+                .builder()
+                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"final result\"}"))
+                .build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        // Setup tool execution response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlExecuteTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+        // Setup memory manager update response
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        // Setup save interaction response
+        doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> listener = invocation.getArgument(4);
+            listener.onResponse(createInteractionResponse);
+            return null;
+        }).when(freshMemory).save(any(), any(), any(), any(), any());
+
+        // Run the agent with fresh_memory parameter set to true
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
+        params.put("fresh_memory", "true");
+
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that getMessages was never called on the fresh memory (memory fetch was skipped)
+        verify(freshMemory, never()).getMessages(any(), anyInt());
+
+        // Verify that the agent still completes successfully
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object response = objectCaptor.getValue();
+        assertTrue(response instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
+        assertNotNull(modelTensorOutput);
+
+        // Verify the response structure
+        List<ModelTensors> mlModelOutputs = modelTensorOutput.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        ModelTensors firstModelTensors = mlModelOutputs.get(0);
+        List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
+        assertEquals(2, firstModelTensorList.size());
+
+        ModelTensor memoryIdTensor = firstModelTensorList.get(0);
+        assertEquals("memory_id", memoryIdTensor.getName());
+        assertEquals("new_conversation_id", memoryIdTensor.getResult());
+
+        ModelTensor parentInteractionModelTensor = firstModelTensorList.get(1);
+        assertEquals("parent_interaction_id", parentInteractionModelTensor.getName());
+        assertEquals("test_parent_interaction_id", parentInteractionModelTensor.getResult());
+
+        ModelTensors secondModelTensors = mlModelOutputs.get(1);
+        List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
+        assertEquals(1, secondModelTensorList.size());
+
+        ModelTensor responseTensor = secondModelTensorList.get(0);
+        assertEquals("response", responseTensor.getName());
+        assertEquals("final result", responseTensor.getDataAsMap().get("response"));
     }
 }

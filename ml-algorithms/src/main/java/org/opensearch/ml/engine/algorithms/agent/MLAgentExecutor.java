@@ -644,7 +644,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    private void storeMessagesInMemory(
+    @VisibleForTesting
+    void storeMessagesInMemory(
         ConversationIndexMemory memory,
         List<Message> messages,
         String appType,
@@ -764,7 +765,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * Iteratively saves message pairs to memory in sequence.
      * Each save waits for the previous one to complete before proceeding.
      */
-    private void saveMessagePairsSequentially(
+    @VisibleForTesting
+    void saveMessagePairsSequentially(
         ConversationIndexMemory memory,
         List<ConversationIndexMessage> messagePairs,
         ActionListener<Void> finalListener
@@ -777,7 +779,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * This creates a chain of listeners without recursion by building each listener
      * at the point of invocation.
      */
-    private void saveNextMessagePair(
+    @VisibleForTesting
+    void saveNextMessagePair(
         ConversationIndexMemory memory,
         List<ConversationIndexMessage> messagePairs,
         int index,
@@ -1151,7 +1154,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     /**
      * Helper method to extract text from a message's content blocks.
      */
-    private String extractTextFromMessage(Message message) {
+    @VisibleForTesting
+    String extractTextFromMessage(Message message) {
         if (message == null || message.getContent() == null) {
             return "";
         }
