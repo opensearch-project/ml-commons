@@ -270,6 +270,7 @@ import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.AgenticConversationMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.memory.RemoteAgenticConversationMemory;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexInsightTool;
@@ -871,6 +872,10 @@ public class MachineLearningPlugin extends Plugin
         AgenticConversationMemory.Factory agenticConversationMemoryFactory = new AgenticConversationMemory.Factory();
         agenticConversationMemoryFactory.init(client);
         memoryFactoryMap.put(AgenticConversationMemory.TYPE, agenticConversationMemoryFactory);
+
+        RemoteAgenticConversationMemory.Factory remoteAgenticConversationMemoryFactory = new RemoteAgenticConversationMemory.Factory();
+        remoteAgenticConversationMemoryFactory.init(scriptService, clusterService, client, xContentRegistry);
+        memoryFactoryMap.put(RemoteAgenticConversationMemory.TYPE, remoteAgenticConversationMemoryFactory);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
             client,

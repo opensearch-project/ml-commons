@@ -86,6 +86,5 @@ public class MLExecuteConnectorRequest extends MLTaskRequest {
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLExecuteConnectorRequest", e);
         }
-
     }
 }

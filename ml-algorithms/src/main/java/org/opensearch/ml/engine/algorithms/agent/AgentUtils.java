@@ -10,7 +10,9 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.RemoteStore.CREDENTIAL_FIELD;
+import static org.opensearch.ml.common.memorycontainer.RemoteStore.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -30,6 +32,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
@@ -64,6 +67,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -72,8 +76,10 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -127,7 +133,6 @@ public class AgentUtils {
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
-    public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
     public static final String TOOL_TEMPLATE = "tool_template";
@@ -140,6 +145,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
 
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
@@ -389,15 +395,15 @@ public class AgentUtils {
                     String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
                     String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
                     if (toolCallsMsgPath != null) {
-                        Map<String, ?> workingDataAsMap = dataAsMap;
                         if (toolCallsMsgExcludePath != null) {
-                            workingDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
+                            Map<String, ?> newDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
+                            Object toolCallsMsg = JsonPath.read(newDataAsMap, toolCallsMsgPath);
+                            interactions.add(StringUtils.toJson(toolCallsMsg));
+                        } else {
+                            Object toolCallsMsg = JsonPath.read(dataAsMap, toolCallsMsgPath);
+                            interactions.add(StringUtils.toJson(toolCallsMsg));
                         }
-                        if (functionCalling != null) {
-                            workingDataAsMap = functionCalling.filterToFirstToolCall(workingDataAsMap, parameters);
-                        }
-                        Object toolCallsMsg = JsonPath.read(workingDataAsMap, toolCallsMsgPath);
-                        interactions.add(StringUtils.toJson(toolCallsMsg));
+
                     } else {
                         interactions
                             .add(
@@ -762,9 +768,14 @@ public class AgentUtils {
                 connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
 
                 List<MLToolSpec> mcpToolSpecs;
+                if (client == null) {
+                    throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
+                }
+
                 if (connector instanceof McpConnector) {
                     McpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;
@@ -772,6 +783,7 @@ public class AgentUtils {
                 if (connector instanceof McpStreamableHttpConnector) {
                     McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;
@@ -861,10 +873,6 @@ public class AgentUtils {
         if (toolSpecs == null) {
             return;
         }
-        // Add agent's model_id for tools that may need it like QPT
-        if (mlAgent.getLlm() != null && mlAgent.getLlm().getModelId() != null) {
-            params.put(AGENT_LLM_MODEL_ID, mlAgent.getLlm().getModelId());
-        }
         for (MLToolSpec toolSpec : toolSpecs) {
             Map<String, String> toolParams = buildToolParameters(params, toolSpec, mlAgent.getTenantId());
             Tool tool = createTool(toolFactories, toolParams, toolSpec);
@@ -951,13 +959,13 @@ public class AgentUtils {
 
     /**
      * Generates a formatted current date and time string in UTC timezone.
-     * 
+     *
      * <p>This method returns the current date and time formatted according to the provided pattern.
      * If no format is provided or the format is invalid, it uses the default format:
      * "yyyy-MM-dd'T'HH:mm:ss'Z'" (e.g., "2024-01-15T14:30:00Z").
-     * 
+     *
      * <p>The method always returns the time in UTC timezone regardless of the system's local timezone.
-     * 
+     *
      * @param dateFormat The date format pattern to use. Can be null or empty to use the default format.
      *                   Must be a valid {@link java.time.format.DateTimeFormatter} pattern.
      *                   Examples:
@@ -1023,21 +1031,152 @@ public class AgentUtils {
         return tool;
     }
 
+    public static List<Map<String, Object>> parseFrontendTools(String aguiTools) {
+        List<Map<String, Object>> frontendTools = new ArrayList<>();
+        if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
+            try {
+                Type listType = new TypeToken<List<Map<String, Object>>>() {
+                }.getType();
+                List<Map<String, Object>> parsed = gson.fromJson(aguiTools, listType);
+                if (parsed != null) {
+                    frontendTools.addAll(parsed);
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse frontend tools: {}", e.getMessage());
+            }
+        }
+        return frontendTools;
+    }
+
+    public static Map<String, Tool> wrapFrontendToolsAsToolObjects(List<Map<String, Object>> frontendTools) {
+        Map<String, Tool> wrappedTools = new HashMap<>();
+
+        for (Map<String, Object> frontendTool : frontendTools) {
+            String toolName = (String) frontendTool.get("name");
+            String toolDescription = (String) frontendTool.get("description");
+
+            // Create frontend tool object with source marker
+            Map<String, Object> toolAttributes = new HashMap<>();
+            toolAttributes.put("source", "frontend");
+            toolAttributes.put("tool_definition", frontendTool);
+
+            Object parameters = frontendTool.get("parameters");
+            if (parameters != null) {
+                toolAttributes.put("input_schema", gson.toJson(parameters));
+            } else {
+                Map<String, Object> emptySchema = Map.of("type", "object", "properties", Map.of());
+                toolAttributes.put("input_schema", gson.toJson(emptySchema));
+            }
+
+            Tool frontendToolObj = new AGUIFrontendTool(toolName, toolDescription, toolAttributes);
+            wrappedTools.put(toolName, frontendToolObj);
+        }
+
+        return wrappedTools;
+    }
+
     public static Map<String, Object> createMemoryParams(
         String question,
         String memoryId,
         String appType,
         MLAgent mlAgent,
-        String memoryContainerId
+        Map<String, String> requestParameters
     ) {
         Map<String, Object> memoryParams = new HashMap<>();
         memoryParams.put(ConversationIndexMemory.MEMORY_NAME, question);
         memoryParams.put(ConversationIndexMemory.MEMORY_ID, memoryId);
         memoryParams.put(APP_TYPE, appType);
-        if (mlAgent.getMemory().getMemoryContainerId() != null) {
-            memoryParams.put(MEMORY_CONTAINER_ID_FIELD, mlAgent.getMemory().getMemoryContainerId());
+        MLMemorySpec agentMemory = mlAgent != null ? mlAgent.getMemory() : null;
+        if (agentMemory != null) {
+            String containerId = agentMemory.getMemoryContainerId();
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
+            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }
-        memoryParams.putIfAbsent(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        if (requestParameters != null) {
+            // Extract memory_container_id
+            String containerId = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
+
+            // Check if parameters are wrapped in memory_configuration
+            // In current implementation, agent memory processing method will be overridden to remote agentic memory
+            // if the agent receive the memory config field, no matter what its previous memory type is.
+            // In long run, memory configuration should only be expected for remote agentic memory type.
+            // TODO: Add a memory type check to restrict memory config to remote agentic memory only
+            String memoryConfigStr = requestParameters.get(MEMORY_CONFIGURATION_FIELD);
+            if (!Strings.isNullOrEmpty(memoryConfigStr)) {
+                // Parse the memory_configuration JSON
+                try (
+                    XContentParser parser = JsonXContent.jsonXContent
+                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, memoryConfigStr)
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    Map<String, Object> memoryConfig = parser.map();
+
+                    // Extract endpoint
+                    String endpointParam = (String) memoryConfig.get("memory_endpoint");
+                    if (!Strings.isNullOrEmpty(endpointParam)) {
+                        memoryParams.put(ENDPOINT_FIELD, endpointParam);
+                    }
+
+                    // Extract region
+                    String regionParam = (String) memoryConfig.get(HttpConnector.REGION_FIELD);
+                    if (!Strings.isNullOrEmpty(regionParam)) {
+                        memoryParams.put(HttpConnector.REGION_FIELD, regionParam);
+                    }
+
+                    // Extract credential
+                    Object credentialObj = memoryConfig.get(CREDENTIAL_FIELD);
+                    if (credentialObj instanceof Map) {
+                        Map<String, String> credential = (Map<String, String>) credentialObj;
+                        if (!credential.isEmpty()) {
+                            memoryParams.put(CREDENTIAL_FIELD, credential);
+                        }
+                    }
+
+                    // Check for direct roleArn field - if present, override credential map
+                    String roleArnParam = (String) memoryConfig.get("role_arn");
+                    if (!Strings.isNullOrEmpty(roleArnParam)) {
+                        // Override credential with roleArn
+                        Map<String, String> roleArnCredential = new HashMap<>();
+                        roleArnCredential.put("roleArn", roleArnParam);
+                        memoryParams.put(CREDENTIAL_FIELD, roleArnCredential);
+                    }
+
+                    // Extract user_id if provided
+                    String userIdParam = (String) memoryConfig.get("user_id");
+                    if (!Strings.isNullOrEmpty(userIdParam)) {
+                        memoryParams.put("user_id", userIdParam);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse memory_configuration", e);
+                }
+            }
+            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+        }
         return memoryParams;
+    }
+
+    private static Map<String, String> parseStringMapParameter(String rawValue, String fieldName) {
+        if (Strings.isNullOrEmpty(rawValue)) {
+            return null;
+        }
+        try (
+            XContentParser parser = JsonXContent.jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, rawValue)
+        ) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            Map<String, String> parsed = parser.mapStrings();
+            if (parsed == null || parsed.isEmpty()) {
+                return null;
+            }
+            return parsed;
+        } catch (IOException ex) {
+            log.warn("Failed to parse {} field; ignoring value", fieldName, ex);
+            return null;
+        }
     }
 }

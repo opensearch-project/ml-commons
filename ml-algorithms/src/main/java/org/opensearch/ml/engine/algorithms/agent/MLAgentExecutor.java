@@ -79,7 +79,6 @@ import org.opensearch.ml.engine.algorithms.contextmanager.ToolsOutputTruncateMan
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
@@ -246,7 +245,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
                                         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
-                                        String appType = mlAgent.getAppType();
+                                        String appType = finalMlAgent.getAppType();
                                         String question = inputDataSet.getParameters().get(QUESTION);
 
                                         if (parentInteractionId != null && regenerateInteractionId != null) {
@@ -280,10 +279,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 question,
                                                 memoryId,
                                                 appType,
-                                                mlAgent,
+                                                finalMlAgent,
                                                 requestParameters
                                             );
-
+                                            log
+                                                .debug(
+                                                    "Called MLAgentExecutor in memory ID inexist case with memoryParams: {}",
+                                                    memoryParams
+                                                );
                                             // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
                                             Memory.Factory<Memory<?, ?, ?>> memoryFactory;
                                             if (memoryParams != null && memoryParams.containsKey("endpoint")) {
@@ -345,26 +348,32 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 listener.onFailure(ex);
                                             }));
                                         } else {
+                                            Map<String, Object> memoryParams = createMemoryParams(
+                                                question,
+                                                memoryId,
+                                                appType,
+                                                finalMlAgent,
+                                                requestParameters
+                                            );
+                                            log.debug("Called MLAgentExecutor in memory ID exist case with memoryParams: {}", memoryParams);
                                             // For existing conversations, create memory instance using factory
                                             if (memorySpec != null && memorySpec.getType() != null) {
-                                                String memoryType = MLMemoryType.from(memorySpec.getType()).name();
-                                                Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
+                                                Memory.Factory<Memory<?, ?, ?>> memoryFactory;
+                                                if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+                                                    // Use RemoteAgenticConversationMemory when inline connector metadata is detected
+                                                    memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+                                                    log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+                                                } else {
+                                                    // Use the originally specified memory factory
+                                                    memoryFactory = memoryFactoryMap.get(MLMemoryType.from(memorySpec.getType()).name());
+                                                }
 
-                                                ConversationIndexMemory.Factory factory = (ConversationIndexMemory.Factory) memoryFactoryMap
-                                                    .get(memorySpec.getType());
-                                                if (factory != null) {
+                                                if (memoryFactory != null) {
                                                     // memoryId exists, so create returns an object with existing
                                                     // memory, therefore name can
                                                     // be null
-                                                    Map<String, Object> memoryParams = createMemoryParams(
-                                                        question,
-                                                        memoryId,
-                                                        appType,
-                                                        finalMlAgent,
-                                                        requestParameters
-                                                    );
 
-                                                    factory
+                                                    memoryFactory
                                                         .create(
                                                             memoryParams,
                                                             ActionListener
@@ -398,7 +407,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 mlTask,
                                                 isAsync,
                                                 memoryId,
-                                                mlAgent,
+                                                finalMlAgent,
                                                 outputs,
                                                 modelTensors,
                                                 listener,
