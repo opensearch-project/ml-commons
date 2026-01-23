@@ -21,6 +21,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MAX_ITERATION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
@@ -53,9 +54,11 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -69,6 +72,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -92,6 +96,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
+    private HookRegistry hookRegistry;
     // flag to track if task has been updated with executor memory ids or not
     private boolean taskUpdated = false;
     private final Map<String, Object> taskUpdates = new HashMap<>();
@@ -163,7 +168,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
         SdkClient sdkClient,
-        Encryptor encryptor
+        Encryptor encryptor,
+        HookRegistry hookRegistry
     ) {
         this.client = client;
         this.settings = settings;
@@ -173,6 +179,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
+        this.hookRegistry = hookRegistry;
         this.plannerPrompt = DEFAULT_PLANNER_PROMPT;
         this.plannerPromptTemplate = DEFAULT_PLANNER_PROMPT_TEMPLATE;
         this.reflectPrompt = DEFAULT_REFLECT_PROMPT;
@@ -290,9 +297,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // todo: use chat history instead of completed steps
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory
-            .create(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+            .create(allParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
                 memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
-                    List<String> completedSteps = new ArrayList<>();
+                    final List<String> completedSteps = new ArrayList<>();
                     for (Interaction interaction : interactions) {
                         String question = interaction.getInput();
                         String response = interaction.getResponse();
@@ -386,8 +393,41 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             );
             return;
         }
+        MLPredictionTaskRequest request;
+        // Planner agent doesn't use INTERACTIONS for now, reusing the INTERACTIONS to pass over
+        // completedSteps to context management.
+        // TODO should refactor the completed steps as message array format, similar to chat agent.
 
-        MLPredictionTaskRequest request = new MLPredictionTaskRequest(
+        allParams.put("_llm_model_id", llm.getModelId());
+        if (hookRegistry != null && !completedSteps.isEmpty()) {
+
+            Map<String, String> requestParams = new HashMap<>(allParams);
+            requestParams.put(INTERACTIONS, ", " + String.join(", ", completedSteps));
+            try {
+                ContextManagerContext contextAfterEvent = AgentContextUtil
+                    .emitPreLLMHook(requestParams, completedSteps, null, memory, hookRegistry);
+
+                // Check if context managers actually modified the interactions
+                List<String> updatedSteps = contextAfterEvent.getToolInteractions();
+                if (updatedSteps != null && !updatedSteps.equals(completedSteps)) {
+                    completedSteps.clear();
+                    completedSteps.addAll(updatedSteps);
+
+                    // Update parameters if context manager set INTERACTIONS
+                    String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                    if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                        allParams.put(COMPLETED_STEPS_FIELD, contextInteractions);
+                        // TODO should I always clear interactions after update the completed steps?
+                        allParams.put(INTERACTIONS, "");
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to emit pre-LLM hook", e);
+            }
+
+        }
+
+        request = new MLPredictionTaskRequest(
             llm.getModelId(),
             RemoteInferenceMLInput
                 .builder()
@@ -442,6 +482,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .functionName(FunctionName.AGENT)
                     .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
                     .build();
+
+                // Pass hookRegistry to internal agent execution
+                agentInput.setHookRegistry(hookRegistry);
 
                 MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 

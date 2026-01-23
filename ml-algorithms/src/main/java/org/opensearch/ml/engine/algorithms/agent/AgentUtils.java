@@ -386,15 +386,15 @@ public class AgentUtils {
                     String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
                     String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
                     if (toolCallsMsgPath != null) {
+                        Map<String, ?> workingDataAsMap = dataAsMap;
                         if (toolCallsMsgExcludePath != null) {
-                            Map<String, ?> newDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
-                            Object toolCallsMsg = JsonPath.read(newDataAsMap, toolCallsMsgPath);
-                            interactions.add(StringUtils.toJson(toolCallsMsg));
-                        } else {
-                            Object toolCallsMsg = JsonPath.read(dataAsMap, toolCallsMsgPath);
-                            interactions.add(StringUtils.toJson(toolCallsMsg));
+                            workingDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
                         }
-
+                        if (functionCalling != null) {
+                            workingDataAsMap = functionCalling.filterToFirstToolCall(workingDataAsMap, parameters);
+                        }
+                        Object toolCallsMsg = JsonPath.read(workingDataAsMap, toolCallsMsgPath);
+                        interactions.add(StringUtils.toJson(toolCallsMsg));
                     } else {
                         interactions
                             .add(
