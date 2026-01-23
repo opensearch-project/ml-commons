@@ -34,6 +34,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -50,6 +51,7 @@ import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockStartEve
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamOutput;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
+import software.amazon.awssdk.services.bedrockruntime.model.GuardrailStreamConfiguration;
 import software.amazon.awssdk.services.bedrockruntime.model.Message;
 import software.amazon.awssdk.services.bedrockruntime.model.SystemContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.Tool;
@@ -155,7 +157,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         return error instanceof ValidationException || error instanceof InvalidRequestException || error instanceof AuthenticationException;
     }
 
-    private ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
+    @VisibleForTesting
+    ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode payloadJson = mapper.readTree(payload);
@@ -165,6 +168,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 .system(getOptionalNode(payloadJson, "system").map(this::parseSystemMessages).orElse(null))
                 .messages(getOptionalNode(payloadJson, "messages").map(this::parseMessages).orElse(null))
                 .toolConfig(getOptionalNode(payloadJson, "toolConfig").map(this::parseToolConfig).orElse(null))
+                .guardrailConfig(getOptionalNode(payloadJson, "guardrailConfig").map(this::parseGuardrailConfig).orElse(null))
                 .build();
         } catch (Exception e) {
             throw new MLException("Failed to parse payload for Bedrock request", e);
@@ -506,5 +510,26 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         if (node.isNumber())
             return Document.fromNumber(node.isInt() ? node.asInt() : node.asDouble());
         return Document.fromString(node.toString());
+    }
+
+    @VisibleForTesting
+    GuardrailStreamConfiguration parseGuardrailConfig(JsonNode guardrailConfig) {
+        GuardrailStreamConfiguration.Builder builder = GuardrailStreamConfiguration.builder();
+
+        if (guardrailConfig.has("guardrailIdentifier")) {
+            builder.guardrailIdentifier(guardrailConfig.get("guardrailIdentifier").asText());
+        }
+
+        if (guardrailConfig.has("guardrailVersion")) {
+            builder.guardrailVersion(guardrailConfig.get("guardrailVersion").asText());
+        }
+
+        if (guardrailConfig.has("trace")) {
+            builder.trace(guardrailConfig.get("trace").asText());
+        }
+
+        builder.streamProcessingMode("async");
+
+        return builder.build();
     }
 }
