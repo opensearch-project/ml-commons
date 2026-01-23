@@ -135,7 +135,23 @@ public class MLAgent implements ToXContentObject, Writeable {
         ContextManagementTemplate contextManagement,
         String tenantId
     ) {
-        this(name, type, description, llm, null, tools, parameters, memory, createdTime, lastUpdateTime, appType, isHidden, contextManagementName, contextManagement, tenantId);
+        this(
+            name,
+            type,
+            description,
+            llm,
+            null,
+            tools,
+            parameters,
+            memory,
+            createdTime,
+            lastUpdateTime,
+            appType,
+            isHidden,
+            contextManagementName,
+            contextManagement,
+            tenantId
+        );
     }
 
     private void validate() {

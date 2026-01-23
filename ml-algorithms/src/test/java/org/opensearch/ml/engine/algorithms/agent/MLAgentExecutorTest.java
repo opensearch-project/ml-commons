@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
 import java.io.IOException;
@@ -27,7 +26,6 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
@@ -35,16 +33,12 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.core.xcontent.DeprecationHandler;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
@@ -62,7 +56,6 @@ import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.InputType;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.output.Output;
-import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
@@ -75,8 +68,6 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
-
-import com.google.common.collect.ImmutableMap;
 
 @SuppressWarnings({ "rawtypes" })
 public class MLAgentExecutorTest {
@@ -652,54 +643,54 @@ public class MLAgentExecutorTest {
     @Test
     public void test_FreshMemoryParameter_SetToTrue_WhenMemoryIdNotProvided() {
         // Create agent with memory spec
-//        MLAgent agent = MLAgent
-//            .builder()
-//            .name("test_agent")
-//            .type(MLAgentType.CONVERSATIONAL.name())
-//            .memory(new MLMemorySpec("conversation_index", null, 0))
-//            .llm(LLMSpec.builder().modelId("test-model").parameters(Collections.emptyMap()).build())
-//            .build();
-//
-//        // Create input without memory_id
-//        Map<String, String> parameters = new HashMap<>();
-//        parameters.put(QUESTION, "What is AI?");
-//        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-//        AgentMLInput agentMLInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
-//
-//        // Setup memory factory
-//        memoryFactoryMap.put("conversation_index", mockMemoryFactory);
-//        doAnswer(invocation -> {
-//            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
-//            when(memory.getConversationId()).thenReturn("new-conversation-id");
-//            listener.onResponse(memory);
-//            return null;
-//        }).when(mockMemoryFactory).create(anyString(), isNull(), anyString(), any());
-//
-//        mlAgentExecutor = new MLAgentExecutor(
-//            client,
-//            sdkClient,
-//            settings,
-//            clusterService,
-//            xContentRegistry,
-//            toolFactories,
-//            memoryFactoryMap,
-//            mlFeatureEnabledSetting,
-//            encryptor
-//        );
-//
-//        // Execute - this will trigger memory creation
-//        mlAgentExecutor.execute(agentMLInput, listener, channel);
-//
-//        // Verify fresh_memory parameter is set to "true"
-//        verify(mockMemoryFactory, timeout(5000).atLeastOnce()).create(anyString(), isNull(), anyString(), any());
-//
-//        // The fresh_memory parameter should be set in the dataset parameters
-//        // Note: This verification happens in the callback, so we verify the factory was called with null memoryId
-//        ArgumentCaptor<String> memoryIdCaptor = ArgumentCaptor.forClass(String.class);
-//        verify(mockMemoryFactory).create(anyString(), memoryIdCaptor.capture(), anyString(), any());
-//
-//        // Verify that memoryId was null (which triggers fresh_memory = true)
-//        assertNull("Memory ID should be null for fresh conversations", memoryIdCaptor.getValue());
+        // MLAgent agent = MLAgent
+        // .builder()
+        // .name("test_agent")
+        // .type(MLAgentType.CONVERSATIONAL.name())
+        // .memory(new MLMemorySpec("conversation_index", null, 0))
+        // .llm(LLMSpec.builder().modelId("test-model").parameters(Collections.emptyMap()).build())
+        // .build();
+        //
+        // // Create input without memory_id
+        // Map<String, String> parameters = new HashMap<>();
+        // parameters.put(QUESTION, "What is AI?");
+        // RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        // AgentMLInput agentMLInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        //
+        // // Setup memory factory
+        // memoryFactoryMap.put("conversation_index", mockMemoryFactory);
+        // doAnswer(invocation -> {
+        // ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+        // when(memory.getConversationId()).thenReturn("new-conversation-id");
+        // listener.onResponse(memory);
+        // return null;
+        // }).when(mockMemoryFactory).create(anyString(), isNull(), anyString(), any());
+        //
+        // mlAgentExecutor = new MLAgentExecutor(
+        // client,
+        // sdkClient,
+        // settings,
+        // clusterService,
+        // xContentRegistry,
+        // toolFactories,
+        // memoryFactoryMap,
+        // mlFeatureEnabledSetting,
+        // encryptor
+        // );
+        //
+        // // Execute - this will trigger memory creation
+        // mlAgentExecutor.execute(agentMLInput, listener, channel);
+        //
+        // // Verify fresh_memory parameter is set to "true"
+        // verify(mockMemoryFactory, timeout(5000).atLeastOnce()).create(anyString(), isNull(), anyString(), any());
+        //
+        // // The fresh_memory parameter should be set in the dataset parameters
+        // // Note: This verification happens in the callback, so we verify the factory was called with null memoryId
+        // ArgumentCaptor<String> memoryIdCaptor = ArgumentCaptor.forClass(String.class);
+        // verify(mockMemoryFactory).create(anyString(), memoryIdCaptor.capture(), anyString(), any());
+        //
+        // // Verify that memoryId was null (which triggers fresh_memory = true)
+        // assertNull("Memory ID should be null for fresh conversations", memoryIdCaptor.getValue());
     }
     // ==================== Tests for storeMessagesInMemory ====================
 
