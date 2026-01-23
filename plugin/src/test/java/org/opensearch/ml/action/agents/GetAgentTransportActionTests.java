@@ -453,6 +453,8 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
 

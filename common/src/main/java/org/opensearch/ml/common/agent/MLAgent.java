@@ -79,7 +79,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private Boolean isHidden;
     private String contextManagementName;
     private ContextManagementTemplate contextManagement;
-    private final String tenantId;
+    private String tenantId;
 
     @Builder(toBuilder = true)
     public MLAgent(
@@ -131,9 +131,11 @@ public class MLAgent implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         String appType,
         Boolean isHidden,
+        String contextManagementName,
+        ContextManagementTemplate contextManagement,
         String tenantId
     ) {
-        this(name, type, description, llm, null, tools, parameters, memory, createdTime, lastUpdateTime, appType, isHidden, tenantId);
+        this(name, type, description, llm, null, tools, parameters, memory, createdTime, lastUpdateTime, appType, isHidden, contextManagementName, contextManagement, tenantId);
     }
 
     private void validate() {
