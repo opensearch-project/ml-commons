@@ -25,8 +25,8 @@ import lombok.NoArgsConstructor;
 /**
  * Represents standardized agent input that can handle different input formats:
  * - Plain text (String)
- * - Multi-modal content blocks (List<ContentBlock>)
- * - Message-based conversations (List<Message>)
+ * - Multi-modal content blocks (List&lt;ContentBlock&gt;)
+ * - Message-based conversations (List&lt;Message&gt;)
  */
 @Data
 @NoArgsConstructor
