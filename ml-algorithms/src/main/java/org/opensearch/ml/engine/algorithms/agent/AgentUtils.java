@@ -11,6 +11,8 @@ import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -30,6 +32,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
@@ -64,6 +67,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -73,8 +77,10 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -147,6 +153,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
     public static final String AGENT_TYPE_PARAM = "agent_type";
 
     // For function calling, do not escape the below params in connector by default
@@ -1093,16 +1100,89 @@ public class AgentUtils {
         String memoryId,
         String appType,
         MLAgent mlAgent,
-        String memoryContainerId
+        Map<String, String> requestParameters
     ) {
         Map<String, Object> memoryParams = new HashMap<>();
         memoryParams.put(ConversationIndexMemory.MEMORY_NAME, question);
         memoryParams.put(ConversationIndexMemory.MEMORY_ID, memoryId);
         memoryParams.put(APP_TYPE, appType);
-        if (mlAgent.getMemory().getMemoryContainerId() != null) {
-            memoryParams.put(MEMORY_CONTAINER_ID_FIELD, mlAgent.getMemory().getMemoryContainerId());
+        MLMemorySpec agentMemory = mlAgent != null ? mlAgent.getMemory() : null;
+        if (agentMemory != null) {
+            String containerId = agentMemory.getMemoryContainerId();
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
+            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }
-        memoryParams.putIfAbsent(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        if (requestParameters != null) {
+            // Extract memory_container_id
+            String containerId = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
+
+            // Check if parameters are wrapped in memory_configuration
+            // In current implementation, agent memory processing method will be overridden to remote agentic memory
+            // if the agent receive the memory config field, no matter what its previous memory type is.
+            // In long run, memory configuration should only be expected for remote agentic memory type.
+            // TODO: Add a memory type check to restrict memory config to remote agentic memory only
+            String memoryConfigStr = requestParameters.get(MEMORY_CONFIGURATION_FIELD);
+            if (!Strings.isNullOrEmpty(memoryConfigStr)) {
+                // Parse the memory_configuration JSON
+                try (
+                    XContentParser parser = JsonXContent.jsonXContent
+                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, memoryConfigStr)
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    Map<String, Object> memoryConfig = parser.map();
+
+                    // Extract endpoint (support both legacy and explicit keys)
+                    String endpointParam = (String) memoryConfig.get(ENDPOINT_FIELD);
+                    if (Strings.isNullOrEmpty(endpointParam)) {
+                        endpointParam = (String) memoryConfig.get("memory_endpoint");
+                    }
+                    if (!Strings.isNullOrEmpty(endpointParam)) {
+                        memoryParams.put(ENDPOINT_FIELD, endpointParam);
+                    }
+
+                    // Extract region
+                    String regionParam = (String) memoryConfig.get(HttpConnector.REGION_FIELD);
+                    if (!Strings.isNullOrEmpty(regionParam)) {
+                        memoryParams.put(HttpConnector.REGION_FIELD, regionParam);
+                    }
+
+                    // Extract credential
+                    Object credentialObj = memoryConfig.get(CREDENTIAL_FIELD);
+                    if (credentialObj instanceof Map) {
+                        Map<String, String> credential = (Map<String, String>) credentialObj;
+                        if (!credential.isEmpty()) {
+                            memoryParams.put(CREDENTIAL_FIELD, credential);
+                        }
+                    }
+
+                    // Check for direct roleArn field - if present, override credential map
+                    String roleArnParam = (String) memoryConfig.get("roleArn");
+                    if (Strings.isNullOrEmpty(roleArnParam)) {
+                        roleArnParam = (String) memoryConfig.get("role_arn");
+                    }
+                    if (!Strings.isNullOrEmpty(roleArnParam)) {
+                        // Override credential with roleArn
+                        Map<String, String> roleArnCredential = new HashMap<>();
+                        roleArnCredential.put("roleArn", roleArnParam);
+                        memoryParams.put(CREDENTIAL_FIELD, roleArnCredential);
+                    }
+
+                    // Extract user_id if provided
+                    String userIdParam = (String) memoryConfig.get("user_id");
+                    if (!Strings.isNullOrEmpty(userIdParam)) {
+                        memoryParams.put("user_id", userIdParam);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse memory_configuration", e);
+                }
+            }
+            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+        }
         return memoryParams;
     }
 

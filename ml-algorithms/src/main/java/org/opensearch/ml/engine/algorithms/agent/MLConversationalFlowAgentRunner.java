@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTensor;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
@@ -36,6 +35,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -110,9 +110,17 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String title = params.get(QUESTION);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
-
-        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params.get(MEMORY_CONTAINER_ID_FIELD));
+        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
+        log.debug("Called MLConversationalFlowAgentRunner with memoryParams: {}", memoryParams);
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
+        if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+            // Use RemoteAgenticConversationMemory when inline connector metadata is detected
+            memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+            log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+        } else {
+            // Use the originally specified memory factory
+            memoryFactory = memoryFactoryMap.get(memoryType);
+        }
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
