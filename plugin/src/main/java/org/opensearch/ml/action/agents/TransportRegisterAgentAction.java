@@ -26,6 +26,8 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.action.agent.MLAgentRegistrationValidator;
+import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -56,6 +58,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLAgentRegistrationValidator agentRegistrationValidator;
 
     @Inject
     public TransportRegisterAgentAction(
@@ -65,7 +68,8 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         SdkClient sdkClient,
         MLIndicesHandler mlIndicesHandler,
         ClusterService clusterService,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        ContextManagementTemplateService contextManagementTemplateService
     ) {
         super(MLRegisterAgentAction.NAME, transportService, actionFilters, MLRegisterAgentRequest::new);
         this.client = client;
@@ -73,6 +77,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         this.mlIndicesHandler = mlIndicesHandler;
         this.clusterService = clusterService;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.agentRegistrationValidator = new MLAgentRegistrationValidator(contextManagementTemplateService);
     }
 
     @Override
@@ -84,6 +89,70 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
+        validateAgent(agent, ActionListener.wrap(validatedAgent -> {
+            // All validations passed, proceed with registration
+            proceedWithAgentRegistration(validatedAgent, listener);
+        }, listener::onFailure));
+    }
+
+    private void validateAgent(MLAgent agent, ActionListener<MLAgent> listener) {
+        // Validate context management configuration
+        if (agent.hasContextManagementTemplate()) {
+            // Validate context management template access
+            String templateName = agent.getContextManagementTemplateName();
+            agentRegistrationValidator.validateContextManagementTemplateAccess(templateName, ActionListener.wrap(hasAccess -> {
+                if (Boolean.TRUE.equals(hasAccess)) {
+                    listener.onResponse(agent);
+                } else {
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "You don't have permission to use the context management template provided, template name: " + templateName
+                            )
+                        );
+                }
+            }, e -> {
+                log.error("You don't have permission to use the context management template provided, template name: {}", templateName, e);
+                listener.onFailure(e);
+            }));
+        } else if (agent.getInlineContextManagement() != null) {
+            // Validate inline context management configuration
+            try {
+                validateInlineContextManagement(agent);
+                listener.onResponse(agent);
+            } catch (Exception e) {
+                listener.onFailure(e);
+            }
+        } else {
+            // No context management configuration - that's fine
+            listener.onResponse(agent);
+        }
+    }
+
+    private void validateInlineContextManagement(MLAgent agent) {
+        if (agent.getInlineContextManagement() == null) {
+            log
+                .error(
+                    "You must provide context management content when creating an agent without providing context management template name!"
+                );
+            throw new IllegalArgumentException(
+                "You must provide context management content when creating an agent without context management template name!"
+            );
+        }
+
+        // Validate inline context management configuration structure
+        if (!agent.getInlineContextManagement().isValid()) {
+            log
+                .error(
+                    "Invalid context management configuration: configuration must have a name and at least one hook with valid context manager configurations"
+                );
+            throw new IllegalArgumentException(
+                "Invalid context management configuration: configuration must have a name and at least one hook with valid context manager configurations"
+            );
+        }
+    }
+
+    private void proceedWithAgentRegistration(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
         String mcpConnectorConfigJSON = (agent.getParameters() != null) ? agent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.

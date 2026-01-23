@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.function_calling;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH;
@@ -32,10 +33,13 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.utils.StringUtils;
 
+import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 public class BedrockConverseFunctionCalling implements FunctionCalling {
     public static final String FINISH_REASON_PATH = "$.stopReason";
     public static final String FINISH_REASON = "tool_use";
@@ -119,6 +123,55 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         }
 
         return List.of(toolMessage);
+    }
+
+    @Override
+    public Map<String, ?> filterToFirstToolCall(Map<String, ?> dataAsMap, Map<String, String> parameters) {
+        try {
+            List<Object> contentList = JsonPath.read(dataAsMap, "$.output.message.content");
+            if (contentList == null || contentList.size() <= 1) {
+                return dataAsMap;
+            }
+
+            // Keep only text and first toolUse
+            List<Object> filteredContent = new ArrayList<>();
+            List<String> allToolNames = new ArrayList<>();
+            String selectedToolName = null;
+            boolean foundFirstToolUse = false;
+
+            for (Object item : contentList) {
+                if (item instanceof Map && ((Map<?, ?>) item).containsKey("toolUse")) {
+                    Map<?, ?> toolUseMap = (Map<?, ?>) ((Map<?, ?>) item).get("toolUse");
+                    String toolName = toolUseMap != null ? String.valueOf(toolUseMap.get("name")) : "unknown";
+                    allToolNames.add(toolName);
+
+                    if (!foundFirstToolUse) {
+                        filteredContent.add(item);
+                        selectedToolName = toolName;
+                        foundFirstToolUse = true;
+                    }
+                } else {
+                    filteredContent.add(item);
+                }
+            }
+
+            if (!foundFirstToolUse) {
+                return dataAsMap;
+            }
+
+            if (allToolNames.size() > 1) {
+                log.info("LLM suggested {} tool(s): {}. Selected first tool: {}", allToolNames.size(), allToolNames, selectedToolName);
+            }
+
+            // Create mutable copy using JSON serialization for efficiency
+            Map<String, Object> mutableCopy = gson.fromJson(StringUtils.toJson(dataAsMap), Map.class);
+            DocumentContext context = JsonPath.parse(mutableCopy);
+            context.set("$.output.message.content", filteredContent);
+            return context.json();
+        } catch (Exception e) {
+            log.error("Failed to filter out to only first tool call", e);
+            return dataAsMap;
+        }
     }
 
     @Data
