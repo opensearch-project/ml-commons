@@ -82,11 +82,7 @@ public class MLAgentModelSpecTest {
         credential.put("access_key", "test_key");
 
         // Act
-        MLAgentModelSpec spec = MLAgentModelSpec.builder()
-            .modelId(modelId)
-            .modelProvider(modelProvider)
-            .credential(credential)
-            .build();
+        MLAgentModelSpec spec = MLAgentModelSpec.builder().modelId(modelId).modelProvider(modelProvider).credential(credential).build();
 
         // Assert
         assertEquals(modelId, spec.getModelId());
@@ -101,12 +97,8 @@ public class MLAgentModelSpecTest {
         String modelProvider = "bedrock";
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
-        
-        MLAgentModelSpec original = MLAgentModelSpec.builder()
-            .modelId(modelId)
-            .modelProvider(modelProvider)
-            .credential(credential)
-            .build();
+
+        MLAgentModelSpec original = MLAgentModelSpec.builder().modelId(modelId).modelProvider(modelProvider).credential(credential).build();
 
         // Act
         MLAgentModelSpec copy = original.toBuilder().build();
@@ -124,7 +116,7 @@ public class MLAgentModelSpecTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
         credential.put("secret_key", "test_secret");
-        
+
         MLAgentModelSpec spec = new MLAgentModelSpec("model-id", "provider", credential, null);
         assertNotNull(spec.getCredential());
 
@@ -141,22 +133,17 @@ public class MLAgentModelSpecTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
         credential.put("secret_key", "test_secret");
-        
+
         Map<String, String> modelParameters = new HashMap<>();
         modelParameters.put("region", "us-west-2");
         modelParameters.put("temperature", "0.7");
-        
-        MLAgentModelSpec original = new MLAgentModelSpec(
-            "test-model-id",
-            "bedrock",
-            credential,
-            modelParameters
-        );
+
+        MLAgentModelSpec original = new MLAgentModelSpec("test-model-id", "bedrock", credential, modelParameters);
 
         // Act
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
-        
+
         StreamInput input = output.bytes().streamInput();
         MLAgentModelSpec deserialized = new MLAgentModelSpec(input);
 
@@ -172,18 +159,13 @@ public class MLAgentModelSpecTest {
         // Arrange
         Map<String, String> modelParameters = new HashMap<>();
         modelParameters.put("region", "us-east-1");
-        
-        MLAgentModelSpec original = new MLAgentModelSpec(
-            "test-model-id",
-            "openai",
-            null,
-            modelParameters
-        );
+
+        MLAgentModelSpec original = new MLAgentModelSpec("test-model-id", "openai", null, modelParameters);
 
         // Act
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
-        
+
         StreamInput input = output.bytes().streamInput();
         MLAgentModelSpec deserialized = new MLAgentModelSpec(input);
 
@@ -197,17 +179,12 @@ public class MLAgentModelSpecTest {
     @Test
     public void testStreamSerialization_WithEmptyMaps() throws IOException {
         // Arrange
-        MLAgentModelSpec original = new MLAgentModelSpec(
-            "test-model-id",
-            "bedrock",
-            new HashMap<>(),
-            new HashMap<>()
-        );
+        MLAgentModelSpec original = new MLAgentModelSpec("test-model-id", "bedrock", new HashMap<>(), new HashMap<>());
 
         // Act
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
-        
+
         StreamInput input = output.bytes().streamInput();
         MLAgentModelSpec deserialized = new MLAgentModelSpec(input);
 
@@ -221,17 +198,12 @@ public class MLAgentModelSpecTest {
     @Test
     public void testStreamSerialization_MinimalFields() throws IOException {
         // Arrange
-        MLAgentModelSpec original = new MLAgentModelSpec(
-            "test-model-id",
-            "bedrock",
-            null,
-            null
-        );
+        MLAgentModelSpec original = new MLAgentModelSpec("test-model-id", "bedrock", null, null);
 
         // Act
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
-        
+
         StreamInput input = output.bytes().streamInput();
         MLAgentModelSpec deserialized = new MLAgentModelSpec(input);
 
@@ -247,13 +219,8 @@ public class MLAgentModelSpecTest {
         // Arrange
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
-        
-        MLAgentModelSpec original = new MLAgentModelSpec(
-            "test-model-id",
-            "bedrock",
-            credential,
-            null
-        );
+
+        MLAgentModelSpec original = new MLAgentModelSpec("test-model-id", "bedrock", credential, null);
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
@@ -274,16 +241,11 @@ public class MLAgentModelSpecTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
         credential.put("secret_key", "test_secret");
-        
+
         Map<String, String> modelParameters = new HashMap<>();
         modelParameters.put("region", "us-west-2");
-        
-        MLAgentModelSpec spec = new MLAgentModelSpec(
-            "test-model-id",
-            "bedrock",
-            credential,
-            modelParameters
-        );
+
+        MLAgentModelSpec spec = new MLAgentModelSpec("test-model-id", "bedrock", credential, modelParameters);
 
         // Act
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -300,12 +262,7 @@ public class MLAgentModelSpecTest {
     @Test
     public void testToXContent_WithMinimalFields() throws IOException {
         // Arrange
-        MLAgentModelSpec spec = new MLAgentModelSpec(
-            "test-model-id",
-            "openai",
-            null,
-            null
-        );
+        MLAgentModelSpec spec = new MLAgentModelSpec("test-model-id", "openai", null, null);
 
         // Act
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -322,12 +279,7 @@ public class MLAgentModelSpecTest {
     @Test
     public void testToXContent_WithEmptyMaps() throws IOException {
         // Arrange
-        MLAgentModelSpec spec = new MLAgentModelSpec(
-            "test-model-id",
-            "bedrock",
-            new HashMap<>(),
-            new HashMap<>()
-        );
+        MLAgentModelSpec spec = new MLAgentModelSpec("test-model-id", "bedrock", new HashMap<>(), new HashMap<>());
 
         // Act
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -344,9 +296,9 @@ public class MLAgentModelSpecTest {
     @Test
     public void testParse_WithAllFields() throws IOException {
         // Arrange
-        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock\"," +
-            "\"credential\":{\"access_key\":\"test_key\",\"secret_key\":\"test_secret\"}," +
-            "\"model_parameters\":{\"region\":\"us-west-2\",\"temperature\":\"0.7\"}}";
+        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock\","
+            + "\"credential\":{\"access_key\":\"test_key\",\"secret_key\":\"test_secret\"},"
+            + "\"model_parameters\":{\"region\":\"us-west-2\",\"temperature\":\"0.7\"}}";
 
         XContentParser parser = createParser(jsonString);
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -386,8 +338,8 @@ public class MLAgentModelSpecTest {
     @Test
     public void testParse_WithUnknownFields() throws IOException {
         // Arrange
-        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock\"," +
-            "\"unknown_field\":\"value\",\"another_unknown\":{\"key\":\"value\"}}";
+        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock\","
+            + "\"unknown_field\":\"value\",\"another_unknown\":{\"key\":\"value\"}}";
 
         XContentParser parser = createParser(jsonString);
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -414,7 +366,7 @@ public class MLAgentModelSpecTest {
         // Arrange
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "value");
-        
+
         MLAgentModelSpec spec1 = new MLAgentModelSpec("model-id", "provider", credential, null);
         MLAgentModelSpec spec2 = new MLAgentModelSpec("model-id", "provider", credential, null);
 
@@ -448,10 +400,10 @@ public class MLAgentModelSpecTest {
         // Arrange
         Map<String, String> credential1 = new HashMap<>();
         credential1.put("key", "value1");
-        
+
         Map<String, String> credential2 = new HashMap<>();
         credential2.put("key", "value2");
-        
+
         MLAgentModelSpec spec1 = new MLAgentModelSpec("model-id", "provider", credential1, null);
         MLAgentModelSpec spec2 = new MLAgentModelSpec("model-id", "provider", credential2, null);
 
@@ -481,10 +433,10 @@ public class MLAgentModelSpecTest {
     public void testSetters() {
         // Arrange
         MLAgentModelSpec spec = new MLAgentModelSpec("model-id", "provider", null, null);
-        
+
         Map<String, String> newCredential = new HashMap<>();
         newCredential.put("new_key", "new_value");
-        
+
         Map<String, String> newParameters = new HashMap<>();
         newParameters.put("param", "value");
 
@@ -503,22 +455,17 @@ public class MLAgentModelSpecTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
         credential.put("secret_key", "test_secret");
-        
+
         Map<String, String> modelParameters = new HashMap<>();
         modelParameters.put("region", "us-west-2");
         modelParameters.put("temperature", "0.7");
-        
-        MLAgentModelSpec original = new MLAgentModelSpec(
-            "test-model-id",
-            "bedrock",
-            credential,
-            modelParameters
-        );
+
+        MLAgentModelSpec original = new MLAgentModelSpec("test-model-id", "bedrock", credential, modelParameters);
 
         // Act - Serialize to XContent
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         original.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        
+
         // Parse back from XContent
         XContentParser parser = createParser(builder.toString());
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -532,8 +479,7 @@ public class MLAgentModelSpecTest {
     }
 
     private XContentParser createParser(String jsonString) throws IOException {
-        XContentParser parser = XContentType.JSON.xContent()
-            .createParser(NamedXContentRegistry.EMPTY, null, jsonString);
+        XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, jsonString);
         return parser;
     }
 }

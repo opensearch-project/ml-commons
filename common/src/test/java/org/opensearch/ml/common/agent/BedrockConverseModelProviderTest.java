@@ -16,7 +16,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -28,7 +27,6 @@ import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
-import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class BedrockConverseModelProviderTest {
 
@@ -313,7 +311,7 @@ public class BedrockConverseModelProviderTest {
     public void testMapContentBlocks_MultipleBlocks() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Describe this image:");
@@ -363,13 +361,13 @@ public class BedrockConverseModelProviderTest {
     public void testMapMessages_SingleMessage() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         List<ContentBlock> content = new ArrayList<>();
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
         content.add(textBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
 
@@ -388,7 +386,7 @@ public class BedrockConverseModelProviderTest {
     public void testMapMessages_MultipleMessages() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         List<ContentBlock> userContent = new ArrayList<>();
         ContentBlock userBlock = new ContentBlock();
         userBlock.setType(ContentType.TEXT);
@@ -626,13 +624,13 @@ public class BedrockConverseModelProviderTest {
     public void testMapAgentInput_MessagesInput() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         List<ContentBlock> content = new ArrayList<>();
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
         content.add(textBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
 
@@ -681,7 +679,7 @@ public class BedrockConverseModelProviderTest {
     public void testMapAgentInput_ContentBlocksWithMultipleTypes() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Describe this image:");
@@ -712,7 +710,7 @@ public class BedrockConverseModelProviderTest {
     public void testMapAgentInput_MessagesWithMultipleRoles() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         List<ContentBlock> userContent = new ArrayList<>();
         ContentBlock userBlock = new ContentBlock();
         userBlock.setType(ContentType.TEXT);

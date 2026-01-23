@@ -60,11 +60,7 @@ public class AgentModelServiceTest {
     @Test
     public void testCreateModelFromSpec_EmptyModelId() {
         // Arrange
-        MLAgentModelSpec modelSpec = MLAgentModelSpec
-            .builder()
-            .modelId("   ")
-            .modelProvider("bedrock/converse")
-            .build();
+        MLAgentModelSpec modelSpec = MLAgentModelSpec.builder().modelId("   ").modelProvider("bedrock/converse").build();
 
         // Assert
         exceptionRule.expect(IllegalArgumentException.class);
@@ -77,11 +73,7 @@ public class AgentModelServiceTest {
     @Test
     public void testCreateModelFromSpec_EmptyModelProvider() {
         // Arrange
-        MLAgentModelSpec modelSpec = MLAgentModelSpec
-            .builder()
-            .modelId("test-model-id")
-            .modelProvider("  ")
-            .build();
+        MLAgentModelSpec modelSpec = MLAgentModelSpec.builder().modelId("test-model-id").modelProvider("  ").build();
 
         // Assert
         exceptionRule.expect(IllegalArgumentException.class);
@@ -94,11 +86,7 @@ public class AgentModelServiceTest {
     @Test
     public void testCreateModelFromSpec_UnsupportedModelProvider() {
         // Arrange
-        MLAgentModelSpec modelSpec = MLAgentModelSpec
-            .builder()
-            .modelId("test-model-id")
-            .modelProvider("unsupported/provider")
-            .build();
+        MLAgentModelSpec modelSpec = MLAgentModelSpec.builder().modelId("test-model-id").modelProvider("unsupported/provider").build();
 
         // Assert
         exceptionRule.expect(IllegalArgumentException.class);

@@ -589,7 +589,7 @@ public class MLChatAgentRunnerTest {
         ConversationIndexMemory freshMemory = Mockito.mock(ConversationIndexMemory.class);
         when(freshMemory.getConversationId()).thenReturn("new_conversation_id");
         when(freshMemory.getMemoryManager()).thenReturn(mlMemoryManager);
-        
+
         doAnswer(invocation -> {
             ActionListener<CreateInteractionResponse> listener = invocation.getArgument(4);
             listener.onResponse(createInteractionResponse);
@@ -606,12 +606,12 @@ public class MLChatAgentRunnerTest {
         HashMap<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
         params.put("fresh_memory", "true");
-        
+
         mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
 
         // Verify that getMessages was never called on the fresh memory (memory fetch was skipped)
         verify(freshMemory, never()).getMessages(any(), any());
-        
+
         // Verify that the agent still completes successfully
         verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();

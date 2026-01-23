@@ -132,12 +132,12 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     public void test_execute_registerAgent_success() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         doAnswer(invocation -> {
@@ -162,12 +162,12 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     public void test_execute_registerAgent_AgentIndexNotInitialized() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         doAnswer(invocation -> {
@@ -186,12 +186,12 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     public void test_execute_registerAgent_IndexFailure() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         doAnswer(invocation -> {
@@ -217,12 +217,12 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     public void test_execute_registerAgent_InitAgentIndexFailure() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         doAnswer(invocation -> {
@@ -241,12 +241,12 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     public void test_execute_registerAgent_ModelNotHidden() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         doAnswer(invocation -> {
@@ -305,13 +305,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         LLMSpec llmSpec = new LLMSpec("test-model-id", new HashMap<>());
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("test_agent")
-                .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
-                .description("Test agent for plan-execute-and-reflect")
-                .parameters(parameters)
-                .llm(llmSpec)
-                .build();
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Test agent for plan-execute-and-reflect")
+            .parameters(parameters)
+            .llm(llmSpec)
+            .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         doAnswer(invocation -> {
@@ -348,13 +348,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         LLMSpec llmSpec = new LLMSpec("test-model-id", new HashMap<>());
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("test_agent")
-                .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
-                .description("Test agent for plan-execute-and-reflect")
-                .parameters(parameters)
-                .llm(llmSpec)
-                .build();
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Test agent for plan-execute-and-reflect")
+            .parameters(parameters)
+            .llm(llmSpec)
+            .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         doAnswer(invocation -> {
@@ -385,25 +385,25 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     public void test_execute_registerAgent_QueryPlanningTool_addsModelId_whenMissing() {
         // Create QueryPlanningTool without model_id parameter
         MLToolSpec queryPlanningTool = new MLToolSpec(
-                QueryPlanningTool.TYPE,
-                "QueryPlanningTool",
-                "QueryPlanningTool",
-                Collections.emptyMap(), // No parameters
-                Collections.emptyMap(),
-                false,
-                Collections.emptyMap(),
-                null,
-                null
+            QueryPlanningTool.TYPE,
+            "QueryPlanningTool",
+            "QueryPlanningTool",
+            Collections.emptyMap(), // No parameters
+            Collections.emptyMap(),
+            false,
+            Collections.emptyMap(),
+            null,
+            null
         );
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("test_model_id", new HashMap<>()))
-                .tools(List.of(queryPlanningTool))
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("test_model_id", new HashMap<>()))
+            .tools(List.of(queryPlanningTool))
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
@@ -440,25 +440,25 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         existingParams.put("other_param", "other_value");
 
         MLToolSpec queryPlanningTool = new MLToolSpec(
-                QueryPlanningTool.TYPE,
-                "QueryPlanningTool",
-                "QueryPlanningTool",
-                existingParams,
-                Collections.emptyMap(),
-                false,
-                Collections.emptyMap(),
-                null,
-                null
+            QueryPlanningTool.TYPE,
+            "QueryPlanningTool",
+            "QueryPlanningTool",
+            existingParams,
+            Collections.emptyMap(),
+            false,
+            Collections.emptyMap(),
+            null,
+            null
         );
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("new_model_id", new HashMap<>()))
-                .tools(List.of(queryPlanningTool))
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("new_model_id", new HashMap<>()))
+            .tools(List.of(queryPlanningTool))
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
@@ -495,13 +495,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         parameters.put(MCP_CONNECTORS_FIELD, "[{\"connector_id\": \"test-connector\"}]");
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .parameters(parameters)
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
@@ -534,13 +534,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         parameters.put(LLM_INTERFACE, "invalid_interface");
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .parameters(parameters)
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
@@ -558,13 +558,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         parameters.put(LLM_INTERFACE, "");
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .parameters(parameters)
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
@@ -582,13 +582,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         parameters.put(LLM_INTERFACE, "   ");
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("agent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("description")
-                .llm(new LLMSpec("model_id", new HashMap<>()))
-                .parameters(parameters)
-                .build();
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
@@ -612,32 +612,33 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         credential.put("secret_key", "test_secret");
 
         MLAgentModelSpec modelSpec = MLAgentModelSpec
-                .builder()
-                .modelProvider("bedrock/converse")
-                .modelId("anthropic.claude-v2")
-                .modelParameters(modelParameters)
-                .credential(credential)
-                .build();
+            .builder()
+            .modelProvider("bedrock/converse")
+            .modelId("anthropic.claude-v2")
+            .modelParameters(modelParameters)
+            .credential(credential)
+            .build();
 
         Map<String, String> agentParameters = new HashMap<>();
         agentParameters.put("tools", "[]");
         agentParameters.put("memory", "{}");
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("test_agent_with_model")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("Test agent with model spec")
-                .model(modelSpec)
-                .parameters(agentParameters)
-                .build();
+            .builder()
+            .name("test_agent_with_model")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Test agent with model spec")
+            .model(modelSpec)
+            .parameters(agentParameters)
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
 
         // Mock model registration response
-        org.opensearch.ml.common.transport.register.MLRegisterModelResponse modelResponse = 
-                mock(org.opensearch.ml.common.transport.register.MLRegisterModelResponse.class);
+        org.opensearch.ml.common.transport.register.MLRegisterModelResponse modelResponse = mock(
+            org.opensearch.ml.common.transport.register.MLRegisterModelResponse.class
+        );
         when(modelResponse.getModelId()).thenReturn("created_model_id");
 
         doAnswer(invocation -> {
@@ -669,7 +670,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         // Verify model registration was called
         verify(client, times(1)).execute(eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE), any(), any());
-        
+
         // Verify agent was indexed with the created model ID in LLMSpec
         ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         verify(client).index(indexRequestCaptor.capture(), any());
@@ -689,19 +690,19 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         credential.put("secret_key", "test_secret");
 
         MLAgentModelSpec modelSpec = MLAgentModelSpec
-                .builder()
-                .modelProvider("bedrock/converse")
-                .modelId("anthropic.claude-v2")
-                .credential(credential)
-                .build();
+            .builder()
+            .modelProvider("bedrock/converse")
+            .modelId("anthropic.claude-v2")
+            .credential(credential)
+            .build();
 
         MLAgent mlAgent = MLAgent
-                .builder()
-                .name("test_agent_with_model")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .description("Test agent with model spec")
-                .model(modelSpec)
-                .build();
+            .builder()
+            .name("test_agent_with_model")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Test agent with model spec")
+            .model(modelSpec)
+            .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
@@ -719,4 +720,3 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertEquals("Model registration failed", argumentCaptor.getValue().getMessage());
     }
 }
-

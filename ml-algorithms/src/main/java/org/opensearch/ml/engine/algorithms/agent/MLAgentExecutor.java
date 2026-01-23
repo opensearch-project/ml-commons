@@ -565,6 +565,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             listener.onFailure(ex);
         }));
     }
+
     /**
      * Process context management configuration and register context managers in
      * hook registry
@@ -645,12 +646,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     }
 
     @VisibleForTesting
-    void storeMessagesInMemory(
-        ConversationIndexMemory memory,
-        List<Message> messages,
-        String appType,
-        ActionListener<Void> listener
-    ) {
+    void storeMessagesInMemory(ConversationIndexMemory memory, List<Message> messages, String appType, ActionListener<Void> listener) {
         // Parse backwards to extract historical conversation pairs, skipping trailing user messages
         // (which will be stored later with the agent's response)
         List<ConversationIndexMessage> messagePairs = new ArrayList<>();

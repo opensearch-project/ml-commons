@@ -63,10 +63,10 @@ public class AgentInputTest {
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
 
@@ -99,7 +99,7 @@ public class AgentInputTest {
         block.setType(ContentType.TEXT);
         block.setText("test");
         contentBlocks.add(block);
-        
+
         AgentInput agentInput = new AgentInput(contentBlocks);
 
         // Act
@@ -117,7 +117,7 @@ public class AgentInputTest {
         message.setRole("user");
         message.setContent(new ArrayList<>());
         messages.add(message);
-        
+
         AgentInput agentInput = new AgentInput(messages);
 
         // Act
@@ -134,10 +134,7 @@ public class AgentInputTest {
         agentInput.setInput(123); // Invalid type
 
         // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            agentInput::getInputType
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, agentInput::getInputType);
         assertTrue(exception.getMessage().contains("Input type not supported"));
     }
 
@@ -146,11 +143,11 @@ public class AgentInputTest {
         // Arrange
         String textInput = "Test message";
         AgentInput originalInput = new AgentInput(textInput);
-        
+
         // Act - Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
         originalInput.writeTo(output);
-        
+
         // Read from stream
         StreamInput input = output.bytes().streamInput();
         AgentInput deserializedInput = new AgentInput(input);
@@ -164,24 +161,24 @@ public class AgentInputTest {
     public void testWriteToAndReadFrom_ContentBlocks() throws IOException {
         // Arrange
         List<ContentBlock> contentBlocks = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello world");
         contentBlocks.add(textBlock);
-        
+
         ContentBlock imageBlock = new ContentBlock();
         imageBlock.setType(ContentType.IMAGE);
         ImageContent imageContent = new ImageContent(SourceType.URL, "jpeg", "https://example.com/image.jpg");
         imageBlock.setImage(imageContent);
         contentBlocks.add(imageBlock);
-        
+
         AgentInput originalInput = new AgentInput(contentBlocks);
-        
+
         // Act - Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
         originalInput.writeTo(output);
-        
+
         // Read from stream
         StreamInput input = output.bytes().streamInput();
         AgentInput deserializedInput = new AgentInput(input);
@@ -201,23 +198,23 @@ public class AgentInputTest {
     public void testWriteToAndReadFrom_Messages() throws IOException {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("User message");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
-        
+
         AgentInput originalInput = new AgentInput(messages);
-        
+
         // Act - Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
         originalInput.writeTo(output);
-        
+
         // Read from stream
         StreamInput input = output.bytes().streamInput();
         AgentInput deserializedInput = new AgentInput(input);
@@ -235,19 +232,19 @@ public class AgentInputTest {
     public void testWriteToAndReadFrom_VideoContent() throws IOException {
         // Arrange
         List<ContentBlock> contentBlocks = new ArrayList<>();
-        
+
         ContentBlock videoBlock = new ContentBlock();
         videoBlock.setType(ContentType.VIDEO);
         VideoContent videoContent = new VideoContent(SourceType.URL, "mp4", "https://example.com/video.mp4");
         videoBlock.setVideo(videoContent);
         contentBlocks.add(videoBlock);
-        
+
         AgentInput originalInput = new AgentInput(contentBlocks);
-        
+
         // Act - Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
         originalInput.writeTo(output);
-        
+
         // Read from stream
         StreamInput input = output.bytes().streamInput();
         AgentInput deserializedInput = new AgentInput(input);
@@ -265,19 +262,19 @@ public class AgentInputTest {
     public void testWriteToAndReadFrom_DocumentContent() throws IOException {
         // Arrange
         List<ContentBlock> contentBlocks = new ArrayList<>();
-        
+
         ContentBlock docBlock = new ContentBlock();
         docBlock.setType(ContentType.DOCUMENT);
         DocumentContent docContent = new DocumentContent(SourceType.BASE64, "pdf", "base64encodeddata");
         docBlock.setDocument(docContent);
         contentBlocks.add(docBlock);
-        
+
         AgentInput originalInput = new AgentInput(contentBlocks);
-        
+
         // Act - Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
         originalInput.writeTo(output);
-        
+
         // Read from stream
         StreamInput input = output.bytes().streamInput();
         AgentInput deserializedInput = new AgentInput(input);
@@ -296,14 +293,11 @@ public class AgentInputTest {
         // Arrange
         BytesStreamOutput output = new BytesStreamOutput();
         output.writeString("INVALID_TYPE");
-        
+
         StreamInput input = output.bytes().streamInput();
 
         // Act & Assert
-        IOException exception = assertThrows(
-            IOException.class,
-            () -> new AgentInput(input)
-        );
+        IOException exception = assertThrows(IOException.class, () -> new AgentInput(input));
         assertTrue(exception.getMessage().contains("Invalid input type"));
     }
 
@@ -334,10 +328,7 @@ public class AgentInputTest {
         parser.nextToken();
 
         // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new AgentInput(parser)
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new AgentInput(parser));
         assertTrue(exception.getMessage().contains("Invalid input format"));
     }
 
@@ -388,7 +379,8 @@ public class AgentInputTest {
     @Test
     public void testXContentParser_ImageContent() throws IOException {
         // Arrange
-        String jsonStr = "[{\"type\":\"image\",\"source\":{\"type\":\"url\",\"format\":\"jpeg\",\"data\":\"https://example.com/image.jpg\"}}]";
+        String jsonStr =
+            "[{\"type\":\"image\",\"source\":{\"type\":\"url\",\"format\":\"jpeg\",\"data\":\"https://example.com/image.jpg\"}}]";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
@@ -412,7 +404,8 @@ public class AgentInputTest {
     @Test
     public void testXContentParser_VideoContent() throws IOException {
         // Arrange
-        String jsonStr = "[{\"type\":\"video\",\"source\":{\"type\":\"url\",\"format\":\"mp4\",\"data\":\"https://example.com/video.mp4\"}}]";
+        String jsonStr =
+            "[{\"type\":\"video\",\"source\":{\"type\":\"url\",\"format\":\"mp4\",\"data\":\"https://example.com/video.mp4\"}}]";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
@@ -465,10 +458,7 @@ public class AgentInputTest {
         parser.nextToken();
 
         // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new AgentInput(parser)
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new AgentInput(parser));
         assertTrue(exception.getMessage().contains("Image format is required"));
     }
 
@@ -482,10 +472,7 @@ public class AgentInputTest {
         parser.nextToken();
 
         // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new AgentInput(parser)
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new AgentInput(parser));
         assertTrue(exception.getMessage().contains("Invalid source type"));
     }
 
@@ -493,29 +480,29 @@ public class AgentInputTest {
     public void testComplexMessage_MultipleContentBlocks() throws IOException {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Check this image:");
-        
+
         ContentBlock imageBlock = new ContentBlock();
         imageBlock.setType(ContentType.IMAGE);
         ImageContent imageContent = new ImageContent(SourceType.URL, "png", "https://example.com/image.png");
         imageBlock.setImage(imageContent);
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
         content.add(imageBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
-        
+
         AgentInput originalInput = new AgentInput(messages);
-        
+
         // Act - Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
         originalInput.writeTo(output);
-        
+
         // Read from stream
         StreamInput input = output.bytes().streamInput();
         AgentInput deserializedInput = new AgentInput(input);
@@ -538,10 +525,7 @@ public class AgentInputTest {
 
         // Act & Assert
         // Empty list should still be valid, but getInputType might throw exception
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            agentInput::getInputType
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, agentInput::getInputType);
         assertTrue(exception.getMessage().contains("Input type not supported"));
     }
 
@@ -549,7 +533,7 @@ public class AgentInputTest {
     public void testMultipleMessages_Conversation() throws IOException {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         // User message
         ContentBlock userBlock = new ContentBlock();
         userBlock.setType(ContentType.TEXT);
@@ -557,7 +541,7 @@ public class AgentInputTest {
         List<ContentBlock> userContent = new ArrayList<>();
         userContent.add(userBlock);
         messages.add(new Message("user", userContent));
-        
+
         // Assistant message
         ContentBlock assistantBlock = new ContentBlock();
         assistantBlock.setType(ContentType.TEXT);
@@ -565,13 +549,13 @@ public class AgentInputTest {
         List<ContentBlock> assistantContent = new ArrayList<>();
         assistantContent.add(assistantBlock);
         messages.add(new Message("assistant", assistantContent));
-        
+
         AgentInput originalInput = new AgentInput(messages);
-        
+
         // Act - Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
         originalInput.writeTo(output);
-        
+
         // Read from stream
         StreamInput input = output.bytes().streamInput();
         AgentInput deserializedInput = new AgentInput(input);

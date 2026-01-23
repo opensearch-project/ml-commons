@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -51,7 +50,6 @@ import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -73,6 +71,8 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.collect.ImmutableMap;
 
 @SuppressWarnings({ "rawtypes" })
 public class MLAgentExecutorTest {
@@ -354,10 +354,10 @@ public class MLAgentExecutorTest {
     public void test_ProcessAgentInput_OldStyleAgent_NoModel() {
         MLAgent oldStyleAgent = MLAgent.builder().name("old_agent").type("flow").build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, null);
-        
+
         // Should not throw exception for old style agent without model
         mlAgentExecutor.processAgentInput(agentMLInput, oldStyleAgent);
-        
+
         // Verify no changes were made
         Assert.assertNull(agentMLInput.getInputDataset());
     }
@@ -370,7 +370,7 @@ public class MLAgentExecutorTest {
             .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
             .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
             .build();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
@@ -378,7 +378,7 @@ public class MLAgentExecutorTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(Collections.singletonList(message));
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
-        
+
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
     }
 
@@ -390,14 +390,14 @@ public class MLAgentExecutorTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
             .build();
-        
+
         Map<String, String> params = new HashMap<>();
         params.put(QUESTION, "What is the weather?");
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
-        
+
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
-        
+
         // Verify AgentInput was created from legacy question
         Assert.assertNotNull(agentMLInput.getAgentInput());
         Assert.assertEquals(InputType.TEXT, agentMLInput.getAgentInput().getInputType());
@@ -411,14 +411,14 @@ public class MLAgentExecutorTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
             .build();
-        
+
         AgentInput agentInput = new AgentInput();
         agentInput.setInput("What is machine learning?");
-        
+
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
-        
+
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
-        
+
         // Verify dataset was created
         Assert.assertNotNull(agentMLInput.getInputDataset());
         RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
@@ -435,16 +435,16 @@ public class MLAgentExecutorTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
             .build();
-        
+
         AgentInput agentInput = new AgentInput();
         agentInput.setInput("Explain neural networks");
         Map<String, String> existingParams = new HashMap<>();
         existingParams.put("existing_key", "existing_value");
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(existingParams).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, dataset, false);
-        
+
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
-        
+
         // Verify existing dataset was updated
         RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         Assert.assertTrue(updatedDataset.getParameters().containsKey(QUESTION));
@@ -461,11 +461,11 @@ public class MLAgentExecutorTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .model(MLAgentModelSpec.builder().modelId("model-123").modelProvider("invalid_provider").build())
             .build();
-        
+
         AgentInput agentInput = new AgentInput();
         agentInput.setInput("Test question");
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
-        
+
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
     }
 
@@ -477,7 +477,7 @@ public class MLAgentExecutorTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
             .build();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello, how are you?");
@@ -485,9 +485,9 @@ public class MLAgentExecutorTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(Collections.singletonList(message));
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
-        
+
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
-        
+
         // Verify dataset was created with processed parameters
         Assert.assertNotNull(agentMLInput.getInputDataset());
         RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
@@ -501,9 +501,9 @@ public class MLAgentExecutorTest {
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello world");
         Message message = new Message("user", Collections.singletonList(textBlock));
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("Hello world", result);
     }
 
@@ -512,16 +512,16 @@ public class MLAgentExecutorTest {
         ContentBlock textBlock1 = new ContentBlock();
         textBlock1.setType(ContentType.TEXT);
         textBlock1.setText("First block");
-        
+
         ContentBlock textBlock2 = new ContentBlock();
         textBlock2.setType(ContentType.TEXT);
         textBlock2.setText("Second block");
-        
+
         List<ContentBlock> blocks = Arrays.asList(textBlock1, textBlock2);
         Message message = new Message("user", blocks);
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("First block\nSecond block", result);
     }
 
@@ -530,40 +530,40 @@ public class MLAgentExecutorTest {
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Text content");
-        
+
         ContentBlock imageBlock = new ContentBlock();
         imageBlock.setType(ContentType.IMAGE);
-        
+
         List<ContentBlock> blocks = Arrays.asList(textBlock, imageBlock);
         Message message = new Message("user", blocks);
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("Text content", result);
     }
 
     @Test
     public void test_ExtractTextFromMessage_NullMessage() {
         String result = mlAgentExecutor.extractTextFromMessage(null);
-        
+
         Assert.assertEquals("", result);
     }
 
     @Test
     public void test_ExtractTextFromMessage_NullContent() {
         Message message = new Message("user", null);
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("", result);
     }
 
     @Test
     public void test_ExtractTextFromMessage_EmptyContentList() {
         Message message = new Message("user", Collections.emptyList());
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("", result);
     }
 
@@ -573,9 +573,9 @@ public class MLAgentExecutorTest {
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("  Hello world  ");
         Message message = new Message("user", Collections.singletonList(textBlock));
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("Hello world", result);
     }
 
@@ -585,9 +585,9 @@ public class MLAgentExecutorTest {
         textBlock.setType(ContentType.TEXT);
         textBlock.setText(null);
         Message message = new Message("user", Collections.singletonList(textBlock));
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("", result);
     }
 
@@ -595,46 +595,46 @@ public class MLAgentExecutorTest {
     public void test_ExtractTextFromMessage_OnlyNonTextBlocks() {
         ContentBlock imageBlock = new ContentBlock();
         imageBlock.setType(ContentType.IMAGE);
-        
+
         ContentBlock videoBlock = new ContentBlock();
         videoBlock.setType(ContentType.VIDEO);
-        
+
         List<ContentBlock> blocks = Arrays.asList(imageBlock, videoBlock);
         Message message = new Message("user", blocks);
-        
+
         String result = mlAgentExecutor.extractTextFromMessage(message);
-        
+
         Assert.assertEquals("", result);
     }
 
     public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
 
         mlAgent = new MLAgent(
-                "test",
-                MLAgentType.CONVERSATIONAL.name(),
-                "test",
-                new LLMSpec("test_model", Map.of("test_key", "test_value")),
-                List
-                        .of(
-                                new MLToolSpec(
-                                        "memoryType",
-                                        "test",
-                                        "test",
-                                        Collections.emptyMap(),
-                                        Collections.emptyMap(),
-                                        false,
-                                        Collections.emptyMap(),
-                                        null,
-                                        null
-                                )
-                        ),
-                Map.of("test", "test"),
-                new MLMemorySpec("memoryType", "123", 0),
-                Instant.EPOCH,
-                Instant.EPOCH,
-                "test",
-                isHidden,
-                tenantId
+            "test",
+            MLAgentType.CONVERSATIONAL.name(),
+            "test",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            List
+                .of(
+                    new MLToolSpec(
+                        "memoryType",
+                        "test",
+                        "test",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null,
+                        null
+                    )
+                ),
+            Map.of("test", "test"),
+            new MLMemorySpec("memoryType", "123", 0),
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            isHidden,
+            tenantId
         );
 
         XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
@@ -646,14 +646,14 @@ public class MLAgentExecutorTest {
     @Test
     public void test_Execute_FreshMemory_AddsParameter() throws IOException {
         ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
-        
+
         // Mock the agent runner to capture parameters
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
         }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
-        
+
         // Mock memory.save to return interaction
         CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
         Mockito.when(interaction.getId()).thenReturn("interaction_id");
@@ -662,7 +662,7 @@ public class MLAgentExecutorTest {
             responseActionListener.onResponse(interaction);
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
-        
+
         // Setup memory factory to simulate fresh conversation (memoryId = null)
         Mockito.doAnswer(invocation -> {
             Mockito.when(memory.getConversationId()).thenReturn("new-conversation-id");
@@ -694,7 +694,7 @@ public class MLAgentExecutorTest {
         // Verify fresh_memory parameter was added
         ArgumentCaptor<Map> paramsCaptor = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(mlAgentRunner).run(Mockito.any(), paramsCaptor.capture(), Mockito.any(), Mockito.any());
-        
+
         Map<String, String> capturedParams = paramsCaptor.getValue();
         Assert.assertNotNull(capturedParams);
         Assert.assertTrue(capturedParams.containsKey("fresh_memory"));
@@ -708,10 +708,8 @@ public class MLAgentExecutorTest {
     @Test
     public void test_StoreMessagesInMemory_EmptyMessages() {
         List<Message> messages = Collections.emptyList();
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail with empty messages")
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail with empty messages"));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -727,10 +725,8 @@ public class MLAgentExecutorTest {
         Message userMessage = new Message("user", Collections.singletonList(textBlock));
         List<Message> messages = Collections.singletonList(userMessage);
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail with only user messages")
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail with only user messages"));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -761,10 +757,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -813,10 +807,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -864,10 +856,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -909,10 +899,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -952,10 +940,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -991,10 +977,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.storeMessagesInMemory(memory, messages, "test-app", listener);
 
@@ -1007,10 +991,7 @@ public class MLAgentExecutorTest {
     @Test
     public void test_SaveMessagePairsSequentially_EmptyList() {
         List<ConversationIndexMessage> messagePairs = Collections.emptyList();
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail with empty list")
-        );
+        ActionListener<Void> listener = ActionListener.wrap(response -> {}, exception -> Assert.fail("Should not fail with empty list"));
 
         mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
 
@@ -1039,10 +1020,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
 
@@ -1080,10 +1059,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
 
@@ -1127,10 +1104,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.saveMessagePairsSequentially(memory, messagePairs, listener);
 
@@ -1143,10 +1118,7 @@ public class MLAgentExecutorTest {
     @Test
     public void test_SaveNextMessagePair_IndexOutOfBounds() {
         List<ConversationIndexMessage> messagePairs = Collections.emptyList();
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail when index >= size")
-        );
+        ActionListener<Void> listener = ActionListener.wrap(response -> {}, exception -> Assert.fail("Should not fail when index >= size"));
 
         mlAgentExecutor.saveNextMessagePair(memory, messagePairs, 0, listener);
 
@@ -1175,10 +1147,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not fail: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not fail: " + exception.getMessage()));
 
         mlAgentExecutor.saveNextMessagePair(memory, messagePairs, 0, listener);
 
@@ -1210,10 +1180,8 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
-        ActionListener<Void> listener = ActionListener.wrap(
-            response -> {},
-            exception -> Assert.fail("Should not propagate failure: " + exception.getMessage())
-        );
+        ActionListener<Void> listener = ActionListener
+            .wrap(response -> {}, exception -> Assert.fail("Should not propagate failure: " + exception.getMessage()));
 
         mlAgentExecutor.saveNextMessagePair(memory, messagePairs, 0, listener);
 

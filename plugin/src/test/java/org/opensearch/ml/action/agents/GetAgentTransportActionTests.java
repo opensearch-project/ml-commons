@@ -412,7 +412,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<MLAgentGetResponse> captor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
         verify(actionListener, times(1)).onResponse(captor.capture());
         MLAgentGetResponse mlAgentGetResponse = captor.getValue();
-        
+
         // Verify credentials are removed
         assertNotNull(mlAgentGetResponse.getMlAgent().getModel());
         assertNull(mlAgentGetResponse.getMlAgent().getModel().getCredential());

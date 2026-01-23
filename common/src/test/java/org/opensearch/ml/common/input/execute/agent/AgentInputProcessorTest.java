@@ -22,10 +22,7 @@ public class AgentInputProcessorTest {
     @Test
     public void testValidateInput_NullAgentInput() {
         // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> AgentInputProcessor.validateInput(null)
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> AgentInputProcessor.validateInput(null));
         assertEquals("AgentInput and its input field cannot be null", exception.getMessage());
     }
 
@@ -244,12 +241,12 @@ public class AgentInputProcessorTest {
     public void testValidateInput_MultipleContentBlocks() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Text content");
         blocks.add(textBlock);
-        
+
         ContentBlock imageBlock = new ContentBlock();
         imageBlock.setType(ContentType.IMAGE);
         ImageContent image = new ImageContent(SourceType.URL, "png", "https://example.com/image.png");
@@ -268,14 +265,14 @@ public class AgentInputProcessorTest {
     public void testValidateInput_ValidMessages() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
 
@@ -303,14 +300,14 @@ public class AgentInputProcessorTest {
     public void testValidateInput_Message_NullRole() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message(null, content);
         messages.add(message);
 
@@ -328,14 +325,14 @@ public class AgentInputProcessorTest {
     public void testValidateInput_Message_EmptyRole() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("   ", content);
         messages.add(message);
 
@@ -387,14 +384,14 @@ public class AgentInputProcessorTest {
     public void testValidateInput_LastMessage_NotFromUser() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("assistant", content);
         messages.add(message);
 
@@ -412,7 +409,7 @@ public class AgentInputProcessorTest {
     public void testValidateInput_MultipleMessages_LastIsUser() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         // Assistant message
         ContentBlock assistantBlock = new ContentBlock();
         assistantBlock.setType(ContentType.TEXT);
@@ -420,7 +417,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> assistantContent = new ArrayList<>();
         assistantContent.add(assistantBlock);
         messages.add(new Message("assistant", assistantContent));
-        
+
         // User message
         ContentBlock userBlock = new ContentBlock();
         userBlock.setType(ContentType.TEXT);
@@ -439,14 +436,14 @@ public class AgentInputProcessorTest {
     public void testValidateInput_Messages_CaseInsensitiveUserRole() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("USER", content);
         messages.add(message);
 
@@ -495,12 +492,12 @@ public class AgentInputProcessorTest {
     public void testExtractQuestionText_MultipleTextBlocks() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        
+
         ContentBlock block1 = new ContentBlock();
         block1.setType(ContentType.TEXT);
         block1.setText("First question.");
         blocks.add(block1);
-        
+
         ContentBlock block2 = new ContentBlock();
         block2.setType(ContentType.TEXT);
         block2.setText("Second question.");
@@ -519,12 +516,12 @@ public class AgentInputProcessorTest {
     public void testExtractQuestionText_MixedContentBlocks_IgnoresNonText() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Describe this image");
         blocks.add(textBlock);
-        
+
         ContentBlock imageBlock = new ContentBlock();
         imageBlock.setType(ContentType.IMAGE);
         ImageContent image = new ImageContent(SourceType.URL, "jpeg", "https://example.com/image.jpg");
@@ -544,12 +541,12 @@ public class AgentInputProcessorTest {
     public void testExtractQuestionText_ContentBlocks_EmptyTextBlock() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        
+
         ContentBlock block1 = new ContentBlock();
         block1.setType(ContentType.TEXT);
         block1.setText("Valid text");
         blocks.add(block1);
-        
+
         ContentBlock block2 = new ContentBlock();
         block2.setType(ContentType.TEXT);
         block2.setText("   ");
@@ -567,14 +564,14 @@ public class AgentInputProcessorTest {
     public void testExtractQuestionText_SingleUserMessage() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("What is machine learning?");
-        
+
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
 
@@ -591,7 +588,7 @@ public class AgentInputProcessorTest {
     public void testExtractQuestionText_MultipleTrailingUserMessages() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         // First user message
         ContentBlock block1 = new ContentBlock();
         block1.setType(ContentType.TEXT);
@@ -599,7 +596,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> content1 = new ArrayList<>();
         content1.add(block1);
         messages.add(new Message("user", content1));
-        
+
         // Second user message
         ContentBlock block2 = new ContentBlock();
         block2.setType(ContentType.TEXT);
@@ -621,7 +618,7 @@ public class AgentInputProcessorTest {
     public void testExtractQuestionText_ConversationWithTrailingUser() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         // User message
         ContentBlock userBlock1 = new ContentBlock();
         userBlock1.setType(ContentType.TEXT);
@@ -629,7 +626,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> userContent1 = new ArrayList<>();
         userContent1.add(userBlock1);
         messages.add(new Message("user", userContent1));
-        
+
         // Assistant message
         ContentBlock assistantBlock = new ContentBlock();
         assistantBlock.setType(ContentType.TEXT);
@@ -637,7 +634,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> assistantContent = new ArrayList<>();
         assistantContent.add(assistantBlock);
         messages.add(new Message("assistant", assistantContent));
-        
+
         // User message
         ContentBlock userBlock2 = new ContentBlock();
         userBlock2.setType(ContentType.TEXT);
@@ -684,13 +681,13 @@ public class AgentInputProcessorTest {
     public void testFilterTrailingUserMessages_SingleUserMessage() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
         textBlock.setText("Hello");
         List<ContentBlock> content = new ArrayList<>();
         content.add(textBlock);
-        
+
         Message message = new Message("user", content);
         messages.add(message);
 
@@ -706,14 +703,14 @@ public class AgentInputProcessorTest {
     public void testFilterTrailingUserMessages_MultipleTrailingUsers() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock block1 = new ContentBlock();
         block1.setType(ContentType.TEXT);
         block1.setText("First");
         List<ContentBlock> content1 = new ArrayList<>();
         content1.add(block1);
         messages.add(new Message("user", content1));
-        
+
         ContentBlock block2 = new ContentBlock();
         block2.setType(ContentType.TEXT);
         block2.setText("Second");
@@ -734,7 +731,7 @@ public class AgentInputProcessorTest {
     public void testFilterTrailingUserMessages_StopsAtAssistant() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         // User message
         ContentBlock userBlock1 = new ContentBlock();
         userBlock1.setType(ContentType.TEXT);
@@ -742,7 +739,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> userContent1 = new ArrayList<>();
         userContent1.add(userBlock1);
         messages.add(new Message("user", userContent1));
-        
+
         // Assistant message
         ContentBlock assistantBlock = new ContentBlock();
         assistantBlock.setType(ContentType.TEXT);
@@ -750,7 +747,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> assistantContent = new ArrayList<>();
         assistantContent.add(assistantBlock);
         messages.add(new Message("assistant", assistantContent));
-        
+
         // User message
         ContentBlock userBlock2 = new ContentBlock();
         userBlock2.setType(ContentType.TEXT);
@@ -771,13 +768,13 @@ public class AgentInputProcessorTest {
     public void testFilterTrailingUserMessages_AllAssistantMessages() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock block = new ContentBlock();
         block.setType(ContentType.TEXT);
         block.setText("Assistant message");
         List<ContentBlock> content = new ArrayList<>();
         content.add(block);
-        
+
         messages.add(new Message("assistant", content));
 
         // Act
@@ -791,13 +788,13 @@ public class AgentInputProcessorTest {
     public void testFilterTrailingUserMessages_MessageWithNullRole() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         ContentBlock block = new ContentBlock();
         block.setType(ContentType.TEXT);
         block.setText("Text");
         List<ContentBlock> content = new ArrayList<>();
         content.add(block);
-        
+
         Message message = new Message(null, content);
         messages.add(message);
 
@@ -812,7 +809,7 @@ public class AgentInputProcessorTest {
     public void testFilterTrailingUserMessages_CaseInsensitive() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         // User message (lowercase)
         ContentBlock userBlock = new ContentBlock();
         userBlock.setType(ContentType.TEXT);
@@ -820,7 +817,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> userContent = new ArrayList<>();
         userContent.add(userBlock);
         messages.add(new Message("user", userContent));
-        
+
         // Assistant message (mixed case)
         ContentBlock assistantBlock = new ContentBlock();
         assistantBlock.setType(ContentType.TEXT);
@@ -828,7 +825,7 @@ public class AgentInputProcessorTest {
         List<ContentBlock> assistantContent = new ArrayList<>();
         assistantContent.add(assistantBlock);
         messages.add(new Message("Assistant", assistantContent));
-        
+
         // User message (uppercase)
         ContentBlock userBlock2 = new ContentBlock();
         userBlock2.setType(ContentType.TEXT);
@@ -849,7 +846,7 @@ public class AgentInputProcessorTest {
     public void testFilterTrailingUserMessages_ComplexConversation() {
         // Arrange
         List<Message> messages = new ArrayList<>();
-        
+
         // Build a complex conversation
         ContentBlock block1 = new ContentBlock();
         block1.setType(ContentType.TEXT);
@@ -857,21 +854,21 @@ public class AgentInputProcessorTest {
         List<ContentBlock> content1 = new ArrayList<>();
         content1.add(block1);
         messages.add(new Message("user", content1));
-        
+
         ContentBlock block2 = new ContentBlock();
         block2.setType(ContentType.TEXT);
         block2.setText("Assistant 1");
         List<ContentBlock> content2 = new ArrayList<>();
         content2.add(block2);
         messages.add(new Message("assistant", content2));
-        
+
         ContentBlock block3 = new ContentBlock();
         block3.setType(ContentType.TEXT);
         block3.setText("User 2");
         List<ContentBlock> content3 = new ArrayList<>();
         content3.add(block3);
         messages.add(new Message("user", content3));
-        
+
         ContentBlock block4 = new ContentBlock();
         block4.setType(ContentType.TEXT);
         block4.setText("User 3");
