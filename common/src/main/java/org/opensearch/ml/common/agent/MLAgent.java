@@ -44,6 +44,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String AGENT_TYPE_FIELD = "type";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String LLM_FIELD = "llm";
+    public static final String MODEL_FIELD = "model";
     public static final String TOOLS_FIELD = "tools";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String MEMORY_FIELD = "memory";
@@ -67,6 +68,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private String type;
     private String description;
     private LLMSpec llm;
+    private MLAgentModelSpec model;
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
@@ -77,9 +79,46 @@ public class MLAgent implements ToXContentObject, Writeable {
     private Boolean isHidden;
     private String contextManagementName;
     private ContextManagementTemplate contextManagement;
-    private final String tenantId;
+    private String tenantId;
 
     @Builder(toBuilder = true)
+    public MLAgent(
+        String name,
+        String type,
+        String description,
+        LLMSpec llm,
+        MLAgentModelSpec model,
+        List<MLToolSpec> tools,
+        Map<String, String> parameters,
+        MLMemorySpec memory,
+        Instant createdTime,
+        Instant lastUpdateTime,
+        String appType,
+        Boolean isHidden,
+        String contextManagementName,
+        ContextManagementTemplate contextManagement,
+        String tenantId
+    ) {
+        this.name = name;
+        this.type = type;
+        this.description = description;
+        this.llm = llm;
+        this.model = model;
+        this.tools = tools;
+        this.parameters = parameters;
+        this.memory = memory;
+        this.createdTime = createdTime;
+        this.lastUpdateTime = lastUpdateTime;
+        this.appType = appType;
+        // is_hidden field isn't going to be set by user. It will be set by the code.
+        this.isHidden = isHidden;
+        this.contextManagementName = contextManagementName;
+        this.contextManagement = contextManagement;
+        this.tenantId = tenantId;
+        validate();
+    }
+
+    // Backward compatible constructor for existing tests
     public MLAgent(
         String name,
         String type,
@@ -96,22 +135,23 @@ public class MLAgent implements ToXContentObject, Writeable {
         ContextManagementTemplate contextManagement,
         String tenantId
     ) {
-        this.name = name;
-        this.type = type;
-        this.description = description;
-        this.llm = llm;
-        this.tools = tools;
-        this.parameters = parameters;
-        this.memory = memory;
-        this.createdTime = createdTime;
-        this.lastUpdateTime = lastUpdateTime;
-        this.appType = appType;
-        // is_hidden field isn't going to be set by user. It will be set by the code.
-        this.isHidden = isHidden;
-        this.contextManagementName = contextManagementName;
-        this.contextManagement = contextManagement;
-        this.tenantId = tenantId;
-        validate();
+        this(
+            name,
+            type,
+            description,
+            llm,
+            null,
+            tools,
+            parameters,
+            memory,
+            createdTime,
+            lastUpdateTime,
+            appType,
+            isHidden,
+            contextManagementName,
+            contextManagement,
+            tenantId
+        );
     }
 
     private void validate() {
@@ -124,7 +164,8 @@ public class MLAgent implements ToXContentObject, Writeable {
             );
         }
         validateMLAgentType(type);
-        if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
+        if ((type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString())
+            || type.equalsIgnoreCase(MLAgentType.PLAN_EXECUTE_AND_REFLECT.toString())) && llm == null && model == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }
         Set<String> toolNames = new HashSet<>();
@@ -173,6 +214,9 @@ public class MLAgent implements ToXContentObject, Writeable {
             llm = new LLMSpec(input);
         }
         if (input.readBoolean()) {
+            model = new MLAgentModelSpec(input);
+        }
+        if (input.readBoolean()) {
             tools = new ArrayList<>();
             int size = input.readInt();
             for (int i = 0; i < size; i++) {
@@ -210,6 +254,12 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (llm != null) {
             out.writeBoolean(true);
             llm.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (model != null) {
+            out.writeBoolean(true);
+            model.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -255,6 +305,16 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
     }
 
+    /**
+     * Remove credentials from the agent's model spec.
+     * Should be called before returning to user-facing APIs.
+     */
+    public void removeCredential() {
+        if (this.model != null) {
+            this.model.removeCredential();
+        }
+    }
+
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
@@ -269,6 +329,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (llm != null) {
             builder.field(LLM_FIELD, llm);
+        }
+        if (model != null) {
+            builder.field(MODEL_FIELD, model);
         }
         if (tools != null && tools.size() > 0) {
             builder.field(TOOLS_FIELD, tools);
@@ -318,6 +381,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String type = null;
         String description = null;
         LLMSpec llm = null;
+        MLAgentModelSpec model = null;
         List<MLToolSpec> tools = null;
         Map<String, String> parameters = null;
         MLMemorySpec memory = null;
@@ -346,6 +410,9 @@ public class MLAgent implements ToXContentObject, Writeable {
                     break;
                 case LLM_FIELD:
                     llm = LLMSpec.parse(parser);
+                    break;
+                case MODEL_FIELD:
+                    model = MLAgentModelSpec.parse(parser);
                     break;
                 case TOOLS_FIELD:
                     tools = new ArrayList<>();
@@ -394,6 +461,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             .type(type)
             .description(description)
             .llm(llm)
+            .model(model)
             .tools(tools)
             .parameters(parameters)
             .memory(memory)
