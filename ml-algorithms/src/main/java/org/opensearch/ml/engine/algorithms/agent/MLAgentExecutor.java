@@ -169,7 +169,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
 
         RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        if (dataSet.getParameters() == null && !agentMLInput.hasStandardInput()) {
+        if ((dataSet == null || dataSet.getParameters() == null) && !agentMLInput.hasStandardInput()) {
             throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
