@@ -245,8 +245,8 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         RestRequest request = getExecuteAgentWithStandardizedInputRestRequest();
 
         when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(false);
-        IllegalStateException exception = assertThrows(
-            IllegalStateException.class,
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
             () -> restMLExecuteAction.handleRequest(request, channel, client)
         );
         assertTrue(exception.getMessage().contains("Standardized input cannot be used"));

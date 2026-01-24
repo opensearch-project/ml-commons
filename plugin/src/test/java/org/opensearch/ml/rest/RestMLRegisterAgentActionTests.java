@@ -124,7 +124,7 @@ public class RestMLRegisterAgentActionTests extends OpenSearchTestCase {
 
     public void testRegisterAgentWithModelWhenSimplifiedRegistrationDisabled() throws Exception {
         when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(false);
-        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Simplified agent registration is not enabled. To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled");
         RestRequest request = getRestRequestWithModel();
         restMLRegisterAgentAction.handleRequest(request, channel, client);

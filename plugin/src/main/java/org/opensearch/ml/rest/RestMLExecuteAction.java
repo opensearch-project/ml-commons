@@ -133,7 +133,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
             // Check if standardized input is being used but simplified agent registration is not enabled
             AgentMLInput agentMLInput = (AgentMLInput) input;
             if (agentMLInput.getAgentInput() != null && !mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()) {
-                throw new IllegalStateException(
+                throw new IllegalArgumentException(
                     "Standardized input cannot be used if simplified agent registration is not enabled. "
                         + "The agent must be created using simplified agent registration. "
                         + "To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled"

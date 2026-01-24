@@ -72,7 +72,7 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
 
         // Check if simplified agent registration is being used but not enabled
         if (mlAgent.getModel() != null && !mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()) {
-            throw new IllegalStateException(
+            throw new IllegalArgumentException(
                 "Simplified agent registration is not enabled. To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled"
             );
         }
