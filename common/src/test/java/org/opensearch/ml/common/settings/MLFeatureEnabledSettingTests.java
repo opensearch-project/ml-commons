@@ -35,6 +35,7 @@ public class MLFeatureEnabledSettingTests {
                 .of(
                     MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_SIMPLIFIED_AGENT_REGISTRATION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED,
                     MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
                     MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
@@ -76,6 +77,7 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.agentic_search_enabled", true)
             .put("plugins.ml_commons.agentic_memory_enabled", true)
             .put("plugins.ml_commons.stream_enabled", true)
+            .put("plugins.ml_commons.simplified_agent_registration_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -95,6 +97,7 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isMcpConnectorEnabled());
         assertTrue(setting.isAgenticMemoryEnabled());
         assertTrue(setting.isStreamEnabled());
+        assertTrue(setting.isSimplifiedAgentRegistrationEnabled());
     }
 
     @Test
@@ -117,6 +120,7 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.agentic_search_enabled", false)
             .put("plugins.ml_commons.agentic_memory_enabled", false)
             .put("plugins.ml_commons.stream_enabled", false)
+            .put("plugins.ml_commons.simplified_agent_registration_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -136,6 +140,7 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isMcpConnectorEnabled());
         assertFalse(setting.isAgenticMemoryEnabled());
         assertFalse(setting.isStreamEnabled());
+        assertFalse(setting.isSimplifiedAgentRegistrationEnabled());
     }
 
     @Test

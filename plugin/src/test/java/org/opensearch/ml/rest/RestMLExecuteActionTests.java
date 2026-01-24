@@ -33,9 +33,12 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
@@ -53,6 +56,7 @@ import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.RemoteTransportException;
@@ -235,6 +239,30 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
         when(mlFeatureEnabledSetting.isToolExecuteEnabled()).thenReturn(false);
         assertThrows(IllegalStateException.class, () -> restMLExecuteAction.handleRequest(request, channel, client));
+    }
+
+    public void testPrepareRequestAgentWithStandardizedInput_disabled() {
+        RestRequest request = getExecuteAgentWithStandardizedInputRestRequest();
+
+        when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(false);
+        IllegalStateException exception = assertThrows(
+            IllegalStateException.class,
+            () -> restMLExecuteAction.handleRequest(request, channel, client)
+        );
+        assertTrue(exception.getMessage().contains("Standardized input cannot be used"));
+        assertTrue(exception.getMessage().contains("simplified agent registration"));
+    }
+
+    public void testPrepareRequestAgentWithStandardizedInput_enabled() throws Exception {
+        RestRequest request = getExecuteAgentWithStandardizedInputRestRequest();
+
+        when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(true);
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
     }
 
     public void testPrepareRequestClientException() throws Exception {
@@ -493,5 +521,16 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         String expectedError =
             "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\",\"type\":\"IllegalArgumentException\"},\"status\":400}";
         assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    private RestRequest getExecuteAgentWithStandardizedInputRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test_agent_id");
+        final String requestContent = "{\"input\":\"What is the weather today?\"}}";
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
     }
 }
