@@ -27,6 +27,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFF
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_SIMPLIFIED_AGENT_REGISTRATION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
 
@@ -82,7 +83,8 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_MCP_CONNECTOR_ENABLED,
                             ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                             ML_COMMONS_STREAM_ENABLED,
-                            ML_COMMONS_MAX_JSON_SIZE
+                            ML_COMMONS_MAX_JSON_SIZE,
+                            ML_COMMONS_SIMPLIFIED_AGENT_REGISTRATION_ENABLED
                         )
                 )
             );
