@@ -130,13 +130,13 @@ public class RestMLExecuteAction extends BaseRestHandler {
             ((AgentMLInput) input).setTenantId(tenantId);
             ((AgentMLInput) input).setIsAsync(async);
 
-            // Check if standardized input is being used but simplified agent registration is not enabled
+            // Check if standardized input is being used but unified agent API is not enabled
             AgentMLInput agentMLInput = (AgentMLInput) input;
-            if (agentMLInput.getAgentInput() != null && !mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()) {
+            if (agentMLInput.getAgentInput() != null && !mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()) {
                 throw new IllegalArgumentException(
-                    "Standardized input cannot be used if simplified agent registration is not enabled. "
-                        + "The agent must be created using simplified agent registration. "
-                        + "To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled"
+                    "Standardized input cannot be used if unified agent API is not enabled. "
+                        + "The agent must be created using unified agent API. "
+                        + "To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
                 );
             }
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {

@@ -122,16 +122,16 @@ public class RestMLRegisterAgentActionTests extends OpenSearchTestCase {
         restMLRegisterAgentAction.handleRequest(request, channel, client);
     }
 
-    public void testRegisterAgentWithModelWhenSimplifiedRegistrationDisabled() throws Exception {
-        when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(false);
+    public void testRegisterAgentWithModelWhenUnifiedAgentApiDisabled() throws Exception {
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(false);
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Simplified agent registration is not enabled. To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled");
+        exceptionRule.expectMessage("Unified agent API is not enabled. To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled");
         RestRequest request = getRestRequestWithModel();
         restMLRegisterAgentAction.handleRequest(request, channel, client);
     }
 
-    public void testRegisterAgentWithModelWhenSimplifiedRegistrationEnabled() throws Exception {
-        when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(true);
+    public void testRegisterAgentWithModelWhenUnifiedAgentApiEnabled() throws Exception {
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(true);
         RestRequest request = getRestRequestWithModel();
         restMLRegisterAgentAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLRegisterAgentRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentRequest.class);
