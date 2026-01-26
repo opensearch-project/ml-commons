@@ -24,6 +24,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -50,6 +51,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private final SdkClient sdkClient;
     private final Encryptor encryptor;
+    private final HookRegistry hookRegistry;
 
     public MLAGUIAgentRunner(
         Client client,
@@ -61,6 +63,20 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
         SdkClient sdkClient,
         Encryptor encryptor
     ) {
+        this(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap, sdkClient, encryptor, null);
+    }
+
+    public MLAGUIAgentRunner(
+        Client client,
+        Settings settings,
+        ClusterService clusterService,
+        NamedXContentRegistry xContentRegistry,
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, Memory.Factory> memoryFactoryMap,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        HookRegistry hookRegistry
+    ) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
@@ -69,6 +85,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
+        this.hookRegistry = hookRegistry;
     }
 
     @Override
@@ -97,7 +114,8 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 toolFactories,
                 memoryFactoryMap,
                 sdkClient,
-                encryptor
+                encryptor,
+                hookRegistry
             );
 
             // Execute with streaming - events are generated in RestMLExecuteStreamAction
