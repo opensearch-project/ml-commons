@@ -52,6 +52,7 @@ import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.jce.JceMasterKey;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.RemovalListener;
@@ -92,21 +93,10 @@ public class EncryptorImpl implements Encryptor {
         this.client = client;
         this.sdkClient = sdkClient;
         this.mlIndicesHandler = mlIndicesHandler;
-
-        // Register listener for dynamic setting updates
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES, this::updateCacheTtl);
-    }
-
-    /**
-     * Updates the cache TTL when the cluster setting changes.
-     * Note: This only affects new cache entries. Existing entries will expire based on their original TTL.
-     */
-    private void updateCacheTtl(Integer newTtlMinutes) {
-        this.masterKeyCacheTtlMinutes = newTtlMinutes;
-        log.info("Master key cache TTL updated to {} minutes. Note: Existing cache entries retain their original TTL.", newTtlMinutes);
     }
 
     // Package-private constructor for testing with custom TTL
+    @VisibleForTesting
     EncryptorImpl(
         ClusterService clusterService,
         Client client,

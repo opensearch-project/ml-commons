@@ -444,25 +444,10 @@ public final class MLCommonsSettings {
      * Default: 5 minutes
      * Range: 1 to 1440 minutes (1 day)
      * 
-     * This is a dynamic setting that can be updated without restarting the cluster:
-     * <pre>
-     * PUT _cluster/settings
-     * {
-     *   "persistent": {
-     *     "plugins.ml_commons.master_key_cache_ttl_minutes": 10
-     *   }
-     * }
-     * </pre>
+     * This is a static setting that must be configured in opensearch.yml and requires a cluster restart to take effect.
      */
     public static final Setting<Integer> ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES = Setting
-        .intSetting(
-            ML_PLUGIN_SETTING_PREFIX + "master_key_cache_ttl_minutes",
-            5,
-            1,
-            1440,
-            Setting.Property.NodeScope,
-            Setting.Property.Dynamic
-        );
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "master_key_cache_ttl_minutes", 5, 1, 1440, Setting.Property.NodeScope);
 
     /** This setting sets the remote metadata type */
     public static final Setting<String> REMOTE_METADATA_TYPE = Setting
