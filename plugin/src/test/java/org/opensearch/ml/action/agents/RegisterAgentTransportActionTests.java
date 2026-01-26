@@ -22,7 +22,6 @@ import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectA
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -48,12 +47,10 @@ import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
-import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -379,113 +376,6 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertEquals("AGENT_ID", response.getAgentId());
 
         verify(client, times(1)).index(any(), any());
-    }
-
-    @Test
-    public void test_execute_registerAgent_QueryPlanningTool_addsModelId_whenMissing() {
-        // Create QueryPlanningTool without model_id parameter
-        MLToolSpec queryPlanningTool = new MLToolSpec(
-            QueryPlanningTool.TYPE,
-            "QueryPlanningTool",
-            "QueryPlanningTool",
-            Collections.emptyMap(), // No parameters
-            Collections.emptyMap(),
-            false,
-            Collections.emptyMap(),
-            null,
-            null
-        );
-
-        MLAgent mlAgent = MLAgent
-            .builder()
-            .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
-            .description("description")
-            .llm(new LLMSpec("test_model_id", new HashMap<>()))
-            .tools(List.of(queryPlanningTool))
-            .build();
-
-        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-        when(request.getMlAgent()).thenReturn(mlAgent);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLAgentIndex(any());
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> al = invocation.getArgument(1);
-            al.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        transportRegisterAgentAction.doExecute(task, request, actionListener);
-
-        // Verify that the agent was indexed with updated tools containing model_id
-        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
-        verify(client).index(indexRequestCaptor.capture(), any());
-
-        IndexRequest indexRequest = indexRequestCaptor.getValue();
-        assertNotNull(indexRequest);
-        String source = indexRequest.source().utf8ToString();
-        assertTrue("Agent source should contain model_id", source.contains("\"model_id\":\"test_model_id\""));
-    }
-
-    @Test
-    public void test_execute_registerAgent_QueryPlanningTool_preservesExistingModelId() {
-        // Create QueryPlanningTool with existing model_id parameter
-        Map<String, String> existingParams = new HashMap<>();
-        existingParams.put("model_id", "existing_model_id");
-        existingParams.put("other_param", "other_value");
-
-        MLToolSpec queryPlanningTool = new MLToolSpec(
-            QueryPlanningTool.TYPE,
-            "QueryPlanningTool",
-            "QueryPlanningTool",
-            existingParams,
-            Collections.emptyMap(),
-            false,
-            Collections.emptyMap(),
-            null,
-            null
-        );
-
-        MLAgent mlAgent = MLAgent
-            .builder()
-            .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
-            .description("description")
-            .llm(new LLMSpec("new_model_id", new HashMap<>()))
-            .tools(List.of(queryPlanningTool))
-            .build();
-
-        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-        when(request.getMlAgent()).thenReturn(mlAgent);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLAgentIndex(any());
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> al = invocation.getArgument(1);
-            al.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        transportRegisterAgentAction.doExecute(task, request, actionListener);
-
-        // Verify that the agent was indexed with tools preserving existing model_id
-        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
-        verify(client).index(indexRequestCaptor.capture(), any());
-
-        IndexRequest indexRequest = indexRequestCaptor.getValue();
-        assertNotNull(indexRequest);
-        String source = indexRequest.source().utf8ToString();
-        assertTrue("Agent source should contain existing model_id", source.contains("\"model_id\":\"existing_model_id\""));
-        assertTrue("Agent source should contain other_param", source.contains("\"other_param\":\"other_value\""));
     }
 
     @Test

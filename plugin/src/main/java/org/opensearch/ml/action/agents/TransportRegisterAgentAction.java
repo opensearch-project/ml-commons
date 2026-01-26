@@ -12,9 +12,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_IN
 
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -33,7 +31,6 @@ import org.opensearch.ml.common.agent.AgentModelService;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
-import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
@@ -44,7 +41,6 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -205,9 +201,6 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
-        // Update QueryPlanningTool to include model_id if missing
-        List<MLToolSpec> updatedTools = processQueryPlannerTools(agent);
-
         String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
         if (llmInterface != null) {
             if (llmInterface.trim().isEmpty()) {
@@ -225,7 +218,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
-        MLAgent mlAgent = agent.toBuilder().tools(updatedTools).createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
+        MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
         String tenantId = agent.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
@@ -243,25 +236,6 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         } else {
             registerAgentToIndex(mlAgent, tenantId, listener);
         }
-    }
-
-    private List<MLToolSpec> processQueryPlannerTools(MLAgent agent) {
-        List<MLToolSpec> tools = agent.getTools();
-        List<MLToolSpec> updatedTools = tools;
-        if (tools != null) {
-            // Update QueryPlanningTool with model_id if missing and LLM exists
-            if (agent.getLlm() != null && agent.getLlm().getModelId() != null && !agent.getLlm().getModelId().isBlank()) {
-                updatedTools = tools.stream().map(tool -> {
-                    if (tool.getType().equals(QueryPlanningTool.TYPE)) {
-                        Map<String, String> params = tool.getParameters() != null ? new HashMap<>(tool.getParameters()) : new HashMap<>();
-                        params.putIfAbsent("model_id", agent.getLlm().getModelId());
-                        return tool.toBuilder().parameters(params).build();
-                    }
-                    return tool;
-                }).collect(Collectors.toList());
-            }
-        }
-        return updatedTools;
     }
 
     private void createConversationAgent(MLAgent planExecuteReflectAgent, String tenantId, ActionListener<String> listener) {
