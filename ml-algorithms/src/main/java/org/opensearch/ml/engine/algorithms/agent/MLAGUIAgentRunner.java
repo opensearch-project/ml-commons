@@ -5,38 +5,26 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_CONTENT;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ROLE;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALLS;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALL_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_ASSISTANT;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_TOOL;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_USER;
 import static org.opensearch.ml.common.utils.StringUtils.getStringField;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_MESSAGE_PREFIX;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_QUESTION_TEMPLATE;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_RESPONSE_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.NEW_CHAT_HISTORY;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -138,208 +126,52 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
             JsonArray messageArray = messagesElement.getAsJsonArray();
 
-            for (int i = 0; i < messageArray.size(); i++) {
-                JsonElement msgElement = messageArray.get(i);
-                if (msgElement.isJsonObject()) {
-                    JsonObject msg = msgElement.getAsJsonObject();
-                    String role = getStringField(msg, "role");
-                    String content = getStringField(msg, "content");
-                    boolean hasToolCalls = msg.has("toolCalls");
-                    boolean hasToolCallId = msg.has("toolCallId");
-                    log
-                        .debug(
-                            "AG-UI: Message[{}] - role: {}, hasToolCalls: {}, hasToolCallId: {}, content preview: {}",
-                            i,
-                            role,
-                            hasToolCalls,
-                            hasToolCallId,
-                            content != null && content.length() > 50 ? content.substring(0, 50) + "..." : content
-                        );
-                }
-            }
-
             if (messageArray.size() <= 1) {
                 return;
             }
 
-            // Check for tool result messages and extract them
-            // Also track assistant messages with tool calls
-            List<Map<String, String>> toolResults = new ArrayList<>();
-            List<Integer> toolCallMessageIndices = new ArrayList<>();
-            List<Integer> toolResultMessageIndices = new ArrayList<>();
-            List<String> assistantToolCallMessages = new ArrayList<>();
-            int lastToolResultIndex = -1;
+            // Extract tool execution data using AGUIInputConverter
+            List<Map<String, String>> allToolResults = AGUIInputConverter.extractToolResults(messageArray);
+            List<String> toolCalls = AGUIInputConverter.extractToolCalls(messageArray);
 
-            for (int i = 0; i < messageArray.size(); i++) {
-                JsonElement messageElement = messageArray.get(i);
-                if (messageElement.isJsonObject()) {
-                    JsonObject message = messageElement.getAsJsonObject();
-                    String role = getStringField(message, AGUI_FIELD_ROLE);
-
-                    // Track and extract assistant messages with tool calls
-                    if (AGUI_ROLE_ASSISTANT.equals(role) && message.has(AGUI_FIELD_TOOL_CALLS)) {
-                        toolCallMessageIndices.add(i);
-
-                        // Extract tool calls from AG-UI message (AG-UI uses OpenAI-compatible format)
-                        JsonElement toolCallsElement = message.get(AGUI_FIELD_TOOL_CALLS);
-                        if (toolCallsElement != null && toolCallsElement.isJsonArray()) {
-                            // Pass the JSON array directly to FunctionCalling for format conversion
-                            String toolCallsJson = gson.toJson(toolCallsElement);
-
-                            FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
-                            String assistantMessage = "";
-
-                            if (functionCalling != null) {
-                                // Use FunctionCalling to format the message in the correct LLM format
-                                assistantMessage = functionCalling.formatAGUIToolCalls(toolCallsJson);
-                                log.debug("AG-UI: Formatted assistant message using {}", functionCalling.getClass().getSimpleName());
-                            } else {
-                                log.error("AG-UI: Invalid function calling configuration: {}", llmInterface);
-                            }
-
-                            assistantToolCallMessages.add(assistantMessage);
-                            log.debug("AG-UI: Extracted assistant message at index {}", i);
-                            log.debug("AG-UI: Assistant message JSON: {}", assistantMessage);
-                        }
-                    }
-
-                    if (AGUI_ROLE_TOOL.equals(role)) {
-                        String content = getStringField(message, AGUI_FIELD_CONTENT);
-                        String toolCallId = getStringField(message, AGUI_FIELD_TOOL_CALL_ID);
-
-                        if (content != null && toolCallId != null) {
-                            Map<String, String> toolResult = new HashMap<>();
-                            toolResult.put("tool_call_id", toolCallId);
-                            toolResult.put("content", content);
-                            toolResults.add(toolResult);
-                            toolResultMessageIndices.add(i);
-                            lastToolResultIndex = i;
-                        }
-                    }
-                }
-            }
-
-            // Only process the MOST RECENT tool execution
-            // Check if there are any assistant messages after the last tool result
-            boolean hasAssistantAfterToolResult = false;
-            if (lastToolResultIndex >= 0) {
-                for (int i = lastToolResultIndex + 1; i < messageArray.size(); i++) {
-                    JsonElement messageElement = messageArray.get(i);
-                    if (messageElement.isJsonObject()) {
-                        JsonObject message = messageElement.getAsJsonObject();
-                        String role = getStringField(message, AGUI_FIELD_ROLE);
-                        if (AGUI_ROLE_ASSISTANT.equals(role)) {
-                            hasAssistantAfterToolResult = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            boolean toolResultsAreRecent = !toolResults.isEmpty() && !hasAssistantAfterToolResult;
-
-            if (!toolResults.isEmpty() && toolResultsAreRecent) {
-                // Only include the MOST RECENT tool execution (last tool call + result pair)
-                // Find the assistant message that corresponds to the last tool result
-                String lastToolCallMessage = null;
-
-                // The last tool result should correspond to the last assistant message with tool_calls
-                if (!assistantToolCallMessages.isEmpty() && !toolCallMessageIndices.isEmpty()) {
-                    lastToolCallMessage = assistantToolCallMessages.getLast();
-                }
-
-                // Include tool results from the most recent tool execution
-                List<Map<String, String>> recentToolResults = new ArrayList<>();
-                if (!toolCallMessageIndices.isEmpty()) {
-                    int lastToolCallIndex = toolCallMessageIndices.getLast();
-
-                    // Collect all tool results that come after the last assistant tool call message
-                    for (int i = 0; i < toolResultMessageIndices.size(); i++) {
-                        int toolResultIndex = toolResultMessageIndices.get(i);
-                        if (toolResultIndex > lastToolCallIndex) {
-                            recentToolResults.add(toolResults.get(i));
-                        }
-                    }
-                }
-
-                String toolResultsJson = gson.toJson(recentToolResults);
-                params.put(AGUI_PARAM_TOOL_CALL_RESULTS, toolResultsJson);
-
-                // Only pass the most recent assistant message with tool_calls
-                if (lastToolCallMessage != null) {
-                    params.put(AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES, gson.toJson(List.of(lastToolCallMessage)));
-                }
-            } else if (!toolResults.isEmpty()) {
-                log
-                    .info(
-                        "AG-UI: Found {} tool results but they are not recent (last at index {}, total messages: {}), "
-                            + "skipping from interactions",
-                        toolResults.size(),
-                        lastToolResultIndex,
-                        messageArray.size()
-                    );
-            }
-
-            String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
-            String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
-
-            // Build chat history using templates (templates are required for AG-UI)
-            if (chatHistoryQuestionTemplate != null && chatHistoryResponseTemplate != null) {
-                List<String> chatHistory = new ArrayList<>();
-
-                for (int i = 0; i < messageArray.size() - 1; i++) {
-                    JsonElement messageElement = messageArray.get(i);
-                    if (messageElement.isJsonObject()) {
-                        JsonObject message = messageElement.getAsJsonObject();
-                        String role = getStringField(message, AGUI_FIELD_ROLE);
-                        String content = getStringField(message, AGUI_FIELD_CONTENT);
-
-                        if (AGUI_ROLE_USER.equals(role) && content != null && !content.isEmpty()) {
-                            // When we have recent tool results, skip the user message that triggered the tool call
-                            // This is the user message right before the assistant message with tool calls
-                            if (toolResultsAreRecent && !toolCallMessageIndices.isEmpty()) {
-                                int firstToolCallIndex = toolCallMessageIndices.get(0);
-                                // Skip user messages that are at or after the first tool call
-                                // (they're part of the current tool execution cycle, not historical chat)
-                                if (i >= firstToolCallIndex - 1) {
-                                    continue;
-                                }
-                            }
-
-                            Map<String, String> messageParams = new HashMap<>();
-                            messageParams.put("question", processTextDoc(content));
-                            StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatMessage = substitutor.replace(chatHistoryQuestionTemplate);
-                            chatHistory.add(chatMessage);
-                        } else if (AGUI_ROLE_ASSISTANT.equals(role)) {
-                            // Include ALL assistant messages (both with and without tool calls)
-                            if (content != null && !content.isEmpty()) {
-                                Map<String, String> messageParams = new HashMap<>();
-                                messageParams.put("response", processTextDoc(content));
-                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                                String chatMessage = substitutor.replace(chatHistoryResponseTemplate);
-                                chatHistory.add(chatMessage);
-                            }
-                        } else if (AGUI_ROLE_TOOL.equals(role)) {
-                            // Include tool result messages in chat history
-                            if (content != null && !content.isEmpty()) {
-                                Map<String, String> messageParams = new HashMap<>();
-                                messageParams.put("response", processTextDoc(content));
-                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                                String chatMessage = substitutor.replace(chatHistoryResponseTemplate);
-                                chatHistory.add(chatMessage);
-                            }
-                        }
-                    }
-                }
-
-                if (!chatHistory.isEmpty()) {
-                    params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                }
+            // Process tool execution if present
+            if (!allToolResults.isEmpty()) {
+                processToolExecution(allToolResults, toolCalls, llmInterface, params);
             }
         } catch (Exception e) {
-            log.error("Failed to process AG-UI messages to chat history", e);
-            throw new IllegalArgumentException("Failed to process AG-UI messages to chat history", e);
+            log.error("Failed to process AG-UI messages", e);
+            throw new IllegalArgumentException("Failed to process AG-UI messages", e);
+        }
+    }
+
+    /**
+     * Processes tool execution by formatting tool calls and setting parameters.
+     */
+    private void processToolExecution(
+        List<Map<String, String>> allToolResults,
+        List<String> toolCalls,
+        String llmInterface,
+        Map<String, String> params
+    ) {
+        // Format ALL tool calls using FunctionCalling
+        List<String> formattedToolCallMessages = new ArrayList<>();
+        FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
+
+        for (String toolCallJson : toolCalls) {
+            if (functionCalling != null) {
+                String formattedMessage = functionCalling.formatAGUIToolCalls(toolCallJson);
+                formattedToolCallMessages.add(formattedMessage);
+            } else {
+                log.error("AG-UI: Invalid function calling configuration: {}", llmInterface);
+            }
+        }
+
+        params.put(AGUI_PARAM_TOOL_CALL_RESULTS, gson.toJson(allToolResults));
+        log.debug("AG-UI: Set {} tool results", allToolResults.size());
+
+        if (!formattedToolCallMessages.isEmpty()) {
+            params.put(AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES, gson.toJson(formattedToolCallMessages));
+            log.debug("AG-UI: Set {} assistant tool call messages", formattedToolCallMessages.size());
         }
     }
 

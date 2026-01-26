@@ -233,8 +233,9 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         private void handleDoneEvent() {
             if (!agentExecutionInProgress) {
                 String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
-                boolean textMessageStarted = (isAGUIAgent && parameters != null) && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
-                
+                boolean textMessageStarted = (isAGUIAgent && parameters != null)
+                    && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
                 if (isAGUIAgent && textMessageStarted) {
                     // End any remaining text message
                     parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
@@ -249,15 +250,16 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                     sendAGUIEvent(runFinishedEvent, true, streamActionListener);
                     log.debug("AG-UI: Sent RUN_FINISHED event at [DONE] - threadId={}, runId={}", threadId, runId);
                 }
-                
+
                 sendCompletionResponse(isStreamClosed, streamActionListener);
             }
         }
 
         private void processStreamChunk(Map<String, Object> dataMap) {
             String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
-            boolean textMessageStarted = (isAGUIAgent && parameters != null) && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
-            
+            boolean textMessageStarted = (isAGUIAgent && parameters != null)
+                && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
             String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
             if ("stop".equals(finishReason)) {
                 agentExecutionInProgress = false;
@@ -276,7 +278,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                     sendAGUIEvent(runFinishedEvent, true, streamActionListener);
                     log.debug("AG-UI: Sent RUN_FINISHED event - threadId={}, runId={}", threadId, runId);
                 }
-                
+
                 sendCompletionResponse(isStreamClosed, streamActionListener);
                 return;
             }
