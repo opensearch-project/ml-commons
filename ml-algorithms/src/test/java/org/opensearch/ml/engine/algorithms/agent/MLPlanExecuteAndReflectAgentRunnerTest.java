@@ -51,10 +51,10 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -69,6 +69,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
@@ -77,6 +78,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
 
+    @Mock
+    private TransportChannel transportChannel;
     @Mock
     private Client client;
     private Settings settings;
@@ -136,27 +139,28 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
 
         // memory
-        mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10);
+        mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10, null);
         when(memoryMap.get(ConversationIndexMemory.TYPE)).thenReturn(memoryFactory);
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
         when(conversationIndexMemory.getConversationId()).thenReturn("test_memory_id");
+        when(conversationIndexMemory.getId()).thenReturn("test_memory_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
         when(createInteractionResponse.getId()).thenReturn("create_interaction_id");
         when(updateResponse.getId()).thenReturn("update_interaction_id");
 
         // memory factory
         doAnswer(invocation -> {
-            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(1);
             listener.onResponse(conversationIndexMemory);
             return null;
-        }).when(memoryFactory).create(any(), any(), any(), memoryFactoryCapture.capture());
+        }).when(memoryFactory).create(any(), memoryFactoryCapture.capture());
 
         // Setup conversation index memory
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onResponse(generateInteractions());
             return null;
-        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), anyInt());
+        }).when(conversationIndexMemory).getMessages(anyInt(), memoryInteractionCapture.capture());
 
         // Setup memory manager
         doAnswer(invocation -> {
@@ -224,11 +228,18 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
 
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
         // Run the agent
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify the response
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -296,12 +307,19 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
 
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
         // Run the agent with history
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put("memory_id", "test_memory_id");
         params.put("parent_interaction_id", "test_parent_interaction_id");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify the response
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -372,9 +390,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("parent_interaction_id", "test_parent_interaction_id");
         params.put("message_history_limit", "5");
         params.put("executor_message_history_limit", "3");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
-        verify(conversationIndexMemory).getMessages(any(), eq(5));
+        verify(conversationIndexMemory).getMessages(eq(5), any());
 
         ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
         verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());
@@ -640,6 +658,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         String executorParentId = "test_executor_parent_id";
 
         when(conversationIndexMemory.getConversationId()).thenReturn(conversationId);
+        when(conversationIndexMemory.getId()).thenReturn(conversationId);
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
 
         doAnswer(invocation -> {
@@ -647,6 +666,12 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(eq(parentInteractionId), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         mlPlanExecuteAndReflectAgentRunner
             .saveAndReturnFinalResult(
@@ -718,6 +743,59 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testExecutionWithNullStepResult() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Setup LLM response for planning phase - returns steps to execute
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor
+                .builder()
+                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"\"}"))
+                .build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        // Setup executor response with tensor that has null dataMap - this will hit line 465
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor memoryIdTensor = ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result("test_memory_id").build();
+            ModelTensor parentIdTensor = ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result("test_parent_id").build();
+            // This tensor will return null from parseTensorDataMap, hitting the stepResult != null check
+            ModelTensor nullDataTensor = ModelTensor.builder().name("other").build();
+            ModelTensors modelTensors = ModelTensors
+                .builder()
+                .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, nullDataTensor))
+                .build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlExecuteTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put("parent_interaction_id", "test_parent_interaction_id");
+
+        // Capture the exception in the listener
+        doAnswer(invocation -> {
+            Exception e = invocation.getArgument(0);
+            assertTrue(e instanceof IllegalStateException);
+            assertEquals("No valid response found in ReAct agent output", e.getMessage());
+            return null;
+        }).when(agentActionListener).onFailure(any());
+
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+        // Verify that onFailure was called with the expected exception
+        verify(agentActionListener).onFailure(any(IllegalStateException.class));
+    }
+
+    @Test
     public void testUpdateTaskWithExecutorAgentInfo() {
         MLAgent mlAgent = createMLAgentWithTools();
         String taskId = "test-task-id";
@@ -726,9 +804,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
             mlTaskUtilsMockedStatic
-                .when(() -> MLTaskUtils.updateMLTaskDirectly(anyString(), any(), any(), any()))
+                .when(() -> MLTaskUtils.updateMLTaskDirectly(anyString(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
-                    ActionListener<UpdateResponse> listener = invocation.getArgument(3);
+                    ActionListener<UpdateResponse> listener = invocation.getArgument(5);
                     listener.onResponse(updateResponse);
                     return null;
                 });
@@ -793,7 +871,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             params.put("memory_id", "test_memory_id");
             params.put("parent_interaction_id", "test_parent_interaction_id");
             params.put("task_id", taskId);
-            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
             Map<String, Object> taskUpdates = mlPlanExecuteAndReflectAgentRunner.getTaskUpdates();
             assertEquals(MLTaskState.RUNNING, taskUpdates.get("state"));
@@ -802,61 +880,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             assertEquals("test_executor_memory_id", response.get("executor_agent_memory_id"));
             assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
 
-            mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
+            mlTaskUtilsMockedStatic
+                .verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), eq(sdkClient), any()));
         }
-    }
-
-    @Test
-    public void testExecutionWithNullStepResult() {
-        MLAgent mlAgent = createMLAgentWithTools();
-
-        // Setup LLM response for planning phase - returns steps to execute
-        doAnswer(invocation -> {
-            ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor modelTensor = ModelTensor
-                .builder()
-                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"\"}"))
-                .build();
-            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
-            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
-            listener.onResponse(mlTaskResponse);
-            return null;
-        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
-
-        // Setup executor response with tensor that has null dataMap - this will hit line 465
-        doAnswer(invocation -> {
-            ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor memoryIdTensor = ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result("test_memory_id").build();
-            ModelTensor parentIdTensor = ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result("test_parent_id").build();
-            // This tensor will return null from parseTensorDataMap, hitting the stepResult != null check
-            ModelTensor nullDataTensor = ModelTensor.builder().name("other").build();
-            ModelTensors modelTensors = ModelTensors
-                .builder()
-                .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, nullDataTensor))
-                .build();
-            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
-            listener.onResponse(mlExecuteTaskResponse);
-            return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
-
-        Map<String, String> params = new HashMap<>();
-        params.put("question", "test question");
-        params.put("parent_interaction_id", "test_parent_interaction_id");
-
-        // Capture the exception in the listener
-        doAnswer(invocation -> {
-            Exception e = invocation.getArgument(0);
-            assertTrue(e instanceof IllegalStateException);
-            assertEquals("No valid response found in ReAct agent output", e.getMessage());
-            return null;
-        }).when(agentActionListener).onFailure(any());
-
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
-
-        // Verify that onFailure was called with the expected exception
-        verify(agentActionListener).onFailure(any(IllegalStateException.class));
     }
 
     @Test
@@ -870,10 +896,10 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         // Mock the memory factory to return the fresh memory
         doAnswer(invocation -> {
-            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(1);
             listener.onResponse(freshMemory);
             return null;
-        }).when(memoryFactory).create(any(), any(), any(), any());
+        }).when(memoryFactory).create(any(), any());
 
         // Setup LLM response for planning phase
         doAnswer(invocation -> {
@@ -923,7 +949,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify that getMessages was never called on the fresh memory (memory fetch was skipped)
-        verify(freshMemory, never()).getMessages(any(), anyInt());
+        verify(freshMemory, never()).getMessages(anyInt(), any());
 
         // Verify that the agent still completes successfully
         verify(agentActionListener).onResponse(objectCaptor.capture());

@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
@@ -30,6 +31,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
@@ -71,11 +73,11 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.hooks.HookRegistry;
+import org.opensearch.ml.common.memory.Memory;
+import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
-import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -84,7 +86,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.function_calling.LLMMessage;
-import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -203,6 +204,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
             functionCalling.configure(params);
         }
 
+        if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
+            runAgent(mlAgent, params, listener, null, null, functionCalling);
+            return;
+        }
+
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
@@ -212,20 +218,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        // Check if this is a fresh conversation (memory was just created, not provided by user)
-        boolean isFreshConversation = "true".equals(params.getOrDefault("fresh_memory", "false"));
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
 
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            // Skip memory fetch for fresh conversations to avoid race condition with newly stored messages
-            if (isFreshConversation) {
-                log.info("Fresh conversation detected (memory just created), skipping memory fetch");
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
-                return;
-            }
-
+        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params.get(MEMORY_CONTAINER_ID_FIELD));
+        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
+            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 for (Interaction next : r) {
                     String question = next.getInput();
@@ -240,7 +238,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .add(
                             ConversationIndexMessage
                                 .conversationIndexMessageBuilder()
-                                .sessionId(memory.getConversationId())
+                                .sessionId(memory.getId())
                                 .question(question)
                                 .response(response)
                                 .build()
@@ -283,11 +281,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                 }
 
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                runAgent(mlAgent, params, listener, memory, memory.getId(), functionCalling);
             }, e -> {
                 log.error("Failed to get chat history", e);
                 listener.onFailure(e);
-            }), messageHistoryLimit);
+            }));
         }, listener::onFailure));
     }
 
@@ -369,9 +367,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
         boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
 
-        // Create root interaction.
-        ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
-
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
 
@@ -434,7 +429,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             finalAnswer
@@ -459,8 +454,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
 
                     saveTraceData(
-                        conversationIndexMemory,
-                        memory.getType(),
+                        memory,
+                        memory != null ? memory.getType() : null,
                         question,
                         thoughtResponse,
                         sessionId,
@@ -479,7 +474,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             lastThought,
@@ -559,8 +554,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
+                    // Save trace with processed output
                     saveTraceData(
-                        conversationIndexMemory,
+                        memory,
                         "ReAct",
                         lastActionInput.get(),
                         outputToOutputString(filteredOutput),
@@ -614,7 +610,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             lastThought,
@@ -804,7 +800,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
      * some special parameters like SCRATCHPAD_NOTES_KEY,
      * some new llmToolTmpParameters produced by the tool run can opt to be copied
      * back to tmpParameters to share across tools in the same interaction
-     * 
+     *
      * @param tmpParameters
      * @param llmToolTmpParameters
      */
@@ -816,8 +812,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     public static void saveTraceData(
-        ConversationIndexMemory conversationIndexMemory,
-        String memory,
+        Memory memory,
+        String memoryType,
         String question,
         String thoughtResponse,
         String sessionId,
@@ -826,17 +822,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicInteger traceNumber,
         String origin
     ) {
-        if (conversationIndexMemory != null) {
+        if (memory != null) {
             ConversationIndexMessage msgTemp = ConversationIndexMessage
                 .conversationIndexMessageBuilder()
-                .type(memory)
+                .type(memoryType)
                 .question(question)
                 .response(thoughtResponse)
                 .finalAnswer(false)
                 .sessionId(sessionId)
                 .build();
             if (!traceDisabled) {
-                conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), origin);
+                memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), origin);
             }
         }
     }
@@ -849,7 +845,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         boolean traceDisabled,
         List<ModelTensors> cotModelTensors,
-        ConversationIndexMemory conversationIndexMemory,
+        Memory memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         String finalAnswer
@@ -857,12 +853,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Send completion chunk for streaming
         streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
 
-        if (conversationIndexMemory != null) {
+        if (memory != null) {
             String copyOfFinalAnswer = finalAnswer;
             ActionListener saveTraceListener = ActionListener.wrap(r -> {
-                conversationIndexMemory
-                    .getMemoryManager()
-                    .updateInteraction(
+                memory
+                    .update(
                         parentInteractionId,
                         Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
                         ActionListener.wrap(res -> {
@@ -878,17 +873,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }, e -> { listener.onFailure(e); })
                     );
             }, e -> { listener.onFailure(e); });
-            saveMessage(
-                conversationIndexMemory,
-                question,
-                finalAnswer,
-                sessionId,
-                parentInteractionId,
-                traceNumber,
-                true,
-                traceDisabled,
-                saveTraceListener
-            );
+            saveMessage(memory, question, finalAnswer, sessionId, parentInteractionId, traceNumber, true, traceDisabled, saveTraceListener);
         } else {
             streamingWrapper
                 .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
@@ -897,20 +882,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     public static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
         List<ModelTensors> cotModelTensors = new ArrayList<>();
+        List<ModelTensor> tensors = new ArrayList<>();
 
-        cotModelTensors
-            .add(
-                ModelTensors
-                    .builder()
-                    .mlModelTensors(
-                        List
-                            .of(
-                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
-                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
-                            )
-                    )
-                    .build()
-            );
+        if (sessionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
+        }
+        if (parentInteractionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
+        }
+
+        if (!tensors.isEmpty()) {
+            cotModelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
+        }
         return cotModelTensors;
     }
 
@@ -1035,7 +1018,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         boolean traceDisabled,
         List<ModelTensors> traceTensors,
-        ConversationIndexMemory conversationIndexMemory,
+        Memory memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         AtomicReference<String> lastThought,
@@ -1053,7 +1036,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             verbose,
             traceDisabled,
             traceTensors,
-            conversationIndexMemory,
+            memory,
             traceNumber,
             additionalInfo,
             incompleteResponse
@@ -1062,7 +1045,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     private void saveMessage(
-        ConversationIndexMemory memory,
+        Memory memory,
         String question,
         String finalAnswer,
         String sessionId,
@@ -1072,18 +1055,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean traceDisabled,
         ActionListener listener
     ) {
-        ConversationIndexMessage msgTemp = ConversationIndexMessage
-            .conversationIndexMessageBuilder()
-            .type(memory.getType())
-            .question(question)
-            .response(finalAnswer)
-            .finalAnswer(isFinalAnswer)
-            .sessionId(sessionId)
-            .build();
-        if (traceDisabled) {
-            listener.onResponse(true);
+        if (memory != null) {
+            ConversationIndexMessage msgTemp = ConversationIndexMessage
+                .conversationIndexMessageBuilder()
+                .type(memory.getType())
+                .question(question)
+                .response(finalAnswer)
+                .finalAnswer(isFinalAnswer)
+                .sessionId(sessionId)
+                .build();
+            if (traceDisabled) {
+                listener.onResponse(true);
+            } else {
+                memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+            }
         } else {
-            memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+            listener.onResponse(true);
         }
     }
 

@@ -55,10 +55,10 @@ import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.InputType;
 import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
@@ -214,8 +214,7 @@ public class MLAgentExecutorTest {
 
     @Test
     public void testExecuteWithNullParameters() {
-        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().build();
-        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, null);
 
         try {
             mlAgentExecutor.execute(agentInput, listener, channel);
@@ -309,7 +308,7 @@ public class MLAgentExecutorTest {
             mlAgentExecutor.getAgentRunner(agent, null);
             fail("Expected IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
-            assertEquals("Wrong Agent type", exception.getMessage());
+            assertEquals("UNSUPPORTED_TYPE is not a valid Agent Type", exception.getMessage());
         }
     }
 
@@ -812,7 +811,7 @@ public class MLAgentExecutorTest {
                     )
                 ),
             Map.of("test", "test"),
-            new MLMemorySpec("memoryType", "123", 0),
+            new MLMemorySpec("memoryType", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",

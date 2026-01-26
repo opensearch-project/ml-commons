@@ -516,10 +516,10 @@ public class TransportAddMemoriesActionTests {
 
         // Mock summarizeMessages
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(3);
             listener.onResponse("Session summary");
             return null;
-        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
 
         // Mock indexData for both session and working memory
         doAnswer(invocation -> {
@@ -539,7 +539,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify session creation flow
-        verify(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        verify(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
         // Verify indexData called twice: once for session, once for working memory
         verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
@@ -588,15 +588,15 @@ public class TransportAddMemoriesActionTests {
         // Mock summarizeMessages to fail
         Exception summarizeException = new RuntimeException("Summarization failed");
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(3);
             listener.onFailure(summarizeException);
             return null;
-        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify summarize was called and failure was propagated
-        verify(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        verify(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
         verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
             && ((OpenSearchStatusException)exception).status() == RestStatus.INTERNAL_SERVER_ERROR
             && exception.getMessage().contains("Internal server error")));
@@ -988,12 +988,12 @@ public class TransportAddMemoriesActionTests {
         doAnswer(invocation -> {
             // Don't invoke callback yet - we'll trigger it manually
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), factsListenerCaptor.capture());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), factsListenerCaptor.capture());
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify runMemoryStrategy was called for the enabled strategy
-        verify(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        verify(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
     }
 
     @Test
@@ -1051,8 +1051,8 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify both strategies were processed
-        verify(memoryProcessingService).runMemoryStrategy(eq(strategy1), eq(messages), eq(config), any());
-        verify(memoryProcessingService).runMemoryStrategy(eq(strategy2), eq(messages), eq(config), any());
+        verify(memoryProcessingService).runMemoryStrategy(any(), eq(strategy1), eq(messages), eq(config), any());
+        verify(memoryProcessingService).runMemoryStrategy(any(), eq(strategy2), eq(messages), eq(config), any());
     }
 
     @Test
@@ -1108,7 +1108,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify disabled strategy was NOT processed
-        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any());
+        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1165,7 +1165,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify strategy with incomplete namespace was NOT processed
-        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any());
+        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1221,10 +1221,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to trigger failure
         Exception strategyException = new RuntimeException("LLM extraction failed");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onFailure(strategyException);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
@@ -1287,10 +1287,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to return facts
         List<String> facts = Arrays.asList("fact1", "fact2", "fact3");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onResponse(facts);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         // Mock searchSimilarFactsForSession to return empty list (no similar facts)
         doAnswer(invocation -> {
@@ -1372,10 +1372,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to return facts
         List<String> facts = Arrays.asList("fact1", "fact2");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onResponse(facts);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         // Mock searchSimilarFactsForSession to return similar facts
         List<Object> similarFacts = Arrays.asList("similarFact1", "similarFact2");
@@ -1391,10 +1391,10 @@ public class TransportAddMemoriesActionTests {
             MemoryDecision.builder().event(MemoryEvent.UPDATE).text("fact2").build()
         );
         doAnswer(invocation -> {
-            ActionListener<List<MemoryDecision>> listener = invocation.getArgument(4);
+            ActionListener<List<MemoryDecision>> listener = invocation.getArgument(5);
             listener.onResponse(decisions);
             return null;
-        }).when(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), any(), eq(config), any());
+        }).when(memoryProcessingService).makeMemoryDecisions(any(), eq(facts), any(), any(), eq(config), any());
 
         // Mock executeMemoryOperations to succeed
         doAnswer(invocation -> {
@@ -1410,7 +1410,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify decision-making was called
-        verify(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), any(), eq(config), any());
+        verify(memoryProcessingService).makeMemoryDecisions(any(), eq(facts), any(), any(), eq(config), any());
         verify(memoryOperationsService).executeMemoryOperations(eq(decisions), eq(config), any(), any(), eq(input), eq(strategy), any());
     }
 
@@ -1467,10 +1467,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to return facts
         List<String> facts = Arrays.asList("fact1");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onResponse(facts);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         // Mock searchSimilarFactsForSession to trigger failure
         Exception searchException = new RuntimeException("Search failed");
@@ -1536,7 +1536,7 @@ public class TransportAddMemoriesActionTests {
             ActionListener<String> listener = invocation.getArgument(2);
             listener.onFailure(notFoundException);
             return null;
-        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 

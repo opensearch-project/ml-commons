@@ -157,7 +157,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
     public void testDoExecuteSuccess() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID, null);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -215,7 +215,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
     public void testDoExecuteWithUnauthorizedUser() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID, null);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -250,7 +250,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
     public void testDoExecuteWithParsingException() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID, null);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -299,7 +299,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecuteWithNoResponse() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID, null);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -343,7 +343,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecuteWithClientGetFailure() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID, null);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -383,7 +383,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecuteWithProcessResponseException() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID, null);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -442,7 +442,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
         
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID, null);
         
         // Execute
         action.doExecute(task, getRequest, actionListener);
