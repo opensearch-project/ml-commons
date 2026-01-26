@@ -22,13 +22,7 @@ import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFram
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Assert;
@@ -54,6 +48,7 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
@@ -475,122 +470,132 @@ public class MLEngineTest extends MLStaticMockBase {
     @Test
     public void testEncryptMethod() {
         String testString = "testString";
-        String encryptedString = mlEngine.encrypt(testString, null);
-        assertNotNull(encryptedString);
-        assertNotEquals(testString, encryptedString);
+        ActionListener<String> listener = ActionListener.wrap(encryptedString -> {
+            assertNotNull(encryptedString);
+            assertNotEquals(testString, encryptedString);
+        }, error -> { throw new MLException(error); });
+        mlEngine.encrypt(testString, null, listener);
     }
 
     @Test
     public void testGetConnectorCredential() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value", null);
-        String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
-            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-            + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
-            + encryptedValue
-            + "\"},"
-            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
-            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
-            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
-            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+        ActionListener<String> listener = ActionListener.wrap(encryptedValue -> {
+            String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+                + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
+                + encryptedValue
+                + "\"},"
+                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(
-                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                null,
-                test_connector_string
-            );
-        parser.nextToken();
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    test_connector_string
+                );
+            parser.nextToken();
 
-        HttpConnector connector = new HttpConnector("http", parser);
-        Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
-        assertNotNull(decryptedCredential);
-        assertEquals(decryptedCredential.get("key"), "test_key_value");
-        assertEquals(decryptedCredential.get("region"), "test region");
+            HttpConnector connector = new HttpConnector("http", parser);
+            Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
+            assertNotNull(decryptedCredential);
+            assertEquals("test_key_value", decryptedCredential.get("key"));
+            assertEquals("test region", decryptedCredential.get("region"));
+        }, error -> { throw new MLException(error); });
+        mlEngine.encrypt("test_key_value", null, listener);
     }
 
     @Test
     public void testGetConnectorCredentialWithoutRegion() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value", null);
-        String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
-            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-            + "\"parameters\":{},\"credential\":{\"key\":\""
-            + encryptedValue
-            + "\"},"
-            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
-            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
-            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
-            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+        ActionListener<String> listener = ActionListener.wrap(encryptedValue -> {
+            String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+                + "\"parameters\":{},\"credential\":{\"key\":\""
+                + encryptedValue
+                + "\"},"
+                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(
-                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                null,
-                test_connector_string
-            );
-        parser.nextToken();
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    test_connector_string
+                );
+            parser.nextToken();
 
-        HttpConnector connector = new HttpConnector("http", parser);
-        Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
-        assertNotNull(decryptedCredential);
-        assertEquals("test_key_value", decryptedCredential.get("key"));
-        assertEquals(null, decryptedCredential.get("region"));
+            HttpConnector connector = new HttpConnector("http", parser);
+            Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
+            assertNotNull(decryptedCredential);
+            assertEquals("test_key_value", decryptedCredential.get("key"));
+            assertEquals(null, decryptedCredential.get("region"));
+        }, error -> { throw new MLException(error); });
+        mlEngine.encrypt("test_key_value", null, listener);
     }
 
     @Test
     public void testDeploy_withPredictableActionListener_successful() throws IOException {
-        String encryptedAccessKey = mlEngine.encrypt("access-key", null);
-        String encryptedSecretKey = mlEngine.encrypt("secret-key", null);
-        String testConnector = String.format(Locale.ROOT, """
-            {
-                "name": "sagemaker: t2ppl",
-                "description": "t2ppl model",
-                "version": 1,
-                "protocol": "aws_sigv4",
-                "credential": {
-                    "access_key": "%s",
-                    "secret_key": "%s"
-                },
-                "parameters": {
-                    "region": "us-east-1",
-                    "service_name": "sagemaker",
-                    "input_type": "search_document"
-                },
-                "actions": [
+        ActionListener<String> accesKeyListener = ActionListener.wrap(encryptedAccessKey -> {
+            ActionListener<String> secretKeyListener = ActionListener.wrap(encryptedSecretKey -> {
+                String testConnector = String.format(Locale.ROOT, """
                     {
-                        "action_type": "predict",
-                        "method": "POST",
-                        "headers": {
-                            "content-type": "application/json",
-                            "x-amz-content-sha256": "required"
+                        "name": "sagemaker: t2ppl",
+                        "description": "t2ppl model",
+                        "version": 1,
+                        "protocol": "aws_sigv4",
+                        "credential": {
+                            "access_key": "%s",
+                            "secret_key": "%s"
                         },
-                        "url": "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/my-endpoint/invocations",
-                        "request_body": "{\\"prompt\\":\\"${parameters.prompt}\\"}"
+                        "parameters": {
+                            "region": "us-east-1",
+                            "service_name": "sagemaker",
+                            "input_type": "search_document"
+                        },
+                        "actions": [
+                            {
+                                "action_type": "predict",
+                                "method": "POST",
+                                "headers": {
+                                    "content-type": "application/json",
+                                    "x-amz-content-sha256": "required"
+                                },
+                                "url": "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/my-endpoint/invocations",
+                                "request_body": "{\\"prompt\\":\\"${parameters.prompt}\\"}"
+                            }
+                        ]
                     }
-                ]
-            }
-            """, encryptedAccessKey, encryptedSecretKey);
+                    """, encryptedAccessKey, encryptedSecretKey);
 
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(
-                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                null,
-                testConnector
-            );
-        parser.nextToken();
+                XContentParser parser = XContentType.JSON
+                    .xContent()
+                    .createParser(
+                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                        null,
+                        testConnector
+                    );
+                parser.nextToken();
 
-        MLModel model = mock(MLModel.class);
-        AwsConnector connector = new AwsConnector("aws_sigv4", parser);
-        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
-        when(model.getConnector()).thenReturn(connector);
-        ActionListener<Predictable> actionListener = mock(ActionListener.class);
-        SdkClient sdkClient = mock(SdkClient.class);
-        when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
-        Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
-        mlEngine.deploy(model, params, actionListener);
-        verify(actionListener).onResponse(any(Predictable.class));
+                MLModel model = mock(MLModel.class);
+                AwsConnector connector = new AwsConnector("aws_sigv4", parser);
+                when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+                when(model.getConnector()).thenReturn(connector);
+                ActionListener<Predictable> actionListener = mock(ActionListener.class);
+                SdkClient sdkClient = mock(SdkClient.class);
+                when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
+                Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
+                mlEngine.deploy(model, params, actionListener);
+                verify(actionListener).onResponse(any(Predictable.class));
+            }, error -> { throw new MLException(error); });
+            mlEngine.encrypt("secret-key", null, secretKeyListener);
+        }, error -> { throw new MLException(error); });
+        mlEngine.encrypt("access-key", null, accesKeyListener);
     }
 
     @Test

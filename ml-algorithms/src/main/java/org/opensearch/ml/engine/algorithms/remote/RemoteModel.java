@@ -113,7 +113,12 @@ public class RemoteModel implements Predictable {
                 ? REMOTE_METADATA_GLOBAL_TENANT_ID.get((Settings) params.get(SETTINGS))
                 : model.getTenantId();
             Connector connector = model.getConnector().cloneConnector();
-            connector.decrypt(PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, decryptTenantId), decryptTenantId);
+            connector
+                .decrypt(
+                    PREDICT.name(),
+                    (credential, tenantId, listener) -> encryptor.decrypt(credential, decryptTenantId, listener),
+                    decryptTenantId
+                );
             // This situation can only happen for inline connector where we don't provide tenant id.
             if (connector.getTenantId() == null && model.getTenantId() != null) {
                 connector.setTenantId(model.getTenantId());
