@@ -1148,11 +1148,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             // Set parameters to processed params
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-            Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), MLAgentType.from(mlAgent.getType()));
-            // set question to questionText for memory
-            parameters.put(QUESTION, question);
+
+            MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+            Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
+
+            // For AG_UI, include context in the question
+            if (agentType == MLAgentType.AG_UI) {
+                String context = remoteDataSet.getParameters().get("context");
+                String questionWithContext = context != null && !context.isEmpty()
+                    ? "Context: " + context + "\nQuestion: " + question
+                    : question;
+                parameters.put(QUESTION, questionWithContext);
+            } else {
+                // set question to questionText for memory
+                parameters.put(QUESTION, question);
             }
-            
+
             // Merge new parameters into existing parameters, preserving existing values like "stream"
             for (Map.Entry<String, String> entry : parameters.entrySet()) {
                 remoteDataSet.getParameters().putIfAbsent(entry.getKey(), entry.getValue());

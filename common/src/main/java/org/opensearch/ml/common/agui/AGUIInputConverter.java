@@ -153,8 +153,25 @@ public class AGUIInputConverter {
             JsonObject aguiMsg = msgElement.getAsJsonObject();
 
             String role = aguiMsg.get(AGUI_FIELD_ROLE).getAsString();
-            List<ContentBlock> contentBlocks = parseContent(aguiMsg.get(AGUI_FIELD_CONTENT));
 
+            // Skip tool role messages
+            if ("tool".equalsIgnoreCase(role)) {
+                continue;
+            }
+
+            // Skip assistant messages with only toolCalls and no content
+            if ("assistant".equalsIgnoreCase(role) && aguiMsg.has(AGUI_FIELD_TOOL_CALLS)) {
+                JsonElement contentElement = aguiMsg.get(AGUI_FIELD_CONTENT);
+                boolean hasContent = contentElement != null
+                    && !contentElement.isJsonNull()
+                    && (!contentElement.isJsonPrimitive() || !contentElement.getAsString().isEmpty());
+
+                if (!hasContent) {
+                    continue;
+                }
+            }
+
+            List<ContentBlock> contentBlocks = parseContent(aguiMsg.get(AGUI_FIELD_CONTENT));
             Message message = new Message(role, contentBlocks);
             messages.add(message);
         }

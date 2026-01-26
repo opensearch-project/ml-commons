@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGES;
