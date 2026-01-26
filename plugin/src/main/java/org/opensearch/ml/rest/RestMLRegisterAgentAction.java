@@ -69,6 +69,14 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLAgent mlAgent = MLAgent.parseFromUserInput(parser).toBuilder().tenantId(tenantId).build();
+
+        // Check if simplified agent registration is being used but not enabled
+        if (mlAgent.getModel() != null && !mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()) {
+            throw new IllegalArgumentException(
+                "Simplified agent registration is not enabled. To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled"
+            );
+        }
+
         return new MLRegisterAgentRequest(mlAgent);
     }
 }

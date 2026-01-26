@@ -35,8 +35,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
-import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.utils.error.ErrorMessage;
 import org.opensearch.ml.utils.error.ErrorMessageFactory;
 import org.opensearch.rest.BaseRestHandler;
@@ -45,6 +43,9 @@ import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -128,6 +129,16 @@ public class RestMLExecuteAction extends BaseRestHandler {
             ((AgentMLInput) input).setAgentId(agentId);
             ((AgentMLInput) input).setTenantId(tenantId);
             ((AgentMLInput) input).setIsAsync(async);
+
+            // Check if standardized input is being used but simplified agent registration is not enabled
+            AgentMLInput agentMLInput = (AgentMLInput) input;
+            if (agentMLInput.getAgentInput() != null && !mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()) {
+                throw new IllegalArgumentException(
+                    "Standardized input cannot be used if simplified agent registration is not enabled. "
+                        + "The agent must be created using simplified agent registration. "
+                        + "To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled"
+                );
+            }
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
             if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {
                 throw new IllegalStateException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE);
