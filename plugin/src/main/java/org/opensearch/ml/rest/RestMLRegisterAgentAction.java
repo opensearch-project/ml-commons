@@ -70,10 +70,10 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLAgent mlAgent = MLAgent.parseFromUserInput(parser).toBuilder().tenantId(tenantId).build();
 
-        // Check if simplified agent registration is being used but not enabled
-        if (mlAgent.getModel() != null && !mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()) {
+        // Check if unified agent API is being used but not enabled
+        if (mlAgent.getModel() != null && !mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()) {
             throw new IllegalArgumentException(
-                "Simplified agent registration is not enabled. To enable, please update the setting plugins.ml_commons.simplified_agent_registration_enabled"
+                "Unified agent API is not enabled. To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
             );
         }
 

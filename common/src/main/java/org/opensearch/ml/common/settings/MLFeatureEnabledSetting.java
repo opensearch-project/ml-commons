@@ -20,9 +20,9 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFF
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_SIMPLIFIED_AGENT_REGISTRATION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +36,7 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isRemoteInferenceEnabled;
     private volatile Boolean isAgentFrameworkEnabled;
-    private volatile Boolean isSimplifiedAgentRegistrationEnabled;
+    private volatile Boolean isUnifiedAgentApiEnabled;
 
     private volatile Boolean isLocalModelEnabled;
     private volatile Boolean isConnectorPrivateIpEnabled;
@@ -72,7 +72,7 @@ public class MLFeatureEnabledSetting {
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
         isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
-        isSimplifiedAgentRegistrationEnabled = ML_COMMONS_SIMPLIFIED_AGENT_REGISTRATION_ENABLED.get(settings);
+        isUnifiedAgentApiEnabled = ML_COMMONS_UNIFIED_AGENT_API_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
@@ -98,7 +98,7 @@ public class MLFeatureEnabledSetting {
             .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_SIMPLIFIED_AGENT_REGISTRATION_ENABLED, it -> isSimplifiedAgentRegistrationEnabled = it);
+            .addSettingsUpdateConsumer(ML_COMMONS_UNIFIED_AGENT_API_ENABLED, it -> isUnifiedAgentApiEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
         clusterService
             .getClusterSettings()
@@ -147,11 +147,11 @@ public class MLFeatureEnabledSetting {
     }
 
     /**
-     * Whether simplified agent registration is enabled. If disabled, APIs in ml-commons will block agent registration with model creation.
-     * @return whether simplified agent registration is enabled.
+     * Whether unified agent API is enabled. If disabled, APIs in ml-commons will block agent registration with model creation and unified execution interface.
+     * @return whether unified agent API is enabled.
      */
-    public boolean isSimplifiedAgentRegistrationEnabled() {
-        return isSimplifiedAgentRegistrationEnabled;
+    public boolean isUnifiedAgentApiEnabled() {
+        return isUnifiedAgentApiEnabled;
     }
 
     /**

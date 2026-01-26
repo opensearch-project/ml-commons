@@ -244,19 +244,19 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     public void testPrepareRequestAgentWithStandardizedInput_disabled() {
         RestRequest request = getExecuteAgentWithStandardizedInputRestRequest();
 
-        when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(false);
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
             () -> restMLExecuteAction.handleRequest(request, channel, client)
         );
         assertTrue(exception.getMessage().contains("Standardized input cannot be used"));
-        assertTrue(exception.getMessage().contains("simplified agent registration"));
+        assertTrue(exception.getMessage().contains("unified agent API"));
     }
 
     public void testPrepareRequestAgentWithStandardizedInput_enabled() throws Exception {
         RestRequest request = getExecuteAgentWithStandardizedInputRestRequest();
 
-        when(mlFeatureEnabledSetting.isSimplifiedAgentRegistrationEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(true);
         restMLExecuteAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);

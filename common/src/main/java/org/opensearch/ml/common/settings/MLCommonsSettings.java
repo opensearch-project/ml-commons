@@ -329,14 +329,9 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agent_framework_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    // This setting is to enable/disable simplified agent registration (agent registration with model creation)
-    public static final Setting<Boolean> ML_COMMONS_SIMPLIFIED_AGENT_REGISTRATION_ENABLED = Setting
-        .boolSetting(
-            ML_PLUGIN_SETTING_PREFIX + "simplified_agent_registration_enabled",
-            false,
-            Setting.Property.NodeScope,
-            Setting.Property.Dynamic
-        );
+    // This setting is to enable/disable unified agent API (agent registration with model creation and standardized execution interface)
+    public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
         .boolSetting(
