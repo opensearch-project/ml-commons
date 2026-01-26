@@ -275,9 +275,9 @@ public interface RemoteConnectorExecutor {
                 getLogger().error("guardrails triggered for user input");
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
-            if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
-                invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
-            } else if (parameters.containsKey("stream")) {
+            // Check for streaming first as invokeRemoteServiceWithRetry does not stream
+            // TODO: support streaming with retry policy
+            if (parameters.containsKey("stream")) {
                 String memoryId = parameters.get("memory_id");
                 String parentInteractionId = parameters.get("parent_interaction_id");
                 boolean isAgentRequest = parameters.get("agent_type") != null;
@@ -294,6 +294,8 @@ public interface RemoteConnectorExecutor {
                     parentInteractionId
                 );
                 invokeRemoteServiceStream(action, mlInput, parameters, payload, executionContext, streamListener);
+            } else if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
+                invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
             } else {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }

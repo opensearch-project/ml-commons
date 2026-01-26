@@ -1151,7 +1151,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), MLAgentType.from(mlAgent.getType()));
             // set question to questionText for memory
             parameters.put(QUESTION, question);
-            remoteDataSet.getParameters().putAll(parameters);
+            }
+            
+            // Merge new parameters into existing parameters, preserving existing values like "stream"
+            for (Map.Entry<String, String> entry : parameters.entrySet()) {
+                remoteDataSet.getParameters().putIfAbsent(entry.getKey(), entry.getValue());
+            }
         } catch (Exception e) {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
             throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
