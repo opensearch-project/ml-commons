@@ -123,7 +123,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
-
+    private static final String DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant.";
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
 
@@ -203,8 +203,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
+        // Check if this is a fresh conversation (memory was just created, not provided by user)
+        boolean isFreshConversation = "true".equals(params.getOrDefault("fresh_memory", "false"));
+
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+            // Skip memory fetch for fresh conversations to avoid race condition with newly stored messages
+            if (isFreshConversation) {
+                log.info("Fresh conversation detected (memory just created), skipping memory fetch");
+                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                return;
+            }
+
             // TODO: call runAgent directly if messageHistoryLimit == 0
             memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
@@ -925,6 +935,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.putIfAbsent(PROMPT_SUFFIX, PromptTemplate.PROMPT_TEMPLATE_SUFFIX);
         tmpParameters.putIfAbsent(RESPONSE_FORMAT_INSTRUCTION, PromptTemplate.PROMPT_FORMAT_INSTRUCTION);
         tmpParameters.putIfAbsent(TOOL_RESPONSE, PromptTemplate.PROMPT_TEMPLATE_TOOL_RESPONSE);
+
+        // Set default system prompt only if none exists
+        if (!tmpParameters.containsKey(SYSTEM_PROMPT_FIELD)) {
+            String systemPrompt = DEFAULT_SYSTEM_PROMPT;
+            // If datetime injection was enabled, include it in the default system prompt
+            if (injectDate) {
+                String dateFormat = tmpParameters.get(DATETIME_FORMAT_FIELD);
+                String currentDateTime = getCurrentDateTime(dateFormat);
+                systemPrompt = systemPrompt + "\n\n" + currentDateTime;
+            }
+            tmpParameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
+        }
+
         return tmpParameters;
     }
 

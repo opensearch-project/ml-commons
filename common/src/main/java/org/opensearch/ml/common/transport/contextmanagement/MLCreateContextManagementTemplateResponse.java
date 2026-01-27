@@ -22,7 +22,7 @@ import lombok.Getter;
 
 @Getter
 public class MLCreateContextManagementTemplateResponse extends ActionResponse implements ToXContentObject {
-    public static final String TEMPLATE_NAME_FIELD = "template_name";
+    public static final String TEMPLATE_NAME_FIELD = "context_management_name";
     public static final String STATUS_FIELD = "status";
 
     private String templateName;

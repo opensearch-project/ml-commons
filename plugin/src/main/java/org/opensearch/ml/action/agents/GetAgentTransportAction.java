@@ -128,6 +128,8 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                                                 )
                                             );
                                     } else {
+                                        // Remove credentials before returning to user
+                                        mlAgent.removeCredential();
                                         actionListener.onResponse(MLAgentGetResponse.builder().mlAgent(mlAgent).build());
                                     }
                                 }
