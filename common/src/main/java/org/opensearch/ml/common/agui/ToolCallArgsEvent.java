@@ -28,7 +28,7 @@ public class ToolCallArgsEvent extends BaseEvent {
     public ToolCallArgsEvent(String toolCallId, String delta) {
         super(TYPE, System.currentTimeMillis(), null);
         this.toolCallId = toolCallId;
-        this.delta = delta;
+        this.delta = delta != null ? delta : "";
     }
 
     public ToolCallArgsEvent(StreamInput input) throws IOException {

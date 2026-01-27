@@ -69,6 +69,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
@@ -138,6 +139,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String AGENT_TYPE_PARAM = "agent_type";
 
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
@@ -1069,5 +1071,25 @@ public class AgentUtils {
         }
 
         return wrappedTools;
+    }
+
+    /**
+     * Checks if the agent type in the given parameters is AG_UI.
+     *
+     * @param parameters The parameters map containing agent type information
+     * @return true if the agent type is AG_UI, false otherwise
+     */
+    public static boolean isAGUIAgent(Map<String, String> parameters) {
+        if (parameters == null || !parameters.containsKey(AGENT_TYPE_PARAM)) {
+            return false;
+        }
+
+        try {
+            String agentTypeValue = parameters.get(AGENT_TYPE_PARAM);
+            MLAgentType agentType = MLAgentType.from(agentTypeValue);
+            return agentType == MLAgentType.AG_UI;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }

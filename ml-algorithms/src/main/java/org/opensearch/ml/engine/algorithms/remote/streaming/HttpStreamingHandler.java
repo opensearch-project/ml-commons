@@ -36,6 +36,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 
 import com.jayway.jsonpath.JsonPath;
@@ -139,7 +140,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             this.parameters = parameters;
             this.isStreamClosed = new AtomicBoolean(false);
 
-            this.isAGUIAgent = parameters != null && (parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui"));
+            this.isAGUIAgent = AgentUtils.isAGUIAgent(parameters);
 
             if (isAGUIAgent) {
                 log.debug("HttpStreamingHandler: Detected AG-UI agent");
@@ -234,7 +235,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             if (!agentExecutionInProgress) {
                 String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
                 boolean textMessageStarted = (isAGUIAgent && parameters != null)
-                    && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+                    && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
 
                 if (isAGUIAgent && textMessageStarted) {
                     // End any remaining text message
@@ -258,7 +259,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         private void processStreamChunk(Map<String, Object> dataMap) {
             String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
             boolean textMessageStarted = (isAGUIAgent && parameters != null)
-                && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+                && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
 
             String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
             if ("stop".equals(finishReason)) {
@@ -360,6 +361,10 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 streamActionListener.onResponse(new MLTaskResponse(output));
             }
 
+            // Reset state
+            accumulatedToolCallId = null;
+            accumulatedToolName = null;
+            accumulatedArguments = "";
             functionCallInProgress = false;
         }
 
@@ -411,6 +416,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
                     if (func.containsKey("arguments")) {
                         String argsDelta = (String) func.get("arguments");
+                        accumulatedArguments += argsDelta;
                         BaseEvent argsEvent = new ToolCallArgsEvent(accumulatedToolCallId, argsDelta);
                         sendAGUIEvent(argsEvent, false, streamActionListener);
                     }

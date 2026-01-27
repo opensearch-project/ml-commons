@@ -25,13 +25,21 @@ import javax.naming.AuthenticationException;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.ml.common.agui.*;
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.TextMessageContentEvent;
+import org.opensearch.ml.common.agui.TextMessageEndEvent;
+import org.opensearch.ml.common.agui.TextMessageStartEvent;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
+import org.opensearch.ml.common.agui.ToolCallEndEvent;
+import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorThrottlingException;
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -94,7 +102,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         this.connector = connector;
         this.parameters = parameters;
 
-        this.isAGUIAgent = parameters != null && (parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui"));
+        this.isAGUIAgent = AgentUtils.isAGUIAgent(parameters);
 
         if (isAGUIAgent) {
             log.debug("BedrockStreamingHandler: Detected AG-UI agent");
@@ -248,7 +256,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         AtomicReference<StreamState> currentState
     ) {
         String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
-        boolean textMessageStarted = (isAGUIAgent && parameters != null) && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+        boolean textMessageStarted = (isAGUIAgent && parameters != null)
+            && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
 
         switch (currentState.get()) {
             case STREAMING_CONTENT:
@@ -299,7 +308,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         String runId = parameters.get(AGUI_PARAM_RUN_ID);
                         BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
                         sendAGUIEvent(runFinishedEvent, true, listener);
-                        log.debug("RestMLExecuteStreamAction: Added RUN_FINISHED event - ReAct loop completed");
+                        log.debug("BedrockStreamingHandler: Added RUN_FINISHED event - ReAct loop completed");
                     }
 
                     currentState.set(StreamState.COMPLETED);

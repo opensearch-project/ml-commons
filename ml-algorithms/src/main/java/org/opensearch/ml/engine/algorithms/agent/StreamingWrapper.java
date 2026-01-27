@@ -132,7 +132,7 @@ public class StreamingWrapper {
 
     public void sendBackendToolResult(String toolCallId, String toolResult, String sessionId, String parentInteractionId) {
         try {
-            BaseEvent toolCallResultEvent = new ToolCallResultEvent("msg_" + System.currentTimeMillis(), toolCallId, toolResult);
+            BaseEvent toolCallResultEvent = new ToolCallResultEvent("msg_" + System.nanoTime(), toolCallId, toolResult);
             MLTaskResponse toolChunk = createStreamChunk(toolCallResultEvent.toJsonString(), sessionId, parentInteractionId, false);
             channel.sendResponseBatch(toolChunk);
         } catch (Exception e) {
@@ -142,20 +142,33 @@ public class StreamingWrapper {
     }
 
     public void sendRunFinishedAndCloseStream(String sessionId, String parentInteractionId) {
+        try {
+            String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+            String runId = parameters.get(AGUI_PARAM_RUN_ID);
 
-        String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-        String runId = parameters.get(AGUI_PARAM_RUN_ID);
+            // Ensure non-null values to avoid NPE in RunFinishedEvent.writeTo()
+            if (threadId == null) {
+                log.warn("AG-UI threadId is null, using generated value. This may cause frontend errors.");
+                threadId = "thread_" + System.nanoTime();
+            }
+            if (runId == null) {
+                log.warn("AG-UI runId is null, using generated value. This may cause frontend errors.");
+                runId = "run_" + System.nanoTime();
+            }
 
-        BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-        List<ModelTensor> modelTensors = new ArrayList<>();
-        Map<String, Object> dataMap = Map.of("content", runFinishedEvent.toJsonString(), "is_last", true);
+            BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+            List<ModelTensor> modelTensors = new ArrayList<>();
+            Map<String, Object> dataMap = Map.of("content", runFinishedEvent.toJsonString(), "is_last", true);
 
-        modelTensors.add(ModelTensor.builder().name("response").dataAsMap(dataMap).build());
-        ModelTensorOutput output = ModelTensorOutput
-            .builder()
-            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(modelTensors).build()))
-            .build();
-        channel.sendResponseBatch(new MLTaskResponse(output));
+            modelTensors.add(ModelTensor.builder().name("response").dataAsMap(dataMap).build());
+            ModelTensorOutput output = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(modelTensors).build()))
+                .build();
+            channel.sendResponseBatch(new MLTaskResponse(output));
+        } catch (Exception e) {
+            log.error("Failed to send run finished event and close stream", e);
+        }
     }
 
     private MLTaskResponse createStreamChunk(String toolOutput, String sessionId, String parentInteractionId, boolean isLast) {

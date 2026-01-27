@@ -324,8 +324,8 @@ testClusters.integTest {
         def transportPluginDir = file("${opensearchCore}/plugins/transport-reactor-netty4/build/distributions")
         def arrowPluginDir = file("${opensearchCore}/plugins/arrow-flight-rpc/build/distributions")
 
-        def transportPlugin = transportPluginDir.exists() ? transportPluginDir.listFiles()?.find { it.name.endsWith('.zip') } : null
-        def arrowPlugin = arrowPluginDir.exists() ? arrowPluginDir.listFiles()?.find { it.name.endsWith('.zip') } : null
+        def transportPlugin = transportPluginDir.exists() ? transportPluginDir.listFiles()?.find { it.name.endsWith('.zip') && it.name.contains(opensearchVersion) } : null
+        def arrowPlugin = arrowPluginDir.exists() ? arrowPluginDir.listFiles()?.find { it.name.endsWith('.zip') && it.name.contains(opensearchVersion) } : null
 
         if (!transportPlugin) {
             throw new GradleException("transport-reactor-netty4 plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:transport-reactor-netty4:assemble")

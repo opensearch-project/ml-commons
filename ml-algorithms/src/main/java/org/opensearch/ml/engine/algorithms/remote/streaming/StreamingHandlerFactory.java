@@ -10,6 +10,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.lang.reflect.Constructor;
+import java.util.Locale;
 import java.util.Map;
 
 import org.opensearch.ml.common.connector.Connector;
@@ -36,7 +37,7 @@ public class StreamingHandlerFactory {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
-        switch (llmInterface.toLowerCase()) {
+        switch (llmInterface.toLowerCase(Locale.ROOT)) {
             case LLM_INTERFACE_BEDROCK_CONVERSE:
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return createBedrockHandler(httpClient, connector, parameters);

@@ -1088,7 +1088,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     private boolean isAGUIAgent(Map<String, String> parameters) {
-        return parameters != null && parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui");
+        return AgentUtils.isAGUIAgent(parameters);
     }
 
     /**
