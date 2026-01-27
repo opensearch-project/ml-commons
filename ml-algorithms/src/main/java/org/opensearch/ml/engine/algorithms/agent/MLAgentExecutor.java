@@ -1116,8 +1116,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * by the existing agent execution logic.
      */
     void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
-        // old style agent registration
-        if (mlAgent.getModel() == null) {
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+
+        // old style agent registration, except AG_UI agent
+        if (mlAgent.getModel() == null && agentType != MLAgentType.AG_UI) {
             return;
         }
 
@@ -1139,7 +1141,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         try {
             // Extract the question text for prompt template and memory storage
             String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
-            ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
 
             // create input dataset if it doesn't exist
             if (agentMLInput.getInputDataset() == null) {
@@ -1149,24 +1150,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             // Set parameters to processed params
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
 
-            MLAgentType agentType = MLAgentType.from(mlAgent.getType());
-            Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
-
-            // For AG_UI, include context in the question
+            // For AG_UI agents, prepend context to question if available
+            String questionToSet = question;
             if (agentType == MLAgentType.AG_UI) {
                 String context = remoteDataSet.getParameters().get("context");
-                String questionWithContext = context != null && !context.isEmpty()
-                    ? "Context: " + context + "\nQuestion: " + question
-                    : question;
-                parameters.put(QUESTION, questionWithContext);
-            } else {
-                // set question to questionText for memory
-                parameters.put(QUESTION, question);
+                if (context != null && !context.isEmpty()) {
+                    questionToSet = "Context: " + context + "\nQuestion: " + question;
+                }
             }
 
-            // Merge new parameters into existing parameters, preserving existing values like "stream"
-            for (Map.Entry<String, String> entry : parameters.entrySet()) {
-                remoteDataSet.getParameters().putIfAbsent(entry.getKey(), entry.getValue());
+            // For agent with revamped interface, use ModelProvider to map the entire AgentInput
+            if (mlAgent.getModel() != null) {
+                ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+                Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
+
+                parameters.put(QUESTION, questionToSet);
+            } else {
+                // For old-style AG_UI agents without model field
+                remoteDataSet.getParameters().putIfAbsent(QUESTION, questionToSet);
             }
         } catch (Exception e) {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
