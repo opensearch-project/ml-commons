@@ -60,8 +60,11 @@ public class AGUIInputConverter {
             // Check required fields exist
             if (!jsonObj.has(AGUI_FIELD_THREAD_ID)
                 || !jsonObj.has(AGUI_FIELD_RUN_ID)
+                || !jsonObj.has(AGUI_FIELD_STATE)
                 || !jsonObj.has(AGUI_FIELD_MESSAGES)
-                || !jsonObj.has(AGUI_FIELD_TOOLS)) {
+                || !jsonObj.has(AGUI_FIELD_TOOLS)
+                || !jsonObj.has(AGUI_FIELD_CONTEXT)
+                || !jsonObj.has(AGUI_FIELD_FORWARDED_PROPS)) {
                 return false;
             }
 
@@ -74,6 +77,12 @@ public class AGUIInputConverter {
             // Validate tools is an array
             JsonElement tools = jsonObj.get(AGUI_FIELD_TOOLS);
             if (!tools.isJsonArray()) {
+                return false;
+            }
+
+            // Validate context is an array
+            JsonElement context = jsonObj.get(AGUI_FIELD_CONTEXT);
+            if (!context.isJsonArray()) {
                 return false;
             }
 

@@ -1165,6 +1165,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
 
                 parameters.put(QUESTION, questionToSet);
+
+                remoteDataSet.getParameters().putAll(parameters);
             } else {
                 // For old-style AG_UI agents without model field
                 remoteDataSet.getParameters().putIfAbsent(QUESTION, questionToSet);

@@ -8,341 +8,723 @@ package org.opensearch.ml.common.agui;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_FORWARDED_PROPS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_STATE;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
 
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 public class AGUIInputConverterTest {
 
+    private static final Gson gson = new Gson();
+
     @Test
     public void testIsAGUIInput_ValidInput() {
-        String validInput = createValidAGUIInput();
-        assertTrue(AGUIInputConverter.isAGUIInput(validInput));
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
+
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertTrue(result);
     }
 
     @Test
     public void testIsAGUIInput_MissingThreadId() {
-        JsonObject input = new JsonObject();
-        input.addProperty("runId", "run-123");
-        input.add("messages", new JsonArray());
-        input.add("tools", new JsonArray());
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
 
-        assertFalse(AGUIInputConverter.isAGUIInput(input.toString()));
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
     }
 
     @Test
     public void testIsAGUIInput_MissingRunId() {
-        JsonObject input = new JsonObject();
-        input.addProperty("threadId", "thread-123");
-        input.add("messages", new JsonArray());
-        input.add("tools", new JsonArray());
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
 
-        assertFalse(AGUIInputConverter.isAGUIInput(input.toString()));
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
+    }
+
+    @Test
+    public void testIsAGUIInput_MissingState() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
+
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
     }
 
     @Test
     public void testIsAGUIInput_MissingMessages() {
-        JsonObject input = new JsonObject();
-        input.addProperty("threadId", "thread-123");
-        input.addProperty("runId", "run-123");
-        input.add("tools", new JsonArray());
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
 
-        assertFalse(AGUIInputConverter.isAGUIInput(input.toString()));
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
     }
 
     @Test
     public void testIsAGUIInput_MissingTools() {
-        JsonObject input = new JsonObject();
-        input.addProperty("threadId", "thread-123");
-        input.addProperty("runId", "run-123");
-        input.add("messages", new JsonArray());
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
 
-        assertFalse(AGUIInputConverter.isAGUIInput(input.toString()));
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
+    }
+
+    @Test
+    public void testIsAGUIInput_MissingContext() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
+
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
+    }
+
+    @Test
+    public void testIsAGUIInput_MissingForwardedProps() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
     }
 
     @Test
     public void testIsAGUIInput_MessagesNotArray() {
-        JsonObject input = new JsonObject();
-        input.addProperty("threadId", "thread-123");
-        input.addProperty("runId", "run-123");
-        input.addProperty("messages", "not an array");
-        input.add("tools", new JsonArray());
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.addProperty("messages", "not an array");
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
 
-        assertFalse(AGUIInputConverter.isAGUIInput(input.toString()));
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
     }
 
     @Test
     public void testIsAGUIInput_ToolsNotArray() {
-        JsonObject input = new JsonObject();
-        input.addProperty("threadId", "thread-123");
-        input.addProperty("runId", "run-123");
-        input.add("messages", new JsonArray());
-        input.addProperty("tools", "not an array");
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.addProperty("tools", "not an array");
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
 
-        assertFalse(AGUIInputConverter.isAGUIInput(input.toString()));
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
+    }
+
+    @Test
+    public void testIsAGUIInput_ContextNotArray() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.addProperty("context", "not an array");
+        aguiInput.add("forwardedProps", new JsonObject());
+
+        boolean result = AGUIInputConverter.isAGUIInput(gson.toJson(aguiInput));
+
+        assertFalse(result);
     }
 
     @Test
     public void testIsAGUIInput_InvalidJson() {
-        String invalidJson = "{ invalid json }";
-        assertFalse(AGUIInputConverter.isAGUIInput(invalidJson));
+        boolean result = AGUIInputConverter.isAGUIInput("invalid json");
+
+        assertFalse(result);
     }
 
     @Test
-    public void testConvertFromAGUIInput_BasicFields() {
-        String aguiInput = createValidAGUIInput();
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "agent-123", "tenant-456", false);
+    public void testConvertFromAGUIInput_BasicConversion() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", "tenant-id", false);
 
         assertNotNull(result);
-        assertEquals("agent-123", result.getAgentId());
-        assertEquals("tenant-456", result.getTenantId());
-        assertEquals(FunctionName.AGENT, result.getAlgorithm());
+        assertEquals("agent-id", result.getAgentId());
+        assertEquals("tenant-id", result.getTenantId());
+        assertEquals(FunctionName.AGENT, result.getFunctionName());
         assertFalse(result.getIsAsync());
 
-        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        assertNotNull(dataSet);
-        Map<String, String> parameters = dataSet.getParameters();
-
-        assertEquals("thread-123", parameters.get(AGUI_PARAM_THREAD_ID));
-        assertEquals("run-123", parameters.get(AGUI_PARAM_RUN_ID));
-        assertNotNull(parameters.get(AGUI_PARAM_MESSAGES));
-        assertNotNull(parameters.get(AGUI_PARAM_TOOLS));
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) result.getInputDataset();
+        assertNotNull(dataset);
+        Map<String, String> params = dataset.getParameters();
+        assertEquals("thread-123", params.get(AGUI_PARAM_THREAD_ID));
+        assertEquals("run-456", params.get(AGUI_PARAM_RUN_ID));
     }
 
     @Test
     public void testConvertFromAGUIInput_WithState() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+
         JsonObject state = new JsonObject();
-        state.addProperty("key1", "value1");
+        state.addProperty("key", "value");
         aguiInput.add("state", state);
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", true);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, true);
 
         assertNotNull(result);
-        assertTrue(result.getIsAsync());
-        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        Map<String, String> parameters = dataSet.getParameters();
-
-        assertNotNull(parameters.get(AGUI_PARAM_STATE));
-        assertTrue(parameters.get(AGUI_PARAM_STATE).contains("key1"));
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) result.getInputDataset();
+        Map<String, String> params = dataset.getParameters();
+        assertTrue(params.containsKey(AGUI_PARAM_STATE));
+        assertEquals("{\"key\":\"value\"}", params.get(AGUI_PARAM_STATE));
     }
 
     @Test
     public void testConvertFromAGUIInput_WithContext() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
+
         JsonArray context = new JsonArray();
         JsonObject contextItem = new JsonObject();
-        contextItem.addProperty("description", "Test context");
-        contextItem.addProperty("value", "Test value");
+        contextItem.addProperty("description", "Location");
+        contextItem.addProperty("value", "SF");
         context.add(contextItem);
         aguiInput.add("context", context);
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        Map<String, String> parameters = dataSet.getParameters();
-
-        assertNotNull(parameters.get(AGUI_PARAM_CONTEXT));
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) result.getInputDataset();
+        Map<String, String> params = dataset.getParameters();
+        assertTrue(params.containsKey(AGUI_PARAM_CONTEXT));
     }
 
     @Test
-    public void testConvertFromAGUIInput_WithForwardedProps() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
-        JsonObject forwardedProps = new JsonObject();
-        forwardedProps.addProperty("prop1", "value1");
-        aguiInput.add("forwardedProps", forwardedProps);
+    public void testConvertFromAGUIInput_WithMessages_CreatesAgentInput() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Hello");
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
 
-        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        Map<String, String> parameters = dataSet.getParameters();
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        assertNotNull(parameters.get(AGUI_PARAM_FORWARDED_PROPS));
+        assertNotNull(result.getAgentInput());
+        assertTrue(result.getAgentInput().getInput() instanceof List);
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        assertNotNull(convertedMessages);
+        assertEquals(1, convertedMessages.size());
+        assertEquals("user", convertedMessages.get(0).getRole());
     }
 
     @Test
-    public void testConvertFromAGUIInput_UserMessage() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
+    public void testConvertFromAGUIInput_SkipsToolMessages() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
         JsonArray messages = new JsonArray();
-        JsonObject userMessage = new JsonObject();
-        userMessage.addProperty("role", "user");
-        userMessage.addProperty("content", "What is the weather?");
-        messages.add(userMessage);
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Question");
+        messages.add(userMsg);
+
+        JsonObject toolMsg = new JsonObject();
+        toolMsg.addProperty("role", "tool");
+        toolMsg.addProperty("content", "Tool result");
+        toolMsg.addProperty("toolCallId", "call-123");
+        messages.add(toolMsg);
+
+        JsonObject assistantMsg = new JsonObject();
+        assistantMsg.addProperty("role", "assistant");
+        assistantMsg.addProperty("content", "Answer");
+        messages.add(assistantMsg);
+
         aguiInput.add("messages", messages);
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        Map<String, String> parameters = dataSet.getParameters();
-
-        assertEquals("What is the weather?", parameters.get("question"));
-        assertNull(parameters.get(AGUI_PARAM_TOOL_CALL_RESULTS));
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        assertEquals(2, convertedMessages.size()); // user and assistant, tool skipped
+        assertEquals("user", convertedMessages.get(0).getRole());
+        assertEquals("assistant", convertedMessages.get(1).getRole());
     }
 
     @Test
-    public void testConvertFromAGUIInput_ToolCallResult() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
+    public void testConvertFromAGUIInput_SkipsAssistantWithOnlyToolCalls() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
         JsonArray messages = new JsonArray();
 
-        // Add assistant message with tool call
-        JsonObject assistantMessage = new JsonObject();
-        assistantMessage.addProperty("role", "assistant");
-        assistantMessage.add("toolCalls", new JsonArray());
-        messages.add(assistantMessage);
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Question");
+        messages.add(userMsg);
 
-        // Add tool result message
-        JsonObject toolResultMessage = new JsonObject();
-        toolResultMessage.addProperty("role", "user");
-        toolResultMessage.addProperty("content", "Tool result content");
-        toolResultMessage.addProperty("toolCallId", "call-123");
-        messages.add(toolResultMessage);
+        // Assistant with toolCalls but no content
+        JsonObject assistantWithToolCalls = new JsonObject();
+        assistantWithToolCalls.addProperty("role", "assistant");
+        assistantWithToolCalls.add("toolCalls", new JsonArray());
+        messages.add(assistantWithToolCalls);
+
+        // Final assistant with content
+        JsonObject assistantWithContent = new JsonObject();
+        assistantWithContent.addProperty("role", "assistant");
+        assistantWithContent.addProperty("content", "Final answer");
+        messages.add(assistantWithContent);
 
         aguiInput.add("messages", messages);
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        Map<String, String> parameters = dataSet.getParameters();
-
-        assertNotNull(parameters.get(AGUI_PARAM_TOOL_CALL_RESULTS));
-        assertTrue(parameters.get(AGUI_PARAM_TOOL_CALL_RESULTS).contains("call-123"));
-        assertTrue(parameters.get(AGUI_PARAM_TOOL_CALL_RESULTS).contains("Tool result content"));
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        assertEquals(2, convertedMessages.size()); // user and final assistant
+        assertEquals("user", convertedMessages.get(0).getRole());
+        assertEquals("assistant", convertedMessages.get(1).getRole());
+        assertEquals("Final answer", convertedMessages.get(1).getContent().get(0).getText());
     }
 
     @Test
-    public void testConvertFromAGUIInput_MultipleUserMessages() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
+    public void testConvertFromAGUIInput_TextContent() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
         JsonArray messages = new JsonArray();
-
-        // Add first user message
-        JsonObject userMessage1 = new JsonObject();
-        userMessage1.addProperty("role", "user");
-        userMessage1.addProperty("content", "First question");
-        messages.add(userMessage1);
-
-        // Add assistant message
-        JsonObject assistantMessage = new JsonObject();
-        assistantMessage.addProperty("role", "assistant");
-        assistantMessage.addProperty("content", "First answer");
-        messages.add(assistantMessage);
-
-        // Add second user message (should be used as question)
-        JsonObject userMessage2 = new JsonObject();
-        userMessage2.addProperty("role", "user");
-        userMessage2.addProperty("content", "Second question");
-        messages.add(userMessage2);
-
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Simple text");
+        messages.add(userMsg);
         aguiInput.add("messages", messages);
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        Map<String, String> parameters = dataSet.getParameters();
-
-        // Should extract the last user message as the question
-        assertEquals("Second question", parameters.get("question"));
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        ContentBlock content = convertedMessages.get(0).getContent().get(0);
+        assertEquals(ContentType.TEXT, content.getType());
+        assertEquals("Simple text", content.getText());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testConvertFromAGUIInput_NoUserMessage() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
+    @Test
+    public void testConvertFromAGUIInput_MultimodalContent() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
         JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
 
-        // Add only assistant message
-        JsonObject assistantMessage = new JsonObject();
-        assistantMessage.addProperty("role", "assistant");
-        assistantMessage.addProperty("content", "Assistant response");
-        messages.add(assistantMessage);
+        JsonArray contentArray = new JsonArray();
 
+        // Text content
+        JsonObject textContent = new JsonObject();
+        textContent.addProperty("type", "text");
+        textContent.addProperty("text", "Describe this image");
+        contentArray.add(textContent);
+
+        // Image content
+        JsonObject imageContent = new JsonObject();
+        imageContent.addProperty("type", "binary");
+        imageContent.addProperty("mimeType", "image/png");
+        imageContent.addProperty("data", "base64encodeddata");
+        contentArray.add(imageContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
         aguiInput.add("messages", messages);
 
-        AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        List<ContentBlock> content = convertedMessages.get(0).getContent();
+        assertEquals(2, content.size());
+
+        assertEquals(ContentType.TEXT, content.get(0).getType());
+        assertEquals("Describe this image", content.get(0).getText());
+
+        assertEquals(ContentType.IMAGE, content.get(1).getType());
+        assertNotNull(content.get(1).getImage());
+        assertEquals("png", content.get(1).getImage().getFormat());
+        assertEquals("base64encodeddata", content.get(1).getImage().getData());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testConvertFromAGUIInput_InvalidMessages() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
-        aguiInput.addProperty("messages", "not a valid json array");
+    @Test
+    public void testExtractToolResults_EmptyMessages() {
+        JsonArray messages = new JsonArray();
 
-        AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
+        List<Map<String, String>> result = AGUIInputConverter.extractToolResults(messages);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testExtractToolResults_NoToolMessages() {
+        JsonArray messages = new JsonArray();
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Hello");
+        messages.add(userMsg);
+
+        JsonObject assistantMsg = new JsonObject();
+        assistantMsg.addProperty("role", "assistant");
+        assistantMsg.addProperty("content", "Hi there");
+        messages.add(assistantMsg);
+
+        List<Map<String, String>> result = AGUIInputConverter.extractToolResults(messages);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testExtractToolResults_SingleToolResult() {
+        JsonArray messages = new JsonArray();
+
+        JsonObject toolMsg = new JsonObject();
+        toolMsg.addProperty("role", "tool");
+        toolMsg.addProperty("content", "Weather: 72F");
+        toolMsg.addProperty("toolCallId", "call-123");
+        messages.add(toolMsg);
+
+        List<Map<String, String>> result = AGUIInputConverter.extractToolResults(messages);
+
+        assertEquals(1, result.size());
+        assertEquals("call-123", result.get(0).get("tool_call_id"));
+        assertEquals("Weather: 72F", result.get(0).get("content"));
+    }
+
+    @Test
+    public void testExtractToolResults_MultipleToolResults() {
+        JsonArray messages = new JsonArray();
+
+        JsonObject toolMsg1 = new JsonObject();
+        toolMsg1.addProperty("role", "tool");
+        toolMsg1.addProperty("content", "Result 1");
+        toolMsg1.addProperty("toolCallId", "call-1");
+        messages.add(toolMsg1);
+
+        JsonObject toolMsg2 = new JsonObject();
+        toolMsg2.addProperty("role", "tool");
+        toolMsg2.addProperty("content", "Result 2");
+        toolMsg2.addProperty("toolCallId", "call-2");
+        messages.add(toolMsg2);
+
+        List<Map<String, String>> result = AGUIInputConverter.extractToolResults(messages);
+
+        assertEquals(2, result.size());
+        assertEquals("call-1", result.get(0).get("tool_call_id"));
+        assertEquals("Result 1", result.get(0).get("content"));
+        assertEquals("call-2", result.get(1).get("tool_call_id"));
+        assertEquals("Result 2", result.get(1).get("content"));
+    }
+
+    @Test
+    public void testExtractToolCalls_EmptyMessages() {
+        JsonArray messages = new JsonArray();
+
+        List<String> result = AGUIInputConverter.extractToolCalls(messages);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testExtractToolCalls_NoToolCalls() {
+        JsonArray messages = new JsonArray();
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Hello");
+        messages.add(userMsg);
+
+        JsonObject assistantMsg = new JsonObject();
+        assistantMsg.addProperty("role", "assistant");
+        assistantMsg.addProperty("content", "Hi there");
+        messages.add(assistantMsg);
+
+        List<String> result = AGUIInputConverter.extractToolCalls(messages);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testExtractToolCalls_SingleAssistantWithToolCalls() {
+        JsonArray messages = new JsonArray();
+
+        JsonObject assistantMsg = new JsonObject();
+        assistantMsg.addProperty("role", "assistant");
+
+        JsonArray toolCalls = new JsonArray();
+        JsonObject toolCall = new JsonObject();
+        toolCall.addProperty("id", "call-123");
+        toolCall.addProperty("type", "function");
+
+        JsonObject function = new JsonObject();
+        function.addProperty("name", "get_weather");
+        function.addProperty("arguments", "{\"location\":\"NYC\"}");
+        toolCall.add("function", function);
+
+        toolCalls.add(toolCall);
+        assistantMsg.add("toolCalls", toolCalls);
+        messages.add(assistantMsg);
+
+        List<String> result = AGUIInputConverter.extractToolCalls(messages);
+
+        assertEquals(1, result.size());
+        assertTrue(result.get(0).contains("call-123"));
+        assertTrue(result.get(0).contains("get_weather"));
+    }
+
+    @Test
+    public void testExtractToolCalls_MultipleAssistantsWithToolCalls() {
+        JsonArray messages = new JsonArray();
+
+        // First assistant with tool calls
+        JsonObject assistantMsg1 = new JsonObject();
+        assistantMsg1.addProperty("role", "assistant");
+        JsonArray toolCalls1 = new JsonArray();
+        JsonObject toolCall1 = new JsonObject();
+        toolCall1.addProperty("id", "call-1");
+        toolCalls1.add(toolCall1);
+        assistantMsg1.add("toolCalls", toolCalls1);
+        messages.add(assistantMsg1);
+
+        // Second assistant with tool calls
+        JsonObject assistantMsg2 = new JsonObject();
+        assistantMsg2.addProperty("role", "assistant");
+        JsonArray toolCalls2 = new JsonArray();
+        JsonObject toolCall2 = new JsonObject();
+        toolCall2.addProperty("id", "call-2");
+        toolCalls2.add(toolCall2);
+        assistantMsg2.add("toolCalls", toolCalls2);
+        messages.add(assistantMsg2);
+
+        List<String> result = AGUIInputConverter.extractToolCalls(messages);
+
+        assertEquals(2, result.size());
+        assertTrue(result.get(0).contains("call-1"));
+        assertTrue(result.get(1).contains("call-2"));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testConvertFromAGUIInput_InvalidJson() {
-        String invalidJson = "{ invalid json }";
-        AGUIInputConverter.convertFromAGUIInput(invalidJson, "agent-123", "tenant-456", false);
+        AGUIInputConverter.convertFromAGUIInput("invalid json", "agent-id", null, false);
     }
 
     @Test
-    public void testConvertFromAGUIInput_EmptyMessages() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
-        JsonArray messages = new JsonArray();
-        aguiInput.add("messages", messages);
+    public void testConvertFromAGUIInput_PreservesParametersInDataset() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("messages", new JsonArray());
+        aguiInput.add("tools", new JsonArray());
 
-        try {
-            AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("No user message found"));
-        }
+        JsonObject forwardedProps = new JsonObject();
+        forwardedProps.addProperty("customParam", "customValue");
+        aguiInput.add("forwardedProps", forwardedProps);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) result.getInputDataset();
+        Map<String, String> params = dataset.getParameters();
+
+        // All fields should be preserved
+        assertTrue(params.containsKey(AGUI_PARAM_THREAD_ID));
+        assertTrue(params.containsKey(AGUI_PARAM_RUN_ID));
+        assertTrue(params.containsKey(AGUI_PARAM_MESSAGES));
+        assertTrue(params.containsKey(AGUI_PARAM_TOOLS));
     }
 
     @Test
-    public void testConvertFromAGUIInput_NullContent() {
-        JsonObject aguiInput = JsonParser.parseString(createValidAGUIInput()).getAsJsonObject();
+    public void testExtractToolResults_MissingToolCallId() {
         JsonArray messages = new JsonArray();
 
-        // Add user message with null content
-        JsonObject userMessage = new JsonObject();
-        userMessage.addProperty("role", "user");
-        userMessage.add("content", null);
-        messages.add(userMessage);
+        JsonObject toolMsg = new JsonObject();
+        toolMsg.addProperty("role", "tool");
+        toolMsg.addProperty("content", "Result");
+        // Missing toolCallId
+        messages.add(toolMsg);
 
-        aguiInput.add("messages", messages);
+        List<Map<String, String>> result = AGUIInputConverter.extractToolResults(messages);
 
-        try {
-            AGUIInputConverter.convertFromAGUIInput(aguiInput.toString(), "agent-123", "tenant-456", false);
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("No user message found"));
-        }
+        // Should skip tool message without toolCallId
+        assertTrue(result.isEmpty());
     }
 
-    // Helper method to create valid AG-UI input
-    private String createValidAGUIInput() {
-        JsonObject input = new JsonObject();
-        input.addProperty("threadId", "thread-123");
-        input.addProperty("runId", "run-123");
+    @Test
+    public void testExtractToolResults_MissingContent() {
+        JsonArray messages = new JsonArray();
+
+        JsonObject toolMsg = new JsonObject();
+        toolMsg.addProperty("role", "tool");
+        toolMsg.addProperty("toolCallId", "call-123");
+        // Missing content
+        messages.add(toolMsg);
+
+        List<Map<String, String>> result = AGUIInputConverter.extractToolResults(messages);
+
+        // Should skip tool message without content
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_ImageContent_ExtractsFormat() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
 
         JsonArray messages = new JsonArray();
-        JsonObject message = new JsonObject();
-        message.addProperty("role", "user");
-        message.addProperty("content", "Test question");
-        messages.add(message);
-        input.add("messages", messages);
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
 
-        JsonArray tools = new JsonArray();
-        JsonObject tool = new JsonObject();
-        tool.addProperty("name", "test_tool");
-        tools.add(tool);
-        input.add("tools", tools);
+        JsonArray contentArray = new JsonArray();
+        JsonObject imageContent = new JsonObject();
+        imageContent.addProperty("type", "binary");
+        imageContent.addProperty("mimeType", "image/jpeg");
+        imageContent.addProperty("data", "imagedata");
+        contentArray.add(imageContent);
 
-        return input.toString();
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        ContentBlock imageBlock = convertedMessages.get(0).getContent().get(0);
+        assertEquals(ContentType.IMAGE, imageBlock.getType());
+        assertEquals("jpeg", imageBlock.getImage().getFormat());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_NonImageBinaryContentSkipped() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+
+        JsonArray contentArray = new JsonArray();
+        JsonObject binaryContent = new JsonObject();
+        binaryContent.addProperty("type", "binary");
+        binaryContent.addProperty("mimeType", "application/pdf");
+        binaryContent.addProperty("data", "pdfdata");
+        contentArray.add(binaryContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        // Non-image binary content should be skipped
+        assertTrue(convertedMessages.get(0).getContent().isEmpty());
     }
 }

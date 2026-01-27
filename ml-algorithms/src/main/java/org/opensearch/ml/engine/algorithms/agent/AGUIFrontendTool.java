@@ -56,13 +56,7 @@ public class AGUIFrontendTool implements Tool {
     @Override
     @SuppressWarnings("unchecked")
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        log.debug("AG-UI: Frontend tool {} executed with parameters: {}", toolName, parameters);
-        String errorResult = String
-            .format(
-                "Error: Tool '%s' is a frontend tool and should be called via function calling in the final response, "
-                    + "not during ReAct execution.",
-                toolName
-            );
+        String errorResult = String.format("Error: Tool '%s' is a frontend tool and should be run in the frontend.", toolName);
         listener.onResponse((T) errorResult);
     }
 
