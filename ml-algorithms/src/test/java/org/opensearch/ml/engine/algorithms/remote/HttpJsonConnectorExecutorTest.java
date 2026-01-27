@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -17,11 +18,24 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.SKIP_SSL_VERIFICATION;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.layout.PatternLayout;
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -38,6 +52,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -46,15 +61,41 @@ import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionL
 import com.google.common.collect.ImmutableMap;
 
 public class HttpJsonConnectorExecutorTest {
+
+    private static final Logger logger = LogManager.getLogger(MLHttpClientFactory.class);
+    private static final String LOG_APPENDER_NAME = "TestLogAppender";
+    private static TestLogAppender testAppender;
+    private static LoggerConfig loggerConfig;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Mock
     private ActionListener<Tuple<Integer, ModelTensors>> actionListener;
 
+    @BeforeClass
+    public static void setUpClass() {
+        testAppender = new TestLogAppender(LOG_APPENDER_NAME);
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        loggerConfig = context.getConfiguration().getLoggerConfig(logger.getName());
+        loggerConfig.addAppender(testAppender, Level.WARN, null);
+        context.updateLoggers();
+    }
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+    }
+
+    @After
+    public void tearDown() {
+        testAppender.clear();
+    }
+
+    @AfterClass
+    public static void tearDownClass() {
+        loggerConfig.removeAppender(LOG_APPENDER_NAME);
+        testAppender.stop();
     }
 
     @Test
@@ -262,6 +303,21 @@ public class HttpJsonConnectorExecutorTest {
         executor
             .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
         verify(actionListener, never()).onFailure(any());
+
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains(
+                            "SSL certificate verification is DISABLED. This connection is vulnerable to man-in-the-middle"
+                                + " attacks. Only use this setting in trusted environments."
+                        )
+            );
+        assertTrue(isWarningLogged);
     }
 
     @Test
@@ -285,6 +341,21 @@ public class HttpJsonConnectorExecutorTest {
         executor
             .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
         verify(actionListener, never()).onFailure(any());
+
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains(
+                            "SSL certificate verification is DISABLED. This connection is vulnerable to man-in-the-middle"
+                                + " attacks. Only use this setting in trusted environments."
+                        )
+            );
+        assertFalse(isWarningLogged);
     }
 
     @Test
@@ -375,5 +446,31 @@ public class HttpJsonConnectorExecutorTest {
     private MLInput createMLInput() {
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         return MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.REMOTE).build();
+    }
+
+    /**
+     * Log appender class to check the skip ssl verification warning
+     */
+    static class TestLogAppender extends AbstractAppender {
+
+        private final List<LogEvent> logEvents = new ArrayList<>();
+
+        public TestLogAppender(String name) {
+            super(name, null, PatternLayout.createDefaultLayout(), false);
+            start();
+        }
+
+        @Override
+        public void append(LogEvent event) {
+            logEvents.add(event.toImmutable());
+        }
+
+        public List<LogEvent> getLogEvents() {
+            return logEvents;
+        }
+
+        public void clear() {
+            logEvents.clear();
+        }
     }
 }
