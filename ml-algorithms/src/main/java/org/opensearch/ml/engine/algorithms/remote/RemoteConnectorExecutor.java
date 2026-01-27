@@ -61,8 +61,14 @@ import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
+import software.amazon.awssdk.utils.SdkAutoCloseable;
 
-public interface RemoteConnectorExecutor {
+/**
+ * This class is responsible for executing the remote connector actions like prediction, it internally encapsulates a SdkAsyncHttpclient
+ * which is used to send the request to the remote model service, when the executor is being closed, we need to close the internal
+ * HttpClient as well.
+ */
+public interface RemoteConnectorExecutor extends SdkAutoCloseable {
 
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
 
