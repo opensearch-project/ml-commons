@@ -15,7 +15,9 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
+import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
@@ -78,7 +80,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(request);
+        MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(request, client);
 
         return channel -> client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, new ActionListener<>() {
             @Override
@@ -107,10 +109,11 @@ public class RestMLExecuteAction extends BaseRestHandler {
      * Creates a MLExecuteTaskRequest from a RestRequest
      *
      * @param request RestRequest
+     * @param client NodeClient
      * @return MLExecuteTaskRequest
      */
     @VisibleForTesting
-    MLExecuteTaskRequest getRequest(RestRequest request) throws IOException {
+    MLExecuteTaskRequest getRequest(RestRequest request, NodeClient client) throws IOException {
         XContentParser parser = request.contentParser();
         boolean async = isAsync(request);
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -139,6 +142,15 @@ public class RestMLExecuteAction extends BaseRestHandler {
                         + "To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
                 );
             }
+
+            // Check MCP header passthrough feature flag
+            if (hasMcpHeaders(request) && !mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()) {
+                throw new IllegalArgumentException(
+                    "MCP header passthrough is not enabled. To enable, please update the setting: "
+                        + "plugins.ml_commons.mcp_header_passthrough_enabled"
+                );
+            }
+            putMcpRequestHeaders(request, client);
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
             if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {
                 throw new IllegalStateException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE);

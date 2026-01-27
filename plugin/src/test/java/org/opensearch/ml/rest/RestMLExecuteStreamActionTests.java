@@ -371,4 +371,120 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         assertEquals(content.length(), result.length());
         assertEquals(content, result.utf8ToString());
     }
+
+    @Test
+    public void testPrepareRequestWithMcpHeadersFeatureDisabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(false);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-key"));
+        headers.put("aws-region", List.of("us-west-2"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> restAction.prepareRequest(request, client)
+        );
+        assertTrue(exception.getMessage().contains("MCP header passthrough"));
+        assertTrue(exception.getMessage().contains("plugins.ml_commons.mcp_header_passthrough_enabled"));
+    }
+
+    @Test
+    public void testPrepareRequestWithMcpHeadersFeatureEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-key"));
+        headers.put("aws-region", List.of("us-west-2"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        assertNotNull(spyAction.prepareRequest(request, client));
+        
+        // Verify headers were put into ThreadContext
+        assertEquals("test-key", client.threadPool().getThreadContext().getHeader("aws-access-key-id"));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader("aws-region"));
+    }
+
+    @Test
+    public void testPrepareRequestWithoutMcpHeaders() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        RestRequest request = getExecuteAgentStreamRestRequest();
+
+        // Should work without MCP headers when feature flag state doesn't matter
+        assertNotNull(spyAction.prepareRequest(request, client));
+    }
+
+    @Test
+    public void testPrepareRequestWithAllMcpHeaders() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-access-key"));
+        headers.put("aws-secret-access-key", List.of("test-secret-key"));
+        headers.put("aws-session-token", List.of("test-session-token"));
+        headers.put("aws-region", List.of("us-west-2"));
+        headers.put("aws-service-name", List.of("bedrock"));
+        headers.put("opensearch-url", List.of("https://localhost:9200"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        assertNotNull(spyAction.prepareRequest(request, client));
+        
+        // Verify all MCP headers were put into ThreadContext
+        assertEquals("test-access-key", client.threadPool().getThreadContext().getHeader("aws-access-key-id"));
+        assertEquals("test-secret-key", client.threadPool().getThreadContext().getHeader("aws-secret-access-key"));
+        assertEquals("test-session-token", client.threadPool().getThreadContext().getHeader("aws-session-token"));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader("aws-region"));
+        assertEquals("bedrock", client.threadPool().getThreadContext().getHeader("aws-service-name"));
+        assertEquals("https://localhost:9200", client.threadPool().getThreadContext().getHeader("opensearch-url"));
+    }
 }

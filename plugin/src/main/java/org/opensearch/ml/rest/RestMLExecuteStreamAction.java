@@ -14,7 +14,9 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THRE
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
+import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.ByteArrayOutputStream;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -131,6 +134,16 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+
+        // Check MCP header passthrough feature flag
+        if (hasMcpHeaders(request) && !mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()) {
+            throw new IllegalArgumentException(
+                "MCP header passthrough is not enabled. To enable, please update the setting: "
+                    + "plugins.ml_commons.mcp_header_passthrough_enabled"
+            );
+        }
+        putMcpRequestHeaders(request, client);
+
         if (!mlFeatureEnabledSetting.isStreamEnabled()) {
             throw new IllegalStateException(STREAM_DISABLED_ERR_MSG);
         }
@@ -146,6 +159,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         }
 
         final StreamingRestChannelConsumer consumer = (channel) -> {
+
+            Supplier<ThreadContext.StoredContext> supplier = client.threadPool().getThreadContext().newRestorableContext(true);
+
             Map<String, List<String>> headers = Map
                 .of(
                     "Content-Type",
@@ -158,7 +174,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             channel.prepareResponse(RestStatus.OK, headers);
 
             Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
-                try {
+                try (ThreadContext.StoredContext context = supplier.get()) {
+
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
 
@@ -302,7 +319,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     /**
      * Creates a MLExecuteTaskRequest from a RestRequest
      *
+     * @param agentId Agent ID
      * @param request RestRequest
+     * @param content Request content
      * @return MLExecuteTaskRequest
      */
     @VisibleForTesting

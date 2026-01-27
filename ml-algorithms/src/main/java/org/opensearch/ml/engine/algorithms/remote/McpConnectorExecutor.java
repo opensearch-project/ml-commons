@@ -50,6 +50,7 @@ import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -58,6 +59,9 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private McpConnector connector;
+    @Getter
+    @Setter
+    private Client client;
 
     public McpConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -80,6 +84,8 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                         builder.header(entry.getKey(), entry.getValue());
                     }
                 }
+                // Add MCP request headers from ThreadContext
+                getMcpRequestHeaders(builder);
             };
 
             // Create transport
@@ -151,11 +157,6 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     @Override
     public MLGuard getMlGuard() {
-        throw new UnsupportedOperationException("Not implemented.");
-    }
-
-    @Override
-    public Client getClient() {
         throw new UnsupportedOperationException("Not implemented.");
     }
 
