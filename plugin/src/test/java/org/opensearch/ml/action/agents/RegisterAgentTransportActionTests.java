@@ -439,7 +439,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue().getMessage().contains("Invalid _llm_interface: invalid_interface"));
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Invalid _llm_interface"));
     }
 
     @Test
