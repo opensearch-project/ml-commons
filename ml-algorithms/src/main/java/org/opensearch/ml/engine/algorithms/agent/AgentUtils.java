@@ -90,6 +90,8 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.transport.client.Client;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -117,6 +119,7 @@ public class AgentUtils {
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
+    public static final String LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT = "gemini/v1beta/generatecontent";
 
     public static final String TOOL_CALLS_PATH = "tool_calls_path";
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
@@ -124,6 +127,8 @@ public class AgentUtils {
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
+    private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
+        .compile(",\\s*\"additionalProperties\"\\s*:\\s*(?:false|true)", Pattern.CASE_INSENSITIVE);
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
@@ -211,6 +216,12 @@ public class AgentUtils {
                 for (String key : attributes.keySet()) {
                     toolParams.put("attributes." + key, attributes.get(key));
                 }
+                // For Gemini, clean input_schema to remove additionalProperties
+                if (parameters.containsKey("gemini.schema.cleaner") && attributes.containsKey("input_schema")) {
+                    String schema = String.valueOf(attributes.get("input_schema"));
+                    String cleanedSchema = removeAdditionalPropertiesFromSchema(schema);
+                    toolParams.put("attributes.input_schema_cleaned", cleanedSchema);
+                }
             }
             StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${tool.", "}");
             String chatQuestionMessage = substitutor.replace(toolTemplate);
@@ -218,6 +229,51 @@ public class AgentUtils {
         }
         parameters.put(TOOLS, String.join(", ", toolInfos));
         return prompt;
+    }
+
+    /**
+     * Removes additionalProperties from JSON schema string for API compatibility.
+     * Recursively removes additionalProperties from all schema objects (where type: "object").
+     * This method can be reused for any API that doesn't support additionalProperties in schemas.
+     */
+    public static String removeAdditionalPropertiesFromSchema(String schema) {
+        if (schema == null || schema.trim().isEmpty()) {
+            return schema;
+        }
+        try {
+            // Parse JSON and recursively remove additionalProperties from all schema objects
+            JsonObject jsonObject = JsonParser.parseString(schema).getAsJsonObject();
+            removeAdditionalPropertiesRecursive(jsonObject);
+            return gson.toJson(jsonObject);
+        } catch (Exception e) {
+            log.warn("Failed to parse schema as JSON, using regex fallback: {}", e.getMessage());
+            // Fallback to regex if JSON parsing fails
+            return ADDITIONAL_PROPERTIES_PATTERN.matcher(schema).replaceAll("");
+        }
+    }
+
+    /**
+     * Recursively removes additionalProperties from schema objects (objects with type: "object").
+     */
+    private static void removeAdditionalPropertiesRecursive(com.google.gson.JsonElement element) {
+        if (element.isJsonObject()) {
+            JsonObject obj = element.getAsJsonObject();
+            // Remove additionalProperties from schema objects (objects with "type": "object")
+            if (obj.has("type") && "object".equals(obj.get("type").getAsString())) {
+                obj.remove("additionalProperties");
+                // Process nested schema objects in properties
+                if (obj.has("properties") && obj.get("properties").isJsonObject()) {
+                    JsonObject properties = obj.get("properties").getAsJsonObject();
+                    for (String key : properties.keySet()) {
+                        removeAdditionalPropertiesRecursive(properties.get(key));
+                    }
+                }
+            }
+        } else if (element.isJsonArray()) {
+            for (com.google.gson.JsonElement item : element.getAsJsonArray()) {
+                removeAdditionalPropertiesRecursive(item);
+            }
+        }
     }
 
     public static String addToolsToPromptString(

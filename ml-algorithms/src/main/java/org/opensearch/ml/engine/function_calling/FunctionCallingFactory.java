@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.function_calling;
 
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.util.Locale;
@@ -26,6 +27,8 @@ public class FunctionCallingFactory {
                 return new OpenaiV1ChatCompletionsFunctionCalling();
             case LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1:
                 return new BedrockConverseDeepseekR1FunctionCalling();
+            case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
+                return new GeminiGenerateContentFunctionCalling();
             default:
                 throw new IllegalArgumentException("Invalid _llm_interface");
         }
