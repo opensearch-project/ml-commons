@@ -113,7 +113,6 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
 
         assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService(null, null, null, null, null, null));
         assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
-        assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
         assertThrows(UnsupportedOperationException.class, () -> exec.getRateLimiter());
         assertThrows(UnsupportedOperationException.class, () -> exec.getMlGuard());
         assertThrows(UnsupportedOperationException.class, () -> exec.getUserRateLimiterMap());

@@ -69,6 +69,14 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLAgent mlAgent = MLAgent.parseFromUserInput(parser).toBuilder().tenantId(tenantId).build();
+
+        // Check if unified agent API is being used but not enabled
+        if (mlAgent.getModel() != null && !mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()) {
+            throw new IllegalArgumentException(
+                "Unified agent API is not enabled. To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
+            );
+        }
+
         return new MLRegisterAgentRequest(mlAgent);
     }
 }

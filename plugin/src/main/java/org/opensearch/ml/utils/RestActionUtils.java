@@ -32,12 +32,14 @@ import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
@@ -336,4 +338,50 @@ public class RestActionUtils {
         }
         return methodName;
     }
+
+    /**
+     * Checks if the REST request contains any MCP (Model Context Protocol) headers.
+     *
+     * @param request RestRequest to check for MCP headers
+     * @return true if any MCP headers are present, false otherwise
+     */
+    public static boolean hasMcpHeaders(RestRequest request) {
+        return request.header(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SESSION_TOKEN) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_REGION) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SERVICE_NAME) != null
+            || request.header(CommonValue.MCP_HEADER_OPENSEARCH_URL) != null;
+    }
+
+    /**
+     * Extracts MCP (Model Context Protocol) request headers from the REST request and puts them in ThreadContext.
+     *
+     * @param request RestRequest containing the MCP headers
+     * @param client Client to access ThreadContext
+     */
+    public static void putMcpRequestHeaders(RestRequest request, Client client) {
+        if (client == null) {
+            return;
+        }
+
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+
+        String[] mcpHeaders = {
+            CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID,
+            CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY,
+            CommonValue.MCP_HEADER_AWS_SESSION_TOKEN,
+            CommonValue.MCP_HEADER_AWS_REGION,
+            CommonValue.MCP_HEADER_AWS_SERVICE_NAME,
+            CommonValue.MCP_HEADER_OPENSEARCH_URL };
+
+        for (String headerName : mcpHeaders) {
+            String headerValue = request.header(headerName);
+            if (headerValue != null && !headerValue.isEmpty()) {
+                threadContext.putHeader(headerName, headerValue);
+                log.debug("Put MCP header: {}", headerName);
+            }
+        }
+    }
+
 }

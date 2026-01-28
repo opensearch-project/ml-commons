@@ -60,6 +60,9 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
 
     @Getter
     private McpStreamableHttpConnector connector;
+    @Getter
+    @Setter
+    private Client client;
 
     public McpStreamableHttpConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -83,6 +86,8 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                         builder.header(entry.getKey(), entry.getValue());
                     }
                 }
+                // Add MCP request headers from ThreadContext
+                getMcpRequestHeaders(builder);
             };
 
             // Create streamable HTTP transport
@@ -158,11 +163,6 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
 
     @Override
     public MLGuard getMlGuard() {
-        throw new UnsupportedOperationException("Not implemented.");
-    }
-
-    @Override
-    public Client getClient() {
         throw new UnsupportedOperationException("Not implemented.");
     }
 

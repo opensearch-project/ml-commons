@@ -329,6 +329,10 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agent_framework_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    // This setting is to enable/disable unified agent API (agent registration with model creation and standardized execution interface)
+    public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "connector.private_ip_enabled",
@@ -433,6 +437,22 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "multi_tenancy_enabled", false, Setting.Property.NodeScope);
 
+    /**
+     * TTL (Time To Live) for master key cache entries in minutes.
+     * 
+     * This setting controls how long encryption master keys are cached before being refreshed from the datastore.
+     * A shorter TTL provides better security by ensuring keys are refreshed more frequently, which is important
+     * in multi-tenant environments where domains may be recreated with new keys. A longer TTL reduces datastore
+     * access overhead but may result in using stale keys for a longer period.
+     * 
+     * Default: 5 minutes
+     * Range: 1 to 1440 minutes (1 day)
+     * 
+     * This is a static setting that must be configured in opensearch.yml and requires a cluster restart to take effect.
+     */
+    public static final Setting<Integer> ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "master_key_cache_ttl_minutes", 5, 1, 1440, Setting.Property.NodeScope);
+
     /** This setting sets the remote metadata type */
     public static final Setting<String> REMOTE_METADATA_TYPE = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_TYPE_KEY, Setting.Property.NodeScope, Setting.Property.Final);
@@ -488,4 +508,22 @@ public final class MLCommonsSettings {
     // Set to -1 to disable size limit (unlimited)
     public static final Setting<Integer> ML_COMMONS_MAX_JSON_SIZE = Setting
         .intSetting(ML_PLUGIN_SETTING_PREFIX + "max_json_size", 100_000_000, -1, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Feature flag for MCP header passthrough
+    public static final Setting<Boolean> ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "mcp_header_passthrough_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_MCP_HEADER_PASSTHROUGH_DISABLED_MESSAGE =
+        "The MCP header passthrough feature is not enabled. To enable, please update the setting "
+            + ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.getKey();
+
+    // Feature flag for AG-UI agent support
+    public static final Setting<Boolean> ML_COMMONS_AG_UI_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
+        "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
 }

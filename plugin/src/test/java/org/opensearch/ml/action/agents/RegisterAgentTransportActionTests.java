@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.agents;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -21,7 +22,6 @@ import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectA
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,12 +46,11 @@ import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateServi
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -380,113 +379,6 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_execute_registerAgent_QueryPlanningTool_addsModelId_whenMissing() {
-        // Create QueryPlanningTool without model_id parameter
-        MLToolSpec queryPlanningTool = new MLToolSpec(
-            QueryPlanningTool.TYPE,
-            "QueryPlanningTool",
-            "QueryPlanningTool",
-            Collections.emptyMap(), // No parameters
-            Collections.emptyMap(),
-            false,
-            Collections.emptyMap(),
-            null,
-            null
-        );
-
-        MLAgent mlAgent = MLAgent
-            .builder()
-            .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
-            .description("description")
-            .llm(new LLMSpec("test_model_id", new HashMap<>()))
-            .tools(List.of(queryPlanningTool))
-            .build();
-
-        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-        when(request.getMlAgent()).thenReturn(mlAgent);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLAgentIndex(any());
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> al = invocation.getArgument(1);
-            al.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        transportRegisterAgentAction.doExecute(task, request, actionListener);
-
-        // Verify that the agent was indexed with updated tools containing model_id
-        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
-        verify(client).index(indexRequestCaptor.capture(), any());
-
-        IndexRequest indexRequest = indexRequestCaptor.getValue();
-        assertNotNull(indexRequest);
-        String source = indexRequest.source().utf8ToString();
-        assertTrue("Agent source should contain model_id", source.contains("\"model_id\":\"test_model_id\""));
-    }
-
-    @Test
-    public void test_execute_registerAgent_QueryPlanningTool_preservesExistingModelId() {
-        // Create QueryPlanningTool with existing model_id parameter
-        Map<String, String> existingParams = new HashMap<>();
-        existingParams.put("model_id", "existing_model_id");
-        existingParams.put("other_param", "other_value");
-
-        MLToolSpec queryPlanningTool = new MLToolSpec(
-            QueryPlanningTool.TYPE,
-            "QueryPlanningTool",
-            "QueryPlanningTool",
-            existingParams,
-            Collections.emptyMap(),
-            false,
-            Collections.emptyMap(),
-            null,
-            null
-        );
-
-        MLAgent mlAgent = MLAgent
-            .builder()
-            .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
-            .description("description")
-            .llm(new LLMSpec("new_model_id", new HashMap<>()))
-            .tools(List.of(queryPlanningTool))
-            .build();
-
-        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-        when(request.getMlAgent()).thenReturn(mlAgent);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLAgentIndex(any());
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> al = invocation.getArgument(1);
-            al.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        transportRegisterAgentAction.doExecute(task, request, actionListener);
-
-        // Verify that the agent was indexed with tools preserving existing model_id
-        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
-        verify(client).index(indexRequestCaptor.capture(), any());
-
-        IndexRequest indexRequest = indexRequestCaptor.getValue();
-        assertNotNull(indexRequest);
-        String source = indexRequest.source().utf8ToString();
-        assertTrue("Agent source should contain existing model_id", source.contains("\"model_id\":\"existing_model_id\""));
-        assertTrue("Agent source should contain other_param", source.contains("\"other_param\":\"other_value\""));
-    }
-
-    @Test
     public void test_execute_registerAgent_MCPConnectorDisabled() {
         // Create an MLAgent with MCP connectors in parameters
         Map<String, String> parameters = new HashMap<>();
@@ -547,7 +439,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue().getMessage().contains("Invalid _llm_interface: invalid_interface"));
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Invalid _llm_interface"));
     }
 
     @Test
@@ -596,5 +488,125 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("_llm_interface cannot be blank or empty", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_WithModelSpec_Success() {
+        // Create MLAgentModelSpec with model configuration
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("temperature", "0.7");
+        modelParameters.put("max_tokens", "100");
+
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_key");
+        credential.put("secret_key", "test_secret");
+
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
+            .modelProvider("bedrock/converse")
+            .modelId("anthropic.claude-v2")
+            .modelParameters(modelParameters)
+            .credential(credential)
+            .build();
+
+        Map<String, String> agentParameters = new HashMap<>();
+        agentParameters.put("tools", "[]");
+        agentParameters.put("memory", "{}");
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("test_agent_with_model")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Test agent with model spec")
+            .model(modelSpec)
+            .parameters(agentParameters)
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // Mock model registration response
+        org.opensearch.ml.common.transport.register.MLRegisterModelResponse modelResponse = mock(
+            org.opensearch.ml.common.transport.register.MLRegisterModelResponse.class
+        );
+        when(modelResponse.getModelId()).thenReturn("created_model_id");
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.ml.common.transport.register.MLRegisterModelResponse> al = invocation.getArgument(2);
+            al.onResponse(modelResponse);
+            return null;
+        }).when(client).execute(eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+
+        MLRegisterAgentResponse response = argumentCaptor.getValue();
+        assertNotNull(response);
+        assertEquals("AGENT_ID", response.getAgentId());
+
+        // Verify model registration was called
+        verify(client, times(1)).execute(eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE), any(), any());
+
+        // Verify agent was indexed with the created model ID in LLMSpec
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+
+        IndexRequest indexRequest = indexRequestCaptor.getValue();
+        assertNotNull(indexRequest);
+        String source = indexRequest.source().utf8ToString();
+        assertTrue("Agent source should contain created model_id", source.contains("\"model_id\":\"created_model_id\""));
+        assertTrue("Agent source should contain _llm_interface", source.contains("\"_llm_interface\":\"bedrock/converse/claude\""));
+        assertFalse("Agent source should not contain credential", source.contains("access_key"));
+    }
+
+    @Test
+    public void test_execute_registerAgent_WithModelSpec_ModelRegistrationFailure() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_key");
+        credential.put("secret_key", "test_secret");
+
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
+            .modelProvider("bedrock/converse")
+            .modelId("anthropic.claude-v2")
+            .credential(credential)
+            .build();
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("test_agent_with_model")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Test agent with model spec")
+            .model(modelSpec)
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.ml.common.transport.register.MLRegisterModelResponse> al = invocation.getArgument(2);
+            al.onFailure(new RuntimeException("Model registration failed"));
+            return null;
+        }).when(client).execute(eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE), any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Model registration failed", argumentCaptor.getValue().getMessage());
     }
 }
