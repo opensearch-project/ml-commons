@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
@@ -16,6 +20,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.TextMessageContentEvent;
+import org.opensearch.ml.common.agui.TextMessageEndEvent;
+import org.opensearch.ml.common.agui.TextMessageStartEvent;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
+import org.opensearch.ml.common.agui.ToolCallEndEvent;
+import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLException;
@@ -24,6 +36,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 
 import com.jayway.jsonpath.JsonPath;
@@ -43,16 +56,25 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     private final Connector connector;
     private OkHttpClient okHttpClient;
     private String llmInterface;
+    private Map<String, String> parameters;
 
     public HttpStreamingHandler(String llmInterface, Connector connector, ConnectorClientConfig connectorClientConfig) {
+        this(llmInterface, connector, connectorClientConfig, null);
+    }
+
+    public HttpStreamingHandler(
+        String llmInterface,
+        Connector connector,
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters
+    ) {
         this.connector = connector;
         this.llmInterface = llmInterface;
+        this.parameters = parameters;
 
-        // Get connector client configuration
         Duration connectionTimeout = Duration.ofSeconds(connectorClientConfig.getConnectionTimeout());
         Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeout());
 
-        // Initialize OkHttp client for SSE
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 this.okHttpClient = new OkHttpClient.Builder()
@@ -76,7 +98,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     ) {
         try {
             log.info("Creating SSE connection for streaming request");
-            EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface);
+            EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface, parameters);
             Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
@@ -99,6 +121,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     public final class HTTPEventSourceListener extends EventSourceListener {
         private StreamPredictActionListener<MLTaskResponse, ?> streamActionListener;
         private final String llmInterface;
+        private final boolean isAGUIAgent;
+        private final Map<String, String> parameters;
         private AtomicBoolean isStreamClosed;
         private boolean functionCallInProgress = false;
         private boolean agentExecutionInProgress = false;
@@ -106,10 +130,21 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         private String accumulatedToolName = null;
         private String accumulatedArguments = "";
 
-        public HTTPEventSourceListener(StreamPredictActionListener<MLTaskResponse, ?> streamActionListener, String llmInterface) {
+        public HTTPEventSourceListener(
+            StreamPredictActionListener<MLTaskResponse, ?> streamActionListener,
+            String llmInterface,
+            Map<String, String> parameters
+        ) {
             this.streamActionListener = streamActionListener;
             this.llmInterface = llmInterface;
+            this.parameters = parameters;
             this.isStreamClosed = new AtomicBoolean(false);
+
+            this.isAGUIAgent = AgentUtils.isAGUIAgent(parameters);
+
+            if (isAGUIAgent) {
+                log.debug("HttpStreamingHandler: Detected AG-UI agent");
+            }
         }
 
         /***
@@ -198,33 +233,98 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         private void handleDoneEvent() {
             if (!agentExecutionInProgress) {
+                String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+                boolean textMessageStarted = (isAGUIAgent && parameters != null)
+                    && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
+                if (isAGUIAgent && textMessageStarted) {
+                    // End any remaining text message
+                    parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                    BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                    sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                    log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {} at stream end", messageId);
+
+                    // Send RUN_FINISHED event
+                    String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+                    String runId = parameters.get(AGUI_PARAM_RUN_ID);
+                    BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+                    sendAGUIEvent(runFinishedEvent, true, streamActionListener);
+                    log.debug("AG-UI: Sent RUN_FINISHED event at [DONE] - threadId={}, runId={}", threadId, runId);
+                }
+
                 sendCompletionResponse(isStreamClosed, streamActionListener);
             }
         }
 
         private void processStreamChunk(Map<String, Object> dataMap) {
-            // Handle stop finish reason
+            String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+            boolean textMessageStarted = (isAGUIAgent && parameters != null)
+                && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
             String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
             if ("stop".equals(finishReason)) {
                 agentExecutionInProgress = false;
+
+                if (isAGUIAgent && textMessageStarted) {
+                    // End the current text message
+                    parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                    BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                    sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                    log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+
+                    // Send RUN_FINISHED event
+                    String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+                    String runId = parameters.get(AGUI_PARAM_RUN_ID);
+                    BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+                    sendAGUIEvent(runFinishedEvent, true, streamActionListener);
+                    log.debug("AG-UI: Sent RUN_FINISHED event - threadId={}, runId={}", threadId, runId);
+                }
+
                 sendCompletionResponse(isStreamClosed, streamActionListener);
                 return;
             }
 
-            // Process content
             String content = extractPath(dataMap, "$.choices[0].delta.content");
             if (content != null && !content.isEmpty()) {
-                sendContentResponse(content, false, streamActionListener);
+                if (isAGUIAgent) {
+                    // Start text message if not already started
+                    if (!textMessageStarted) {
+                        messageId = "msg_" + System.nanoTime();
+                        parameters.put(AGUI_PARAM_MESSAGE_ID, messageId);
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "true");
+
+                        BaseEvent textMessageStartEvent = new TextMessageStartEvent(messageId, "assistant");
+                        sendAGUIEvent(textMessageStartEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", messageId);
+                    }
+
+                    // Send content event
+                    BaseEvent textMessageContentEvent = new TextMessageContentEvent(messageId, content);
+                    sendAGUIEvent(textMessageContentEvent, false, streamActionListener);
+                    log.debug("AG-UI: Sent TEXT_MESSAGE_CONTENT for messageId: {}", messageId);
+                } else {
+                    sendContentResponse(content, false, streamActionListener);
+                }
             }
 
-            // Process tool call
             List<?> toolCalls = extractPath(dataMap, "$.choices[0].delta.tool_calls");
             if (toolCalls != null) {
-                accumulateFunctionCall(toolCalls);
-                sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
+                if (isAGUIAgent) {
+                    // End current text message before sending tool events
+                    if (textMessageStarted) {
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {} before tool call", messageId);
+                    }
+
+                    processAGUIToolCalls(toolCalls);
+                } else {
+                    accumulateFunctionCall(toolCalls);
+                    sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
+                }
             }
 
-            // Handle tool_calls finish reason
             if ("tool_calls".equals(finishReason) && functionCallInProgress) {
                 completeToolCall();
             }
@@ -240,20 +340,39 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         private void completeToolCall() {
             agentExecutionInProgress = true;
-            String completeFunctionCall = buildCompleteFunctionCallResponse();
 
-            // Send to client and agent
-            sendContentResponse(completeFunctionCall, false, streamActionListener);
-            Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
-            ModelTensorOutput output = createModelTensorOutput(response);
-            streamActionListener.onResponse(new MLTaskResponse(output));
+            if (isAGUIAgent) {
+                // Send TOOL_CALL_END event (not marked as last - tool execution continues)
+                BaseEvent toolCallEndEvent = new ToolCallEndEvent(accumulatedToolCallId);
+                sendAGUIEvent(toolCallEndEvent, false, streamActionListener);
+                log.debug("AG-UI: Sent TOOL_CALL_END for toolCallId: {}", accumulatedToolCallId);
+
+                // Build and send the tool use response for agent execution
+                String completeFunctionCall = buildCompleteFunctionCallResponse();
+                Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
+                ModelTensorOutput output = createModelTensorOutput(response);
+                streamActionListener.onResponse(new MLTaskResponse(output));
+                log.debug("AG-UI: Sent tool execution response to agent");
+            } else {
+                String completeFunctionCall = buildCompleteFunctionCallResponse();
+                sendContentResponse(completeFunctionCall, false, streamActionListener);
+                Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
+                ModelTensorOutput output = createModelTensorOutput(response);
+                streamActionListener.onResponse(new MLTaskResponse(output));
+            }
 
             // Reset state
+            accumulatedToolCallId = null;
+            accumulatedToolName = null;
+            accumulatedArguments = "";
             functionCallInProgress = false;
         }
 
         private String buildCompleteFunctionCallResponse() {
-            Map<String, Object> function = Map.of("name", accumulatedToolName, "arguments", accumulatedArguments);
+            // Ensure arguments is valid JSON - default to empty object if empty
+            String arguments = (accumulatedArguments == null || accumulatedArguments.isEmpty()) ? "{}" : accumulatedArguments;
+
+            Map<String, Object> function = Map.of("name", accumulatedToolName, "arguments", arguments);
             Map<String, Object> toolCall = Map.of("id", accumulatedToolCallId, "type", "function", "function", function);
             Map<String, Object> message = Map.of("tool_calls", List.of(toolCall));
             Map<String, Object> choice = Map.of("message", message, "finish_reason", "tool_calls");
@@ -268,12 +387,48 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             return ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
         }
 
+        private void processAGUIToolCalls(List<?> toolCalls) {
+            functionCallInProgress = true;
+            String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+
+            for (Object toolCall : toolCalls) {
+                Map<String, Object> tcMap = (Map<String, Object>) toolCall;
+
+                if (tcMap.containsKey("id")) {
+                    String toolCallId = (String) tcMap.get("id");
+                    if (accumulatedToolCallId == null) {
+                        accumulatedToolCallId = toolCallId;
+                    }
+                }
+
+                if (tcMap.containsKey("function")) {
+                    Map<String, Object> func = (Map<String, Object>) tcMap.get("function");
+
+                    if (func.containsKey("name")) {
+                        String toolName = (String) func.get("name");
+                        if (accumulatedToolName == null) {
+                            accumulatedToolName = toolName;
+
+                            BaseEvent startEvent = new ToolCallStartEvent(accumulatedToolCallId, toolName, messageId);
+                            sendAGUIEvent(startEvent, false, streamActionListener);
+                        }
+                    }
+
+                    if (func.containsKey("arguments")) {
+                        String argsDelta = (String) func.get("arguments");
+                        accumulatedArguments += argsDelta;
+                        BaseEvent argsEvent = new ToolCallArgsEvent(accumulatedToolCallId, argsDelta);
+                        sendAGUIEvent(argsEvent, false, streamActionListener);
+                    }
+                }
+            }
+        }
+
         private void accumulateFunctionCall(List<?> toolCalls) {
             functionCallInProgress = true;
             for (Object toolCall : toolCalls) {
                 Map<String, Object> tcMap = (Map<String, Object>) toolCall;
 
-                // Extract ID and name from first chunk
                 if (tcMap.containsKey("id")) {
                     accumulatedToolCallId = (String) tcMap.get("id");
                 }

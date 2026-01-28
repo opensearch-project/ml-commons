@@ -69,6 +69,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
@@ -90,6 +91,8 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.transport.client.Client;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -114,9 +117,11 @@ public class AgentUtils {
     public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
     public static final String TOOL_RESULT = "tool_result";
     public static final String TOOL_CALL_ID = "tool_call_id";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE = "bedrock/converse";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
+    public static final String LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT = "gemini/v1beta/generatecontent";
 
     public static final String TOOL_CALLS_PATH = "tool_calls_path";
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
@@ -124,6 +129,8 @@ public class AgentUtils {
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
+    private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
+        .compile(",\\s*\"additionalProperties\"\\s*:\\s*(?:false|true)", Pattern.CASE_INSENSITIVE);
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
@@ -137,6 +144,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String AGENT_TYPE_PARAM = "agent_type";
 
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
@@ -211,6 +219,12 @@ public class AgentUtils {
                 for (String key : attributes.keySet()) {
                     toolParams.put("attributes." + key, attributes.get(key));
                 }
+                // For Gemini, clean input_schema to remove additionalProperties
+                if (parameters.containsKey("gemini.schema.cleaner") && attributes.containsKey("input_schema")) {
+                    String schema = String.valueOf(attributes.get("input_schema"));
+                    String cleanedSchema = removeAdditionalPropertiesFromSchema(schema);
+                    toolParams.put("attributes.input_schema_cleaned", cleanedSchema);
+                }
             }
             StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${tool.", "}");
             String chatQuestionMessage = substitutor.replace(toolTemplate);
@@ -218,6 +232,51 @@ public class AgentUtils {
         }
         parameters.put(TOOLS, String.join(", ", toolInfos));
         return prompt;
+    }
+
+    /**
+     * Removes additionalProperties from JSON schema string for API compatibility.
+     * Recursively removes additionalProperties from all schema objects (where type: "object").
+     * This method can be reused for any API that doesn't support additionalProperties in schemas.
+     */
+    public static String removeAdditionalPropertiesFromSchema(String schema) {
+        if (schema == null || schema.trim().isEmpty()) {
+            return schema;
+        }
+        try {
+            // Parse JSON and recursively remove additionalProperties from all schema objects
+            JsonObject jsonObject = JsonParser.parseString(schema).getAsJsonObject();
+            removeAdditionalPropertiesRecursive(jsonObject);
+            return gson.toJson(jsonObject);
+        } catch (Exception e) {
+            log.warn("Failed to parse schema as JSON, using regex fallback: {}", e.getMessage());
+            // Fallback to regex if JSON parsing fails
+            return ADDITIONAL_PROPERTIES_PATTERN.matcher(schema).replaceAll("");
+        }
+    }
+
+    /**
+     * Recursively removes additionalProperties from schema objects (objects with type: "object").
+     */
+    private static void removeAdditionalPropertiesRecursive(com.google.gson.JsonElement element) {
+        if (element.isJsonObject()) {
+            JsonObject obj = element.getAsJsonObject();
+            // Remove additionalProperties from schema objects (objects with "type": "object")
+            if (obj.has("type") && "object".equals(obj.get("type").getAsString())) {
+                obj.remove("additionalProperties");
+                // Process nested schema objects in properties
+                if (obj.has("properties") && obj.get("properties").isJsonObject()) {
+                    JsonObject properties = obj.get("properties").getAsJsonObject();
+                    for (String key : properties.keySet()) {
+                        removeAdditionalPropertiesRecursive(properties.get(key));
+                    }
+                }
+            }
+        } else if (element.isJsonArray()) {
+            for (com.google.gson.JsonElement item : element.getAsJsonArray()) {
+                removeAdditionalPropertiesRecursive(item);
+            }
+        }
     }
 
     public static String addToolsToPromptString(
@@ -759,9 +818,14 @@ public class AgentUtils {
                 connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
 
                 List<MLToolSpec> mcpToolSpecs;
+                if (client == null) {
+                    throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
+                }
+
                 if (connector instanceof McpConnector) {
                     McpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;
@@ -769,6 +833,7 @@ public class AgentUtils {
                 if (connector instanceof McpStreamableHttpConnector) {
                     McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;
@@ -1018,5 +1083,69 @@ public class AgentUtils {
         }
 
         return tool;
+    }
+
+    public static List<Map<String, Object>> parseFrontendTools(String aguiTools) {
+        List<Map<String, Object>> frontendTools = new ArrayList<>();
+        if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
+            try {
+                Type listType = new TypeToken<List<Map<String, Object>>>() {
+                }.getType();
+                List<Map<String, Object>> parsed = gson.fromJson(aguiTools, listType);
+                if (parsed != null) {
+                    frontendTools.addAll(parsed);
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse frontend tools: {}", e.getMessage());
+            }
+        }
+        return frontendTools;
+    }
+
+    public static Map<String, Tool> wrapFrontendToolsAsToolObjects(List<Map<String, Object>> frontendTools) {
+        Map<String, Tool> wrappedTools = new HashMap<>();
+
+        for (Map<String, Object> frontendTool : frontendTools) {
+            String toolName = (String) frontendTool.get("name");
+            String toolDescription = (String) frontendTool.get("description");
+
+            // Create frontend tool object with source marker
+            Map<String, Object> toolAttributes = new HashMap<>();
+            toolAttributes.put("source", "frontend");
+            toolAttributes.put("tool_definition", frontendTool);
+
+            Object parameters = frontendTool.get("parameters");
+            if (parameters != null) {
+                toolAttributes.put("input_schema", gson.toJson(parameters));
+            } else {
+                Map<String, Object> emptySchema = Map.of("type", "object", "properties", Map.of());
+                toolAttributes.put("input_schema", gson.toJson(emptySchema));
+            }
+
+            Tool frontendToolObj = new AGUIFrontendTool(toolName, toolDescription, toolAttributes);
+            wrappedTools.put(toolName, frontendToolObj);
+        }
+
+        return wrappedTools;
+    }
+
+    /**
+     * Checks if the agent type in the given parameters is AG_UI.
+     *
+     * @param parameters The parameters map containing agent type information
+     * @return true if the agent type is AG_UI, false otherwise
+     */
+    public static boolean isAGUIAgent(Map<String, String> parameters) {
+        if (parameters == null || !parameters.containsKey(AGENT_TYPE_PARAM)) {
+            return false;
+        }
+
+        try {
+            String agentTypeValue = parameters.get(AGENT_TYPE_PARAM);
+            MLAgentType agentType = MLAgentType.from(agentTypeValue);
+            return agentType == MLAgentType.AG_UI;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }

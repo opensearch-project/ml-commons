@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.model;
 
 import org.opensearch.ml.common.agent.BedrockConverseModelProvider;
+import org.opensearch.ml.common.agent.GeminiGenerateContentModelProvider;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 
 /**
@@ -25,6 +26,7 @@ public class ModelProviderFactory {
         ModelProviderType type = ModelProviderType.from(providerType);
         return switch (type) {
             case BEDROCK_CONVERSE -> new BedrockConverseModelProvider();
+            case GEMINI_GENERATE_CONTENT -> new GeminiGenerateContentModelProvider();
             default -> throw new IllegalArgumentException("Unsupported model provider type: " + providerType);
         };
     }

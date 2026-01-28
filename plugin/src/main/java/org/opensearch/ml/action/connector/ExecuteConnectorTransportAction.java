@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.ml.common.CommonValue.CONNECTOR_ACTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 
 import org.opensearch.ResourceNotFoundException;
@@ -18,6 +19,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
@@ -73,14 +75,24 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> actionListener) {
         MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.fromActionRequest(request);
         String connectorId = executeConnectorRequest.getConnectorId();
+        if (executeConnectorRequest.getMlInput() == null) {
+            actionListener.onFailure(new IllegalArgumentException("MLInput cannot be null"));
+            return;
+        }
+
+        RemoteInferenceInputDataSet inputDataset = (RemoteInferenceInputDataSet) executeConnectorRequest.getMlInput().getInputDataset();
         String connectorAction = ConnectorAction.ActionType.EXECUTE.name();
+        if (inputDataset.getParameters() != null && inputDataset.getParameters().get(CONNECTOR_ACTION_FIELD) != null) {
+            connectorAction = inputDataset.getParameters().get(CONNECTOR_ACTION_FIELD);
+        }
 
         if (MLIndicesHandler
             .doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
+            String finalConnectorAction = connectorAction;
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
-                    connector.decrypt(connectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
+                    connector.decrypt(finalConnectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
                     RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
                     connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
@@ -89,7 +101,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                     connectorExecutor.setClient(client);
                     connectorExecutor.setXContentRegistry(xContentRegistry);
                     connectorExecutor
-                        .executeAction(connectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
+                        .executeAction(finalConnectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
                             actionListener.onResponse(taskResponse);
                         }, e -> { actionListener.onFailure(e); }));
                 }

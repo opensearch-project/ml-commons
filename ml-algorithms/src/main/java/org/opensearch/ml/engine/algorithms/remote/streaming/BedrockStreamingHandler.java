@@ -6,6 +6,10 @@
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -21,12 +25,21 @@ import javax.naming.AuthenticationException;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.TextMessageContentEvent;
+import org.opensearch.ml.common.agui.TextMessageEndEvent;
+import org.opensearch.ml.common.agui.TextMessageStartEvent;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
+import org.opensearch.ml.common.agui.ToolCallEndEvent;
+import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorThrottlingException;
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -68,6 +81,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private final SdkAsyncHttpClient httpClient;
     private final AwsConnector connector;
+    private final Map<String, String> parameters;
+    private final boolean isAGUIAgent;
     private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
 
     private enum StreamState {
@@ -79,8 +94,19 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector) {
+        this(httpClient, connector, null);
+    }
+
+    public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector, Map<String, String> parameters) {
         this.httpClient = httpClient;
         this.connector = connector;
+        this.parameters = parameters;
+
+        this.isAGUIAgent = AgentUtils.isAGUIAgent(parameters);
+
+        if (isAGUIAgent) {
+            log.debug("BedrockStreamingHandler: Detected AG-UI agent");
+        }
     }
 
     @Override
@@ -92,6 +118,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     ) {
         try {
             AtomicBoolean isStreamClosed = new AtomicBoolean(false);
+            AtomicBoolean firstToolSent = new AtomicBoolean(false);
             AtomicReference<String> toolName = new AtomicReference<>();
             AtomicReference<Map<String, Object>> toolInput = new AtomicReference<>();
             AtomicReference<String> toolUseId = new AtomicReference<>();
@@ -130,7 +157,18 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     log.debug("Tool execution in progress - keeping stream open");
                 }
             }).subscriber(event -> {
-                handleStreamEvent(event, listener, isStreamClosed, toolName, toolInput, toolUseId, toolInputAccumulator, currentState);
+                log.debug("BEDROCK_RAW_EVENT: Type={}, Event={}", event.sdkEventType(), event);
+                handleStreamEvent(
+                    event,
+                    listener,
+                    isStreamClosed,
+                    firstToolSent,
+                    toolName,
+                    toolInput,
+                    toolUseId,
+                    toolInputAccumulator,
+                    currentState
+                );
             }).build();
 
             // Start streaming
@@ -160,8 +198,35 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     @VisibleForTesting
     ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
         try {
+            log.debug("AG-UI: Building Bedrock request from payload: {}", payload);
             ObjectMapper mapper = new ObjectMapper();
             JsonNode payloadJson = mapper.readTree(payload);
+
+            // Log the messages array for debugging
+            if (payloadJson.has("messages")) {
+                JsonNode messagesArray = payloadJson.get("messages");
+                log.debug("AG-UI: Messages array in payload: {}", messagesArray);
+
+                // Check for consecutive messages with the same role (Bedrock doesn't allow this)
+                String previousRole = null;
+                for (int i = 0; i < messagesArray.size(); i++) {
+                    JsonNode msg = messagesArray.get(i);
+                    String currentRole = msg.has("role") ? msg.get("role").asText() : "unknown";
+                    if (previousRole != null && previousRole.equals(currentRole)) {
+                        log
+                            .warn(
+                                "AG-UI: Found consecutive messages with same role '{}' at index {} and {}. Bedrock requires alternating roles!",
+                                currentRole,
+                                i - 1,
+                                i
+                            );
+                    }
+                    previousRole = currentRole;
+                }
+            } else {
+                log.warn("AG-UI: No messages array found in payload!");
+            }
+
             return ConverseStreamRequest
                 .builder()
                 .modelId(parameters.get("model"))
@@ -183,20 +248,69 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         ConverseStreamOutput event,
         StreamPredictActionListener<MLTaskResponse, ?> listener,
         AtomicBoolean isStreamClosed,
+        AtomicBoolean firstToolSent,
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId,
         StringBuilder toolInputAccumulator,
         AtomicReference<StreamState> currentState
     ) {
+        String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+        boolean textMessageStarted = (isAGUIAgent && parameters != null)
+            && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
         switch (currentState.get()) {
             case STREAMING_CONTENT:
                 if (isToolUseDetected(event)) {
                     currentState.set(StreamState.TOOL_CALL_DETECTED);
                     extractToolInfo(event, toolName, toolUseId);
+
+                    if (isAGUIAgent) {
+                        // end current text message before sending tool events
+                        if (textMessageStarted) {
+                            parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                            BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                            sendAGUIEvent(textMessageEndEvent, false, listener);
+                        }
+
+                        BaseEvent toolCallStartEvent = new ToolCallStartEvent(toolUseId.get(), toolName.get(), messageId);
+                        sendAGUIEvent(toolCallStartEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_START for messageId: {} and toolUseId: {}", messageId, toolUseId);
+                    }
                 } else if (isContentDelta(event)) {
-                    sendContentResponse(getTextContent(event), false, listener);
+                    String content = getTextContent(event);
+
+                    if (isAGUIAgent) {
+                        if (!textMessageStarted) {
+                            messageId = "msg_" + System.nanoTime();
+                            parameters.put(AGUI_PARAM_MESSAGE_ID, messageId);
+                            parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "true");
+
+                            BaseEvent textMessageStartEvent = new TextMessageStartEvent(messageId, "assistant");
+                            sendAGUIEvent(textMessageStartEvent, false, listener);
+                            log.debug("AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", messageId);
+                        }
+
+                        BaseEvent textMessageContentEvent = new TextMessageContentEvent(messageId, content);
+                        sendAGUIEvent(textMessageContentEvent, false, listener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_CONTENT for messageId: {}", messageId);
+                    } else {
+                        sendContentResponse(content, false, listener);
+                    }
                 } else if (isStreamComplete(event)) {
+                    if (isAGUIAgent && textMessageStarted) {
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, listener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+
+                        String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+                        String runId = parameters.get(AGUI_PARAM_RUN_ID);
+                        BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+                        sendAGUIEvent(runFinishedEvent, true, listener);
+                        log.debug("BedrockStreamingHandler: Added RUN_FINISHED event - ReAct loop completed");
+                    }
+
                     currentState.set(StreamState.COMPLETED);
                     sendCompletionResponse(isStreamClosed, listener);
                 }
@@ -205,31 +319,63 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             case TOOL_CALL_DETECTED:
                 if (isToolInputDelta(event)) {
                     currentState.set(StreamState.ACCUMULATING_TOOL_INPUT);
-                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                    String inputFragment = getToolInputFragment(event);
+                    accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
+                    if (isAGUIAgent) {
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
+                        sendAGUIEvent(toolCallArgsEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
+                    } else {
+                        sendContentResponse(inputFragment, false, listener);
+                    }
                 }
                 break;
 
             case ACCUMULATING_TOOL_INPUT:
-                if (isToolInputDelta(event)) {
-                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                // TODO: support parallel tool use
+                if (isToolInputDelta(event) && !firstToolSent.get()) {
+                    String inputFragment = getToolInputFragment(event);
+                    accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
+
+                    if (isAGUIAgent) {
+                        BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
+                        sendAGUIEvent(toolCallArgsEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
+                    } else {
+                        sendContentResponse(inputFragment, false, listener);
+                    }
+                } else if (isCurrentToolInputComplete(event)) {
+                    // contentBlockStop during ACCUMULATING_TOOL_INPUT means this tool's input is complete
+                    // Since we do not support parallel tool execution yet, drop tool args after the first
+                    firstToolSent.set(true);
+                    log.info("First tool complete, will drop events for subsequent tools");
                 } else if (isToolInputComplete(event)) {
+                    // Ensure toolInput is set even if it's empty
+                    if (toolInput.get() == null) {
+                        toolInput.set(Map.of());
+                    }
+
+                    if (isAGUIAgent) {
+                        BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
+                        sendAGUIEvent(toolCallEndEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}'", toolName.get());
+                    }
+
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
                     listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId));
                 }
                 break;
 
             case WAITING_FOR_TOOL_RESULT:
-                // Don't close stream - wait for tool execution
                 log.debug("Waiting for tool result - keeping stream open");
                 break;
 
             case COMPLETED:
-                // Stream already completed
                 break;
         }
     }
 
-    // TODO: refactor the event type checker methods
     private void extractToolInfo(ConverseStreamOutput event, AtomicReference<String> toolName, AtomicReference<String> toolUseId) {
         ContentBlockStartEvent startEvent = (ContentBlockStartEvent) event;
         if (startEvent.start() != null && startEvent.start().toolUse() != null) {
@@ -268,6 +414,10 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private boolean isToolInputComplete(ConverseStreamOutput event) {
         return event.sdkEventType() == ConverseStreamOutput.EventType.MESSAGE_STOP && event.toString().contains(STOP_REASON_TOOL_USE);
+    }
+
+    private boolean isCurrentToolInputComplete(ConverseStreamOutput event) {
+        return event.sdkEventType() == ConverseStreamOutput.EventType.CONTENT_BLOCK_STOP;
     }
 
     private MLTaskResponse createToolUseResponse(
@@ -367,17 +517,19 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     private BedrockRuntimeAsyncClient buildBedrockRuntimeAsyncClient() {
-        AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
-            ? StaticCredentialsProvider
-                .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
-            : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
+        return java.security.AccessController.doPrivileged((java.security.PrivilegedAction<BedrockRuntimeAsyncClient>) () -> {
+            AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
+                ? StaticCredentialsProvider
+                    .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
+                : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
 
-        return BedrockRuntimeAsyncClient
-            .builder()
-            .region(Region.of(connector.getRegion()))
-            .credentialsProvider(awsCredentialsProvider)
-            .httpClient(httpClient)
-            .build();
+            return BedrockRuntimeAsyncClient
+                .builder()
+                .region(Region.of(connector.getRegion()))
+                .credentialsProvider(awsCredentialsProvider)
+                .httpClient(httpClient)
+                .build();
+        });
     }
 
     private List<SystemContentBlock> parseSystemMessages(JsonNode systemArray) {
@@ -399,8 +551,29 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private Message buildMessage(JsonNode messageItem) {
         String role = messageItem.has("role") && messageItem.get("role") != null ? messageItem.get("role").asText() : "assistant";
 
+        // Handle AG-UI tool result messages
+        if (isAGUIAgent && "tool".equals(role)) {
+            return buildToolResultMessage(messageItem);
+        }
+
         List<ContentBlock> contentBlocks = buildContentBlocks(messageItem.get("content"));
         return Message.builder().role(role).content(contentBlocks).build();
+    }
+
+    private Message buildToolResultMessage(JsonNode toolMessage) {
+        String toolCallId = toolMessage.has("toolCallId") ? toolMessage.get("toolCallId").asText() : "";
+        String content = toolMessage.has("content") ? toolMessage.get("content").asText() : "";
+
+        ContentBlock toolResultBlock = ContentBlock
+            .builder()
+            .toolResult(
+                ToolResultBlock.builder().toolUseId(toolCallId).content(ToolResultContentBlock.builder().text(content).build()).build()
+            )
+            .build();
+
+        log.debug("AG-UI: Converted tool message to Bedrock format - toolUseId: {}, content length: {}", toolCallId, content.length());
+
+        return Message.builder().role("user").content(List.of(toolResultBlock)).build();
     }
 
     private List<ContentBlock> buildContentBlocks(JsonNode contentArray) {

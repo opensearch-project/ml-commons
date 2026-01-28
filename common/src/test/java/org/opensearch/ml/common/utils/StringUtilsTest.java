@@ -81,6 +81,95 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void isJsonOrNdjson_NullInput() {
+        assertFalse(StringUtils.isJsonOrNdjson(null));
+    }
+
+    @Test
+    public void isJsonOrNdjson_BlankInput() {
+        assertFalse(StringUtils.isJsonOrNdjson(""));
+        assertFalse(StringUtils.isJsonOrNdjson("   "));
+        assertFalse(StringUtils.isJsonOrNdjson("\n"));
+        assertFalse(StringUtils.isJsonOrNdjson("\t"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidJson() {
+        // Valid JSON objects should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": 123}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2, 3]"));
+        assertTrue(StringUtils.isJsonOrNdjson("[\"a\", \"b\"]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value\", \"key2\": 123}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidNdjson() {
+        // Valid NDJSON (newline-delimited JSON) should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"index\": {}}\n{\"field\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2, 3]\n[4, 5, 6]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2}\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidNdjsonWithCarriageReturn() {
+        // NDJSON with \r\n line endings should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\r\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\r\n{\"b\": 2}\r\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_NdjsonWithEmptyLines() {
+        // NDJSON with empty lines should return true (empty lines are ignored)
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n  \n{\"b\": 2}"));
+        assertTrue(StringUtils.isJsonOrNdjson("\n{\"key\": \"value\"}\n"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": \"value\"}\n\n"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_InvalidJson() {
+        // Invalid JSON should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{"));
+        assertFalse(StringUtils.isJsonOrNdjson("["));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key\": \"value}"));
+        assertFalse(StringUtils.isJsonOrNdjson("[1, \"a]"));
+        assertFalse(StringUtils.isJsonOrNdjson("not json"));
+        assertFalse(StringUtils.isJsonOrNdjson("123abc"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_InvalidNdjson() {
+        // NDJSON with at least one invalid line should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\ninvalid json"));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n{\"key2\": \"value2}\n{\"key3\": \"value3\"}"));
+        assertFalse(StringUtils.isJsonOrNdjson("invalid\n{\"key\": \"value\"}"));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_MixedValidInvalidLines() {
+        // Mix of valid and invalid JSON lines should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{\"valid\": true}\n{invalid}\n{\"also_valid\": true}"));
+        assertFalse(StringUtils.isJsonOrNdjson("[1, 2, 3]\nplain text\n[4, 5, 6]"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_OpenSearchBulkFormat() {
+        // OpenSearch bulk API format (action/metadata line followed by document)
+        assertTrue(StringUtils.isJsonOrNdjson("{\"index\": {\"_index\": \"test\"}}\n{\"field\": \"value\"}"));
+        assertTrue(
+            StringUtils
+                .isJsonOrNdjson(
+                    "{\"index\": {\"_index\": \"test\", \"_id\": \"1\"}}\n{\"field1\": \"value1\"}\n{\"index\": {\"_index\": \"test\", \"_id\": \"2\"}}\n{\"field2\": \"value2\"}"
+                )
+        );
+    }
+
+    @Test
     public void toUTF8() {
         String rawString = "\uD83D\uDE00\uD83D\uDE0D\uD83D\uDE1C";
         String utf8 = StringUtils.toUTF8(rawString);

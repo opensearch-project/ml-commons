@@ -51,7 +51,9 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE
+                    MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
+                    MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -233,5 +235,48 @@ public class MLFeatureEnabledSettingTests {
         mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.max_json_size", 75_000_000).build());
 
         assertEquals(75_000_000, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to enable
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build());
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to disable again
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build());
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
     }
 }
