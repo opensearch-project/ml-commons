@@ -44,6 +44,8 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.collect.Tuple;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
@@ -57,6 +59,8 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -73,18 +77,19 @@ public class HttpJsonConnectorExecutorTest {
     @Mock
     private ActionListener<Tuple<Integer, ModelTensors>> actionListener;
 
-    @BeforeClass
-    public static void setUpClass() {
-        testAppender = new TestLogAppender(LOG_APPENDER_NAME);
-        LoggerContext context = (LoggerContext) LogManager.getContext(false);
-        loggerConfig = context.getConfiguration().getLoggerConfig(logger.getName());
-        loggerConfig.addAppender(testAppender, Level.WARN, null);
-        context.updateLoggers();
-    }
+    @Mock
+    private ThreadPool threadPool;
+
+    @Mock
+    private Client client;
+
+    private ThreadContext threadContext;
 
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
     }
 
     @After
@@ -137,8 +142,11 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setConnectorPrivateIpEnabled(false);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -170,8 +178,11 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setConnectorPrivateIpEnabled(true);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -200,8 +211,11 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setConnectorPrivateIpEnabled(false);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -257,7 +271,10 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor.invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
     }
 
@@ -277,7 +294,10 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor
             .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
     }
@@ -375,6 +395,9 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(executor.getHttpClient()).thenReturn(null);
         executor
             .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);

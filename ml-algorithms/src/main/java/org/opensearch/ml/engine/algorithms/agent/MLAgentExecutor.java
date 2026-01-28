@@ -1021,6 +1021,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     encryptor,
                     hookRegistry
                 );
+            case AG_UI:
+                return new MLAGUIAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             default:
                 throw new IllegalArgumentException("Unsupported agent type");
         }
@@ -1105,8 +1116,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * by the existing agent execution logic.
      */
     void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
-        // old style agent registration
-        if (mlAgent.getModel() == null) {
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+
+        // old style agent registration, except AG_UI agent
+        if (mlAgent.getModel() == null && agentType != MLAgentType.AG_UI) {
             return;
         }
 
@@ -1128,7 +1141,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         try {
             // Extract the question text for prompt template and memory storage
             String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
-            ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
 
             // create input dataset if it doesn't exist
             if (agentMLInput.getInputDataset() == null) {
@@ -1137,10 +1149,28 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             // Set parameters to processed params
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-            Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), MLAgentType.from(mlAgent.getType()));
-            // set question to questionText for memory
-            parameters.put(QUESTION, question);
-            remoteDataSet.getParameters().putAll(parameters);
+
+            // For AG_UI agents, prepend context to question if available
+            String questionToSet = question;
+            if (agentType == MLAgentType.AG_UI) {
+                String context = remoteDataSet.getParameters().get("context");
+                if (context != null && !context.isEmpty()) {
+                    questionToSet = "Context: " + context + "\nQuestion: " + question;
+                }
+            }
+
+            // For agent with revamped interface, use ModelProvider to map the entire AgentInput
+            if (mlAgent.getModel() != null) {
+                ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+                Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
+
+                parameters.put(QUESTION, questionToSet);
+
+                remoteDataSet.getParameters().putAll(parameters);
+            } else {
+                // For old-style AG_UI agents without model field
+                remoteDataSet.getParameters().putIfAbsent(QUESTION, questionToSet);
+            }
         } catch (Exception e) {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
             throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
