@@ -258,7 +258,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "container-123");
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "container-123", null);
 
         assertEquals("container-123", parsed.getMemoryContainerId());
         assertEquals(2, parsed.getMessages().size());
@@ -285,7 +285,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null, null);
 
         assertNotNull(parsed.getMemoryContainerId());
         assertEquals(1, parsed.getMessages().size());
@@ -307,7 +307,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null, null);
 
         assertEquals(1, parsed.getMessages().size());
         assertEquals("Test", parsed.getMessages().get(0).getContent().get(0).get("text"));
@@ -578,7 +578,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "override-container");
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "override-container", null);
 
         assertEquals("override-container", parsed.getMemoryContainerId()); // Should use parameter value (security: no parsing from body)
         assertEquals(PayloadType.DATA, parsed.getPayloadType());
@@ -611,7 +611,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "test-container");
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "test-container", null);
 
         assertEquals(PayloadType.CONVERSATIONAL, parsed.getPayloadType());
     }
@@ -630,7 +630,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "override-container-id");
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "override-container-id", null);
 
         assertEquals("override-container-id", parsed.getMemoryContainerId());
     }
@@ -790,7 +790,7 @@ public class MLAddMemoriesInputTest {
         parser.nextToken();
 
         // Should throw IllegalArgumentException due to invalid memory type
-        assertThrows(IllegalArgumentException.class, () -> { MLAddMemoriesInput.parse(parser, null); });
+        assertThrows(IllegalArgumentException.class, () -> { MLAddMemoriesInput.parse(parser, null, null); });
     }
 
     @Test
@@ -842,7 +842,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "container-123");
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "container-123", null);
 
         assertEquals("checkpoint-789", parsed.getCheckpointId());
     }

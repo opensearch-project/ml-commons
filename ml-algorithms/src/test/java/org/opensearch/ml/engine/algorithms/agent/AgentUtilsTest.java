@@ -6,7 +6,10 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -17,6 +20,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
@@ -1999,5 +2003,58 @@ public class AgentUtilsTest extends MLStaticMockBase {
         when(mockConnector.getProtocol()).thenReturn("mcp_streamable_http");
         doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+    }
+
+    @Test
+    public void testSanitizeForLogging_NullInput() {
+        assertNull(AgentUtils.sanitizeForLogging(null));
+    }
+
+    @Test
+    public void testSanitizeForLogging_EmptyMap() {
+        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+        assertTrue(result.isEmpty());
+        assertNotSame(params, result);
+    }
+
+    @Test
+    public void testSanitizeForLogging_WithCredentialField() {
+        Map<String, Object> params = new HashMap<>();
+        Map<String, String> credential = new HashMap<>();
+        credential.put("accessKey", "secretAccessKey123");
+        credential.put("secretKey", "verySecretKey456");
+        params.put(CREDENTIAL_FIELD, credential);
+        params.put("endpoint", "https://example.com");
+        params.put("region", "us-west-2");
+
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+
+        // Verify credential is redacted
+        assertEquals("[REDACTED]", result.get(CREDENTIAL_FIELD));
+        // Verify other fields are unchanged
+        assertEquals("https://example.com", result.get("endpoint"));
+        assertEquals("us-west-2", result.get("region"));
+        // Verify original map is not modified
+        assertEquals(credential, params.get(CREDENTIAL_FIELD));
+        // Verify it's a different map
+        assertNotSame(params, result);
+    }
+
+    @Test
+    public void testSanitizeForLogging_WithoutCredentialField() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("endpoint", "https://example.com");
+        params.put("region", "us-west-2");
+        params.put("memory_id", "test-memory-id");
+
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+
+        // Verify all fields are unchanged
+        assertEquals("https://example.com", result.get("endpoint"));
+        assertEquals("us-west-2", result.get("region"));
+        assertEquals("test-memory-id", result.get("memory_id"));
+        // Verify it's a different map (shallow copy)
+        assertNotSame(params, result);
     }
 }

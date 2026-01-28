@@ -333,6 +333,7 @@ public class DeleteAgentTransportActionTests {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List
                 .of(
                     new MLToolSpec(
@@ -348,7 +349,7 @@ public class DeleteAgentTransportActionTests {
                     )
                 ),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
