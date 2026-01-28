@@ -203,8 +203,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                 log.error("Failed to get Agent index", cause);
                                 listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                             } else {
-                                log.error("Failed to get ML Agent {}", agentId, cause);
-                                listener.onFailure(cause);
+                                log.error("Failed to get ML Agent", cause);
+                                listener.onFailure(new OpenSearchStatusException("Failed to get agent", RestStatus.NOT_FOUND));
                             }
                         } else {
                             try {
@@ -396,7 +396,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     listener
                                         .onFailure(
                                             new OpenSearchStatusException(
-                                                "Failed to find agent with the provided agent id: " + agentId,
+                                                "Failed to find agent with the provided agent id",
                                                 RestStatus.NOT_FOUND
                                             )
                                         );

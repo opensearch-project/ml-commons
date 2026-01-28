@@ -186,28 +186,31 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
             switch (fieldName) {
                 case ACTION_TYPE_FIELD:
-                    actionType = ActionType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    String actionTypeText = parser.textOrNull();
+                    if (actionTypeText != null) {
+                        actionType = ActionType.valueOf(actionTypeText.toUpperCase(Locale.ROOT));
+                    }
                     break;
                 case NAME_FIELD:
                     name = parser.text();
                     break;
                 case METHOD_FIELD:
-                    method = parser.text();
+                    method = parser.textOrNull();
                     break;
                 case URL_FIELD:
-                    url = parser.text();
+                    url = parser.textOrNull();
                     break;
                 case HEADERS_FIELD:
                     headers = parser.mapStrings();
                     break;
                 case REQUEST_BODY_FIELD:
-                    requestBody = parser.text();
+                    requestBody = parser.textOrNull();
                     break;
                 case ACTION_PRE_PROCESS_FUNCTION:
-                    preProcessFunction = parser.text();
+                    preProcessFunction = parser.textOrNull();
                     break;
                 case ACTION_POST_PROCESS_FUNCTION:
-                    postProcessFunction = parser.text();
+                    postProcessFunction = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();
