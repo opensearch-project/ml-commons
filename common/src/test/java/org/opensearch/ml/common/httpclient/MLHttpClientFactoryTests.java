@@ -8,6 +8,7 @@ package org.opensearch.ml.common.httpclient;
 import static org.junit.Assert.assertNotNull;
 
 import java.time.Duration;
+
 import org.junit.Test;
 
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
