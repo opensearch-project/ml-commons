@@ -230,6 +230,7 @@ public class SearchIndexTool implements Tool {
     /**
      * Removes multiple layers of outer quotes from stringified JSON.
      * Handles cases like """{"key":"value"}""" -> {"key":"value"}
+     * Optimized to O(n) time complexity by counting quotes first, then doing single substring operation.
      */
     private String removeMultipleOuterQuotes(String input) {
         if (StringUtils.isEmpty(input)) {
@@ -237,27 +238,53 @@ public class SearchIndexTool implements Tool {
         }
 
         String result = input.trim();
-        int layersRemoved = 0;
-
-        // Remove multiple layers of outer quotes
-        while (result.length() > 2 && result.startsWith("\"") && result.endsWith("\"")) {
-            String unwrapped = result.substring(1, result.length() - 1);
+        
+        // Count consecutive quotes from both ends in a single pass
+        int quoteLayers = countMatchingOuterQuotes(result);
+        
+        if (quoteLayers > 0 && result.length() > 2 * quoteLayers) {
+            // Single substring operation - O(n) instead of O(n*m)
+            String unwrapped = result.substring(quoteLayers, result.length() - quoteLayers);
             try {
-                // Test if the unwrapped content is valid JSON
+                // Single JSON validation
                 PLAIN_NUMBER_GSON.fromJson(unwrapped, Object.class);
-                result = unwrapped;
-                layersRemoved++;
+                log.debug("Removed {} outer quote layer(s) from stringified JSON", quoteLayers);
+                return unwrapped;
             } catch (JsonSyntaxException e) {
-                // If unwrapping breaks JSON, stop here
+                // If unwrapping breaks JSON, return original
+                log.debug("Quote removal would break JSON structure, keeping original");
+            }
+        }
+        
+        return result;
+    }
+
+    /**
+     * Counts matching consecutive quote pairs from both ends of a string.
+     * Uses a single loop that breaks as soon as a non-quote character is encountered.
+     *
+     * @param str the string to analyze
+     * @return number of matching quote layers that can be safely removed
+     */
+    private int countMatchingOuterQuotes(String str) {
+        if (StringUtils.isEmpty(str) || str.length() < 2) {
+            return 0;
+        }
+        
+        int length = str.length();
+        int quoteLayers = 0;
+        
+        // Single loop: count matching quotes from both ends until we hit non-quote
+        for (int i = 0; i < length / 2; i++) {
+            if (str.charAt(i) == '\"' && str.charAt(length - 1 - i) == '\"') {
+                quoteLayers++;
+            } else {
+                // Break immediately when we encounter non-matching characters
                 break;
             }
         }
-
-        if (layersRemoved > 0) {
-            log.debug("Removed {} outer quote layer(s) from stringified JSON", layersRemoved);
-        }
-
-        return result;
+        
+        return quoteLayers;
     }
 
     /**
@@ -301,14 +328,14 @@ public class SearchIndexTool implements Tool {
 
         if (braceBalance < 0) {
             // Remove all extra closing braces from the end in a single pass
-            int extraClosing = Math.abs(braceBalance);
+            int extraClosing = -braceBalance;
             int endIndex = fixed.length();
             while (extraClosing > 0 && endIndex > 0 && fixed.charAt(endIndex - 1) == '}') {
                 endIndex--;
                 extraClosing--;
             }
             fixed = fixed.substring(0, endIndex);
-            log.debug("Removed {} extra closing brace(s) from malformed JSON", Math.abs(braceBalance) - extraClosing);
+            log.debug("Removed {} extra closing brace(s) from malformed JSON", 0 - braceBalance - extraClosing);
 
         } else if (braceBalance > 0) {
             // Unbalanced: more opening braces
