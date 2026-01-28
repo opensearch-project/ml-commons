@@ -19,6 +19,7 @@ import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -290,11 +291,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 finalMlAgent,
                                                 requestParameters
                                             );
-                                            log
-                                                .debug(
-                                                    "Called MLAgentExecutor in memory ID inexist case with memoryParams: {}",
-                                                    memoryParams
-                                                );
+                                            log.debug("MLAgentExecutor creating new memory, params: {}", sanitizeForLogging(memoryParams));
                                             // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
                                             Memory.Factory<Memory<?, ?, ?>> memoryFactory;
                                             if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
@@ -377,7 +374,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 finalMlAgent,
                                                 requestParameters
                                             );
-                                            log.debug("Called MLAgentExecutor in memory ID exist case with memoryParams: {}", memoryParams);
+                                            log
+                                                .debug(
+                                                    "MLAgentExecutor loading existing memory, params: {}",
+                                                    sanitizeForLogging(memoryParams)
+                                                );
                                             // For existing conversations, create memory instance using factory
                                             if (memorySpec != null && memorySpec.getType() != null) {
                                                 Memory.Factory<Memory<?, ?, ?>> memoryFactory;

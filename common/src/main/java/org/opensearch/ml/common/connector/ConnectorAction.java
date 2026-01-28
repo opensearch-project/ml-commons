@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
@@ -54,6 +55,13 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     private static final String POST_PROCESS_FUNC = "PostProcessFunction";
     private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
 
+    // Name validation constants
+    public static final int MAX_NAME_LENGTH = 64;
+    public static final String NAME_INVALID_CHARACTERS_ERROR =
+        "Action name contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed";
+    public static final String NAME_INVALID_LENGTH_ERROR = "Action name exceeds maximum length of " + MAX_NAME_LENGTH + " characters";
+    public static final String NAME_CONTROL_CHARACTERS_ERROR = "Action name must not contain control characters";
+
     private ActionType actionType;
     private String name;
     private String method;
@@ -83,13 +91,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (method == null) {
             throw new IllegalArgumentException("method can't be null");
         }
-        // The 'name' field is an optional identifier for this specific action within a connector.
-        // It allows running a specific action by name when a connector has multiple actions of the same type.
-        // We validate that 'name' is not an action type (PREDICT, EXECUTE, etc.) to avoid ambiguity
-        // when resolving actions.
-        if (name != null && ActionType.isValidAction(name)) {
-            throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
-        }
+        // Validate name (optional identifier for this specific action within a connector)
+        validateName(name);
         this.actionType = actionType;
         this.name = name;
         this.method = method;
@@ -225,6 +228,44 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             .preProcessFunction(preProcessFunction)
             .postProcessFunction(postProcessFunction)
             .build();
+    }
+
+    /**
+     * Validates the action name according to security constraints.
+     * Name must:
+     * - Be at most 64 characters long
+     * - Contain only alphanumeric characters, hyphens (-), and underscores (_)
+     * - Not contain control characters (CR, LF, etc.)
+     * - Not be an ActionType value
+     *
+     * @param name The action name to validate (null is allowed)
+     * @throws IllegalArgumentException if name violates constraints
+     */
+    private static void validateName(String name) {
+        if (name == null) {
+            return; // null is allowed (name is optional)
+        }
+
+        // Check for control characters
+        if (name.indexOf('\r') >= 0 || name.indexOf('\n') >= 0 || name.chars().anyMatch(ch -> ch < 32)) {
+            throw new IllegalArgumentException(NAME_CONTROL_CHARACTERS_ERROR);
+        }
+
+        // Check length
+        if (name.length() > MAX_NAME_LENGTH) {
+            throw new IllegalArgumentException(NAME_INVALID_LENGTH_ERROR);
+        }
+
+        // Check allowed characters: alphanumeric, hyphen, underscore
+        Pattern validPattern = Pattern.compile("^[a-zA-Z0-9_-]+$");
+        if (!validPattern.matcher(name).matches()) {
+            throw new IllegalArgumentException(NAME_INVALID_CHARACTERS_ERROR);
+        }
+
+        // Check not an action type
+        if (ActionType.isValidAction(name)) {
+            throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
+        }
     }
 
     /**

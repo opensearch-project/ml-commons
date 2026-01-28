@@ -86,7 +86,6 @@ public class RemoteAgenticConversationMemoryTest {
     @Test
     public void testClear() {
         RemoteAgenticConversationMemory memory = createTestMemory();
-
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("clear method is not supported in RemoteAgenticConversationMemory");
         memory.clear();

@@ -25,6 +25,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MAX_ITERATION;
@@ -311,7 +312,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         // todo: use chat history instead of completed steps
         Map<String, Object> memoryParams = createMemoryParams(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, mlAgent, apiParams);
-        log.debug("Called MLPlanExecuteAndReflectAgentRunner with memoryParams: {}", memoryParams);
+        log.debug("MLPlanExecuteAndReflectAgentRunner setting up memory, params: {}", sanitizeForLogging(memoryParams));
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
         if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected

@@ -13,6 +13,10 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENDPOINT_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ENDPOINT_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_ARN_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_ARN_SNAKE_CASE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -723,6 +727,23 @@ public class AgentUtils {
         return messageHistoryLimitStr != null ? Integer.parseInt(messageHistoryLimitStr) : LAST_N_INTERACTIONS;
     }
 
+    /**
+     * Sanitizes memory parameters for logging by redacting sensitive credential data.
+     *
+     * @param params The memory parameters map that may contain sensitive data
+     * @return A copy of the map with credential fields redacted, or null if input is null
+     */
+    public static Map<String, Object> sanitizeForLogging(Map<String, Object> params) {
+        if (params == null) {
+            return null;
+        }
+        Map<String, Object> sanitized = new HashMap<>(params);
+        if (sanitized.containsKey(CREDENTIAL_FIELD)) {
+            sanitized.put(CREDENTIAL_FIELD, "[REDACTED]");
+        }
+        return sanitized;
+    }
+
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = new ArrayList<>();
@@ -1139,7 +1160,7 @@ public class AgentUtils {
                     // Extract endpoint (support both legacy and explicit keys)
                     String endpointParam = (String) memoryConfig.get(ENDPOINT_FIELD);
                     if (Strings.isNullOrEmpty(endpointParam)) {
-                        endpointParam = (String) memoryConfig.get("memory_endpoint");
+                        endpointParam = (String) memoryConfig.get(MEMORY_ENDPOINT_FIELD);
                     }
                     if (!Strings.isNullOrEmpty(endpointParam)) {
                         memoryParams.put(ENDPOINT_FIELD, endpointParam);
@@ -1161,21 +1182,21 @@ public class AgentUtils {
                     }
 
                     // Check for direct roleArn field - if present, override credential map
-                    String roleArnParam = (String) memoryConfig.get("roleArn");
+                    String roleArnParam = (String) memoryConfig.get(ROLE_ARN_FIELD);
                     if (Strings.isNullOrEmpty(roleArnParam)) {
-                        roleArnParam = (String) memoryConfig.get("role_arn");
+                        roleArnParam = (String) memoryConfig.get(ROLE_ARN_SNAKE_CASE_FIELD);
                     }
                     if (!Strings.isNullOrEmpty(roleArnParam)) {
                         // Override credential with roleArn
                         Map<String, String> roleArnCredential = new HashMap<>();
-                        roleArnCredential.put("roleArn", roleArnParam);
+                        roleArnCredential.put(ROLE_ARN_FIELD, roleArnParam);
                         memoryParams.put(CREDENTIAL_FIELD, roleArnCredential);
                     }
 
                     // Extract user_id if provided
-                    String userIdParam = (String) memoryConfig.get("user_id");
+                    String userIdParam = (String) memoryConfig.get(USER_ID_FIELD);
                     if (!Strings.isNullOrEmpty(userIdParam)) {
-                        memoryParams.put("user_id", userIdParam);
+                        memoryParams.put(USER_ID_FIELD, userIdParam);
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse memory_configuration", e);

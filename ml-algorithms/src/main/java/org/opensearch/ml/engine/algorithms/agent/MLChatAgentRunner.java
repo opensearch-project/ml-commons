@@ -41,6 +41,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolNames;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseFrontendTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.wrapFrontendToolsAsToolObjects;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
@@ -220,7 +221,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
         Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
-        log.debug("MLChatAgentRunner called with memoryParams: {}", memoryParams);
+        log.debug("MLChatAgentRunner setting up memory, params: {}", sanitizeForLogging(memoryParams));
         // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
         if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {

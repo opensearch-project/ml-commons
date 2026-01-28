@@ -1209,11 +1209,6 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                             .collect(Collectors.toList())
                     );
 
-                // Log credential keys but not values for security
-                if (credentials != null && !credentials.isEmpty()) {
-                    debugInfo.put("credential_keys", credentials.keySet());
-                }
-
                 log.debug("Created inline connector for RemoteAgenticConversationMemory: {}", GSON.toJson(debugInfo));
             }
 

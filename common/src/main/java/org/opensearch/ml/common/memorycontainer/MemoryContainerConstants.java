@@ -41,6 +41,9 @@ public class MemoryContainerConstants {
     public static final String ENABLED_FIELD = "enabled";
     public static final String ENDPOINT_FIELD = "endpoint";
     public static final String CREDENTIAL_FIELD = "credential";
+    public static final String MEMORY_ENDPOINT_FIELD = "memory_endpoint";
+    public static final String ROLE_ARN_FIELD = "roleArn";
+    public static final String ROLE_ARN_SNAKE_CASE_FIELD = "role_arn";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;

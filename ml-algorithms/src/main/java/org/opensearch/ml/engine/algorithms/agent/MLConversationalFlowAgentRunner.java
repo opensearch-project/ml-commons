@@ -20,6 +20,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryP
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
 import java.security.PrivilegedActionException;
@@ -112,7 +113,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
         Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
-        log.debug("Called MLConversationalFlowAgentRunner with memoryParams: {}", memoryParams);
+        log.debug("MLConversationalFlowAgentRunner setting up memory, params: {}", sanitizeForLogging(memoryParams));
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
         if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected
