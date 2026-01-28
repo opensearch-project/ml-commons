@@ -561,12 +561,21 @@ public class AgentUtils {
     }
 
     public static String getMatchedTool(Collection<String> tools, String action) {
+        String bestMatch = null;
+        String actionLower = action.toLowerCase(Locale.ROOT);
         for (String tool : tools) {
-            if (action.toLowerCase(Locale.ROOT).contains(tool.toLowerCase(Locale.ROOT))) {
+            // Exact match takes priority
+            if (action.equalsIgnoreCase(tool)) {
                 return tool;
             }
+            // Track longest substring match to avoid prefix collisions (e.g., "get_order" vs "get_order_simple")
+            if (actionLower.contains(tool.toLowerCase(Locale.ROOT))) {
+                if (bestMatch == null || tool.length() > bestMatch.length()) {
+                    bestMatch = tool;
+                }
+            }
         }
-        return null;
+        return bestMatch;
     }
 
     public static void extractParams(Map<String, String> modelOutput, Map<String, ?> dataAsMap, String paramName) {
