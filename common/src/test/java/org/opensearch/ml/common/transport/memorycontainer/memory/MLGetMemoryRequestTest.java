@@ -96,7 +96,7 @@ public class MLGetMemoryRequestTest {
                 out.writeString("test-container");
                 out.writeEnum(MemoryType.SESSIONS);
                 out.writeString("test-memory");
-                out.writeString("test-tenant");
+                out.writeOptionalString("test-tenant");
             }
         };
 

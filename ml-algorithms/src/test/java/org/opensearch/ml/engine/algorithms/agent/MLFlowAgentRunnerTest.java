@@ -126,7 +126,7 @@ public class MLFlowAgentRunnerTest {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
-        memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
+        memoryMap = ImmutableMap.of("CONVERSATION_INDEX", mockMemoryFactory);
         mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(anyMap())).thenReturn(secondTool);
@@ -164,7 +164,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "interaction_id");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         ConversationIndexMemory memory = mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
@@ -204,7 +204,7 @@ public class MLFlowAgentRunnerTest {
     public void testRunWithNoToolSpec() {
         final Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         final MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).memory(mlMemorySpec).build();
         mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
@@ -219,7 +219,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "interaction_id");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(true).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         ConversationIndexMemory memory = mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
@@ -261,7 +261,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(null).type(FIRST_TOOL).includeOutputInAgentResponse(true).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
@@ -419,32 +419,6 @@ public class MLFlowAgentRunnerTest {
         assertEquals(SECOND_TOOL_RESPONSE, agentOutput.get(0).getResult());
     }
 
-    // @Test
-    // public void testUpdateMemory() {
-    // // Mocking MLMemorySpec
-    // MLMemorySpec memorySpec = mock(MLMemorySpec.class);
-    // when(memorySpec.getType()).thenReturn("memoryType");
-    //
-    // // Mocking Memory Factory and Memory
-    //
-    // ConversationIndexMemory.Factory memoryFactory = new ConversationIndexMemory.Factory();
-    // memoryFactory.init(client, indicesHandler, memoryManager);
-    // ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
-    // memoryFactory.create(Map.of(MEMORY_ID, "123", MEMORY_NAME, "name", APP_TYPE, "app"), listener);
-    //
-    // verify(listener).onResponse(isA(ConversationIndexMemory.class));
-    //
-    // Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
-    // memoryFactoryMap.put("memoryType", memoryFactory);
-    // mlFlowAgentRunner.setMemoryFactoryMap(memoryFactoryMap);
-    //
-    // // Execute the method under test
-    // mlFlowAgentRunner.updateMemory(new HashMap<>(), memorySpec, "memoryId", "interactionId");
-    //
-    // // Asserting that the Memory Manager's updateInteraction method was called
-    // verify(memoryManager).updateInteraction(anyString(), anyMap(), any(ActionListener.class));
-    // }
-
     @Test
     public void testRunWithUpdateFailure() {
         final Map<String, String> params = new HashMap<>();
@@ -452,7 +426,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "interaction_id");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         ConversationIndexMemory memory = mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);

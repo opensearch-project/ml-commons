@@ -276,6 +276,9 @@ public class Interaction implements Writeable, ToXContentObject, Message {
             + "}";
     }
 
+    // Interaction is a data container for conversation history. These stub implementations
+    // satisfy the Message interface contract. When Message functionality is needed,
+    // Interaction objects are converted to separate Message instances (see PromptUtil.fromInteractions()).
     @Override
     public String getType() {
         return "";

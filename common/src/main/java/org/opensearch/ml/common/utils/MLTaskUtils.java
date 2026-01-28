@@ -85,17 +85,17 @@ public class MLTaskUtils {
         UpdateDataObjectRequest updateDataObjectRequest = requestBuilder.build();
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((r, throwable) -> {
-                context.restore();
                 if (throwable != null) {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     log.error("Failed to update ML task {}", taskId, cause);
-                    listener.onFailure(cause);
+                    wrappedListener.onFailure(cause);
                 } else {
                     try {
-                        listener.onResponse(r.updateResponse());
+                        wrappedListener.onResponse(r.updateResponse());
                     } catch (Exception e) {
-                        listener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 }
             });

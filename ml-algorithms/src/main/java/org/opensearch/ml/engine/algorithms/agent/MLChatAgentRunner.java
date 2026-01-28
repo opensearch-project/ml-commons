@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOO
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_FRONTEND_TOOL_NAMES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
+import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -209,7 +210,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             return;
         }
 
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
         String title = params.get(MLAgentExecutor.QUESTION);
@@ -222,13 +223,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
         log.debug("MLChatAgentRunner called with memoryParams: {}", memoryParams);
         // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
-        if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+        if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected
             memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
             log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
         } else {
             // Use the originally specified memory factory
             memoryFactory = memoryFactoryMap.get(memoryType);
+        }
+        if (memoryFactory == null) {
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "Memory factory not found for type: "
+                            + (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)
+                                ? MLMemoryType.REMOTE_AGENTIC_MEMORY.name()
+                                : memoryType)
+                    )
+                );
+            return;
         }
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0

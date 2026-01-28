@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
@@ -137,10 +138,10 @@ public class MLChatAgentRunnerTest {
         mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10, null);
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onResponse(generateInteractions(2));
             return null;
-        }).when(conversationIndexMemory).getMessages(messageHistoryLimitCapture.capture(), memoryInteractionCapture.capture());
+        }).when(conversationIndexMemory).getMessages(anyInt(), memoryInteractionCapture.capture());
         when(conversationIndexMemory.getConversationId()).thenReturn("conversation_id");
         when(conversationIndexMemory.getId()).thenReturn("conversation_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
@@ -401,7 +402,7 @@ public class MLChatAgentRunnerTest {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             List<Interaction> interactionList = generateInteractions(2);
             Interaction inProgressInteraction = Interaction.builder().id("interaction-99").input("input-99").response(null).build();
             interactionList.add(inProgressInteraction);
@@ -457,7 +458,7 @@ public class MLChatAgentRunnerTest {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             List<Interaction> interactionList = generateInteractions(2);
             Interaction inProgressInteraction = Interaction.builder().id("interaction-99").input("input-99").response(null).build();
             interactionList.add(inProgressInteraction);
@@ -490,7 +491,7 @@ public class MLChatAgentRunnerTest {
 
         doAnswer(invocation -> {
 
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("Test Exception"));
             return null;
         }).when(conversationIndexMemory).getMessages(messageHistoryLimitCapture.capture(), memoryInteractionCapture.capture());
@@ -518,13 +519,26 @@ public class MLChatAgentRunnerTest {
         // Mock memory factory to return a fresh memory (just created)
         ConversationIndexMemory freshMemory = Mockito.mock(ConversationIndexMemory.class);
         when(freshMemory.getConversationId()).thenReturn("new_conversation_id");
+        when(freshMemory.getId()).thenReturn("new_conversation_id");
         when(freshMemory.getMemoryManager()).thenReturn(mlMemoryManager);
+
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
+            listener.onResponse(generateInteractions(2));
+            return null;
+        }).when(freshMemory).getMessages(anyInt(), any());
 
         doAnswer(invocation -> {
             ActionListener<CreateInteractionResponse> listener = invocation.getArgument(4);
             listener.onResponse(createInteractionResponse);
             return null;
         }).when(freshMemory).save(any(), any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(freshMemory).update(any(), any(), any());
 
         // Mock the memory factory to indicate this is a fresh conversation
         doAnswer(invocation -> {
@@ -533,14 +547,16 @@ public class MLChatAgentRunnerTest {
             return null;
         }).when(memoryFactory).create(any(), any());
 
+        // Mock LLM response with final answer
+        doAnswer(getLLMAnswer(ImmutableMap.of("thought", "test thought", "final_answer", "This is the final answer")))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
         HashMap<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
         params.put("fresh_memory", "true");
 
         mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
-
-        // Verify that getMessages was never called on the fresh memory (memory fetch was skipped)
-        verify(freshMemory, never()).getMessages(any(), any());
 
         // Verify that the agent still completes successfully
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -914,7 +930,7 @@ public class MLChatAgentRunnerTest {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             List<Interaction> interactionList = generateInteractions(2);
             Interaction inProgressInteraction = Interaction.builder().id("interaction-99").input("input-99").response(null).build();
             interactionList.add(inProgressInteraction);

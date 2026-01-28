@@ -876,17 +876,17 @@ public class AgentUtils {
             .build();
 
         try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Connector> wrappedListener = ActionListener.runBefore(listener, ctx::restore);
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
                 log.debug("Completed Get Connector Request, id:{}", connectorId);
-                ctx.restore();
                 if (throwable != null) {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
                         log.error("Failed to get connector index", cause);
-                        listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                        wrappedListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get ML connector {}", connectorId, cause);
-                        listener.onFailure(cause);
+                        wrappedListener.onFailure(cause);
                     }
                 } else {
                     try {
@@ -900,17 +900,17 @@ public class AgentUtils {
                             ) {
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector connector = Connector.createConnector(parser);
-                                listener.onResponse(connector);
+                                wrappedListener.onResponse(connector);
                             } catch (Exception e) {
                                 log.error("Failed to parse connector:{}", connectorId);
-                                listener.onFailure(e);
+                                wrappedListener.onFailure(e);
                             }
                         } else {
-                            listener
+                            wrappedListener
                                 .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
                         }
                     } catch (Exception e) {
-                        listener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 }
             });
@@ -1181,7 +1181,9 @@ public class AgentUtils {
                     log.error("Failed to parse memory_configuration", e);
                 }
             }
-            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+            if (mlAgent != null) {
+                memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+            }
         }
         return memoryParams;
     }

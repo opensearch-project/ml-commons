@@ -154,7 +154,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         MLAddMemoriesInput input = MLAddMemoriesInput
             .builder()
             .memoryContainerId(memoryContainerId)
-            .structuredData(structuredData)
+            .structuredDataBlob(structuredData)
             .messageId(traceNum) // Store trace number in messageId field (null for messages)
             .namespace(namespace)
             .metadata(metadata)
@@ -197,7 +197,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 return;
             }
 
-            Map<String, Object> structuredData = workingMemory.getStructuredData();
+            Map<String, Object> structuredData = workingMemory.getStructuredDataBlob();
             if (structuredData == null) {
                 structuredData = new HashMap<>();
             } else {
@@ -215,9 +215,9 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             // Update the timestamp
             structuredData.put("updated_time", java.time.Instant.now().toString());
 
-            // Step 4: Create update request with merged structured_data
+            // Step 4: Create update request with merged structured_data_blob
             Map<String, Object> finalUpdateContent = new HashMap<>();
-            finalUpdateContent.put("structured_data", structuredData);
+            finalUpdateContent.put("structured_data_blob", structuredData);
 
             MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(finalUpdateContent).build();
 
@@ -263,7 +263,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         // Match ConversationIndexMemory pattern: exclude entries with trace_number
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
         boolQuery.must(QueryBuilders.termQuery("namespace." + SESSION_ID_FIELD, conversationId));
-        boolQuery.mustNot(QueryBuilders.existsQuery("structured_data.trace_number")); // Exclude traces
+        boolQuery.mustNot(QueryBuilders.existsQuery("structured_data_blob.trace_number")); // Exclude traces
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(boolQuery);
@@ -293,9 +293,9 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         for (SearchHit hit : searchResponse.getHits().getHits()) {
             Map<String, Object> sourceMap = hit.getSourceAsMap();
 
-            // Extract structured_data which contains the interaction data
+            // Extract structured_data_blob which contains the interaction data
             @SuppressWarnings("unchecked")
-            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data");
+            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
 
             if (structuredData != null) {
                 String input = (String) structuredData.get("input");
@@ -421,9 +421,9 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         for (SearchHit hit : searchResponse.getHits().getHits()) {
             Map<String, Object> sourceMap = hit.getSourceAsMap();
 
-            // Extract structured_data which contains the trace data
+            // Extract structured_data_blob which contains the trace data
             @SuppressWarnings("unchecked")
-            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data");
+            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
 
             if (structuredData != null) {
                 String input = (String) structuredData.get("input");

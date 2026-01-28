@@ -161,10 +161,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(testMemoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         // Setup client to return successful response
         doAnswer(invocation -> {
@@ -183,7 +183,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
-        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(MemoryType.class));
         verify(memoryContainerHelper)
@@ -219,10 +219,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(testMemoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         // Setup access control to deny access
         when(memoryContainerHelper.checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class))).thenReturn(false);
@@ -231,7 +231,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         action.doExecute(task, getRequest, actionListener);
 
         // Verify memory container helper was called
-        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         // Verify access control was checked
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
@@ -254,10 +254,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(testMemoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class))).thenReturn(true);
 
@@ -280,7 +280,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         action.doExecute(task, getRequest, actionListener);
 
         // Verify memory container helper was called
-        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         // Verify access control was checked
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
@@ -303,10 +303,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(testMemoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         // Setup client to return response with isExists() as false
         doAnswer(invocation -> {
@@ -322,7 +322,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
-        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(MemoryType.class));
         verify(memoryContainerHelper)
@@ -347,10 +347,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(testMemoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         // Setup client to throw an exception when get() is called
         doAnswer(invocation -> {
@@ -365,7 +365,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
-        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(MemoryType.class));
         verify(memoryContainerHelper)
@@ -387,10 +387,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(testMemoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(2);
@@ -404,7 +404,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         action.doExecute(task, getRequest, actionListener);
 
-        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(MemoryType.class));
         verify(memoryContainerHelper)
@@ -458,6 +458,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.FORBIDDEN, statusException.status());
         
         // Verify that no other operations were attempted
-        verify(memoryContainerHelper, never()).getMemoryContainer(any(String.class), any(ActionListener.class));
+        verify(memoryContainerHelper, never()).getMemoryContainer(any(String.class), any(), any(ActionListener.class));
     }
 }

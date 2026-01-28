@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
@@ -301,7 +302,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         String memoryId = allParams.get(MEMORY_ID_FIELD);
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
@@ -312,7 +313,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, Object> memoryParams = createMemoryParams(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, mlAgent, apiParams);
         log.debug("Called MLPlanExecuteAndReflectAgentRunner with memoryParams: {}", memoryParams);
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
-        if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+        if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected
             memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
             log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
@@ -320,7 +321,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             // Use the originally specified memory factory
             memoryFactory = memoryFactoryMap.get(memoryType);
         }
-
+        if (memoryFactory == null) {
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "Memory factory not found for type: "
+                            + (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)
+                                ? MLMemoryType.REMOTE_AGENTIC_MEMORY.name()
+                                : memoryType)
+                    )
+                );
+            return;
+        }
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
                 List<String> completedSteps = new ArrayList<>();

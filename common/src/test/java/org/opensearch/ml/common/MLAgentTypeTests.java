@@ -44,14 +44,14 @@ public class MLAgentTypeTests {
     public void testFromWithInvalidType() {
         // This should throw an IllegalArgumentException
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("INVALID_TYPE is not a valid Agent Type");
+        exceptionRule.expectMessage("Wrong Agent type");
         MLAgentType.from("INVALID_TYPE");
     }
 
     @Test
     public void testFromWithEmptyString() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage(" is not a valid Agent Type");
+        exceptionRule.expectMessage("Wrong Agent type");
         // This should also throw an IllegalArgumentException
         MLAgentType.from("");
     }

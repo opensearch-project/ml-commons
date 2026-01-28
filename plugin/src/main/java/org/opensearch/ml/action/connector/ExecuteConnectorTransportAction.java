@@ -79,6 +79,11 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             return;
         }
 
+        // instanceof returns false for null, so this also validates non-null
+        if (!(executeConnectorRequest.getMlInput().getInputDataset() instanceof RemoteInferenceInputDataSet)) {
+            actionListener.onFailure(new IllegalArgumentException("Input dataset must be of type RemoteInferenceInputDataSet"));
+            return;
+        }
         RemoteInferenceInputDataSet inputDataset = (RemoteInferenceInputDataSet) executeConnectorRequest.getMlInput().getInputDataset();
         String connectorAction = ConnectorAction.ActionType.EXECUTE.name();
         if (inputDataset.getParameters() != null && inputDataset.getParameters().get(CONNECTOR_ACTION_FIELD) != null) {
@@ -117,19 +122,25 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         } else {
             connector.decrypt(action, (credential, tenantId) -> credential, connectorTenantId);
         }
-        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
-        connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
-        connectorExecutor.setScriptService(scriptService);
-        connectorExecutor.setClusterService(clusterService);
-        connectorExecutor.setClient(client);
-        connectorExecutor.setXContentRegistry(xContentRegistry);
-        connectorExecutor.executeAction(action, request.getMlInput(), ActionListener.wrap(response -> {
-            connector.removeCredential();
-            listener.onResponse(response);
-        }, e -> {
+        try {
+            RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                .initInstance(connector.getProtocol(), connector, Connector.class);
+            connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+            connectorExecutor.setScriptService(scriptService);
+            connectorExecutor.setClusterService(clusterService);
+            connectorExecutor.setClient(client);
+            connectorExecutor.setXContentRegistry(xContentRegistry);
+            connectorExecutor.executeAction(action, request.getMlInput(), ActionListener.wrap(response -> {
+                connector.removeCredential();
+                listener.onResponse(response);
+            }, e -> {
+                connector.removeCredential();
+                listener.onFailure(e);
+            }));
+        } catch (Exception e) {
             connector.removeCredential();
             listener.onFailure(e);
-        }));
+        }
     }
 
 }

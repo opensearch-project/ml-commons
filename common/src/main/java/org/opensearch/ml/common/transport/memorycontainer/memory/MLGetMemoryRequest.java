@@ -49,7 +49,7 @@ public class MLGetMemoryRequest extends ActionRequest {
         this.memoryContainerId = in.readString();
         this.memoryType = in.readEnum(MemoryType.class);
         this.memoryId = in.readString();
-        this.tenantId = in.readString();
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -58,7 +58,7 @@ public class MLGetMemoryRequest extends ActionRequest {
         out.writeString(this.memoryContainerId);
         out.writeEnum(this.memoryType);
         out.writeString(this.memoryId);
-        out.writeString(this.tenantId);
+        out.writeOptionalString(this.tenantId);
     }
 
     @Override

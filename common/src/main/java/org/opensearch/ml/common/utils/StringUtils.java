@@ -169,9 +169,6 @@ public class StringUtils {
 
         // Check if it's NDJSON (newline-delimited JSON)
         String[] lines = json.split("\\r?\\n");
-        if (lines.length == 0) {
-            return false;
-        }
 
         // Each non-empty line must be valid JSON
         for (String line : lines) {

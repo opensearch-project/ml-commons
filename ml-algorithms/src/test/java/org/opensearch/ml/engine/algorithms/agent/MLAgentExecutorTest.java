@@ -308,7 +308,7 @@ public class MLAgentExecutorTest {
             mlAgentExecutor.getAgentRunner(agent, null);
             fail("Expected IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
-            assertEquals("UNSUPPORTED_TYPE is not a valid Agent Type", exception.getMessage());
+            assertEquals("Wrong Agent type", exception.getMessage());
         }
     }
 
@@ -924,7 +924,7 @@ public class MLAgentExecutorTest {
 
         List<Message> messages = Arrays.asList(userMessage, assistantMessage);
 
-        Mockito.when(memory.getConversationId()).thenReturn("conv-123");
+        Mockito.when(memory.getId()).thenReturn("conv-123");
         CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
         Mockito.when(interaction.getId()).thenReturn("interaction-1");
         Mockito.doAnswer(invocation -> {
@@ -974,7 +974,7 @@ public class MLAgentExecutorTest {
 
         List<Message> messages = Arrays.asList(user1, assistant1, user2, assistant2);
 
-        Mockito.when(memory.getConversationId()).thenReturn("conv-456");
+        Mockito.when(memory.getId()).thenReturn("conv-456");
         CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
         Mockito.when(interaction.getId()).thenReturn("interaction-1");
         Mockito.doAnswer(invocation -> {
@@ -1023,7 +1023,7 @@ public class MLAgentExecutorTest {
 
         List<Message> messages = Arrays.asList(user1, assistant1, user2);
 
-        Mockito.when(memory.getConversationId()).thenReturn("conv-789");
+        Mockito.when(memory.getId()).thenReturn("conv-789");
         CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
         Mockito.when(interaction.getId()).thenReturn("interaction-1");
         Mockito.doAnswer(invocation -> {
@@ -1066,7 +1066,7 @@ public class MLAgentExecutorTest {
 
         List<Message> messages = Arrays.asList(userMessage, assistantMessage);
 
-        Mockito.when(memory.getConversationId()).thenReturn("conv-multi");
+        Mockito.when(memory.getId()).thenReturn("conv-multi");
         CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
         Mockito.when(interaction.getId()).thenReturn("interaction-1");
         Mockito.doAnswer(invocation -> {
@@ -1107,7 +1107,7 @@ public class MLAgentExecutorTest {
 
         List<Message> messages = Arrays.asList(systemMessage, userMessage, assistantMessage);
 
-        Mockito.when(memory.getConversationId()).thenReturn("conv-system");
+        Mockito.when(memory.getId()).thenReturn("conv-system");
         CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
         Mockito.when(interaction.getId()).thenReturn("interaction-1");
         Mockito.doAnswer(invocation -> {
@@ -1144,7 +1144,7 @@ public class MLAgentExecutorTest {
 
         List<Message> messages = Arrays.asList(userMessage, null, assistantMessage);
 
-        Mockito.when(memory.getConversationId()).thenReturn("conv-null");
+        Mockito.when(memory.getId()).thenReturn("conv-null");
         CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
         Mockito.when(interaction.getId()).thenReturn("interaction-1");
         Mockito.doAnswer(invocation -> {

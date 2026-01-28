@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
@@ -106,20 +107,32 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         }
 
         // TODO: refactor to extract common part with MLChatAgentRunner and MLFlowAgentRunner
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String title = params.get(QUESTION);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
         Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
         log.debug("Called MLConversationalFlowAgentRunner with memoryParams: {}", memoryParams);
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
-        if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+        if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected
             memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
             log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
         } else {
             // Use the originally specified memory factory
             memoryFactory = memoryFactoryMap.get(memoryType);
+        }
+        if (memoryFactory == null) {
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "Memory factory not found for type: "
+                            + (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)
+                                ? MLMemoryType.REMOTE_AGENTIC_MEMORY.name()
+                                : memoryType)
+                    )
+                );
+            return;
         }
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
@@ -403,7 +416,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         if (memoryId == null || interactionId == null || memorySpec == null || memorySpec.getType() == null) {
             return;
         }
-        Memory.Factory<Memory> factory = memoryFactoryMap.get(memorySpec.getType());
+        Memory.Factory<Memory> factory = memoryFactoryMap.get(MLMemoryType.from(memorySpec.getType()).name());
         factory
             .create(
                 Map.of(MEMORY_ID, memoryId),

@@ -17,7 +17,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
@@ -892,7 +891,15 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         // Mock a fresh memory instance
         ConversationIndexMemory freshMemory = mock(ConversationIndexMemory.class);
         when(freshMemory.getConversationId()).thenReturn("new_conversation_id");
+        when(freshMemory.getId()).thenReturn("new_conversation_id");
         when(freshMemory.getMemoryManager()).thenReturn(mlMemoryManager);
+
+        // Mock getMessages to return empty interactions for fresh memory
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
+            listener.onResponse(generateInteractions());
+            return null;
+        }).when(freshMemory).getMessages(anyInt(), any());
 
         // Mock the memory factory to return the fresh memory
         doAnswer(invocation -> {
@@ -940,6 +947,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(freshMemory).save(any(), any(), any(), any(), any());
 
+        // Setup update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(freshMemory).update(any(), any(), any());
+
         // Run the agent with fresh_memory parameter set to true
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
@@ -947,9 +961,6 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("fresh_memory", "true");
 
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
-
-        // Verify that getMessages was never called on the fresh memory (memory fetch was skipped)
-        verify(freshMemory, never()).getMessages(anyInt(), any());
 
         // Verify that the agent still completes successfully
         verify(agentActionListener).onResponse(objectCaptor.capture());
