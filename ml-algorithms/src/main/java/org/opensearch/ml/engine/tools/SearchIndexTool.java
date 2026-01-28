@@ -22,6 +22,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.ParsingException;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -71,11 +72,15 @@ public class SearchIndexTool implements Tool {
             + "Returns documents matching the query in the provided index.";
 
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
-        + "\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
-        + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. You need to get index mapping to write correct search query. It must be a valid OpenSearch query."
-        + " Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}\\n"
-        + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
-        + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
+        + "\"properties\":{"
+        + "\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. Example: index1\"},"
+        + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch Query DSL as a JSON object. "
+        + "The object MUST follow OpenSearch Query DSL and MUST include a top-level 'query' field. "
+        + "Preferred format for reliable parsing. "
+        + "Example: {\\\"query\\\":{\\\"match\\\":{\\\"field\\\":\\\"value\\\"}},\\\"size\\\":10}. "
+        + "String format is also supported for backward compatibility, but object format is strongly recommended.\"}},"
+        + "\"required\":[\"index\",\"query\"],"
+        + "\"additionalProperties\":false}";
 
     private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 
@@ -131,10 +136,267 @@ public class SearchIndexTool implements Tool {
         return true;
     }
 
+    /**
+     * Normalizes a JsonElement query parameter to a proper JSON string.
+     * Handles both JSON objects and malformed JSON strings from LLMs.
+     */
+    private String normalizeQueryParameter(JsonElement queryElement) {
+        if (queryElement == null || queryElement.isJsonNull()) {
+            return null;
+        }
+        if (queryElement.isJsonObject()) {
+            return PLAIN_NUMBER_GSON.toJson(queryElement);
+        } else if (queryElement.isJsonPrimitive() && queryElement.getAsJsonPrimitive().isString()) {
+            String queryString = queryElement.getAsString();
+            log.debug("Processing query as string (backward compatibility mode). Consider using object format for better reliability.");
+            return normalizeQueryString(queryString);
+        } else {
+            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
+            return PLAIN_NUMBER_GSON.toJson(queryObject);
+        }
+    }
+
+    /**
+     * Attempts to normalize and fix common JSON string formatting issues from LLMs.
+     * Provides graceful fallback for malformed query strings.
+     */
+    String normalizeQueryString(String queryString) {
+        if (StringUtils.isEmpty(queryString)) {
+            return queryString;
+        }
+
+        try {
+            Object parsed = PLAIN_NUMBER_GSON.fromJson(queryString, Object.class);
+            if (parsed instanceof String s && !StringUtils.isEmpty(s)) {
+                try {
+                    Object reparsed = PLAIN_NUMBER_GSON.fromJson(s, Object.class);
+                    // Only unwrap if the inner content is structured JSON (object/array), not another string.
+                    if (!(reparsed instanceof String)) {
+                        return PLAIN_NUMBER_GSON.toJson(reparsed);
+                    }
+                } catch (JsonSyntaxException ignored) {
+                    // fall through to return the original parsed form
+                }
+            }
+            return PLAIN_NUMBER_GSON.toJson(parsed);
+        } catch (JsonSyntaxException e) {
+            log.debug("Initial query parsing failed, attempting to fix common LLM formatting issues: {}", e.getMessage());
+        }
+
+        // Try conservative fixes first: outer quote removal and brace balancing
+        String fixedQuery = queryString.trim();
+
+        // 1. Remove multiple outer quotes (handles single and multiple layers)
+        String multiQuoteFixed = removeMultipleOuterQuotes(fixedQuery);
+        if (!multiQuoteFixed.equals(fixedQuery)) {
+            try {
+                Object parsed = PLAIN_NUMBER_GSON.fromJson(multiQuoteFixed, Object.class);
+                log.debug("Successfully fixed query by removing outer quotes");
+                return PLAIN_NUMBER_GSON.toJson(parsed);
+            } catch (JsonSyntaxException ignored) {
+                // Continue with other fixes
+            }
+        }
+
+        // 2. Try brace balancing (conservative - only removes extra braces)
+        String braceFixed = fixMalformedJson(fixedQuery);
+        if (!braceFixed.equals(fixedQuery)) {
+            try {
+                Object parsed = PLAIN_NUMBER_GSON.fromJson(braceFixed, Object.class);
+                log.debug("Successfully fixed malformed query through brace balancing");
+                return PLAIN_NUMBER_GSON.toJson(parsed);
+            } catch (JsonSyntaxException ignored) {
+                // Continue with escape sequence fixes
+            }
+        }
+
+        // 3. Conservative escape sequence fixes (parser-validated)
+        String escapeFixed = fixEscapeSequencesConservatively(queryString);
+        if (!escapeFixed.equals(queryString)) {
+            try {
+                Object parsed = PLAIN_NUMBER_GSON.fromJson(escapeFixed, Object.class);
+                log.debug("Successfully fixed malformed query through conservative escape correction");
+                return PLAIN_NUMBER_GSON.toJson(parsed);
+            } catch (JsonSyntaxException ignored) {
+                // All fixes failed, return original
+            }
+        }
+
+        // All normalization attempts failed - return original to preserve semantics
+        log.warn("Could not auto-fix malformed query (length: {}), using original to preserve semantics", queryString.length());
+        return queryString;
+    }
+
+    /**
+     * Removes multiple layers of outer quotes from stringified JSON.
+     * Handles cases like """{"key":"value"}""" -> {"key":"value"}
+     * Optimized to O(n) time complexity by counting quotes first, then doing single substring operation.
+     */
+    private String removeMultipleOuterQuotes(String input) {
+        if (StringUtils.isEmpty(input)) {
+            return input;
+        }
+
+        String result = input.trim();
+
+        // Count consecutive quotes from both ends in a single pass
+        int quoteLayers = countMatchingOuterQuotes(result);
+
+        if (quoteLayers > 0 && result.length() > 2 * quoteLayers) {
+            // Single substring operation - O(n) instead of O(n*m)
+            String unwrapped = result.substring(quoteLayers, result.length() - quoteLayers);
+            try {
+                // Single JSON validation
+                PLAIN_NUMBER_GSON.fromJson(unwrapped, Object.class);
+                log.debug("Removed {} outer quote layer(s) from stringified JSON", quoteLayers);
+                return unwrapped;
+            } catch (JsonSyntaxException e) {
+                // If unwrapping breaks JSON, return original
+                log.debug("Quote removal would break JSON structure, keeping original");
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Counts matching consecutive quote pairs from both ends of a string.
+     * Uses a single loop that breaks as soon as a non-quote character is encountered.
+     *
+     * @param str the string to analyze
+     * @return number of matching quote layers that can be safely removed
+     */
+    private int countMatchingOuterQuotes(String str) {
+        if (StringUtils.isEmpty(str) || str.length() < 2) {
+            return 0;
+        }
+
+        int length = str.length();
+        int quoteLayers = 0;
+
+        // Single loop: count matching quotes from both ends until we hit non-quote
+        for (int i = 0; i < length / 2; i++) {
+            if (str.charAt(i) == '\"' && str.charAt(length - 1 - i) == '\"') {
+                quoteLayers++;
+            } else {
+                // Break immediately when we encounter non-matching characters
+                break;
+            }
+        }
+
+        return quoteLayers;
+    }
+
+    /**
+     * Conservative escape sequence fixes using Apache Commons Text for safety.
+     * Only applies minimal fixes to avoid changing query semantics.
+     */
+    private String fixEscapeSequencesConservatively(String input) {
+        if (StringUtils.isEmpty(input)) {
+            return input;
+        }
+
+        if (!(input.contains("\\\"") || input.contains("\\\\"))) {
+            return input;
+        }
+
+        try {
+            String unescaped = org.apache.commons.text.StringEscapeUtils.unescapeJson(input);
+
+            // Validate that unescaped content is still valid JSON
+            PLAIN_NUMBER_GSON.fromJson(unescaped, Object.class);
+
+            log.debug("Applied conservative JSON unescaping");
+            return unescaped;
+        } catch (Exception e) {
+            log.debug("Conservative JSON unescaping failed, using original: {}", e.getMessage());
+            return input;
+        }
+    }
+
+    /**
+     * Fixes common JSON malformation issues in input strings.
+     * Only removes extra closing braces - does not add missing structure to avoid changing query semantics.
+     */
+    private String fixMalformedJson(String input) {
+        if (StringUtils.isEmpty(input)) {
+            return input;
+        }
+
+        String fixed = input.trim();
+        int braceBalance = countBraces(fixed);
+
+        if (braceBalance < 0) {
+            // Remove all extra closing braces from the end in a single pass
+            int extraClosing = -braceBalance;
+            int originalExtraClosing = extraClosing;
+            int endIndex = fixed.length();
+            while (extraClosing > 0 && endIndex > 0 && fixed.charAt(endIndex - 1) == '}') {
+                endIndex--;
+                extraClosing--;
+            }
+            fixed = fixed.substring(0, endIndex);
+            int bracesRemoved = originalExtraClosing - extraClosing;
+            log.debug("Removed {} extra closing brace(s) from malformed JSON", bracesRemoved);
+
+        } else if (braceBalance > 0) {
+            // Unbalanced: more opening braces
+            log.debug("Unbalanced JSON: missing {} closing brace(s), cannot safely auto-fix without changing semantics", braceBalance);
+            return input;
+        }
+
+        // If braceBalance == 0, JSON is already balanced
+        return fixed;
+    }
+
+    /**
+     * Counts the balance of opening vs closing braces.
+     * Returns 0 for balanced, positive for more opening braces, negative for more closing braces.
+     */
+    private int countBraces(String json) {
+        int balance = 0;
+        boolean inString = false;
+        boolean escaped = false;
+
+        for (char c : json.toCharArray()) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (c == '{') {
+                    balance++;
+                } else if (c == '}') {
+                    balance--;
+                }
+            }
+        }
+
+        return balance;
+    }
+
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
-        searchSourceBuilder.parseXContent(queryParser);
+        try {
+            XContentParser queryParser = XContentType.JSON
+                .xContent()
+                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
+            searchSourceBuilder.parseXContent(queryParser);
+        } catch (Exception e) {
+            // Create a ParsingException without a cause to prevent unwrapping to JsonParseException
+            throw new ParsingException(null, "ParsingException[Invalid query format]: " + e.getMessage());
+        }
         return new SearchRequest().source(searchSourceBuilder).indices(index);
     }
 
@@ -177,20 +439,21 @@ public class SearchIndexTool implements Tool {
             String index = null;
             String query = null;
             boolean returnFullResponse = Boolean.parseBoolean(parameters.getOrDefault(RETURN_RAW_RESPONSE, "false"));
+
             if (!StringUtils.isEmpty(input)) {
                 try {
-                    JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
+                    String fixedInput = fixMalformedJson(input);
+                    JsonObject jsonObject = GSON.fromJson(fixedInput, JsonObject.class);
                     if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
                         index = jsonObject.get(INDEX_FIELD).getAsString();
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
 
                         if (queryElement != null) {
-                            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
-                            query = PLAIN_NUMBER_GSON.toJson(queryObject);
+                            query = normalizeQueryParameter(queryElement);
                         }
                     }
                 } catch (JsonSyntaxException e) {
-                    log.error("Invalid JSON input: {}", input, e);
+                    log.error("Invalid JSON input (length: {}): {}", input != null ? input.length() : 0, e.getMessage());
                 }
             }
 
@@ -199,7 +462,14 @@ public class SearchIndexTool implements Tool {
             }
 
             if (StringUtils.isEmpty(query)) {
-                query = parameters.get(QUERY_FIELD);
+                String rawQuery = parameters.get(QUERY_FIELD);
+                if (!StringUtils.isEmpty(rawQuery)) {
+                    log
+                        .debug(
+                            "Processing query parameter as string (backward compatibility mode). Consider using object format for better reliability."
+                        );
+                    query = normalizeQueryString(rawQuery);
+                }
             }
 
             if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
@@ -212,7 +482,26 @@ public class SearchIndexTool implements Tool {
                 return;
             }
 
-            SearchRequest searchRequest = getSearchRequest(index, query);
+            SearchRequest searchRequest;
+            try {
+                searchRequest = getSearchRequest(index, query);
+            } catch (Exception e) {
+                log.error("Failed to parse search query. Index: {}", index, e);
+
+                if (e instanceof ParsingException) {
+                    listener.onFailure(e);
+                } else {
+                    listener
+                        .onFailure(
+                            new ParsingException(
+                                null,
+                                "Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage(),
+                                e
+                            )
+                        );
+                }
+                return;
+            }
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();
