@@ -12,6 +12,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -151,14 +152,14 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             ActionListener<ConversationIndexMemory> listener = invocation.getArgument(1);
             listener.onResponse(conversationIndexMemory);
             return null;
-        }).when(memoryFactory).create(any(), any(), any(), any());
+        }).when(memoryFactory).create(any(), memoryFactoryCapture.capture());
 
         // Setup conversation index memory
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onResponse(generateInteractions());
             return null;
-        }).when(conversationIndexMemory).getMessages(any(ActionListener.class), any(Integer.class));
+        }).when(conversationIndexMemory).getMessages(anyInt(), memoryInteractionCapture.capture());
 
         // Setup memory manager
         doAnswer(invocation -> {
@@ -390,7 +391,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("executor_message_history_limit", "3");
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
-        verify(conversationIndexMemory).getMessages(any(ActionListener.class), eq(5));
+        verify(conversationIndexMemory).getMessages(eq(5), any());
 
         ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
         verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());
@@ -420,6 +421,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
@@ -459,6 +467,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
 
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put("parent_interaction_id", "test_parent_interaction_id");
@@ -493,6 +508,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
 
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put("parent_interaction_id", "test_parent_interaction_id");
@@ -515,10 +537,10 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         MLAgent mlAgent = createMLAgentWithTools();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onResponse(Collections.emptyList());
             return null;
-        }).when(conversationIndexMemory).getMessages(any(ActionListener.class), any(Integer.class));
+        }).when(conversationIndexMemory).getMessages(anyInt(), any());
 
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(2);
@@ -531,6 +553,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
@@ -1024,7 +1053,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             assertEquals("test_executor_memory_id", response.get("executor_agent_memory_id"));
             assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
 
-            mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
+            mlTaskUtilsMockedStatic
+                .verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), eq(sdkClient), any()));
         }
     }
 
@@ -1033,16 +1063,23 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         MLAgent mlAgent = createMLAgentWithTools();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onResponse(Arrays.asList(Interaction.builder().id("i1").input("step1").response("").build()));
             return null;
-        }).when(conversationIndexMemory).getMessages(any(ActionListener.class), any(Integer.class));
+        }).when(conversationIndexMemory).getMessages(anyInt(), any());
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         Map<String, String> params = new HashMap<>();
         params.put("question", "test");
@@ -1084,6 +1121,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         Map<String, String> params = new HashMap<>();
         params.put("question", "test");
@@ -1195,6 +1239,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         Map<String, String> params = new HashMap<>();
         params.put("question", "test");
