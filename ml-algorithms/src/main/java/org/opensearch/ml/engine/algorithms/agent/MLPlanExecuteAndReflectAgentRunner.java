@@ -909,7 +909,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             summaryParams.putAll(allParams);
 
             String userObjective = allParams.get(USER_PROMPT_FIELD);
-            String steps = String.format(Locale.ROOT, String.join("\n", completedSteps));
+            String steps = String.join("\n", completedSteps);
             String promptWithObjective = String
                 .format("Objective: %s\n\nCompleted Steps:\n%s", userObjective != null ? userObjective : "", steps);
             summaryParams.put(PROMPT_FIELD, promptWithObjective);

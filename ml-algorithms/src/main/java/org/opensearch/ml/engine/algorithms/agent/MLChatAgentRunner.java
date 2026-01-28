@@ -1196,7 +1196,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             );
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
                 String summary = extractSummaryFromResponse(response, summaryParams);
-                if (summary == null) {
+                if (summary == null || summary.trim().isEmpty()) {
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
                     return;
                 }
