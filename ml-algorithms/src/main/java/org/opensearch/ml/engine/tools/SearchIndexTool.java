@@ -238,10 +238,10 @@ public class SearchIndexTool implements Tool {
         }
 
         String result = input.trim();
-        
+
         // Count consecutive quotes from both ends in a single pass
         int quoteLayers = countMatchingOuterQuotes(result);
-        
+
         if (quoteLayers > 0 && result.length() > 2 * quoteLayers) {
             // Single substring operation - O(n) instead of O(n*m)
             String unwrapped = result.substring(quoteLayers, result.length() - quoteLayers);
@@ -255,7 +255,7 @@ public class SearchIndexTool implements Tool {
                 log.debug("Quote removal would break JSON structure, keeping original");
             }
         }
-        
+
         return result;
     }
 
@@ -270,10 +270,10 @@ public class SearchIndexTool implements Tool {
         if (StringUtils.isEmpty(str) || str.length() < 2) {
             return 0;
         }
-        
+
         int length = str.length();
         int quoteLayers = 0;
-        
+
         // Single loop: count matching quotes from both ends until we hit non-quote
         for (int i = 0; i < length / 2; i++) {
             if (str.charAt(i) == '\"' && str.charAt(length - 1 - i) == '\"') {
@@ -283,7 +283,7 @@ public class SearchIndexTool implements Tool {
                 break;
             }
         }
-        
+
         return quoteLayers;
     }
 
@@ -329,13 +329,15 @@ public class SearchIndexTool implements Tool {
         if (braceBalance < 0) {
             // Remove all extra closing braces from the end in a single pass
             int extraClosing = -braceBalance;
+            int originalExtraClosing = extraClosing;
             int endIndex = fixed.length();
             while (extraClosing > 0 && endIndex > 0 && fixed.charAt(endIndex - 1) == '}') {
                 endIndex--;
                 extraClosing--;
             }
             fixed = fixed.substring(0, endIndex);
-            log.debug("Removed {} extra closing brace(s) from malformed JSON", 0 - braceBalance - extraClosing);
+            int bracesRemoved = originalExtraClosing - extraClosing;
+            log.debug("Removed {} extra closing brace(s) from malformed JSON", bracesRemoved);
 
         } else if (braceBalance > 0) {
             // Unbalanced: more opening braces
