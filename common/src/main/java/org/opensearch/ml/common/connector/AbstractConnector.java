@@ -121,6 +121,7 @@ public abstract class AbstractConnector implements Connector {
 
     @Override
     public Optional<ConnectorAction> findAction(String action) {
+        // Guard against null actions list or null action parameter
         if (actions != null && action != null) {
             if (ConnectorAction.ActionType.isValidAction(action)) {
                 return actions.stream().filter(a -> a.getActionType().name().equalsIgnoreCase(action)).findFirst();

@@ -6,7 +6,17 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENTS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BINARY_DATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_BLOB_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -81,9 +91,10 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         String memoryContainerId = updateRequest.getMemoryContainerId();
         MemoryType memoryType = updateRequest.getMemoryType();
         String memoryId = updateRequest.getMemoryId();
+        String tenantId = updateRequest.getTenantId();
 
         // Get memory container to validate access and get memory index name
-        memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
+        memoryContainerHelper.getMemoryContainer(memoryContainerId, tenantId, ActionListener.wrap(container -> {
             // Validate access permissions
             User user = RestActionUtils.getUserContext(client);
             if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
@@ -187,6 +198,9 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }
         if (updateContent.containsKey(STRUCTURED_DATA_FIELD)) {
             updateFields.put(STRUCTURED_DATA_FIELD, updateContent.get(STRUCTURED_DATA_FIELD));
+        }
+        if (updateContent.containsKey(STRUCTURED_DATA_BLOB_FIELD)) {
+            updateFields.put(STRUCTURED_DATA_BLOB_FIELD, updateContent.get(STRUCTURED_DATA_BLOB_FIELD));
         }
         if (updateContent.containsKey(METADATA_FIELD)) {
             updateFields.put(METADATA_FIELD, updateContent.get(METADATA_FIELD));

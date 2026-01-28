@@ -34,9 +34,10 @@ public class MLGetMemoryRequestTest {
             .memoryContainerId("container-123")
             .memoryType(MemoryType.LONG_TERM)
             .memoryId("memory-456")
+            .tenantId("tenant-789")
             .build();
 
-        requestWithNulls = MLGetMemoryRequest.builder().memoryContainerId(null).memoryType(null).memoryId(null).build();
+        requestWithNulls = MLGetMemoryRequest.builder().memoryContainerId(null).memoryType(null).memoryId(null).tenantId(null).build();
     }
 
     @Test
@@ -95,6 +96,7 @@ public class MLGetMemoryRequestTest {
                 out.writeString("test-container");
                 out.writeEnum(MemoryType.SESSIONS);
                 out.writeString("test-memory");
+                out.writeOptionalString("test-tenant");
             }
         };
 

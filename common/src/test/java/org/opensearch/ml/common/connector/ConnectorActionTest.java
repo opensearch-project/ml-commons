@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.isValidActionInModelPrediction;
@@ -121,6 +122,101 @@ public class ConnectorActionTest {
             () -> new ConnectorAction(TEST_ACTION_TYPE, null, null, URL, null, TEST_REQUEST_BODY, null, null)
         );
         assertEquals("method can't be null", exception.getMessage());
+    }
+
+    // Name validation tests
+
+    @Test
+    public void constructor_ValidName() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            "my_action-name123",
+            TEST_METHOD_POST,
+            URL,
+            null,
+            TEST_REQUEST_BODY,
+            null,
+            null
+        );
+        assertEquals("my_action-name123", action.getName());
+    }
+
+    @Test
+    public void constructor_NullName() {
+        // Null name should be allowed
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, null, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null);
+        assertNull(action.getName());
+    }
+
+    @Test
+    public void constructor_NameWithCarriageReturn() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name\rwith_cr", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void constructor_NameWithLineFeed() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name\nwith_lf", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void constructor_NameWithTab() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name\twith_tab", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void constructor_NameTooLong() {
+        String longName = "a".repeat(65);
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, longName, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("maximum length"));
+    }
+
+    @Test
+    public void constructor_NameExactlyMaxLength() {
+        String maxName = "a".repeat(64);
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, maxName, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null);
+        assertEquals(maxName, action.getName());
+    }
+
+    @Test
+    public void constructor_NameWithSpaces() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name with spaces", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("invalid characters"));
+    }
+
+    @Test
+    public void constructor_NameWithSpecialChars() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name@special!", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("invalid characters"));
+    }
+
+    @Test
+    public void constructor_NameIsActionType() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "PREDICT", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("action type"));
     }
 
     @Test

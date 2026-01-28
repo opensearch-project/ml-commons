@@ -27,6 +27,7 @@ public class CommonValue {
     public static final String MASTER_KEY = "master_key";
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
+    public static final String AGENTIC_MEMORY_THREAD_POOL = "opensearch_ml_agentic_memory";
 
     public static final String BOX_TYPE_KEY = "box_type";
     // hot node

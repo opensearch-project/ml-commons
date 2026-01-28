@@ -34,7 +34,7 @@ import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
-import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
