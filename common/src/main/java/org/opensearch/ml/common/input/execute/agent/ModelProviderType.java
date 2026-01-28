@@ -9,7 +9,8 @@ package org.opensearch.ml.common.input.execute.agent;
  * Enum for supported model provider types
  */
 public enum ModelProviderType {
-    BEDROCK_CONVERSE("bedrock/converse");
+    BEDROCK_CONVERSE("bedrock/converse"),
+    GEMINI_GENERATE_CONTENT("gemini/generatecontent");
 
     private final String value;
 
@@ -31,6 +32,6 @@ public enum ModelProviderType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown model provider type. Supported types: bedrock/converse");
+        throw new IllegalArgumentException("Unknown model provider type. Supported types: bedrock/converse, gemini/generatecontent");
     }
 }
