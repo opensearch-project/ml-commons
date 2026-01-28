@@ -791,4 +791,9 @@ public class StringUtils {
             return f;
         }
     }
+
+    public static String getStringField(JsonObject obj, String fieldName) {
+        JsonElement element = obj.get(fieldName);
+        return element != null && !element.isJsonNull() ? element.getAsString() : null;
+    }
 }

@@ -52,7 +52,6 @@ import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTranspor
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2

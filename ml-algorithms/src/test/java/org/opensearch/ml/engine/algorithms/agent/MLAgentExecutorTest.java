@@ -292,6 +292,14 @@ public class MLAgentExecutorTest {
     }
 
     @Test
+    public void testGetAgentRunnerWithAGUIAgent() {
+        MLAgent agent = createTestAgent(MLAgentType.AG_UI.name());
+        MLAgentRunner runner = mlAgentExecutor.getAgentRunner(agent, null);
+        assertNotNull(runner);
+        assertTrue(runner instanceof MLAGUIAgentRunner);
+    }
+
+    @Test
     public void testGetAgentRunnerWithUnsupportedAgentType() {
         // Create a mock MLAgent instead of using the constructor that validates
         MLAgent agent = mock(MLAgent.class);
@@ -462,6 +470,186 @@ public class MLAgentExecutorTest {
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
 
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithLegacyLLMInterface() {
+        // AGUI agent using legacy LLM interface
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_legacy")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("anthropic.claude-v2").build())
+            .build();
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("What is AI?");
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        // Should not throw exception - legacy interface should work
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify dataset has QUESTION parameter for legacy interface
+        Assert.assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        Assert.assertTrue(dataset.getParameters().containsKey(QUESTION));
+        Assert.assertEquals("What is AI?", dataset.getParameters().get(QUESTION));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithRevampModelInterface() {
+        // AGUI agent using revamp model interface
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_revamp")
+            .type(MLAgentType.AG_UI.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("Explain machine learning");
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        // Should not throw exception - revamp interface should work
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify dataset has QUESTION parameter for revamp interface
+        Assert.assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        Assert.assertTrue(dataset.getParameters().containsKey(QUESTION));
+        Assert.assertEquals("Explain machine learning", dataset.getParameters().get(QUESTION));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithLegacyLLMInterface_Messages() {
+        // AGUI agent with legacy LLM interface and message-based input
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_legacy_msgs")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            .build();
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Hello from AGUI");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        // Should handle message input with legacy interface
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        Assert.assertNotNull(agentMLInput.getAgentInput());
+        Assert.assertNotNull(agentMLInput.getInputDataset());
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithRevampModelInterface_Messages() {
+        // AGUI agent with revamp model interface and message-based input
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_revamp_msgs")
+            .type(MLAgentType.AG_UI.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Tell me about AI");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        // Should handle message input with revamp interface
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify QUESTION parameter is set
+        Assert.assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        Assert.assertTrue(dataset.getParameters().containsKey(QUESTION));
+        Assert.assertEquals("Tell me about AI\n", dataset.getParameters().get(QUESTION));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithContext_LegacyInterface() {
+        // AGUI agent with legacy interface and context
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_with_context")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            .build();
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("What is the weather?");
+
+        Map<String, String> existingParams = new HashMap<>();
+        existingParams.put("context", "User is in San Francisco");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(existingParams).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, dataset, false);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify context is prepended to question for AGUI agents
+        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        String question = updatedDataset.getParameters().get(QUESTION);
+        Assert.assertNotNull(question);
+        Assert.assertTrue(question.contains("Context: User is in San Francisco"));
+        Assert.assertTrue(question.contains("Question: What is the weather?"));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithContext_RevampInterface() {
+        // AGUI agent with revamp interface and context
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_revamp_context")
+            .type(MLAgentType.AG_UI.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("What time is it?");
+
+        Map<String, String> existingParams = new HashMap<>();
+        existingParams.put("context", "User timezone: PST");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(existingParams).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, dataset, false);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify context is prepended to question for AGUI agents
+        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        String question = updatedDataset.getParameters().get(QUESTION);
+        Assert.assertNotNull(question);
+        Assert.assertTrue(question.contains("Context: User timezone: PST"));
+        Assert.assertTrue(question.contains("Question: What time is it?"));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithoutContext() {
+        // AGUI agent without context - question should not be modified
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_no_context")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            .build();
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("Hello world");
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify question is set without context prefix
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        String question = dataset.getParameters().get(QUESTION);
+        Assert.assertEquals("Hello world", question);
+        Assert.assertFalse(question.contains("Context:"));
     }
 
     @Test

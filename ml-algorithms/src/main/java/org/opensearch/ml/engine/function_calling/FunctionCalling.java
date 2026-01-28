@@ -48,4 +48,12 @@ public interface FunctionCalling {
     default Map<String, ?> filterToFirstToolCall(Map<String, ?> dataAsMap, Map<String, String> parameters) {
         return dataAsMap;
     }
+
+    /**
+     * Format AG-UI tool calls into an assistant message in LLM-specific format.
+     *
+     * @param toolCallsJson JSON string containing array of tool calls from AG-UI.
+     * @return JSON string representing the assistant message with tool calls in LLM-specific format
+     */
+    String formatAGUIToolCalls(String toolCallsJson);
 }

@@ -69,6 +69,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
@@ -114,6 +115,7 @@ public class AgentUtils {
     public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
     public static final String TOOL_RESULT = "tool_result";
     public static final String TOOL_CALL_ID = "tool_call_id";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE = "bedrock/converse";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
@@ -137,6 +139,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String AGENT_TYPE_PARAM = "agent_type";
 
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
@@ -1024,5 +1027,69 @@ public class AgentUtils {
         }
 
         return tool;
+    }
+
+    public static List<Map<String, Object>> parseFrontendTools(String aguiTools) {
+        List<Map<String, Object>> frontendTools = new ArrayList<>();
+        if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
+            try {
+                Type listType = new TypeToken<List<Map<String, Object>>>() {
+                }.getType();
+                List<Map<String, Object>> parsed = gson.fromJson(aguiTools, listType);
+                if (parsed != null) {
+                    frontendTools.addAll(parsed);
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse frontend tools: {}", e.getMessage());
+            }
+        }
+        return frontendTools;
+    }
+
+    public static Map<String, Tool> wrapFrontendToolsAsToolObjects(List<Map<String, Object>> frontendTools) {
+        Map<String, Tool> wrappedTools = new HashMap<>();
+
+        for (Map<String, Object> frontendTool : frontendTools) {
+            String toolName = (String) frontendTool.get("name");
+            String toolDescription = (String) frontendTool.get("description");
+
+            // Create frontend tool object with source marker
+            Map<String, Object> toolAttributes = new HashMap<>();
+            toolAttributes.put("source", "frontend");
+            toolAttributes.put("tool_definition", frontendTool);
+
+            Object parameters = frontendTool.get("parameters");
+            if (parameters != null) {
+                toolAttributes.put("input_schema", gson.toJson(parameters));
+            } else {
+                Map<String, Object> emptySchema = Map.of("type", "object", "properties", Map.of());
+                toolAttributes.put("input_schema", gson.toJson(emptySchema));
+            }
+
+            Tool frontendToolObj = new AGUIFrontendTool(toolName, toolDescription, toolAttributes);
+            wrappedTools.put(toolName, frontendToolObj);
+        }
+
+        return wrappedTools;
+    }
+
+    /**
+     * Checks if the agent type in the given parameters is AG_UI.
+     *
+     * @param parameters The parameters map containing agent type information
+     * @return true if the agent type is AG_UI, false otherwise
+     */
+    public static boolean isAGUIAgent(Map<String, String> parameters) {
+        if (parameters == null || !parameters.containsKey(AGENT_TYPE_PARAM)) {
+            return false;
+        }
+
+        try {
+            String agentTypeValue = parameters.get(AGENT_TYPE_PARAM);
+            MLAgentType agentType = MLAgentType.from(agentTypeValue);
+            return agentType == MLAgentType.AG_UI;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }

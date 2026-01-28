@@ -167,7 +167,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
             validateLLMInterface(llmInterface);
 
-            StreamingHandler handler = StreamingHandlerFactory.createHandler(llmInterface, connector, getHttpClient(), null);
+            StreamingHandler handler = StreamingHandlerFactory.createHandler(llmInterface, connector, getHttpClient(), null, parameters);
             handler.startStream(action, parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);
