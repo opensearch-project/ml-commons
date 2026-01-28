@@ -83,7 +83,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     private StreamTransportService streamTransportService;
 
     @Setter
-    private boolean connectorPrivateIpEnabled;
+    private volatile boolean connectorPrivateIpEnabled;
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);

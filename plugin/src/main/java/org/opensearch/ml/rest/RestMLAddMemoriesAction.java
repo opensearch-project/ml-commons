@@ -21,6 +21,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -72,7 +73,8 @@ public class RestMLAddMemoriesAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLAddMemoriesInput mlAddMemoryInput = MLAddMemoriesInput.parse(parser, memoryContainerId);
+        String tenantId = TenantAwareHelper.getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+        MLAddMemoriesInput mlAddMemoryInput = MLAddMemoriesInput.parse(parser, memoryContainerId, tenantId);
 
         return new MLAddMemoriesRequest(mlAddMemoryInput);
     }

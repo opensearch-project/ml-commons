@@ -76,6 +76,7 @@ public class MLAgentGetResponseTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List
                 .of(
                     new MLToolSpec(
@@ -91,7 +92,7 @@ public class MLAgentGetResponseTest {
                     )
                 ),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -117,7 +118,23 @@ public class MLAgentGetResponseTest {
 
     @Test
     public void toXContent() throws IOException {
-        mlAgent = new MLAgent("mock", MLAgentType.FLOW.name(), "test", null, null, null, null, null, null, "test", false, null, null, null);
+        mlAgent = new MLAgent(
+            "mock",
+            MLAgentType.FLOW.name(),
+            "test",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "test",
+            false,
+            null,
+            null,
+            null
+        );
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         ToXContent.Params params = EMPTY_PARAMS;

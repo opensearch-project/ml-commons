@@ -25,7 +25,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.hooks.HookRegistry;
-import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
