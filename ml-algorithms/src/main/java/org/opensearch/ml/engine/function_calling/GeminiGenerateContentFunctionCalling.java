@@ -178,4 +178,9 @@ public class GeminiGenerateContentFunctionCalling implements FunctionCalling {
             return dataAsMap;
         }
     }
+
+    @Override
+    public String formatAGUIToolCalls(String toolCallsJson) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
 }
