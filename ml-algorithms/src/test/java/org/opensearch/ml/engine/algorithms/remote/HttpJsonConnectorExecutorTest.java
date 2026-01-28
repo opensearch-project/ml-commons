@@ -389,6 +389,60 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
+    public void invokeRemoteService_SkipSslVerification_InvalidInput() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            ConnectorAction predictAction = ConnectorAction
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://openai.com/mock")
+                .requestBody("hello world")
+                .build();
+            Connector connector = HttpConnector
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(Map.of(SKIP_SSL_VERIFICATION, "abc"))
+                .actions(Arrays.asList(predictAction))
+                .build();
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+            executor
+                .invokeRemoteService(
+                    PREDICT.name(),
+                    createMLInput(),
+                    new HashMap<>(),
+                    "hello world",
+                    new ExecutionContext(0),
+                    actionListener
+                );
+            verify(actionListener, never()).onFailure(any());
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification was set to false when configure with an invalid string
+            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
+        }
+    }
+
+    @Test
     public void invokeRemoteService_nullHttpClient_throwMLException() {
         ConnectorAction predictAction = ConnectorAction
             .builder()

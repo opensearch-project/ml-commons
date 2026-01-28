@@ -257,7 +257,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
-        executor.setClient(client);
+        when(executor.getClient()).thenReturn(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
@@ -736,7 +736,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         ExecutorService executorService = mock(ExecutorService.class);
-        executor.setClient(client);
+        when(executor.getClient()).thenReturn(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(threadPool.executor(any())).thenReturn(executorService);
@@ -1056,6 +1056,48 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                         )
                 );
             // Assert that skipSslVerification was set to false
+            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
+        }
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_With_SkipSslVerification_InvalidInput() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            AwsConnector mockConnector = mock(AwsConnector.class);
+            when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+            when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+            when(mockConnector.getRegion()).thenReturn("us-east-1");
+            when(mockConnector.getParameters()).thenReturn(Map.of(SKIP_SSL_VERIFICATION, "abc"));
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+            MLInput mlInput = mock(MLInput.class);
+            Map<String, String> parameters = Map
+                .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+            String payload = "{\"input\": \"test input\"}";
+            ExecutionContext executionContext = new ExecutionContext(123);
+            StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+            executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification was set to false when configure with an invalid string
             assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
         }
     }
