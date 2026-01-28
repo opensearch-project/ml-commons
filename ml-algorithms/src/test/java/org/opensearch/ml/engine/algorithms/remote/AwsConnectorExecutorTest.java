@@ -9,11 +9,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -27,29 +28,19 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.SKIP_SSL_VERIFICATION;
 
-import java.util.ArrayList;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.LoggerConfig;
-import org.apache.logging.log4j.core.layout.PatternLayout;
-import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -80,6 +71,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -90,7 +82,9 @@ import org.opensearch.transport.client.Client;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-public class AwsConnectorExecutorTest {
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+
+public class AwsConnectorExecutorTest extends MLStaticMockBase {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -113,11 +107,6 @@ public class AwsConnectorExecutorTest {
     @Mock
     private ScriptService scriptService;
 
-    private static final Logger logger = LogManager.getLogger(MLHttpClientFactory.class);
-    private static final String LOG_APPENDER_NAME = "TestLogAppender";
-    private static TestLogAppender testAppender;
-    private static LoggerConfig loggerConfig;
-
     Map<String, ?> dataAsMap = Map.of("completion", "answer");
 
     List<ModelTensor> modelTensors = List
@@ -127,32 +116,12 @@ public class AwsConnectorExecutorTest {
             new ModelTensor("tensor2", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap)
         );
 
-    @BeforeClass
-    public static void setUpClass() {
-        testAppender = new TestLogAppender(LOG_APPENDER_NAME);
-        LoggerContext context = (LoggerContext) LogManager.getContext(false);
-        loggerConfig = context.getConfiguration().getLoggerConfig(logger.getName());
-        loggerConfig.addAppender(testAppender, Level.WARN, null);
-        context.updateLoggers();
-    }
-
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         when(scriptService.compile(any(), any()))
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
-    }
-
-    @After
-    public void tearDown() {
-        testAppender.clear();
-    }
-
-    @AfterClass
-    public static void tearDownClass() {
-        loggerConfig.removeAppender(LOG_APPENDER_NAME);
-        testAppender.stop();
     }
 
     @Test
@@ -1009,96 +978,85 @@ public class AwsConnectorExecutorTest {
 
     @Test
     public void testInvokeRemoteServiceStream_With_SkipSslVerification_True() {
-        AwsConnector mockConnector = mock(AwsConnector.class);
-        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
-        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
-        when(mockConnector.getRegion()).thenReturn("us-east-1");
-        when(mockConnector.getParameters()).thenReturn(Map.of(SKIP_SSL_VERIFICATION, "true"));
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            AwsConnector mockConnector = mock(AwsConnector.class);
+            when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+            when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+            when(mockConnector.getRegion()).thenReturn("us-east-1");
+            when(mockConnector.getParameters()).thenReturn(Map.of(SKIP_SSL_VERIFICATION, "true"));
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
 
-        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
-        MLInput mlInput = mock(MLInput.class);
-        Map<String, String> parameters = Map
-            .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
-        String payload = "{\"input\": \"test input\"}";
-        ExecutionContext executionContext = new ExecutionContext(123);
-        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+            AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+            MLInput mlInput = mock(MLInput.class);
+            Map<String, String> parameters = Map
+                .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+            String payload = "{\"input\": \"test input\"}";
+            ExecutionContext executionContext = new ExecutionContext(123);
+            StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
 
-        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
-        verify(actionListener, never()).onFailure(any());
-
-        boolean isWarningLogged = testAppender
-            .getLogEvents()
-            .stream()
-            .anyMatch(
-                event -> event.getLevel() == Level.WARN
-                    && event
-                        .getMessage()
-                        .getFormattedMessage()
-                        .contains(
-                            "SSL certificate verification is DISABLED. This connection is vulnerable to man-in-the-middle"
-                                + " attacks. Only use this setting in trusted environments."
+            executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
                         )
-            );
-        assertTrue(isWarningLogged);
+                );
+            // Assert that skipSslVerification was set to true
+            assertTrue("SSL verification should be disabled", sslVerificationCaptor.getValue());
+        }
     }
 
     @Test
     public void testInvokeRemoteServiceStream_With_SkipSslVerification_False() {
-        AwsConnector mockConnector = mock(AwsConnector.class);
-        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
-        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
-        when(mockConnector.getRegion()).thenReturn("us-east-1");
-        when(mockConnector.getParameters()).thenReturn(Map.of(SKIP_SSL_VERIFICATION, "false"));
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            AwsConnector mockConnector = mock(AwsConnector.class);
+            when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+            when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+            when(mockConnector.getRegion()).thenReturn("us-east-1");
+            when(mockConnector.getParameters()).thenReturn(Map.of(SKIP_SSL_VERIFICATION, "false"));
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
 
-        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
-        MLInput mlInput = mock(MLInput.class);
-        Map<String, String> parameters = Map
-            .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
-        String payload = "{\"input\": \"test input\"}";
-        ExecutionContext executionContext = new ExecutionContext(123);
-        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
-        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
-        verify(actionListener, never()).onFailure(any());
+            AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+            MLInput mlInput = mock(MLInput.class);
+            Map<String, String> parameters = Map
+                .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+            String payload = "{\"input\": \"test input\"}";
+            ExecutionContext executionContext = new ExecutionContext(123);
+            StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+            executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
 
-        boolean isWarningLogged = testAppender
-            .getLogEvents()
-            .stream()
-            .anyMatch(
-                event -> event.getLevel() == Level.WARN
-                    && event
-                        .getMessage()
-                        .getFormattedMessage()
-                        .contains(
-                            "SSL certificate verification is DISABLED. This connection is vulnerable to man-in-the-middle"
-                                + " attacks. Only use this setting in trusted environments."
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
                         )
-            );
-        assertFalse(isWarningLogged);
-    }
-
-    /**
-     * Log appender class to check the skip ssl verification warning
-     */
-    static class TestLogAppender extends AbstractAppender {
-
-        private final List<LogEvent> logEvents = new ArrayList<>();
-
-        public TestLogAppender(String name) {
-            super(name, null, PatternLayout.createDefaultLayout(), false);
-            start();
-        }
-
-        @Override
-        public void append(LogEvent event) {
-            logEvents.add(event.toImmutable());
-        }
-
-        public List<LogEvent> getLogEvents() {
-            return logEvents;
-        }
-
-        public void clear() {
-            logEvents.clear();
+                );
+            // Assert that skipSslVerification was set to false
+            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
         }
     }
 }
