@@ -306,7 +306,10 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 )
                 .thenReturn(mockClient);
 
-            HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+            HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setClient(client);
+            when(client.threadPool()).thenReturn(threadPool);
+            when(threadPool.getThreadContext()).thenReturn(threadContext);
             executor
                 .invokeRemoteService(
                     PREDICT.name(),
@@ -360,7 +363,10 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 )
                 .thenReturn(mockClient);
 
-            HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+            HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setClient(client);
+            when(client.threadPool()).thenReturn(threadPool);
+            when(threadPool.getThreadContext()).thenReturn(threadContext);
             executor
                 .invokeRemoteService(
                     PREDICT.name(),
@@ -414,7 +420,10 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 )
                 .thenReturn(mockClient);
 
-            HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+            HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setClient(client);
+            when(client.threadPool()).thenReturn(threadPool);
+            when(threadPool.getThreadContext()).thenReturn(threadContext);
             executor
                 .invokeRemoteService(
                     PREDICT.name(),

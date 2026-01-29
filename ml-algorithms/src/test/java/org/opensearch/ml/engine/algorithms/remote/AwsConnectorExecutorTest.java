@@ -257,7 +257,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
-        when(executor.getClient()).thenReturn(client);
+        executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
@@ -736,7 +736,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         ExecutorService executorService = mock(ExecutorService.class);
-        when(executor.getClient()).thenReturn(client);
+        executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(threadPool.executor(any())).thenReturn(executorService);
