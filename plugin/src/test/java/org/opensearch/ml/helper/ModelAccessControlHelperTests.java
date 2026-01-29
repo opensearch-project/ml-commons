@@ -487,6 +487,70 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertFalse(ModelAccessControlHelper.shouldUseResourceAuthz(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE));
     }
 
+    public void test_ResourceAuthz_NotAuthorized_UserNull_UsesUnknownName() {
+        when(resourceSharingClient.isFeatureEnabledForType(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE)).thenReturn(true);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(resourceSharingClient).verifyAccess(any(), any(), any(), any());
+
+        modelAccessControlHelper
+                .validateModelGroupAccess(
+                        null,                      // user
+                        mlFeatureEnabledSetting,
+                        "testTenant",
+                        "testGroupID",
+                        "testAction",
+                        client,
+                        sdkClient,
+                        actionListener
+                );
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception ex = argumentCaptor.getValue();
+        assertTrue(ex instanceof org.opensearch.OpenSearchStatusException);
+        assertTrue(ex.getMessage().contains("User null is not authorized"));
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+    }
+
+    public void test_ResourceAuthz_NotAuthorized_UserPresent_UsesUserName() {
+        when(resourceSharingClient.isFeatureEnabledForType(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE)).thenReturn(true);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(resourceSharingClient).verifyAccess(any(), any(), any(), any());
+
+        User user = User.parse("owner|IT,HR|myTenant");
+
+        modelAccessControlHelper
+                .validateModelGroupAccess(
+                        user,
+                        mlFeatureEnabledSetting,
+                        "testTenant",
+                        "testGroupID",
+                        "testAction",
+                        client,
+                        sdkClient,
+                        actionListener
+                );
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception ex = argumentCaptor.getValue();
+        assertTrue(ex instanceof org.opensearch.OpenSearchStatusException);
+        assertTrue(ex.getMessage().contains("User owner is not authorized"));
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+    }
+
     private GetResponse modelGroupBuilder(List<String> backendRoles, String access, String owner) throws IOException {
         MLModelGroup mlModelGroup = MLModelGroup
             .builder()
