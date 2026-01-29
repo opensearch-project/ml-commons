@@ -194,7 +194,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             if (connector.getParameters() != null && connector.getParameters().containsKey(SKIP_SSL_VERIFICATION)) {
                 skipSslVerification = Boolean.parseBoolean(connector.getParameters().get(SKIP_SSL_VERIFICATION));
                 if (skipSslVerification) {
-                    log.info("SSL certificate verification is DISABLED for connector {}", connector.getName());
+                    log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
                 }
             }
             this.httpClientRef
