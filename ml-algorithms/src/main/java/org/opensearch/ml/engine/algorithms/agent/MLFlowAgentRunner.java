@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_ESCAPE_OUTPUT;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTensor;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
@@ -118,7 +119,15 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     String outputKey = toolName + ".output";
                     Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, mlAgent.getTenantId());
                     String filteredOutput = parseResponse(filterToolOutput(toolParameters, output));
-                    params.put(outputKey, StringUtils.prepareJsonValue(filteredOutput));
+                    params
+                        .put(
+                            outputKey,
+                            StringUtils
+                                .prepareJsonValue(
+                                    filteredOutput,
+                                    Boolean.parseBoolean(toolParameters.getOrDefault(TOOL_ESCAPE_OUTPUT, "false"))
+                                )
+                        );
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
                         if (toolParameters.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
                             flowAgentOutput.add(ModelTensor.builder().name(outputKey).result(filteredOutput).build());
