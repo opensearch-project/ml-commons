@@ -27,6 +27,7 @@ import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -83,7 +84,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     private StreamTransportService streamTransportService;
 
     @Setter
-    private volatile boolean connectorPrivateIpEnabled;
+    private boolean connectorPrivateIpEnabled;
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -125,6 +126,17 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     throw new IllegalArgumentException("unsupported http method");
             }
             ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+
+            // Wrap listener to offload response processing from Netty I/O thread to ML thread pool
+            // This prevents blocking I/O threads during JSON parsing and model tensor creation
+            ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = new ThreadedActionListener<>(
+                log,
+                client.threadPool(),
+                "opensearch_ml_predict_remote",
+                actionListener,
+                false
+            );
+
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
@@ -132,7 +144,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        ActionListener.runBefore(actionListener, storedContext::restore),
+                        ActionListener.runBefore(threadedListener, storedContext::restore), // Restore context before calling listener,
                         parameters,
                         connector,
                         scriptService,
@@ -200,6 +212,14 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            log
+                .info(
+                    "AwsConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    connector.getName(),
+                    maxConnection,
+                    super.getConnectorClientConfig().getConnectionTimeout(),
+                    super.getConnectorClientConfig().getReadTimeout()
+                );
             this.httpClientRef
                 .compareAndSet(
                     null,
