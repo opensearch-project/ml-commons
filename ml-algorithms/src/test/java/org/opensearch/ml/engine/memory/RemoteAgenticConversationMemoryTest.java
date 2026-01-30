@@ -44,6 +44,8 @@ import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.collect.ImmutableMap;
+
 public class RemoteAgenticConversationMemoryTest {
 
     @Rule
@@ -339,5 +341,132 @@ public class RemoteAgenticConversationMemoryTest {
             .parameters(Map.of("endpoint", "http://localhost:9200"))
             .actions(List.of())
             .build();
+    }
+
+    // Tests for defaultHttpClient
+    @Test
+    public void testDefaultHttpClientInitialization() {
+        // Create first instance - this should initialize the defaultHttpClient
+        RemoteAgenticConversationMemory memory1 = createTestMemory();
+        assertNotNull("Memory instance should be created", memory1);
+        assertNotNull("Executor should be initialized", memory1.getExecutor());
+        assertNotNull("Async HTTP client should be set", memory1.getExecutor().getHttpClient());
+    }
+
+    @Test
+    public void testDefaultHttpClientReuse() {
+        // Create multiple instances and verify they share the same HTTP client
+        RemoteAgenticConversationMemory memory1 = createTestMemory();
+        RemoteAgenticConversationMemory memory2 = createTestMemory();
+
+        assertNotNull("First memory instance should be created", memory1);
+        assertNotNull("Second memory instance should be created", memory2);
+
+        // Both should have executors with HTTP clients set
+        assertNotNull("First executor should be initialized", memory1.getExecutor());
+        assertNotNull("Second executor should be initialized", memory2.getExecutor());
+        assertNotNull("First async HTTP client should be set", memory1.getExecutor().getHttpClient());
+        assertNotNull("Second async HTTP client should be set", memory2.getExecutor().getHttpClient());
+    }
+
+    @Test
+    public void testDefaultHttpClientThreadSafety() throws InterruptedException {
+        // Test concurrent initialization to verify double-checked locking works
+        final int threadCount = 10;
+        Thread[] threads = new Thread[threadCount];
+        final RemoteAgenticConversationMemory[] memories = new RemoteAgenticConversationMemory[threadCount];
+
+        // Create multiple threads that create memory instances concurrently
+        for (int i = 0; i < threadCount; i++) {
+            final int index = i;
+            threads[i] = new Thread(() -> { memories[index] = createTestMemory(); });
+        }
+
+        // Start all threads
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        // Wait for all threads to complete
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        // Verify all instances were created successfully
+        for (int i = 0; i < threadCount; i++) {
+            assertNotNull("Memory instance " + i + " should be created", memories[i]);
+            assertNotNull("Executor " + i + " should be initialized", memories[i].getExecutor());
+            assertNotNull("Async HTTP client " + i + " should be set", memories[i].getExecutor().getHttpClient());
+        }
+    }
+
+    @Test
+    public void testFactoryUsesDefaultHttpClient() {
+        RemoteAgenticConversationMemory.Factory factory = new RemoteAgenticConversationMemory.Factory();
+        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("memory_id", "test_memory_id");
+        params.put("memory_name", "Test Memory");
+        params.put("memory_container_id", "test_container_id");
+        params.put("endpoint", "https://example.com");
+        params.put("credential", ImmutableMap.of("username", "test_user", "password", "test_password"));
+
+        ActionListener<RemoteAgenticConversationMemory> listener = ActionListener.wrap(memory -> {
+            assertNotNull("Memory should be created", memory);
+            assertNotNull("Executor should be initialized", memory.getExecutor());
+            assertNotNull("Async HTTP client should be set", memory.getExecutor().getHttpClient());
+        }, e -> { throw new RuntimeException("Factory create should succeed", e); });
+
+        factory.create(params, listener);
+    }
+
+    @Test
+    public void testMultipleMemoryInstancesShareHttpClient() {
+        // Create multiple memory instances
+        RemoteAgenticConversationMemory memory1 = new RemoteAgenticConversationMemory(
+            "conversation_1",
+            "container_1",
+            "user_1",
+            createMockConnector(),
+            scriptService,
+            clusterService,
+            client,
+            xContentRegistry,
+            mlFeatureEnabledSetting
+        );
+
+        RemoteAgenticConversationMemory memory2 = new RemoteAgenticConversationMemory(
+            "conversation_2",
+            "container_2",
+            "user_2",
+            createMockConnector(),
+            scriptService,
+            clusterService,
+            client,
+            xContentRegistry,
+            mlFeatureEnabledSetting
+        );
+
+        RemoteAgenticConversationMemory memory3 = new RemoteAgenticConversationMemory(
+            "conversation_3",
+            "container_3",
+            "user_3",
+            createMockConnector(),
+            scriptService,
+            clusterService,
+            client,
+            xContentRegistry,
+            mlFeatureEnabledSetting
+        );
+
+        // All should have executors with HTTP clients
+        assertNotNull("Memory 1 executor should be initialized", memory1.getExecutor());
+        assertNotNull("Memory 2 executor should be initialized", memory2.getExecutor());
+        assertNotNull("Memory 3 executor should be initialized", memory3.getExecutor());
+
+        assertNotNull("Memory 1 HTTP client should be set", memory1.getExecutor().getHttpClient());
+        assertNotNull("Memory 2 HTTP client should be set", memory2.getExecutor().getHttpClient());
+        assertNotNull("Memory 3 HTTP client should be set", memory3.getExecutor().getHttpClient());
     }
 }
