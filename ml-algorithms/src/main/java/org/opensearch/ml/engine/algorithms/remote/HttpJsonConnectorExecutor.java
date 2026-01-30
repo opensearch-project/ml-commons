@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -124,6 +125,19 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     throw new IllegalArgumentException("unsupported http method");
             }
             ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+
+            // Wrap listener to offload response processing from Netty I/O thread to ML thread pool
+            // This prevents blocking I/O threads during long-running cases like PER agent.
+            // We should have an idea to identify the source of the request(predict/agent execution), but currently it's not easy, so
+            // reusing the predict thread pool won't harm anything.
+            ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = new ThreadedActionListener<>(
+                log,
+                client.threadPool(),
+                "opensearch_ml_predict_remote",
+                actionListener,
+                false
+            );
+
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(request)
@@ -131,7 +145,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        ActionListener.runBefore(actionListener, storedContext::restore),
+                        ActionListener.runBefore(threadedListener, storedContext::restore),
                         parameters,
                         connector,
                         scriptService,
@@ -190,6 +204,14 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            log
+                .info(
+                    "HttpJsonConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    connector.getName(),
+                    maxConnection,
+                    super.getConnectorClientConfig().getConnectionTimeout(),
+                    super.getConnectorClientConfig().getReadTimeout()
+                );
             this.httpClientRef
                 .compareAndSet(
                     null,
