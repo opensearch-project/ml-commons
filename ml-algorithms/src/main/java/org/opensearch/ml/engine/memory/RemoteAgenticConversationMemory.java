@@ -13,6 +13,7 @@ import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.httpclient.MLValidatableAsyncHttpClient;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -61,6 +63,8 @@ import com.google.gson.Gson;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 
 /**
  * Remote agentic memory implementation backed by connector-defined REST APIs.
@@ -73,6 +77,9 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
     private static final Gson GSON = new Gson();
+
+    // Default HTTP client with 64 threads for all remote agentic memory instances
+    private static volatile SdkAsyncHttpClient defaultHttpClient = null;
 
     private final String conversationId;
     private final String memoryContainerId;
@@ -115,6 +122,9 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         this.executor.setClient(client);
         this.executor.setXContentRegistry(xContentRegistry);
         this.executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+
+        // Set the default HTTP client with 64 threads
+        this.executor.setAsyncHttpClient(getOrCreateDefaultHttpClient());
 
         // Log creation for debugging/monitoring
         log
@@ -283,7 +293,6 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             if (workingMemory == null || workingMemory.getStructuredDataBlob() == null) {
                 structuredData = new HashMap<>();
             } else {
-                // Create a mutable copy
                 structuredData = new HashMap<>(workingMemory.getStructuredDataBlob());
             }
 
@@ -939,6 +948,40 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     }
 
     /**
+     * Get or create the default HTTP client.
+     * This is shared across all RemoteAgenticConversationMemory instances.
+     */
+    private static SdkAsyncHttpClient getOrCreateDefaultHttpClient() {
+        if (defaultHttpClient == null) {
+            synchronized (RemoteAgenticConversationMemory.class) {
+                if (defaultHttpClient == null) {
+                    try {
+                        log.info("Creating default HTTP client for RemoteAgenticConversationMemory");
+
+                        // Use default configuration values
+                        Duration connectionTimeout = Duration.ofSeconds(1);
+                        Duration readTimeout = Duration.ofSeconds(10);
+                        int maxConnections = 100;
+
+                        SdkAsyncHttpClient delegate = NettyNioAsyncHttpClient
+                            .builder()
+                            .connectionTimeout(connectionTimeout)
+                            .readTimeout(readTimeout)
+                            .maxConcurrency(maxConnections)
+                            .build();
+
+                        defaultHttpClient = new MLValidatableAsyncHttpClient(delegate, false);
+                    } catch (Exception e) {
+                        log.error("Failed to create default HTTP client for RemoteAgenticConversationMemory", e);
+                        throw new RuntimeException("Failed to create default HTTP client", e);
+                    }
+                }
+            }
+        }
+        return defaultHttpClient;
+    }
+
+    /**
      * Factory for creating RemoteAgenticConversationMemory instances
      */
     public static class Factory implements Memory.Factory<RemoteAgenticConversationMemory> {
@@ -1062,6 +1105,9 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             executor.setClient(client);
             executor.setXContentRegistry(xContentRegistry);
             executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+
+            // Set the default HTTP client with 64 threads
+            executor.setAsyncHttpClient(getOrCreateDefaultHttpClient());
 
             // Prepare parameters for the action
             Map<String, String> inputParams = new HashMap<>();
