@@ -76,7 +76,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.StreamTransportResponseHandler;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.TransportException;
@@ -236,7 +235,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
                         @Override
                         public String executor() {
-                            return ThreadPool.Names.SAME;
+                            return STREAM_EXECUTE_THREAD_POOL;
                         }
 
                         @Override
