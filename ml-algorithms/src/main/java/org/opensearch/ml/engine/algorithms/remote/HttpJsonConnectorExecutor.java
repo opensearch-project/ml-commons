@@ -128,8 +128,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
             // Wrap listener to offload response processing from Netty I/O thread to ML thread pool
             // This prevents blocking I/O threads during long-running cases like PER agent.
-            // We should have an idea to identify the source of the request(predict/agent execution), but currently it's not easy, so
-            // reusing the predict thread pool won't harm anything.
+            // TODO: We should have an idea to identify the source of the request(predict/agent execution),
+            // but currently it's not easy, so reusing the predict thread pool won't harm anything.
             ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = new ThreadedActionListener<>(
                 log,
                 client.threadPool(),
