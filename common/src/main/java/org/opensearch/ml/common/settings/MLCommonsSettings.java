@@ -483,4 +483,9 @@ public final class MLCommonsSettings {
     // Feature flag for streaming feature
     public static final Setting<Boolean> ML_COMMONS_STREAM_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "stream_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Maximum allowed JSON string size in bytes for JSON parsing/validation (default: 100MB)
+    // Set to -1 to disable size limit (unlimited)
+    public static final Setting<Integer> ML_COMMONS_MAX_JSON_SIZE = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "max_json_size", 100_000_000, -1, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
