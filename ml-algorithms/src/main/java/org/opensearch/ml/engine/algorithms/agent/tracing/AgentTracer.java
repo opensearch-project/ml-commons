@@ -12,9 +12,18 @@ import java.net.URI;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.transport.client.Client;
 
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.Span;
@@ -84,11 +93,27 @@ public final class AgentTracer {
     private static final String OSIS_SERVICE_NAME = "osis";
     private static final String DEFAULT_REGION = "us-east-1";
     private static final Pattern REGION_PATTERN = Pattern.compile("\\.([a-z]{2}-[a-z]+-\\d)\\.osis\\.amazonaws\\.com");
+    private static final ConcurrentHashMap<String, Long> toolStartTimes = new ConcurrentHashMap<>();
 
     private static volatile OpenTelemetrySdk sdk;
     private static volatile Tracer tracer;
     private static volatile boolean initialized = false;
     private static volatile boolean enabled = true;
+
+    public static final String PARAM_LLM_INTERFACE = "_llm_interface";
+    public static final String PROVIDER_UNKNOWN = "unknown";
+    public static final String USAGE_FIELD = "usage";
+    public static final String PROVIDER_BEDROCK = "bedrock";
+    public static final String PROVIDER_OPENAI = "openai";
+
+    public static final String TOKEN_FIELD_INPUT_TOKENS = "inputTokens";
+    public static final String TOKEN_FIELD_OUTPUT_TOKENS = "outputTokens";
+    public static final String TOKEN_FIELD_TOTAL_TOKENS = "totalTokens";
+    public static final String TOKEN_FIELD_INPUT_TOKENS_ALT = "input_tokens";
+    public static final String TOKEN_FIELD_OUTPUT_TOKENS_ALT = "output_tokens";
+    public static final String TOKEN_FIELD_PROMPT_TOKENS = "prompt_tokens";
+    public static final String TOKEN_FIELD_COMPLETION_TOKENS = "completion_tokens";
+    public static final String TOKEN_FIELD_TOTAL_TOKENS_ALT = "total_tokens";
 
     private AgentTracer() {}
 
@@ -231,6 +256,10 @@ public final class AgentTracer {
             enabled = false;
             initialized = true;
         }
+    }
+
+    public static OpenTelemetrySdk getSdk() {
+        return sdk;
     }
 
     /**
@@ -463,6 +492,48 @@ public final class AgentTracer {
     }
 
     /**
+     * Initialize with direct OpenSearch export (for testing)
+     */
+    public static synchronized void initializeDirectExport(Client client, String indexPrefix) {
+        log.info("[AgentTracer] initializeDirectExport() called with indexPrefix: {}", indexPrefix);
+
+        if (initialized) {
+            log.debug("[AgentTracer] Already initialized, skipping");
+            return;
+        }
+
+        try {
+            DirectOpenSearchSpanExporter exporter = new DirectOpenSearchSpanExporter(client, indexPrefix);
+
+            Resource resource = Resource
+                .getDefault()
+                .merge(
+                    Resource
+                        .create(
+                            Attributes.of(ResourceAttributes.SERVICE_NAME, "ml-commons", ResourceAttributes.SERVICE_VERSION, TRACER_VERSION)
+                        )
+                );
+
+            SdkTracerProvider tracerProvider = SdkTracerProvider
+                .builder()
+                .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
+                .setResource(resource)
+                .build();
+
+            sdk = OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).build();
+            tracer = sdk.getTracer(TRACER_NAME, TRACER_VERSION);
+            initialized = true;
+            enabled = true;
+
+            log.info("[AgentTracer] Direct OpenSearch export initialized with index prefix: {}", indexPrefix);
+        } catch (Exception e) {
+            log.error("[AgentTracer] Failed to initialize direct export", e);
+            enabled = false;
+            initialized = true;
+        }
+    }
+
+    /**
      * Check if tracing is enabled.
      */
     public static boolean isEnabled() {
@@ -559,7 +630,9 @@ public final class AgentTracer {
             builder.setParent(Context.current().with(parent));
         }
 
-        return builder.startSpan();
+        Span span = builder.startSpan();
+        toolStartTimes.put(span.getSpanContext().getSpanId(), System.currentTimeMillis());
+        return span;
     }
 
     /**
@@ -656,7 +729,7 @@ public final class AgentTracer {
     /**
      * End a span successfully.
      */
-    public static void endSpan(Span span, boolean success, String output) {
+    public static void endSpan(Span span, boolean success, String output, Map<String, Integer> extractedTokens) {
         log.info("[AgentTracer] endSpan called: span={}, success={}", span != null ? span.getSpanContext().getSpanId() : "null", success);
         if (span == null || !span.getSpanContext().isValid()) {
             log.warn("[AgentTracer] endSpan: span is null or invalid, skipping");
@@ -667,6 +740,28 @@ public final class AgentTracer {
         if (output != null) {
             span.setAttribute(RESULT_OUTPUT, truncate(output, 500));
         }
+
+        // Set token attributes
+        if (extractedTokens != null && !extractedTokens.isEmpty()) {
+            if (extractedTokens.containsKey(TOKEN_FIELD_INPUT_TOKENS)) {
+                span.setAttribute(INPUT_TOKENS, (long) extractedTokens.get(TOKEN_FIELD_INPUT_TOKENS));
+            }
+            if (extractedTokens.containsKey(TOKEN_FIELD_OUTPUT_TOKENS)) {
+                span.setAttribute(OUTPUT_TOKENS, (long) extractedTokens.get(TOKEN_FIELD_OUTPUT_TOKENS));
+            }
+            if (extractedTokens.containsKey(TOKEN_FIELD_TOTAL_TOKENS)) {
+                span.setAttribute(TOTAL_TOKENS, (long) extractedTokens.get(TOKEN_FIELD_TOTAL_TOKENS));
+            }
+        }
+
+        // Add duration for tool spans
+        String spanId = span.getSpanContext().getSpanId();
+        Long startTime = toolStartTimes.remove(spanId);
+        if (startTime != null) {
+            long duration = System.currentTimeMillis() - startTime;
+            span.setAttribute(TOOL_DURATION_MS, duration);
+        }
+
         span.setStatus(success ? StatusCode.OK : StatusCode.ERROR);
         span.end();
         log.info("[AgentTracer] endSpan: span ended successfully, spanId={}", span.getSpanContext().getSpanId());
@@ -689,6 +784,14 @@ public final class AgentTracer {
 
         span.setAttribute(RESULT_SUCCESS, false);
         span.setAttribute(ERROR_MESSAGE, error.getMessage());
+
+        String spanId = span.getSpanContext().getSpanId();
+        Long startTime = toolStartTimes.remove(spanId);
+        if (startTime != null) {
+            long duration = System.currentTimeMillis() - startTime;
+            span.setAttribute(TOOL_DURATION_MS, duration);
+        }
+
         span.setStatus(StatusCode.ERROR, error.getMessage());
         span.recordException(error);
         span.end();
@@ -743,5 +846,192 @@ public final class AgentTracer {
         tracer = null;
         initialized = false;
         enabled = true;
+    }
+
+    // ============ Token Extraction Methods ============
+
+    /**
+     * Extracts token information from ModelTensorOutput using the robust provider-specific logic.
+     * @param modelTensorOutput The model output to extract tokens from.
+     * @param parameters The parameters used for the LLM call (for provider detection).
+     * @return A map of extracted token information.
+     */
+    public static Map<String, Integer> extractTokensFromModelOutput(ModelTensorOutput modelTensorOutput, Map<String, String> parameters) {
+        Map<String, Integer> extractedTokens = new HashMap<>();
+        if (modelTensorOutput == null || modelTensorOutput.getMlModelOutputs() == null || modelTensorOutput.getMlModelOutputs().isEmpty()) {
+            return extractedTokens;
+        }
+        String provider = detectProviderFromParameters(parameters);
+        for (ModelTensors output : modelTensorOutput.getMlModelOutputs()) {
+            if (output.getMlModelTensors() != null) {
+                for (ModelTensor tensor : output.getMlModelTensors()) {
+                    processTensorForTokens(tensor, provider, extractedTokens);
+                }
+            }
+        }
+        return extractedTokens;
+    }
+
+    /**
+     * Detects the provider from the parameters map using the shared utility from MLModel.
+     * @param parameters The parameters map.
+     * @return The provider string (e.g., "openai", "aws.bedrock", etc.)
+     */
+    public static String detectProviderFromParameters(Map<String, String> parameters) {
+        String llmInterface = parameters.getOrDefault(PARAM_LLM_INTERFACE, "");
+        return llmInterface.isEmpty() ? PROVIDER_UNKNOWN : MLModel.identifyServiceProviderFromUrl(llmInterface.toLowerCase());
+    }
+
+    private static void processTensorForTokens(ModelTensor tensor, String provider, Map<String, Integer> extractedTokens) {
+        Map<String, ?> dataAsMap = tensor.getDataAsMap();
+        if (dataAsMap == null || !dataAsMap.containsKey(USAGE_FIELD)) {
+            return;
+        }
+        Object usageObj = dataAsMap.get(USAGE_FIELD);
+        if (!(usageObj instanceof Map)) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> usage = (Map<String, Object>) usageObj;
+
+        if (provider.toLowerCase().contains(PROVIDER_BEDROCK)) {
+            extractBedrockTokens(usage, extractedTokens);
+        } else if (provider.toLowerCase().contains(PROVIDER_OPENAI)) {
+            extractOpenAITokens(usage, extractedTokens);
+        } else {
+            // TODO: find general method for all providers
+        }
+    }
+
+    /**
+     * Extracts token information from Bedrock usage.
+     * @param usage The usage map from Bedrock.
+     * @param extractedTokens The map to store extracted tokens.
+     */
+    private static void extractBedrockTokens(Map<String, Object> usage, Map<String, Integer> extractedTokens) {
+        Object inputTokens = null;
+        Object outputTokens = null;
+        for (String key : usage.keySet()) {
+            if (key.equalsIgnoreCase(TOKEN_FIELD_INPUT_TOKENS_ALT) || key.equalsIgnoreCase(TOKEN_FIELD_INPUT_TOKENS)) {
+                inputTokens = usage.get(key);
+            }
+            if (key.equalsIgnoreCase(TOKEN_FIELD_OUTPUT_TOKENS_ALT) || key.equalsIgnoreCase(TOKEN_FIELD_OUTPUT_TOKENS)) {
+                outputTokens = usage.get(key);
+            }
+        }
+
+        Integer inputTokensValue = null;
+        Integer outputTokensValue = null;
+        try {
+            if (inputTokens != null) {
+                inputTokensValue = inputTokens instanceof Number
+                    ? ((Number) inputTokens).intValue()
+                    : Integer.parseInt(inputTokens.toString());
+            }
+            if (outputTokens != null) {
+                outputTokensValue = outputTokens instanceof Number
+                    ? ((Number) outputTokens).intValue()
+                    : Integer.parseInt(outputTokens.toString());
+            }
+        } catch (NumberFormatException e) {
+            log
+                .warn(
+                    "[AGENT_TRACE] Failed to parse Bedrock token values: inputTokens={}, outputTokens={}, error={}",
+                    inputTokens,
+                    outputTokens,
+                    e.getMessage()
+                );
+        }
+
+        if (inputTokensValue != null) {
+            extractedTokens.put(TOKEN_FIELD_INPUT_TOKENS, inputTokensValue);
+        }
+        if (outputTokensValue != null) {
+            extractedTokens.put(TOKEN_FIELD_OUTPUT_TOKENS, outputTokensValue);
+        }
+        if (inputTokensValue != null && outputTokensValue != null) {
+            int totalTokens = inputTokensValue + outputTokensValue;
+            extractedTokens.put(TOKEN_FIELD_TOTAL_TOKENS, totalTokens);
+        }
+    }
+
+    /**
+     * Extracts token information from OpenAI usage.
+     * @param usage The usage map from OpenAI.
+     * @param extractedTokens The map to store extracted tokens.
+     */
+    private static void extractOpenAITokens(Map<String, Object> usage, Map<String, Integer> extractedTokens) {
+        Object promptTokens = null;
+        Object completionTokens = null;
+        Object totalTokens = null;
+        for (String key : usage.keySet()) {
+            if (key.equalsIgnoreCase(TOKEN_FIELD_PROMPT_TOKENS)) {
+                promptTokens = usage.get(key);
+            }
+            if (key.equalsIgnoreCase(TOKEN_FIELD_COMPLETION_TOKENS)) {
+                completionTokens = usage.get(key);
+            }
+            if (key.equalsIgnoreCase(TOKEN_FIELD_TOTAL_TOKENS_ALT)) {
+                totalTokens = usage.get(key);
+            }
+        }
+
+        if (promptTokens != null) {
+            try {
+                extractedTokens
+                    .put(
+                        TOKEN_FIELD_INPUT_TOKENS,
+                        promptTokens instanceof Number ? ((Number) promptTokens).intValue() : Integer.parseInt(promptTokens.toString())
+                    );
+            } catch (NumberFormatException e) {
+                log.warn("[AGENT_TRACE] Failed to parse OpenAI prompt tokens: promptTokens={}, error={}", promptTokens, e.getMessage());
+            }
+        }
+        if (completionTokens != null) {
+            try {
+                extractedTokens
+                    .put(
+                        TOKEN_FIELD_OUTPUT_TOKENS,
+                        completionTokens instanceof Number
+                            ? ((Number) completionTokens).intValue()
+                            : Integer.parseInt(completionTokens.toString())
+                    );
+            } catch (NumberFormatException e) {
+                log
+                    .warn(
+                        "[AGENT_TRACE] Failed to parse OpenAI completion tokens: completionTokens={}, error={}",
+                        completionTokens,
+                        e.getMessage()
+                    );
+            }
+        }
+        if (totalTokens != null) {
+            try {
+                extractedTokens
+                    .put(
+                        TOKEN_FIELD_TOTAL_TOKENS,
+                        totalTokens instanceof Number ? ((Number) totalTokens).intValue() : Integer.parseInt(totalTokens.toString())
+                    );
+            } catch (NumberFormatException e) {
+                log.warn("[AGENT_TRACE] Failed to parse OpenAI total tokens: totalTokens={}, error={}", totalTokens, e.getMessage());
+            }
+        }
+    }
+
+    public static void injectSpanContext(Span span, Map<String, String> contextMap) {
+        if (span == null || !span.getSpanContext().isValid()) {
+            return;
+        }
+
+        try {
+            String traceId = span.getSpanContext().getTraceId();
+            String spanId = span.getSpanContext().getSpanId();
+            String traceFlags = span.getSpanContext().getTraceFlags().asHex();
+            contextMap.put("traceparent", String.format("00-%s-%s-%s", traceId, spanId, traceFlags));
+
+            log.info("[AgentTracer] Injected trace context: traceparent=00-{}-{}-{}", traceId, spanId, traceFlags);
+        } catch (Exception e) {
+            log.warn("Failed to inject span context", e);
+        }
     }
 }

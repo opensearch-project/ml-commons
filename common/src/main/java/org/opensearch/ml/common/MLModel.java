@@ -965,7 +965,7 @@ public class MLModel implements ToXContentObject {
      * @param url The URL to analyze for service provider identification
      * @return The identified service provider name, or "unknown" if not found
      */
-    String identifyServiceProvider(String url) {
+    static String identifyServiceProvider(String url) {
         for (String provider : MODEL_SERVICE_PROVIDER_KEYWORDS) {
             if (url.contains(provider)) {
                 return provider;
@@ -973,6 +973,10 @@ public class MLModel implements ToXContentObject {
         }
 
         return TAG_VALUE_UNKNOWN;
+    }
+
+    public static String identifyServiceProviderFromUrl(String url) {
+        return identifyServiceProvider(url);
     }
 
     /**

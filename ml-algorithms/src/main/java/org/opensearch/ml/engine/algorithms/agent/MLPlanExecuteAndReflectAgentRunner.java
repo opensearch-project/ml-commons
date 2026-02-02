@@ -454,7 +454,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         if (stepsExecuted >= maxSteps) {
             // End agent span when max steps reached
-            AgentTracer.endSpan(agentSpan, true, "Max steps reached");
+            AgentTracer.endSpan(agentSpan, true, "Max steps reached", null);
             if (agentScope != null) {
                 agentScope.close();
             }
@@ -509,24 +509,25 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             null,
             tenantId
         );
-
         StepListener<MLTaskResponse> planListener = new StepListener<>();
 
         planListener.whenComplete(llmOutput -> {
+            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
+            Map<String, Integer> extractedTokens = AgentTracer.extractTokensFromModelOutput(modelTensorOutput, allParams);
+
             // End LLM span when response received
             Span completedLlmSpan = currentLlmSpan.get();
             if (completedLlmSpan != null) {
-                AgentTracer.endSpan(completedLlmSpan, true, null);
+                AgentTracer.endSpan(completedLlmSpan, true, null, extractedTokens);
                 currentLlmSpan.set(null);
             }
 
-            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
             Map<String, Object> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = (String) parseLLMOutput.get(RESULT_FIELD);
                 // End agent span successfully with final result
-                AgentTracer.endSpan(agentSpan, true, finalResult);
+                AgentTracer.endSpan(agentSpan, true, finalResult, extractedTokens);
                 if (agentScope != null) {
                     agentScope.close();
                 }
@@ -569,6 +570,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 if (allParams.containsKey(MEMORY_CONFIGURATION_FIELD)) {
                     reactParams.put(MEMORY_CONFIGURATION_FIELD, allParams.get(MEMORY_CONFIGURATION_FIELD));
                 }
+
+                // Inject parent SpanContext using
+                Map<String, String> spanContextMap = new HashMap<>();
+                AgentTracer.injectSpanContext(stepSpan, spanContextMap);
+                reactParams.putAll(spanContextMap);
+                AgentLoggingContext
+                    .info(log, getThreadContext(), "[AGENT_TRACE] PER Agent - Injected parent SpanContext: {}", spanContextMap);
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
@@ -684,7 +692,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     // End step span after step execution completes
                     Span completedStepSpan = currentStepSpan.get();
                     if (completedStepSpan != null) {
-                        AgentTracer.endSpan(completedStepSpan, true, results.get(STEP_RESULT_FIELD));
+                        AgentTracer.endSpan(completedStepSpan, true, results.get(STEP_RESULT_FIELD), extractedTokens);
                         currentStepSpan.set(null);
                     }
 
