@@ -280,7 +280,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         ActionListener<MLTaskGetResponse> actionListener
     ) {
         try {
-            GetResponse gr = response.parser() == null ? null : GetResponse.fromXContent(response.parser());
+            GetResponse gr = response.getResponse();
 
             if (gr == null || !gr.isExists()) {
                 actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND));
