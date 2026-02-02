@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
@@ -151,12 +153,24 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
-                    Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                    Tool tool = createTool(toolFactories, executeParams, toolSpec);
-                    if (finalI < toolSpecs.size()) {
-                        tool.run(executeParams, nextStepListener);
-                    }
 
+                    // Create a common method to handle both success and failure cases
+                    Consumer<List<MLToolSpec>> processTools = (allToolSpecs) -> {
+                        Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                        Tool tool = createTool(toolFactories, executeParams, toolSpec);
+                        if (finalI < toolSpecs.size()) {
+                            tool.run(executeParams, nextStepListener);
+                        }
+                    };
+
+                    // Fetch MCP tools and handle both success and failure cases
+                    getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
+                        toolSpecs.addAll(mcpTools);
+                        processTools.accept(toolSpecs);
+                    }, e -> {
+                        log.warn("Failed to get MCP tools, continuing with base tools only", e);
+                        processTools.accept(toolSpecs);
+                    }));
                 }, e -> {
                     log.error("Failed to run flow agent", e);
                     listener.onFailure(e);
