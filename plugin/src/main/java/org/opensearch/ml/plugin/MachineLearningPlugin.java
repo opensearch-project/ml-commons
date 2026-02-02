@@ -20,11 +20,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_STOP_WORDS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_REGION;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_ENDPOINT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL;
@@ -707,15 +702,18 @@ public class MachineLearningPlugin extends Plugin
 
         mlEngine = new MLEngine(dataPath, encryptor);
 
+        // Use direct OpenSearch export for testing
+        AgentTracer.initializeDirectExport(client, "otel-v1-apm-span");
+
         // Initialize AgentTracer for OpenTelemetry tracing if OSIS endpoint is configured
-        String osisEndpoint = ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT.get(settings);
-        if (osisEndpoint != null && !osisEndpoint.isEmpty()) {
-            String awsAccessKey = ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY.get(settings);
-            String awsSecretKey = ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY.get(settings);
-            String awsSessionToken = ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN.get(settings);
-            String awsRegion = ML_COMMONS_AGENT_TRACING_AWS_REGION.get(settings);
-            AgentTracer.initialize(osisEndpoint, "ml-commons", awsAccessKey, awsSecretKey, awsSessionToken, awsRegion);
-        }
+        // String osisEndpoint = ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT.get(settings);
+        // if (osisEndpoint != null && !osisEndpoint.isEmpty()) {
+        // String awsAccessKey = ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY.get(settings);
+        // String awsSecretKey = ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY.get(settings);
+        // String awsSessionToken = ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN.get(settings);
+        // String awsRegion = ML_COMMONS_AGENT_TRACING_AWS_REGION.get(settings);
+        // AgentTracer.initialize(osisEndpoint, "ml-commons", awsAccessKey, awsSecretKey, awsSessionToken, awsRegion);
+        // }
 
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
