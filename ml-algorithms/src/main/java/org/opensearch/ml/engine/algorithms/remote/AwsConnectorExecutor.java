@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -125,6 +126,11 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     throw new IllegalArgumentException("unsupported http method");
             }
             ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+
+            // TODO: We should have an idea to identify the source of the request(predict/agent execution),
+            // but currently it's not easy, so reusing the predict thread pool won't harm anything.
+            ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = createThreadedListener(log, actionListener);
+
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
@@ -132,7 +138,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        ActionListener.runBefore(actionListener, storedContext::restore),
+                        ActionListener.runBefore(threadedListener, storedContext::restore), // Restore context before calling listener,
                         parameters,
                         connector,
                         scriptService,
@@ -200,6 +206,14 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            log
+                .info(
+                    "AwsConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    connector.getName(),
+                    maxConnection,
+                    super.getConnectorClientConfig().getConnectionTimeout(),
+                    super.getConnectorClientConfig().getReadTimeout()
+                );
             this.httpClientRef
                 .compareAndSet(
                     null,
