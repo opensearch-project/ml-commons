@@ -38,8 +38,10 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
@@ -80,6 +82,16 @@ public class StringUtils {
 
     public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
+    private static volatile MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    /**
+     * Sets the MLFeatureEnabledSetting instance for accessing dynamic settings.
+     * @param setting the MLFeatureEnabledSetting instance
+     */
+    public static void setMLFeatureEnabledSetting(MLFeatureEnabledSetting setting) {
+        mlFeatureEnabledSetting = setting;
+    }
+
     public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
         .serializeNulls()
         .registerTypeAdapter(Float.class, new PlainFloatAdapter())
@@ -100,7 +112,9 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    public static final ObjectMapper MAPPER = new ObjectMapper();
+    public static final ObjectMapper MAPPER = new ObjectMapper()
+        .configure(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION, true)
+        .configure(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY, true);
 
     public static boolean isValidJsonString(String json) {
         if (json == null || json.isBlank()) {
@@ -168,18 +182,31 @@ public class StringUtils {
     }
 
     public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
-        Map<String, Object> result;
-        JsonElement jsonElement = JsonParser.parseString(jsonStr);
-        if (jsonElement.isJsonObject()) {
-            result = gson.fromJson(jsonElement, Map.class);
-        } else if (jsonElement.isJsonArray()) {
-            List<Object> list = gson.fromJson(jsonElement, List.class);
-            result = new HashMap<>();
-            result.put(defaultKey, list);
-        } else {
-            throw new IllegalArgumentException("Unsupported response type");
+        if (jsonStr == null) {
+            throw new IllegalArgumentException("JSON string cannot be null");
         }
-        return result;
+        // Check size limit if configured (maxJsonSize = -1 means unlimited)
+        if (mlFeatureEnabledSetting != null) {
+            int maxJsonSize = mlFeatureEnabledSetting.getMaxJsonSize();
+            if (maxJsonSize > 0 && jsonStr.getBytes(StandardCharsets.UTF_8).length > maxJsonSize) {
+                throw new IllegalArgumentException(String.format("JSON string size exceeds maximum allowed size (%d bytes)", maxJsonSize));
+            }
+        }
+        try {
+            JsonNode jsonNode = MAPPER.readTree(jsonStr);
+            if (jsonNode.isObject()) {
+                return MAPPER.convertValue(jsonNode, Map.class);
+            } else if (jsonNode.isArray()) {
+                List<Object> list = MAPPER.convertValue(jsonNode, List.class);
+                Map<String, Object> result = new HashMap<>();
+                result.put(defaultKey, list);
+                return result;
+            } else {
+                throw new IllegalArgumentException("Unsupported response type");
+            }
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -294,7 +321,11 @@ public class StringUtils {
                 if (value instanceof String) {
                     return (String) value;
                 } else {
-                    return gson.toJson(value);
+                    try {
+                        return MAPPER.writeValueAsString(value);
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException("Failed to serialize to JSON", e);
+                    }
                 }
             });
         } catch (PrivilegedActionException e) {
