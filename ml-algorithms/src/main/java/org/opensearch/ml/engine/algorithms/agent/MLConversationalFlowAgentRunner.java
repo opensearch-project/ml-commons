@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_ESCAPE_OUTPUT;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTensor;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
@@ -287,7 +288,11 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String outputKey = toolName + ".output";
         Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, tenantId);
         String filteredOutput = parseResponse(filterToolOutput(toolParameters, output));
-        params.put(outputKey, StringUtils.prepareJsonValue(filteredOutput));
+        params
+            .put(
+                outputKey,
+                StringUtils.prepareJsonValue(filteredOutput, Boolean.parseBoolean(toolParameters.getOrDefault(TOOL_ESCAPE_OUTPUT, "false")))
+            );
         boolean traceDisabled = params.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(params.get(DISABLE_TRACE));
 
         if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {

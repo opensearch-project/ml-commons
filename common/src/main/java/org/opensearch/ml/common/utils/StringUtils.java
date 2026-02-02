@@ -196,11 +196,16 @@ public class StringUtils {
      *   prepareJsonValue("{\"key\":123}") → {\"key\":123} (valid JSON object, unchanged)
      * </pre>
      * @param input
+     * @param escapeJson
      * @return
      */
-    public static String prepareJsonValue(String input) {
+    public static String prepareJsonValue(String input, boolean escapeJson) {
         if (isJson(input)) {
-            return input;
+            if (!escapeJson) {
+                return input;
+            } else {
+                return escapeJson(input);
+            }
         }
         return escapeJson(input);
     }
