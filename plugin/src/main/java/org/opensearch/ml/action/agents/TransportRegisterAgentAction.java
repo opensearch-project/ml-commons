@@ -104,7 +104,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             try {
                 FunctionCallingFactory.create(llmInterface);
             } catch (Exception e) {
-                listener.onFailure(new IllegalArgumentException("Invalid _llm_interface: " + llmInterface));
+                listener.onFailure(new IllegalArgumentException("Invalid _llm_interface"));
                 return;
             }
         }
