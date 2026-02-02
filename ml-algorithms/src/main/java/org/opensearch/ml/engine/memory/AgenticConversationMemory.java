@@ -20,6 +20,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -56,7 +57,7 @@ import lombok.extern.log4j.Log4j2;
 @Getter
 public class AgenticConversationMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
 
-    public static final String TYPE = "agentic_conversation";
+    public static final String TYPE = MLMemoryType.AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
 
