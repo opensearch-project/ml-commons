@@ -10,7 +10,7 @@ package org.opensearch.ml.common.input.execute.agent;
  */
 public enum ModelProviderType {
     BEDROCK_CONVERSE("bedrock/converse"),
-    GEMINI_GENERATE_CONTENT("gemini/generatecontent");
+    GEMINI_V1BETA_GENERATE_CONTENT("gemini/v1beta/generatecontent");
 
     private final String value;
 
@@ -32,6 +32,6 @@ public enum ModelProviderType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown model provider type. Supported types: bedrock/converse, gemini/generatecontent");
+        throw new IllegalArgumentException("Unknown model provider type. Supported types: bedrock/converse, gemini/v1beta/generatecontent");
     }
 }

@@ -90,7 +90,7 @@ public class AgentModelServiceTest {
 
         // Assert
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported model provider: unsupported/provider");
+        exceptionRule.expectMessage("Unknown model provider type. Supported types: bedrock/converse, gemini/v1beta/generatecontent");
 
         // Act
         AgentModelService.createModelFromSpec(modelSpec);
