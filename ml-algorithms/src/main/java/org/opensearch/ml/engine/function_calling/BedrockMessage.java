@@ -17,7 +17,7 @@ import lombok.Data;
 public class BedrockMessage implements LLMMessage {
 
     private String role;
-    private List<Object> content = new ArrayList<>();
+    private List<Object> content;
 
     BedrockMessage() {
         this("user");
@@ -28,13 +28,13 @@ public class BedrockMessage implements LLMMessage {
     }
 
     BedrockMessage(String role, List<Object> content) {
-        this.role = role;
-        if (content != null) {
-            this.content = content;
-        }
+        this.role = role != null ? role : "user";
+        this.content = content != null ? new ArrayList<>(content) : new ArrayList<>();
     }
 
     public String getResponse() {
-        return StringUtils.toJson(Map.of("role", role, "content", content));
+        String roleToUse = role != null ? role : "user";
+        List<Object> contentToUse = content != null ? content : new ArrayList<>();
+        return StringUtils.toJson(Map.of("role", roleToUse, "content", contentToUse));
     }
 }
