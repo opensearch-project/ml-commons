@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.common.input.execute.agent;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 /**
  * Enum for supported model provider types
  */
@@ -32,6 +35,7 @@ public enum ModelProviderType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown model provider type. Supported types: bedrock/converse, gemini/v1beta/generatecontent");
+        String supportedTypes = Stream.of(ModelProviderType.values()).map(ModelProviderType::getValue).collect(Collectors.joining(", "));
+        throw new IllegalArgumentException("Unknown model provider type. Supported types: " + supportedTypes);
     }
 }

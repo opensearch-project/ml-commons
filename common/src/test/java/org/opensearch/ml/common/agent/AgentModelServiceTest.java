@@ -9,10 +9,13 @@ import static org.junit.Assert.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class AgentModelServiceTest {
@@ -88,9 +91,13 @@ public class AgentModelServiceTest {
         // Arrange
         MLAgentModelSpec modelSpec = MLAgentModelSpec.builder().modelId("test-model-id").modelProvider("unsupported/provider").build();
 
+        // Build expected message dynamically from enum
+        String supportedTypes = Stream.of(ModelProviderType.values()).map(ModelProviderType::getValue).collect(Collectors.joining(", "));
+        String expectedMessage = "Unknown model provider type. Supported types: " + supportedTypes;
+
         // Assert
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unknown model provider type. Supported types: bedrock/converse, gemini/v1beta/generatecontent");
+        exceptionRule.expectMessage(expectedMessage);
 
         // Act
         AgentModelService.createModelFromSpec(modelSpec);
