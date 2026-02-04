@@ -71,6 +71,14 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
             int maxConnection = Optional
                 .ofNullable(connectorClientConfig.getMaxConnections())
                 .orElse(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE);
+            log
+                .info(
+                    "{} creating HTTP client with maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    this.getClass().getSimpleName(),
+                    maxConnection,
+                    this.getConnectorClientConfig().getConnectionTimeoutMillis(),
+                    this.getConnectorClientConfig().getReadTimeoutMillis()
+                );
             SdkAsyncHttpClient newClient = MLHttpClientFactory
                 .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled);
             httpClientRef.set(newClient);
