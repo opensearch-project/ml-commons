@@ -12,7 +12,9 @@ import java.util.Map;
 
 import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.utils.TestHelper;
@@ -56,6 +58,7 @@ public class RestOpenaiV1ChatCompletionsFunctionCallingIT extends RestBaseAgentT
         updateClusterSettings("plugins.ml_commons.only_run_on_ml_node", null);
         updateClusterSettings("plugins.ml_commons.memory_feature_enabled", null);
         updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", null);
+        updateClusterSettings("plugins.ml_commons.connector.private_ip_enabled", null);
         updateClusterSettings("plugins.ml_commons.unified_agent_api_enabled", null);
     }
 
@@ -64,7 +67,10 @@ public class RestOpenaiV1ChatCompletionsFunctionCallingIT extends RestBaseAgentT
     /**
      * Test 1: New API - Tool execution with simplified agent registration
      */
+    @Test
     public void testNewAPI_ToolExecutionWithFunctionCalling() throws IOException, ParseException {
+        // Skip test if OPENAI_KEY is not set
+        Assume.assumeNotNull(OPENAI_API_KEY);
         // Create agent with ListIndexTool using simplified agent registration
         String agentBody = String
             .format(

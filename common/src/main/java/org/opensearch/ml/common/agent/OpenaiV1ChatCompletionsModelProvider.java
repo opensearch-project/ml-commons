@@ -8,6 +8,8 @@ package org.opensearch.ml.common.agent;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -277,13 +279,20 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
      *
      * @param sourceType the source type from image content
      * @return the corresponding OpenAI API template string
+     * @throws IllegalArgumentException if sourceType is null or unsupported
      */
     private String mapImageSourceTypeToOpenAI(SourceType sourceType) {
-        if (sourceType == SourceType.BASE64) {
-            return IMAGE_CONTENT_BASE64_TEMPLATE;
-        } else {
-            // URL source type
-            return IMAGE_CONTENT_URL_TEMPLATE;
+        if (sourceType == null) {
+            String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
+            throw new IllegalArgumentException("Image source type is required. Supported types: " + supportedTypes);
         }
+        return switch (sourceType) {
+            case BASE64 -> IMAGE_CONTENT_BASE64_TEMPLATE;
+            case URL -> IMAGE_CONTENT_URL_TEMPLATE;
+            default -> {
+                String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
+                throw new IllegalArgumentException("Unsupported image source type. Supported types: " + supportedTypes);
+            }
+        };
     }
 }
