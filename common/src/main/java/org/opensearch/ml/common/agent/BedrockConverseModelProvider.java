@@ -8,6 +8,8 @@ package org.opensearch.ml.common.agent;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -288,20 +290,28 @@ public class BedrockConverseModelProvider extends ModelProvider {
      * @param sourceType the source type from content
      * @param dataUrl the data URL (only validated when sourceType is URL)
      * @return the corresponding Bedrock API source field name
-     * @throws IllegalArgumentException if sourceType is URL but dataUrl is not an S3 URI
+     * @throws IllegalArgumentException if sourceType is null, unsupported, or if sourceType is URL but dataUrl is not an S3 URI
      */
     private String mapSourceTypeToBedrock(SourceType sourceType, String dataUrl) {
-        if (sourceType == SourceType.URL) {
-            // s3Location for S3 URIs (must be s3://...)
-            if (dataUrl == null || !dataUrl.startsWith("s3://")) {
-                throw new IllegalArgumentException(
-                    "URL-based content must use S3 URIs (s3://...). Other URL schemes are not supported by Bedrock Converse API"
-                );
-            }
-
-            return "s3Location";
+        if (sourceType == null) {
+            String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
+            throw new IllegalArgumentException("Source type is required. Supported types: " + supportedTypes);
         }
-
-        return "bytes";
+        return switch (sourceType) {
+            case BASE64 -> "bytes";
+            case URL -> {
+                // s3Location for S3 URIs (must be s3://...)
+                if (dataUrl == null || !dataUrl.startsWith("s3://")) {
+                    throw new IllegalArgumentException(
+                        "URL-based content must use S3 URIs (s3://...). Other URL schemes are not supported by Bedrock Converse API"
+                    );
+                }
+                yield "s3Location";
+            }
+            default -> {
+                String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
+                throw new IllegalArgumentException("Unsupported source type. Supported types: " + supportedTypes);
+            }
+        };
     }
 }

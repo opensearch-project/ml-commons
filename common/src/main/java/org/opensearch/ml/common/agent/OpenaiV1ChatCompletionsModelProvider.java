@@ -21,17 +21,15 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
-import org.opensearch.ml.common.input.execute.agent.DocumentContent;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
-import org.opensearch.ml.common.input.execute.agent.VideoContent;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.utils.ToolUtils;
 
 /**
- * Model provider for Google Gemini generateContent API (v1beta).
+ * Model provider for OpenAI Chat Completions API.
  *
  * This provider uses template-based parameter substitution with StringSubstitutor
  * to create the request body. Different input types (text, content blocks, messages)
@@ -45,36 +43,45 @@ import org.opensearch.ml.common.utils.ToolUtils;
  * - Content blocks: ${parameters.content_array}
  * - Messages: ${parameters.messages_array}
  * - Content types use prefixed parameters: ${parameters.content_text}, ${parameters.image_format}, etc.
- * - Source types are dynamically mapped: BASE64 → "bytes", URL → "uri"
+ * - Source types are dynamically mapped: BASE64 → data URI format, URL → direct URL
  *
  * All parameters consistently use the ${parameters.} prefix for uniformity.
+ *
+ * Supported content types:
+ * - TEXT: Fully supported
+ * - IMAGE: Supported (BASE64 and URL formats)
+ * - VIDEO: NOT supported in Chat Completions API (throws IllegalArgumentException)
+ * - DOCUMENT: NOT supported in Chat Completions API (throws IllegalArgumentException)
  */
 // todo: refactor the processing so providers have to only provide the constants
-public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
+public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
 
-    private static final String REQUEST_BODY_TEMPLATE =
-        "{\"systemInstruction\":{\"parts\":[{\"text\":\"${parameters.system_prompt:-You are a helpful assistant.}\"}]},"
-            + "\"contents\":[${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
-            + "${parameters.tool_configs:-}}";
+    private static final String REQUEST_BODY_TEMPLATE = "{\"model\":\"${parameters.model}\","
+        + "\"messages\":[${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
+        + "${parameters.tool_configs:-}}";
+
+    private static final String REQUEST_BODY_REASONING_TEMPLATE = "{\"model\":\"${parameters.model}\","
+        + "\"messages\":[${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
+        + "${parameters.tool_configs:-}"
+        + ",\"reasoning_effort\":\"${parameters.reasoning_effort}\"}";
 
     // Body templates for different input types
-    private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.user_text}\"}]}";
+    private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":\"${parameters.user_text}\"}";
 
-    private static final String CONTENT_BLOCKS_BODY_TEMPLATE = "{\"role\":\"user\",\"parts\":[${parameters.content_array}]}";
+    private static final String CONTENT_BLOCKS_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[${parameters.content_array}]}";
 
     // Content block templates for multi-modal content
-    private static final String TEXT_CONTENT_TEMPLATE = "{\"text\":\"${parameters.content_text}\"}";
+    private static final String TEXT_CONTENT_TEMPLATE = "{\"type\":\"text\",\"text\":\"${parameters.content_text}\"}";
 
-    private static final String IMAGE_CONTENT_TEMPLATE =
-        "{\"inlineData\":{\"mimeType\":\"image/${parameters.image_format}\",\"data\":\"${parameters.image_data}\"}}";
+    private static final String IMAGE_CONTENT_BASE64_TEMPLATE =
+        "{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/${parameters.image_format};base64,${parameters.image_data}\"}}";
 
-    private static final String DOCUMENT_CONTENT_TEMPLATE =
-        "{\"fileData\":{\"mimeType\":\"${parameters.doc_format}\",\"fileUri\":\"${parameters.doc_data}\"}}";
+    private static final String IMAGE_CONTENT_URL_TEMPLATE =
+        "{\"type\":\"image_url\",\"image_url\":{\"url\":\"${parameters.image_data}\"}}";
 
-    private static final String VIDEO_CONTENT_TEMPLATE =
-        "{\"fileData\":{\"mimeType\":\"video/${parameters.video_format}\",\"fileUri\":\"${parameters.video_data}\"}}";
+    private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"content\":[${parameters.msg_content_array}]}";
 
-    private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"parts\":[${parameters.msg_content_array}]}";
+    private static final String OPENAI_REASONING_EFFORT = "reasoning_effort";
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
@@ -88,15 +95,18 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");
-        headers.put("x-goog-api-key", "${credential.gemini_api_key}");
+        headers.put("Authorization", "Bearer ${credential.openai_api_key}");
+
+        // handle reasoning effort
+        String requestBody = parameters.containsKey(OPENAI_REASONING_EFFORT) ? REQUEST_BODY_REASONING_TEMPLATE : REQUEST_BODY_TEMPLATE;
 
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("https://generativelanguage.googleapis.com/v1beta/models/${parameters.model}:generateContent")
+            .url("https://api.openai.com/v1/chat/completions")
             .headers(headers)
-            .requestBody(REQUEST_BODY_TEMPLATE)
+            .requestBody(requestBody)
             .build();
 
         // Set agent connector to have default 3 retries
@@ -105,8 +115,8 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
         return HttpConnector
             .builder()
-            .name("Auto-generated Gemini connector for Agent")
-            .description("Auto-generated connector for Gemini generateContent API")
+            .name("Auto-generated OpenAI connector for Agent")
+            .description("Auto-generated connector for OpenAI Chat Completions API")
             .version("1")
             .protocol(ConnectorProtocols.HTTP)
             .parameters(parameters)
@@ -129,7 +139,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
     @Override
     public String getLLMInterface() {
-        return "gemini/v1beta/generatecontent";
+        return "openai/v1/chat/completions";
     }
 
     @Override
@@ -181,8 +191,9 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
     }
 
     /**
-     * Builds content array from content blocks using templates for Gemini generateContent API.
-     * Supports text, image, document, and video content types.
+     * Builds content array from content blocks using templates for OpenAI Chat Completions API.
+     * Supports text and image content types.
+     * Throws IllegalArgumentException for unsupported VIDEO and DOCUMENT content types.
      */
     private String buildContentArrayFromBlocks(List<ContentBlock> blocks, MLAgentType type) {
         if (blocks == null || blocks.isEmpty()) {
@@ -214,27 +225,17 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     Map<String, Object> imageParams = new HashMap<>();
                     imageParams.put("image_format", image.getFormat());
                     imageParams.put("image_data", StringEscapeUtils.escapeJson(image.getData()));
-                    // Map SourceType to Gemini API source type
-                    String imageTemplate = mapImageSourceTypeToGemini(image.getType());
+                    // Map SourceType to OpenAI API format
+                    String imageTemplate = mapImageSourceTypeToOpenAI(image.getType());
                     StringSubstitutor imageSubstitutor = new StringSubstitutor(imageParams, "${parameters.", "}");
                     contentArray.append(imageSubstitutor.replace(imageTemplate));
                     break;
-                case DOCUMENT:
-                    DocumentContent document = block.getDocument();
-                    Map<String, Object> docParams = new HashMap<>();
-                    docParams.put("doc_format", document.getFormat());
-                    docParams.put("doc_data", StringEscapeUtils.escapeJson(document.getData()));
-                    StringSubstitutor docSubstitutor = new StringSubstitutor(docParams, "${parameters.", "}");
-                    contentArray.append(docSubstitutor.replace(DOCUMENT_CONTENT_TEMPLATE));
-                    break;
                 case VIDEO:
-                    VideoContent video = block.getVideo();
-                    Map<String, Object> videoParams = new HashMap<>();
-                    videoParams.put("video_format", video.getFormat());
-                    videoParams.put("video_data", StringEscapeUtils.escapeJson(video.getData()));
-                    StringSubstitutor videoSubstitutor = new StringSubstitutor(videoParams, "${parameters.", "}");
-                    contentArray.append(videoSubstitutor.replace(VIDEO_CONTENT_TEMPLATE));
-                    break;
+                    // TODO: Video support would require separate Videos API integration
+                    throw new IllegalArgumentException("Video content is not supported in OpenAI Chat Completions API. ");
+                case DOCUMENT:
+                    // TODO: Document support would require separate API integration
+                    throw new IllegalArgumentException("Document content is not supported in OpenAI Chat Completions API. ");
                 default:
                     // Skip unsupported content types
                     break;
@@ -245,7 +246,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
     }
 
     /**
-     * Builds messages array using templates for Gemini generateContent API.
+     * Builds messages array using templates for OpenAI Chat Completions API.
      * Converts messages to conversation history format.
      */
     private String buildMessagesArray(List<Message> messages, MLAgentType type) {
@@ -263,9 +264,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
             String contentArray = buildContentArrayFromBlocks(message.getContent(), type);
             Map<String, Object> msgParams = new HashMap<>();
-            // Map role: Gemini uses "user" and "model" (not "assistant")
-            String geminiRole = "user".equals(message.getRole()) ? "user" : "model";
-            msgParams.put("msg_role", geminiRole);
+            msgParams.put("msg_role", message.getRole());
             msgParams.put("msg_content_array", contentArray);
             StringSubstitutor msgSubstitutor = new StringSubstitutor(msgParams, "${parameters.", "}");
             messagesArray.append(msgSubstitutor.replace(MESSAGE_TEMPLATE));
@@ -275,26 +274,25 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
     }
 
     /**
-     * Maps SourceType to Gemini generateContent API image format.
+     * Maps SourceType to OpenAI Chat Completions API image format.
      * Returns the appropriate template based on the source type.
      *
      * @param sourceType the source type from image content
-     * @return the corresponding Gemini API template string
+     * @return the corresponding OpenAI API template string
      * @throws IllegalArgumentException if sourceType is null or unsupported
      */
-    private String mapImageSourceTypeToGemini(SourceType sourceType) {
+    private String mapImageSourceTypeToOpenAI(SourceType sourceType) {
         if (sourceType == null) {
             String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
             throw new IllegalArgumentException("Image source type is required. Supported types: " + supportedTypes);
         }
         return switch (sourceType) {
-            case BASE64 -> IMAGE_CONTENT_TEMPLATE;
-            case URL -> "{\"fileData\":{\"mimeType\":\"image/${parameters.image_format}\",\"fileUri\":\"${parameters.image_data}\"}}";
+            case BASE64 -> IMAGE_CONTENT_BASE64_TEMPLATE;
+            case URL -> IMAGE_CONTENT_URL_TEMPLATE;
             default -> {
                 String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
                 throw new IllegalArgumentException("Unsupported image source type. Supported types: " + supportedTypes);
             }
         };
     }
-
 }

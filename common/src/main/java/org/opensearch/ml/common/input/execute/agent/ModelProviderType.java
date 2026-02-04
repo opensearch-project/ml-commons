@@ -13,7 +13,8 @@ import java.util.stream.Stream;
  */
 public enum ModelProviderType {
     BEDROCK_CONVERSE("bedrock/converse"),
-    GEMINI_V1BETA_GENERATE_CONTENT("gemini/v1beta/generatecontent");
+    GEMINI_V1BETA_GENERATE_CONTENT("gemini/v1beta/generatecontent"),
+    OPENAI_V1_CHAT_COMPLETIONS("openai/v1/chat/completions");
 
     private final String value;
 
