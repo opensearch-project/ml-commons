@@ -61,6 +61,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + OPENAI_KEY
         + "\"\n"
         + "    },\n"
+        + "    \"client_config\": {\n"
+        + "        \"read_timeout\": 60000\n"
+        + "    },\n"
         + "    \"actions\": [\n"
         + "        {\n"
         + "            \"action_type\": \"predict\",\n"
@@ -88,6 +91,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "        \"openAI_key\": \""
         + OPENAI_KEY
         + "\"\n"
+        + "    },\n"
+        + "    \"client_config\": {\n"
+        + "        \"read_timeout\": 60000\n"
         + "    },\n"
         + "    \"actions\": [\n"
         + "        {\n"
@@ -137,6 +143,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + AWS_SESSION_TOKEN
         + "\"\n"
         + "  },\n"
+        + "  \"client_config\": {\n"
+        + "    \"read_timeout\": 60000\n"
+        + "  },\n"
         + "  \"actions\": [\n"
         + "        {\n"
         + "            \"action_type\": \""
@@ -178,6 +187,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + AWS_SESSION_TOKEN
         + "\"\n"
         + "  },\n"
+        + "  \"client_config\": {\n"
+        + "    \"read_timeout\": 60000\n"
+        + "  },\n"
         + "  \"actions\": [\n"
         + "        {\n"
         + "            \"action_type\": \"predict\",\n"
@@ -210,6 +222,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    \"secret_key\": \""
         + AWS_SECRET_ACCESS_KEY
         + "\"\n"
+        + "  },\n"
+        + "  \"client_config\": {\n"
+        + "    \"read_timeout\": 60000\n"
         + "  },\n"
         + "  \"actions\": [\n"
         + "        {\n"
@@ -251,6 +266,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    \"session_token\": \""
         + AWS_SESSION_TOKEN
         + "\"\n"
+        + "  },\n"
+        + "  \"client_config\": {\n"
+        + "    \"read_timeout\": 60000\n"
         + "  },\n"
         + "  \"actions\": [\n"
         + "        {\n"
@@ -294,6 +312,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    \"session_token\": \""
         + AWS_SESSION_TOKEN
         + "\"\n"
+        + "  },\n"
+        + "  \"client_config\": {\n"
+        + "    \"read_timeout\": 60000\n"
         + "  },\n"
         + "  \"actions\": [\n"
         + "        {\n"
