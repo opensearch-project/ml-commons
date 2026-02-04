@@ -40,7 +40,7 @@ import com.jayway.jsonpath.PathNotFoundException;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class GeminiGenerateContentFunctionCalling implements FunctionCalling {
+public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalling {
     public static final String CALL_PATH = "$.candidates[0].content.parts[*].functionCall";
     public static final String NAME = "name";
     public static final String INPUT = "args";
@@ -80,7 +80,11 @@ public class GeminiGenerateContentFunctionCalling implements FunctionCalling {
         params.put(CHAT_HISTORY_RESPONSE_TEMPLATE, "{\"role\":\"model\",\"parts\":[{\"text\":\"${_chat_history.message.response}\"}]}");
 
         params.put(LLM_FINISH_REASON_PATH, "$.candidates[0].finishReason");
-        params.put(LLM_FINISH_REASON_TOOL_USE, "STOP");
+        // Gemini uses the same finish reason ("STOP") for both tool calls and final responses.
+        // Tool call detection is handled by checking for functionCall existence in handle() method.
+        // TODO: Once tool call detection is refactored into FunctionCalling interface (see AgentUtils.java:434),
+        // this parameter may need to be removed or repurposed since it's not used for Gemini.
+        params.put(LLM_FINISH_REASON_TOOL_USE, "N/A");
     }
 
     @Override
@@ -120,7 +124,7 @@ public class GeminiGenerateContentFunctionCalling implements FunctionCalling {
                 continue;
             }
             Map<String, Object> functionResponse = Map.of("name", toolUseId, "response", toolResult.get(TOOL_RESULT));
-            toolMessage.getParts().add(Map.of("functionResponse", functionResponse));
+            toolMessage.getContent().add(Map.of("functionResponse", functionResponse));
             if (toolResult.containsKey(TOOL_ERROR)) {
                 // Gemini may not need status field, but keep for consistency
                 log.debug("Tool error detected for function: {}", toolUseId);

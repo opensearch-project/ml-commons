@@ -391,6 +391,7 @@ public class AgentUtils {
         List<String> interactions,
         FunctionCalling functionCalling
     ) {
+        // TODO: Handle Function calling in a different function
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
         String llmResponseExcludePath = parameters.get(LLM_RESPONSE_EXCLUDE_PATH);
@@ -429,6 +430,12 @@ public class AgentUtils {
                 llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
             }
             if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason) || isToolUseResponse) {
+                // Handles tool calls
+                // TODO: Refactor tool call detection logic into FunctionCalling interface.
+                // Currently, we rely on finish_reason to detect tool calls, but some LLMs (e.g., Gemini)
+                // use the same finish_reason for both tool calls and final responses. The workaround
+                // uses isToolUseResponse flag or checks if functionCalling.handle() returns tool calls.
+                // This logic should be centralized in the FunctionCalling interface to handle LLM-specific differences.
                 List<Map<String, String>> toolCalls = null;
                 try {
                     String toolName = "";

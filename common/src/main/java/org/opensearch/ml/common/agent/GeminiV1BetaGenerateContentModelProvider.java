@@ -29,7 +29,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.utils.ToolUtils;
 
 /**
- * Model provider for Google Gemini generateContent API.
+ * Model provider for Google Gemini generateContent API (v1beta).
  *
  * This provider uses template-based parameter substitution with StringSubstitutor
  * to create the request body. Different input types (text, content blocks, messages)
@@ -48,7 +48,7 @@ import org.opensearch.ml.common.utils.ToolUtils;
  * All parameters consistently use the ${parameters.} prefix for uniformity.
  */
 // todo: refactor the processing so providers have to only provide the constants
-public class GeminiGenerateContentModelProvider extends ModelProvider {
+public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY_TEMPLATE =
         "{\"systemInstruction\":{\"parts\":[{\"text\":\"${parameters.system_prompt:-You are a helpful assistant.}\"}]},"
