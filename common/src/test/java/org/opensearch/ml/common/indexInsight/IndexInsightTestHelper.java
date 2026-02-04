@@ -172,6 +172,60 @@ public class IndexInsightTestHelper {
     }
 
     /**
+     * Mock both correlation insight miss AND cache hit for pattern
+     * This allows testing cache hit scenario without conflict
+     */
+    public static void mockCorrelationMissAndPatternCacheHit(SdkClient sdkClient, String pattern, String type, long ageMillis) {
+        long lastUpdateTime = Instant.now().toEpochMilli() - ageMillis;
+        Map<String, Object> cacheContent = Map.of(
+            STATUS_FIELD, "COMPLETED",
+            LAST_UPDATE_FIELD, lastUpdateTime,
+            CONTENT_FIELD, String.format(
+                "{\"pattern\":\"%s\",\"sample_indices\":[],\"type\":\"%s\"," +
+                "\"time_field\":\"time\",\"trace_id_field\":\"traceId\",\"span_id_field\":\"spanId\"}",
+                pattern, type
+            )
+        );
+
+        doAnswer(invocation -> {
+            GetDataObjectRequest request = invocation.getArgument(0);
+            GetResponse getResponse = mock(GetResponse.class);
+            GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+
+            // Check if this is a pattern cache request (docId is SHA256 hash)
+            String docId = request.id();
+            if (docId != null && docId.length() == 64) {
+                // Pattern cache request - return cache hit
+                when(getResponse.isExists()).thenReturn(true);
+                when(getResponse.getSourceAsMap()).thenReturn(cacheContent);
+            } else {
+                // Correlation insight request - return miss
+                when(getResponse.isExists()).thenReturn(false);
+                when(getResponse.getSourceAsMap()).thenReturn(Map.of());
+            }
+
+            when(sdkResponse.getResponse()).thenReturn(getResponse);
+            return CompletableFuture.completedFuture(sdkResponse);
+        }).when(sdkClient).getDataObjectAsync(any(GetDataObjectRequest.class));
+    }
+
+    /**
+     * Mock both correlation insight miss AND cache miss for pattern
+     */
+    public static void mockCorrelationMissAndPatternCacheMiss(SdkClient sdkClient) {
+        doAnswer(invocation -> {
+            GetResponse getResponse = mock(GetResponse.class);
+            when(getResponse.isExists()).thenReturn(false);
+            when(getResponse.getSourceAsMap()).thenReturn(Map.of());
+
+            GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+            when(sdkResponse.getResponse()).thenReturn(getResponse);
+
+            return CompletableFuture.completedFuture(sdkResponse);
+        }).when(sdkClient).getDataObjectAsync(any(GetDataObjectRequest.class));
+    }
+
+    /**
      * Mock cache hit with valid, non-expired cached pattern data
      */
     public static void mockPatternCacheHit(SdkClient sdkClient, String pattern, String type, long ageMillis) {

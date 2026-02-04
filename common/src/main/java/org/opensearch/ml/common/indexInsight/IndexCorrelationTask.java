@@ -13,6 +13,8 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -377,42 +379,59 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     }
 
     /**
-     * Detect types for each pattern using LLM
+     * Detect types for each pattern using LLM (in parallel)
      */
     private void detectPatternTypes(
         Map<String, List<String>> patterns,
         String tenantId,
         ActionListener<Map<String, PatternInfo>> listener
     ) {
-        Map<String, PatternInfo> result = new HashMap<>();
-        List<String> patternKeys = new ArrayList<>(patterns.keySet());
-
-        if (patternKeys.isEmpty()) {
-            listener.onResponse(result);
+        if (patterns.isEmpty()) {
+            listener.onResponse(new HashMap<>());
             return;
         }
 
-        detectNextPattern(patterns, patternKeys, 0, tenantId, result, listener);
+        // Use ConcurrentHashMap for thread-safe writes from parallel operations
+        Map<String, PatternInfo> result = new ConcurrentHashMap<>();
+        AtomicInteger pendingCount = new AtomicInteger(patterns.size());
+
+        // Launch detection for all patterns in parallel
+        for (Map.Entry<String, List<String>> entry : patterns.entrySet()) {
+            String pattern = entry.getKey();
+            List<String> sampleIndices = entry.getValue();
+
+            detectSinglePattern(pattern, sampleIndices, tenantId, ActionListener.wrap(
+                patternInfo -> {
+                    if (patternInfo != null) {
+                        result.put(pattern, patternInfo);
+                    }
+
+                    // Check if all patterns are processed
+                    if (pendingCount.decrementAndGet() == 0) {
+                        listener.onResponse(result);
+                    }
+                },
+                e -> {
+                    log.error("Failed to detect type for pattern: {}", pattern, e);
+
+                    // Continue even if this pattern fails
+                    if (pendingCount.decrementAndGet() == 0) {
+                        listener.onResponse(result);
+                    }
+                }
+            ));
+        }
     }
 
     /**
-     * Recursively detect pattern types with caching
+     * Detect a single pattern's type with caching (used in parallel execution)
      */
-    private void detectNextPattern(
-        Map<String, List<String>> patterns,
-        List<String> patternKeys,
-        int index,
+    private void detectSinglePattern(
+        String pattern,
+        List<String> sampleIndices,
         String tenantId,
-        Map<String, PatternInfo> result,
-        ActionListener<Map<String, PatternInfo>> listener
+        ActionListener<PatternInfo> listener
     ) {
-        if (index >= patternKeys.size()) {
-            listener.onResponse(result);
-            return;
-        }
-
-        String pattern = patternKeys.get(index);
-        List<String> sampleIndices = patterns.get(pattern);
 
         // Step 1: Check cache first
         getPatternFromCache(pattern, tenantId, ActionListener.wrap(cachedPatternInfo -> {
@@ -426,10 +445,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                     cachedPatternInfo.traceIdField,
                     cachedPatternInfo.spanIdField
                 );
-                result.put(pattern, updatedInfo);
-
-                // Process next pattern
-                detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                listener.onResponse(updatedInfo);
                 return;
             }
 
@@ -440,43 +456,37 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                 getSampleDocuments(sampleIndex, ActionListener.wrap(sampleDocs -> {
                     // Use LLM to detect type
                     detectPatternType(pattern, sampleIndices, fields, sampleDocs, tenantId, ActionListener.wrap(patternInfo -> {
-                        result.put(pattern, patternInfo);
-
                         // Step 3: Save to cache (fire and forget)
                         savePatternToCache(patternInfo, tenantId, ActionListener.wrap(
                             success -> {}, // Ignore success
                             e -> log.warn("Cache save failed for pattern: {}", pattern, e)
                         ));
 
-                        // Process next pattern
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onResponse(patternInfo);
 
                     }, e -> {
                         log.error("Failed to detect type for pattern: {}", pattern, e);
-                        // Continue with next pattern even if this one fails
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onFailure(e);
                     }));
 
                 }, e -> {
                     log.warn("Failed to get sample documents for index: {}, proceeding with empty list", sampleIndex, e);
                     // Proceed with empty sample documents list
                     detectPatternType(pattern, sampleIndices, fields, Collections.emptyList(), tenantId, ActionListener.wrap(patternInfo -> {
-                        result.put(pattern, patternInfo);
                         savePatternToCache(patternInfo, tenantId, ActionListener.wrap(
                             success -> {},
                             e2 -> log.warn("Cache save failed for pattern: {}", pattern, e2)
                         ));
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onResponse(patternInfo);
                     }, e2 -> {
                         log.error("Failed to detect type for pattern: {}", pattern, e2);
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onFailure(e2);
                     }));
                 }));
 
             }, e -> {
                 log.error("Failed to get mapping for index: {}", sampleIndex, e);
-                // Continue with next pattern
-                detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                listener.onFailure(e);
             }));
 
         }, e -> {
@@ -486,25 +496,23 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             getMappingFields(sampleIndex, ActionListener.wrap(fields -> {
                 getSampleDocuments(sampleIndex, ActionListener.wrap(sampleDocs -> {
                     detectPatternType(pattern, sampleIndices, fields, sampleDocs, tenantId, ActionListener.wrap(patternInfo -> {
-                        result.put(pattern, patternInfo);
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onResponse(patternInfo);
                     }, e2 -> {
                         log.error("Failed to detect type for pattern: {}", pattern, e2);
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onFailure(e2);
                     }));
                 }, e2 -> {
                     log.warn("Failed to get sample documents for index: {}, proceeding with empty list", sampleIndex, e2);
                     detectPatternType(pattern, sampleIndices, fields, Collections.emptyList(), tenantId, ActionListener.wrap(patternInfo -> {
-                        result.put(pattern, patternInfo);
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onResponse(patternInfo);
                     }, e3 -> {
                         log.error("Failed to detect type for pattern: {}", pattern, e3);
-                        detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                        listener.onFailure(e3);
                     }));
                 }));
             }, e2 -> {
                 log.error("Failed to get mapping for index: {}", sampleIndex, e2);
-                detectNextPattern(patterns, patternKeys, index + 1, tenantId, result, listener);
+                listener.onFailure(e2);
             }));
         }));
     }
@@ -673,17 +681,159 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     private void buildCorrelationResult(String tenantId, ActionListener<Map<String, Object>> listener) {
         Map<String, Object> result = new HashMap<>();
 
-        // Find patterns for each type
-        PatternInfo logPattern = findPatternByType("LOG");
-        PatternInfo tracePattern = findPatternByType("TRACE");
-        PatternInfo metricPattern = findPatternByType("METRIC");
+        // Step 1: Find which pattern the source index belongs to
+        PatternInfo sourcePatternInfo = findSourceIndexPattern();
+        if (sourcePatternInfo == null) {
+            log.error("Source index {} does not match any detected pattern", sourceIndex);
+            listener.onFailure(new IllegalStateException("Source index does not match any detected pattern"));
+            return;
+        }
 
-        // Build tuple
+        String sourceType = sourcePatternInfo.type;
+        log.info("Source index {} belongs to pattern {} of type {}", sourceIndex, sourcePatternInfo.pattern, sourceType);
+
+        // Step 2: Determine which other two types we need to find
+        String[] otherTypes = getOtherTypes(sourceType);
+
+        // Step 3: Get patterns for the other two types
+        List<PatternInfo> firstTypePatterns = findPatternsByType(otherTypes[0]);
+        List<PatternInfo> secondTypePatterns = findPatternsByType(otherTypes[1]);
+
+        // Step 4: Use LLM to select correlated patterns if multiple candidates exist
+        if (firstTypePatterns.size() > 1 || secondTypePatterns.size() > 1) {
+            selectCorrelatedPatternsForSource(
+                sourcePatternInfo,
+                otherTypes[0],
+                firstTypePatterns,
+                otherTypes[1],
+                secondTypePatterns,
+                tenantId,
+                ActionListener.wrap(
+                    tuple -> {
+                        result.put("source_index", sourceIndex);
+                        result.put("source_pattern", sourcePatternInfo.pattern);
+                        result.put("source_type", sourceType);
+                        result.put("total_indices_scanned", allIndices.size());
+                        result.put("total_patterns_detected", detectedPatterns.size());
+                        result.put("correlation_tuple", tuple);
+                        result.put("all_patterns", buildAllPatternsInfo());
+                        listener.onResponse(result);
+                    },
+                    e -> {
+                        log.warn("Failed to use LLM for pattern matching, falling back to simple selection", e);
+                        // Fallback to simple selection (first pattern of each type)
+                        Map<String, Object> tuple = buildCorrelationTupleFromSource(
+                            sourcePatternInfo,
+                            sourceType,
+                            firstTypePatterns.isEmpty() ? null : firstTypePatterns.get(0),
+                            otherTypes[0],
+                            secondTypePatterns.isEmpty() ? null : secondTypePatterns.get(0),
+                            otherTypes[1]
+                        );
+                        result.put("source_index", sourceIndex);
+                        result.put("source_pattern", sourcePatternInfo.pattern);
+                        result.put("source_type", sourceType);
+                        result.put("total_indices_scanned", allIndices.size());
+                        result.put("total_patterns_detected", detectedPatterns.size());
+                        result.put("correlation_tuple", tuple);
+                        result.put("all_patterns", buildAllPatternsInfo());
+                        listener.onResponse(result);
+                    }
+                )
+            );
+        } else {
+            // Simple case: 0 or 1 pattern per type, no need for LLM
+            Map<String, Object> tuple = buildCorrelationTupleFromSource(
+                sourcePatternInfo,
+                sourceType,
+                firstTypePatterns.isEmpty() ? null : firstTypePatterns.get(0),
+                otherTypes[0],
+                secondTypePatterns.isEmpty() ? null : secondTypePatterns.get(0),
+                otherTypes[1]
+            );
+            result.put("source_index", sourceIndex);
+            result.put("source_pattern", sourcePatternInfo.pattern);
+            result.put("source_type", sourceType);
+            result.put("total_indices_scanned", allIndices.size());
+            result.put("total_patterns_detected", detectedPatterns.size());
+            result.put("correlation_tuple", tuple);
+            result.put("all_patterns", buildAllPatternsInfo());
+            listener.onResponse(result);
+        }
+    }
+
+    /**
+     * Find which pattern the source index belongs to
+     */
+    private PatternInfo findSourceIndexPattern() {
+        for (PatternInfo info : detectedPatterns.values()) {
+            if (info.sampleIndices.contains(sourceIndex)) {
+                return info;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get the other two types given a source type
+     */
+    private String[] getOtherTypes(String sourceType) {
+        switch (sourceType) {
+            case "LOG":
+                return new String[]{"TRACE", "METRIC"};
+            case "TRACE":
+                return new String[]{"LOG", "METRIC"};
+            case "METRIC":
+                return new String[]{"LOG", "TRACE"};
+            default:
+                return new String[]{"LOG", "TRACE"};
+        }
+    }
+
+    /**
+     * Build all patterns info for debugging
+     */
+    private List<Map<String, Object>> buildAllPatternsInfo() {
+        List<Map<String, Object>> allPatterns = new ArrayList<>();
+        for (PatternInfo info : detectedPatterns.values()) {
+            Map<String, Object> patternMap = new HashMap<>();
+            patternMap.put("pattern", info.pattern);
+            patternMap.put("type", info.type);
+            patternMap.put("sample_count", info.sampleIndices.size());
+            allPatterns.add(patternMap);
+        }
+        return allPatterns;
+    }
+
+    /**
+     * Build correlation tuple from source pattern and other patterns
+     */
+    private Map<String, Object> buildCorrelationTupleFromSource(
+        PatternInfo sourcePattern,
+        String sourceType,
+        PatternInfo firstTypePattern,
+        String firstType,
+        PatternInfo secondTypePattern,
+        String secondType
+    ) {
         Map<String, Object> tuple = new HashMap<>();
 
+        // Add patterns based on their types
+        Map<String, PatternInfo> typeMap = new HashMap<>();
+        typeMap.put(sourceType, sourcePattern);
+        if (firstTypePattern != null) {
+            typeMap.put(firstType, firstTypePattern);
+        }
+        if (secondTypePattern != null) {
+            typeMap.put(secondType, secondTypePattern);
+        }
+
+        // Build LOG info
+        PatternInfo logPattern = typeMap.get("LOG");
         if (logPattern != null) {
             Map<String, String> logInfo = new HashMap<>();
             logInfo.put("pattern", logPattern.pattern);
+            logInfo.put("type", logPattern.type);
             logInfo.put("sample_index", logPattern.sampleIndices.isEmpty() ? null : logPattern.sampleIndices.get(0));
             logInfo.put("time_field", logPattern.timeField);
             logInfo.put("span_id_field", logPattern.spanIdField);
@@ -693,9 +843,12 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             tuple.put("logs", null);
         }
 
+        // Build TRACE info
+        PatternInfo tracePattern = typeMap.get("TRACE");
         if (tracePattern != null) {
             Map<String, String> traceInfo = new HashMap<>();
             traceInfo.put("pattern", tracePattern.pattern);
+            traceInfo.put("type", tracePattern.type);
             traceInfo.put("sample_index", tracePattern.sampleIndices.isEmpty() ? null : tracePattern.sampleIndices.get(0));
             traceInfo.put("time_field", tracePattern.timeField);
             traceInfo.put("trace_id_field", tracePattern.traceIdField);
@@ -704,9 +857,12 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             tuple.put("trace", null);
         }
 
+        // Build METRIC info
+        PatternInfo metricPattern = typeMap.get("METRIC");
         if (metricPattern != null) {
             Map<String, String> metricInfo = new HashMap<>();
             metricInfo.put("pattern", metricPattern.pattern);
+            metricInfo.put("type", metricPattern.type);
             metricInfo.put("sample_index", metricPattern.sampleIndices.isEmpty() ? null : metricPattern.sampleIndices.get(0));
             metricInfo.put("time_field", metricPattern.timeField);
             tuple.put("metrics", metricInfo);
@@ -714,27 +870,231 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             tuple.put("metrics", null);
         }
 
-        result.put("source_index", sourceIndex);
-        result.put("total_indices_scanned", allIndices.size());
-        result.put("total_patterns_detected", detectedPatterns.size());
-        result.put("correlation_tuple", tuple);
-
-        // Add all detected patterns for debugging
-        List<Map<String, Object>> allPatterns = new ArrayList<>();
-        for (PatternInfo info : detectedPatterns.values()) {
-            Map<String, Object> patternMap = new HashMap<>();
-            patternMap.put("pattern", info.pattern);
-            patternMap.put("type", info.type);
-            patternMap.put("sample_count", info.sampleIndices.size());
-            allPatterns.add(patternMap);
-        }
-        result.put("all_patterns", allPatterns);
-
-        listener.onResponse(result);
+        return tuple;
     }
 
     /**
-     * Find pattern by type
+     * Use LLM to intelligently select correlated patterns based on source pattern
+     */
+    private void selectCorrelatedPatternsForSource(
+        PatternInfo sourcePattern,
+        String firstType,
+        List<PatternInfo> firstTypePatterns,
+        String secondType,
+        List<PatternInfo> secondTypePatterns,
+        String tenantId,
+        ActionListener<Map<String, Object>> listener
+    ) {
+        // Build LLM prompt with source pattern and candidates
+        String prompt = buildCorrelationMatchingPromptForSource(
+            sourcePattern,
+            firstType,
+            firstTypePatterns,
+            secondType,
+            secondTypePatterns
+        );
+
+        // Get agent ID
+        getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
+            // Call LLM
+            callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(llmResponse -> {
+                // Parse LLM response
+                parseCorrelationMatchingResponseForSource(
+                    llmResponse,
+                    sourcePattern,
+                    sourcePattern.type,
+                    firstType,
+                    firstTypePatterns,
+                    secondType,
+                    secondTypePatterns,
+                    listener
+                );
+            }, e -> {
+                log.error("Failed to execute LLM for correlation matching", e);
+                listener.onFailure(e);
+            }));
+        }, e -> {
+            log.error("Failed to get agent ID for correlation matching", e);
+            listener.onFailure(e);
+        }));
+    }
+
+    /**
+     * Build LLM prompt for correlation matching based on source pattern
+     */
+    private String buildCorrelationMatchingPromptForSource(
+        PatternInfo sourcePattern,
+        String firstType,
+        List<PatternInfo> firstTypePatterns,
+        String secondType,
+        List<PatternInfo> secondTypePatterns
+    ) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("You are an expert in analyzing OpenSearch observability data.\n\n");
+        prompt.append("I have a source index: ").append(sourceIndex).append("\n");
+        prompt.append("This index belongs to pattern: ").append(sourcePattern.pattern).append(" (type: ").append(sourcePattern.type).append(")\n\n");
+
+        prompt.append("Pattern details:\n");
+        prompt.append("- Time field: ").append(sourcePattern.timeField).append("\n");
+        if (sourcePattern.traceIdField != null) {
+            prompt.append("- Trace ID field: ").append(sourcePattern.traceIdField).append("\n");
+        }
+        if (sourcePattern.spanIdField != null) {
+            prompt.append("- Span ID field: ").append(sourcePattern.spanIdField).append("\n");
+        }
+        prompt.append("\n");
+
+        prompt.append("I have detected multiple patterns for the other observability types.\n");
+        prompt.append("Please analyze these patterns and select the ones most likely correlated to the source pattern.\n\n");
+
+        prompt.append("Consider:\n");
+        prompt.append("1. Naming conventions - patterns with similar prefixes/suffixes/keywords are likely related\n");
+        prompt.append("2. Field overlap - matching trace_id/span_id field names indicate correlation\n");
+        prompt.append("3. Common technology indicators (e.g., 'otel', 'jaeger', 'ss4o', 'prometheus')\n");
+        prompt.append("4. The source pattern name as the primary hint for finding related patterns\n\n");
+
+        // Add first type patterns
+        if (!firstTypePatterns.isEmpty()) {
+            prompt.append("Available ").append(firstType).append(" patterns (").append(firstTypePatterns.size()).append("):\n");
+            for (int i = 0; i < firstTypePatterns.size(); i++) {
+                PatternInfo info = firstTypePatterns.get(i);
+                prompt.append(i + 1).append(". Pattern: ").append(info.pattern).append("\n");
+                prompt.append("   Time field: ").append(info.timeField).append("\n");
+                if (info.traceIdField != null) {
+                    prompt.append("   Trace ID field: ").append(info.traceIdField).append("\n");
+                }
+                if (info.spanIdField != null) {
+                    prompt.append("   Span ID field: ").append(info.spanIdField).append("\n");
+                }
+            }
+            prompt.append("\n");
+        }
+
+        // Add second type patterns
+        if (!secondTypePatterns.isEmpty()) {
+            prompt.append("Available ").append(secondType).append(" patterns (").append(secondTypePatterns.size()).append("):\n");
+            for (int i = 0; i < secondTypePatterns.size(); i++) {
+                PatternInfo info = secondTypePatterns.get(i);
+                prompt.append(i + 1).append(". Pattern: ").append(info.pattern).append("\n");
+                prompt.append("   Time field: ").append(info.timeField).append("\n");
+                if (info.traceIdField != null) {
+                    prompt.append("   Trace ID field: ").append(info.traceIdField).append("\n");
+                }
+                if (info.spanIdField != null) {
+                    prompt.append("   Span ID field: ").append(info.spanIdField).append("\n");
+                }
+            }
+            prompt.append("\n");
+        }
+
+        prompt.append("Please respond with your analysis in this exact XML format:\n");
+        prompt.append("<correlation_selection>\n");
+        prompt.append("{\n");
+        prompt.append("  \"selected_").append(firstType.toLowerCase()).append("_pattern\": \"<pattern_string_or_null>\",\n");
+        prompt.append("  \"selected_").append(secondType.toLowerCase()).append("_pattern\": \"<pattern_string_or_null>\",\n");
+        prompt.append("  \"reasoning\": \"<brief explanation of why these patterns are correlated with the source>\"\n");
+        prompt.append("}\n");
+        prompt.append("</correlation_selection>\n");
+
+        return prompt.toString();
+    }
+
+    /**
+     * Parse LLM response for correlation matching based on source
+     */
+    private void parseCorrelationMatchingResponseForSource(
+        String llmResponse,
+        PatternInfo sourcePattern,
+        String sourceType,
+        String firstType,
+        List<PatternInfo> firstTypePatterns,
+        String secondType,
+        List<PatternInfo> secondTypePatterns,
+        ActionListener<Map<String, Object>> listener
+    ) {
+        try {
+            // Extract JSON from XML tags
+            String jsonStr = extractXmlContent(llmResponse, "correlation_selection");
+            if (jsonStr == null) {
+                throw new IllegalArgumentException("No <correlation_selection> found in LLM response");
+            }
+
+            // Parse JSON
+            Map<String, Object> selection = MAPPER.readValue(jsonStr, new TypeReference<>() {});
+
+            String selectedFirstPattern = (String) selection.get("selected_" + firstType.toLowerCase() + "_pattern");
+            String selectedSecondPattern = (String) selection.get("selected_" + secondType.toLowerCase() + "_pattern");
+            String reasoning = (String) selection.get("reasoning");
+
+            log.info("LLM correlation matching reasoning: {}", reasoning);
+
+            // Find matching PatternInfo objects
+            PatternInfo firstPattern = findPatternByPatternString(firstTypePatterns, selectedFirstPattern);
+            PatternInfo secondPattern = findPatternByPatternString(secondTypePatterns, selectedSecondPattern);
+
+            // Build result tuple
+            Map<String, Object> tuple = buildCorrelationTupleFromSource(
+                sourcePattern,
+                sourceType,
+                firstPattern,
+                firstType,
+                secondPattern,
+                secondType
+            );
+
+            // Add reasoning to tuple
+            tuple.put("llm_reasoning", reasoning);
+
+            listener.onResponse(tuple);
+
+        } catch (Exception e) {
+            log.error("Failed to parse correlation matching response", e);
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Extract content from XML tags
+     * E.g., extract "content" from "<tag>content</tag>"
+     */
+    private String extractXmlContent(String text, String tagName) {
+        String openTag = "<" + tagName + ">";
+        String closeTag = "</" + tagName + ">";
+
+        int startIdx = text.indexOf(openTag);
+        int endIdx = text.indexOf(closeTag);
+
+        if (startIdx == -1 || endIdx == -1 || startIdx >= endIdx) {
+            return null;
+        }
+
+        return text.substring(startIdx + openTag.length(), endIdx).trim();
+    }
+
+    /**
+     * Find PatternInfo by pattern string
+     */
+    private PatternInfo findPatternByPatternString(List<PatternInfo> patterns, String patternStr) {
+        if (patternStr == null || "null".equals(patternStr)) {
+            return null;
+        }
+        return patterns.stream()
+            .filter(p -> p.pattern.equals(patternStr))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /**
+     * Find all patterns by type (used for intelligent matching)
+     */
+    private List<PatternInfo> findPatternsByType(String type) {
+        return detectedPatterns.values().stream()
+            .filter(p -> type.equals(p.type))
+            .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * Find pattern by type (returns first match)
      */
     private PatternInfo findPatternByType(String type) {
         return detectedPatterns.values().stream()
