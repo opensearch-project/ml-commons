@@ -7,7 +7,6 @@ package org.opensearch.ml.common.input.execute.agent;
 
 import java.util.List;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -16,8 +15,15 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class Message {
     private String role; // flexible - any role allowed (user, assistant, system, etc.)
     private List<ContentBlock> content;
+
+    private List<ToolCall> toolCalls;  // Optional, for assistant messages with tool calls
+    private String toolCallId;  // Optional, for tool result messages (role "tool")
+
+    public Message(String role, List<ContentBlock> content) {
+        this.role = role;
+        this.content = content;
+    }
 }
