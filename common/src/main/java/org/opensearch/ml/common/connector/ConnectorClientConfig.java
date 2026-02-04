@@ -39,8 +39,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
 
     public static final int MAX_CONNECTION_DEFAULT_VALUE = 30;
-    public static final int CONNECTION_TIMEOUT_DEFAULT_VALUE = 1000;
-    public static final int READ_TIMEOUT_DEFAULT_VALUE = 10000;
+    public static final int CONNECTION_TIMEOUT_DEFAULT_VALUE = 10000;
+    public static final int READ_TIMEOUT_DEFAULT_VALUE = 30000;
     public static final int RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final int RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final int MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
