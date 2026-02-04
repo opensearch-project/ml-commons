@@ -153,19 +153,57 @@ public class AGUIInputConverter {
 
     /**
      * Converts AG-UI messages to standard Message format.
+     * Skips tool-related messages as they are handled via _chat_history and _interactions.
      */
     private static List<Message> convertAGUIMessages(JsonArray aguiMessages) {
         List<Message> messages = new ArrayList<>();
 
-        for (JsonElement msgElement : aguiMessages) {
+        // First pass: identify the last pending tool execution
+        int lastPendingToolCallIndex = -1;
+        for (int i = aguiMessages.size() - 1; i >= 0; i--) {
+            JsonElement msgElement = aguiMessages.get(i);
+            if (msgElement.isJsonObject()) {
+                JsonObject msg = msgElement.getAsJsonObject();
+                String role = getStringField(msg, AGUI_FIELD_ROLE);
 
+                if ("assistant".equalsIgnoreCase(role) && msg.has(AGUI_FIELD_TOOL_CALLS)) {
+                    // Check if there's an assistant response after this
+                    boolean hasAssistantAfter = false;
+                    for (int j = i + 1; j < aguiMessages.size(); j++) {
+                        JsonObject laterMsg = aguiMessages.get(j).getAsJsonObject();
+                        String laterRole = getStringField(laterMsg, AGUI_FIELD_ROLE);
+                        if ("assistant".equalsIgnoreCase(laterRole)) {
+                            hasAssistantAfter = true;
+                            break;
+                        }
+                    }
+                    if (!hasAssistantAfter) {
+                        lastPendingToolCallIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Second pass: convert messages, excluding the pending tool execution
+        for (int i = 0; i < aguiMessages.size(); i++) {
+            JsonElement msgElement = aguiMessages.get(i);
             JsonObject aguiMsg = msgElement.getAsJsonObject();
-
             String role = aguiMsg.get(AGUI_FIELD_ROLE).getAsString();
 
-            // Skip tool role messages
-            if ("tool".equalsIgnoreCase(role)) {
+            // Skip the pending assistant tool call message (will be in _interactions)
+            if (i == lastPendingToolCallIndex) {
                 continue;
+            }
+
+            // Skip tool results that belong to the pending execution
+            if ("tool".equalsIgnoreCase(role) && lastPendingToolCallIndex >= 0 && i > lastPendingToolCallIndex) {
+                continue;
+            }
+
+            // Convert tool messages to user messages (for historical completed tool executions)
+            if ("tool".equalsIgnoreCase(role)) {
+                role = "user"; // Tool results are sent as user messages in Bedrock
             }
 
             // Skip assistant messages with only toolCalls and no content
@@ -286,24 +324,50 @@ public class AGUIInputConverter {
     }
 
     /**
-     * Extracts tool calls JSON from ALL assistant messages with tool calls.
-     * Returns list of JSON strings (one per assistant message with tool calls).
-     * Used by MLAGUIAgentRunner to format via FunctionCalling.
+     * Extracts the most recent pending tool execution (one without a subsequent assistant response).
+     * Returns list with at most one JSON string containing the tool calls array.
+     * Historical completed tool executions are handled separately in processHistoricalToolExecutions.
      */
     public static List<String> extractToolCalls(JsonArray aguiMessages) {
         List<String> toolCallsJsonList = new ArrayList<>();
 
-        for (JsonElement msgElement : aguiMessages) {
+        // Find the last assistant message with tool calls
+        int lastToolCallIndex = -1;
+        JsonElement lastToolCallElement = null;
+
+        for (int i = 0; i < aguiMessages.size(); i++) {
+            JsonElement msgElement = aguiMessages.get(i);
             if (msgElement.isJsonObject()) {
                 JsonObject msg = msgElement.getAsJsonObject();
                 String role = getStringField(msg, AGUI_FIELD_ROLE);
 
                 if ("assistant".equalsIgnoreCase(role) && msg.has(AGUI_FIELD_TOOL_CALLS)) {
-                    JsonElement toolCallsElement = msg.get(AGUI_FIELD_TOOL_CALLS);
-                    if (toolCallsElement != null && toolCallsElement.isJsonArray()) {
-                        toolCallsJsonList.add(gson.toJson(toolCallsElement));
+                    lastToolCallIndex = i;
+                    lastToolCallElement = msg.get(AGUI_FIELD_TOOL_CALLS);
+                }
+            }
+        }
+
+        // Only return the last tool call if there are no assistant messages after it
+        // (indicating the tool execution is still pending, not yet completed)
+        if (lastToolCallIndex >= 0 && lastToolCallElement != null && lastToolCallElement.isJsonArray()) {
+            boolean hasAssistantAfter = false;
+            for (int i = lastToolCallIndex + 1; i < aguiMessages.size(); i++) {
+                JsonElement msgElement = aguiMessages.get(i);
+                if (msgElement.isJsonObject()) {
+                    JsonObject msg = msgElement.getAsJsonObject();
+                    String role = getStringField(msg, AGUI_FIELD_ROLE);
+                    if ("assistant".equalsIgnoreCase(role)) {
+                        hasAssistantAfter = true;
+                        break;
                     }
                 }
+            }
+
+            // Only include if this is the most recent, pending tool execution
+            // The tool calls array may contain multiple tool uses
+            if (!hasAssistantAfter) {
+                toolCallsJsonList.add(gson.toJson(lastToolCallElement));
             }
         }
 
@@ -311,18 +375,25 @@ public class AGUIInputConverter {
     }
 
     /**
-     * Extracts ALL tool results from AG-UI messages.
-     * Used by MLAGUIAgentRunner to process tool executions.
+     * Extracts tool results from the most recent pending tool execution only.
+     * Returns results that come after the last tool call without a subsequent assistant response.
+     * Historical completed tool results are handled separately in processHistoricalToolExecutions.
      */
     public static List<Map<String, String>> extractToolResults(JsonArray aguiMessages) {
-        List<Map<String, String>> toolResults = new ArrayList<>();
+        List<Map<String, String>> allToolResults = new ArrayList<>();
+        List<Integer> toolResultIndices = new ArrayList<>();
+        int lastToolCallIndex = -1;
 
-        for (JsonElement msgElement : aguiMessages) {
+        // First pass: find all tool results and the last assistant message with tool calls
+        for (int i = 0; i < aguiMessages.size(); i++) {
+            JsonElement msgElement = aguiMessages.get(i);
             if (msgElement.isJsonObject()) {
                 JsonObject msg = msgElement.getAsJsonObject();
                 String role = getStringField(msg, AGUI_FIELD_ROLE);
 
-                if ("tool".equalsIgnoreCase(role)) {
+                if ("assistant".equalsIgnoreCase(role) && msg.has(AGUI_FIELD_TOOL_CALLS)) {
+                    lastToolCallIndex = i;
+                } else if ("tool".equalsIgnoreCase(role)) {
                     String content = getStringField(msg, AGUI_FIELD_CONTENT);
                     String toolCallId = getStringField(msg, AGUI_FIELD_TOOL_CALL_ID);
 
@@ -330,12 +401,46 @@ public class AGUIInputConverter {
                         Map<String, String> toolResult = new HashMap<>();
                         toolResult.put("tool_call_id", toolCallId);
                         toolResult.put("content", content);
-                        toolResults.add(toolResult);
+                        allToolResults.add(toolResult);
+                        toolResultIndices.add(i);
                     }
                 }
             }
         }
 
-        return toolResults;
+        // If no tool results or no tool calls, return empty
+        if (allToolResults.isEmpty() || lastToolCallIndex < 0) {
+            return new ArrayList<>();
+        }
+
+        // Check if there's an assistant message after the last tool result
+        int lastToolResultIndex = toolResultIndices.isEmpty() ? -1 : toolResultIndices.get(toolResultIndices.size() - 1);
+        boolean hasAssistantAfter = false;
+        for (int i = lastToolResultIndex + 1; i < aguiMessages.size(); i++) {
+            JsonElement msgElement = aguiMessages.get(i);
+            if (msgElement.isJsonObject()) {
+                JsonObject msg = msgElement.getAsJsonObject();
+                String role = getStringField(msg, AGUI_FIELD_ROLE);
+                if ("assistant".equalsIgnoreCase(role)) {
+                    hasAssistantAfter = true;
+                    break;
+                }
+            }
+        }
+
+        // Only return tool results if they're recent/pending (no assistant response after them)
+        if (hasAssistantAfter) {
+            return new ArrayList<>();
+        }
+
+        // Return only the tool results that come after the last assistant message with tool calls
+        List<Map<String, String>> recentToolResults = new ArrayList<>();
+        for (int i = 0; i < toolResultIndices.size(); i++) {
+            if (toolResultIndices.get(i) > lastToolCallIndex) {
+                recentToolResults.add(allToolResults.get(i));
+            }
+        }
+
+        return recentToolResults;
     }
 }

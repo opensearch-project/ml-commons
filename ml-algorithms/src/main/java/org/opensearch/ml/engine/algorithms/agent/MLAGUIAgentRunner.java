@@ -15,6 +15,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEX
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -147,14 +148,17 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 return;
             }
 
-            // Extract tool execution data using AGUIInputConverter
-            List<Map<String, String>> allToolResults = AGUIInputConverter.extractToolResults(messageArray);
-            List<String> toolCalls = AGUIInputConverter.extractToolCalls(messageArray);
+            // Extract pending tool execution (most recent without assistant response after it)
+            List<Map<String, String>> pendingToolResults = AGUIInputConverter.extractToolResults(messageArray);
+            List<String> pendingToolCalls = AGUIInputConverter.extractToolCalls(messageArray);
 
-            // Process tool execution if present
-            if (!allToolResults.isEmpty()) {
-                processToolExecution(allToolResults, toolCalls, llmInterface, params);
+            // Process pending tool execution if present (goes to _interactions)
+            if (!pendingToolResults.isEmpty()) {
+                processToolExecution(pendingToolResults, pendingToolCalls, llmInterface, params);
             }
+
+            // Extract and process historical completed tool executions (goes to _chat_history)
+            processHistoricalToolExecutions(messageArray, llmInterface, params);
         } catch (Exception e) {
             log.error("Failed to process AG-UI messages", e);
             throw new IllegalArgumentException("Failed to process AG-UI messages", e);
@@ -189,6 +193,116 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
         if (!formattedToolCallMessages.isEmpty()) {
             params.put(AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES, gson.toJson(formattedToolCallMessages));
             log.debug("AG-UI: Set {} assistant tool call messages", formattedToolCallMessages.size());
+        }
+    }
+
+    /**
+     * Extracts historical completed tool executions and adds them to _chat_history.
+     * Formats them with FunctionCalling in proper LLM format (assistant toolUse -> user toolResult pairs).
+     */
+    private void processHistoricalToolExecutions(JsonArray messageArray, String llmInterface, Map<String, String> params) {
+        FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
+        if (functionCalling == null) {
+            log.debug("AG-UI: No function calling interface, skipping historical tool execution processing");
+            return;
+        }
+
+        List<String> historicalMessages = new ArrayList<>();
+
+        // Find the last pending tool call index
+        int lastPendingToolCallIndex = -1;
+        for (int i = messageArray.size() - 1; i >= 0; i--) {
+            JsonElement msgElement = messageArray.get(i);
+            if (msgElement.isJsonObject()) {
+                JsonObject msg = msgElement.getAsJsonObject();
+                String role = getStringField(msg, "role");
+
+                if ("assistant".equalsIgnoreCase(role) && msg.has("toolCalls")) {
+                    boolean hasAssistantAfter = false;
+                    for (int j = i + 1; j < messageArray.size(); j++) {
+                        JsonObject laterMsg = messageArray.get(j).getAsJsonObject();
+                        String laterRole = getStringField(laterMsg, "role");
+                        if ("assistant".equalsIgnoreCase(laterRole)) {
+                            hasAssistantAfter = true;
+                            break;
+                        }
+                    }
+                    if (!hasAssistantAfter) {
+                        lastPendingToolCallIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Extract all completed tool executions (before the pending one)
+        for (int i = 0; i < messageArray.size(); i++) {
+            JsonElement msgElement = messageArray.get(i);
+            if (msgElement.isJsonObject()) {
+                JsonObject msg = msgElement.getAsJsonObject();
+                String role = getStringField(msg, "role");
+
+                // Stop at the pending tool call
+                if (i == lastPendingToolCallIndex) {
+                    break;
+                }
+
+                if ("assistant".equalsIgnoreCase(role) && msg.has("toolCalls")) {
+                    JsonElement toolCallsElement = msg.get("toolCalls");
+                    if (toolCallsElement != null && toolCallsElement.isJsonArray()) {
+                        // Format the assistant tool call message
+                        String toolCallsJson = gson.toJson(toolCallsElement);
+                        String formattedAssistantMessage = functionCalling.formatAGUIToolCalls(toolCallsJson);
+                        historicalMessages.add(formattedAssistantMessage);
+
+                        // Find corresponding tool results
+                        List<Map<String, Object>> toolResults = new ArrayList<>();
+                        for (int j = i + 1; j < messageArray.size(); j++) {
+                            JsonElement resultElement = messageArray.get(j);
+                            if (resultElement.isJsonObject()) {
+                                JsonObject resultMsg = resultElement.getAsJsonObject();
+                                String resultRole = getStringField(resultMsg, "role");
+
+                                if ("tool".equalsIgnoreCase(resultRole)) {
+                                    String content = getStringField(resultMsg, "content");
+                                    String toolCallId = getStringField(resultMsg, "toolCallId");
+
+                                    if (content != null && toolCallId != null) {
+                                        Map<String, Object> toolResult = new HashMap<>();
+                                        toolResult.put("tool_call_id", toolCallId);
+                                        toolResult.put("tool_result", Map.of("text", content));
+                                        toolResults.add(toolResult);
+                                    }
+                                } else if ("assistant".equalsIgnoreCase(resultRole)) {
+                                    // Reached next assistant message, stop collecting results
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Format the tool results as user message
+                        if (!toolResults.isEmpty()) {
+                            List<org.opensearch.ml.engine.function_calling.LLMMessage> llmMessages = functionCalling
+                                .supply(toolResults);
+                            for (org.opensearch.ml.engine.function_calling.LLMMessage llmMessage : llmMessages) {
+                                historicalMessages.add(llmMessage.getResponse());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add historical tool executions to chat history
+        if (!historicalMessages.isEmpty()) {
+            String existingChatHistory = params.get("_chat_history");
+            String historicalToolExecutions = String.join(", ", historicalMessages);
+            if (existingChatHistory != null && !existingChatHistory.isEmpty()) {
+                params.put("_chat_history", existingChatHistory + ", " + historicalToolExecutions + ", ");
+            } else {
+                params.put("_chat_history", historicalToolExecutions + ", ");
+            }
+            log.debug("AG-UI: Added {} historical tool execution messages to chat history", historicalMessages.size());
         }
     }
 
