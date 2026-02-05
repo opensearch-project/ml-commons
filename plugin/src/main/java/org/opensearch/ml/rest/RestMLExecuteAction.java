@@ -172,8 +172,8 @@ public class RestMLExecuteAction extends BaseRestHandler {
             }
 
             if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
-                RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-                if (inputDataSet != null && inputDataSet.getParameters() != null) {
+                if (agentMLInput.getInputDataset() instanceof RemoteInferenceInputDataSet inputDataSet
+                    && inputDataSet.getParameters() != null) {
                     String memoryConfig = inputDataSet.getParameters().get(MEMORY_CONFIGURATION_FIELD);
                     if (!Strings.isNullOrEmpty(memoryConfig)) {
                         throw new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);

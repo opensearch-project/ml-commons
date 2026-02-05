@@ -381,16 +381,19 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             agentInput.setIsAsync(async);
         }
 
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) input).getInputDataset();
-        if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
-            if (inputDataSet != null && inputDataSet.getParameters() != null) {
-                String memoryConfig = inputDataSet.getParameters().get(MEMORY_CONFIGURATION_FIELD);
-                if (!Strings.isNullOrEmpty(memoryConfig)) {
-                    throw new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        if (((AgentMLInput) input).getInputDataset() instanceof RemoteInferenceInputDataSet inputDataSet) {
+            if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+                if (inputDataSet.getParameters() != null) {
+                    String memoryConfig = inputDataSet.getParameters().get(MEMORY_CONFIGURATION_FIELD);
+                    if (!Strings.isNullOrEmpty(memoryConfig)) {
+                        throw new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+                    }
                 }
             }
+            inputDataSet.getParameters().put("stream", String.valueOf(true));
+        } else {
+            throw new IllegalArgumentException("Expected RemoteInferenceInputDataSet for agent execution");
         }
-        inputDataSet.getParameters().put("stream", String.valueOf(true));
         return new MLExecuteTaskRequest(functionName, input);
     }
 
