@@ -93,7 +93,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.saveTemplate(templateName, template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertTrue(exceptionCaptor.getValue().getMessage().contains("Invalid context management"));
     }
@@ -136,6 +136,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void testSaveTemplate_ValidTemplate() {
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValidName()).thenReturn(true);
         when(template.isValid()).thenReturn(true);
         when(template.getName()).thenReturn("test_template");
         when(template.getCreatedTime()).thenReturn(null);
@@ -159,7 +160,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     public void testSaveTemplate_ExceptionInTryBlock() {
         // Test exception handling in the outer try-catch block
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
-        when(template.isValid()).thenThrow(new RuntimeException("Validation error"));
+        when(template.isValidName()).thenThrow(new RuntimeException("Validation error"));
 
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
@@ -178,9 +179,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.getTemplate(null, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
@@ -190,9 +191,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.getTemplate("", listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
@@ -202,9 +203,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.getTemplate("   ", listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
@@ -214,9 +215,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.deleteTemplate(null, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
@@ -227,9 +228,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.updateTemplate(null, template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
@@ -241,7 +242,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.updateTemplate("test_template", template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertTrue(exceptionCaptor.getValue().getMessage().contains("Invalid context management"));
     }
@@ -253,7 +254,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.listTemplates(-1, 10, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertEquals("[from] parameter cannot be negative, found [-1]", exceptionCaptor.getValue().getMessage());
     }
@@ -272,7 +273,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void testSaveTemplate_ExceptionInValidation() {
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
-        when(template.isValid()).thenThrow(new RuntimeException("Validation error"));
+        when(template.isValidName()).thenThrow(new RuntimeException("Validation error"));
 
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
@@ -288,6 +289,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void testSaveTemplate_ThreadContextException() {
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValidName()).thenReturn(true);
         when(template.isValid()).thenReturn(true);
 
         ThreadPool mockThreadPool = mock(ThreadPool.class);
@@ -307,6 +309,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void testUpdateTemplate_ThreadContextException() {
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValidName()).thenReturn(true);
         when(template.isValid()).thenReturn(true);
 
         ThreadPool mockThreadPool = mock(ThreadPool.class);
@@ -365,7 +368,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.getTemplate(templateName, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertTrue(exceptionCaptor.getValue().getMessage().contains("not found"));
     }
@@ -385,7 +388,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.getTemplate(templateName, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertTrue(exceptionCaptor.getValue().getMessage().contains("not found"));
     }
@@ -539,9 +542,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.deleteTemplate("", listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
@@ -551,15 +554,16 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.deleteTemplate("   ", listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
     public void testUpdateTemplate_Success() throws Exception {
         String templateName = "test_template";
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValidName()).thenReturn(true);
         when(template.isValid()).thenReturn(true);
         when(template.toXContent(any(), any())).thenReturn(org.opensearch.common.xcontent.json.JsonXContent.contentBuilder());
 
@@ -584,6 +588,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     public void testUpdateTemplate_IndexNotFoundException() throws Exception {
         String templateName = "test_template";
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValidName()).thenReturn(true);
         when(template.isValid()).thenReturn(true);
         when(template.toXContent(any(), any())).thenReturn(org.opensearch.common.xcontent.json.JsonXContent.contentBuilder());
 
@@ -598,7 +603,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.updateTemplate(templateName, template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertTrue(exceptionCaptor.getValue().getMessage().contains("not found"));
     }
@@ -607,6 +612,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     public void testUpdateTemplate_OtherException() throws Exception {
         String templateName = "test_template";
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValidName()).thenReturn(true);
         when(template.isValid()).thenReturn(true);
         when(template.toXContent(any(), any())).thenReturn(org.opensearch.common.xcontent.json.JsonXContent.contentBuilder());
 
@@ -634,9 +640,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.updateTemplate("", template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
@@ -647,14 +653,15 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.updateTemplate("   ", template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("context management name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
     @Test
     public void testSaveTemplate_WithCreatedBy() throws Exception {
         ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValidName()).thenReturn(true);
         when(template.isValid()).thenReturn(true);
         when(template.getName()).thenReturn("test_template");
         when(template.getCreatedTime()).thenReturn(Instant.now());
@@ -683,9 +690,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.saveTemplate("test template", template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertTrue(exceptionCaptor.getValue().getMessage().contains("must not contain spaces"));
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Invalid context management"));
     }
 
     @Test
@@ -701,9 +708,9 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.saveTemplate("TestTemplate", template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertTrue(exceptionCaptor.getValue().getMessage().contains("capital letters"));
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Invalid context management"));
     }
 
     @Test
@@ -720,7 +727,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.saveTemplate(longName, template, listener);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertTrue(exceptionCaptor.getValue().getMessage().contains("less than 50 characters"));
     }
@@ -735,5 +742,41 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
             .build();
 
         assertTrue(template.isValid());
+    }
+
+    @Test
+    public void testSaveTemplate_NameWithSpecialCharacters() {
+        ContextManagementTemplate template = ContextManagementTemplate
+            .builder()
+            .name("test@template#name")
+            .hooks(java.util.Map.of("pre_tool", java.util.List.of()))
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.saveTemplate("test@template#name", template, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Invalid context management"));
+    }
+
+    @Test
+    public void testSaveTemplate_NameWithControlCharacters() {
+        ContextManagementTemplate template = ContextManagementTemplate
+            .builder()
+            .name("test\ntemplate")
+            .hooks(java.util.Map.of("pre_tool", java.util.List.of()))
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.saveTemplate("test\ntemplate", template, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Invalid context management"));
     }
 }

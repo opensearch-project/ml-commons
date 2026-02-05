@@ -235,6 +235,13 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
      * Validate the template configuration
      */
     public boolean isValid() {
+        return isValidName() && isValidHooksAndConfigs();
+    }
+
+    /**
+     * Validate only the template name
+     */
+    public boolean isValidName() {
         if (name == null || name.trim().isEmpty()) {
             return false;
         }
@@ -249,10 +256,28 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
             return false;
         }
 
+        // Name must not contain control characters
+        if (name.indexOf('\r') >= 0 || name.indexOf('\n') >= 0 || name.chars().anyMatch(ch -> ch < 32)) {
+            return false;
+        }
+
+        // Name must only contain lowercase letters, numbers, hyphens, and underscores
+        if (!name.matches("^[a-z0-9_-]+$")) {
+            return false;
+        }
+
         // Name length must be less than 50 characters
         if (name.length() >= 50) {
             return false;
         }
+
+        return true;
+    }
+
+    /**
+     * Validate hooks and context manager configurations
+     */
+    private boolean isValidHooksAndConfigs() {
 
         // Allow null hooks (no context management) but not empty hooks map (misconfiguration)
         if (hooks != null) {

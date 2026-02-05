@@ -10,6 +10,7 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import java.time.Instant;
 import java.util.List;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
@@ -24,6 +25,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -48,8 +50,11 @@ import lombok.extern.log4j.Log4j2;
 public class ContextManagementTemplateService {
 
     private static final int DEFAULT_MAX_TEMPLATES = 1000;
-    private static final String INVALID_CONTEXT_MANAGEMENT_TEMPLATE_EXCEPTION_MESSAGE =
-        "Invalid context management name: must not contain spaces or capital letters, and must be less than 50 characters.";
+    private static final String INVALID_CONTEXT_MANAGEMENT_NAME_ERROR =
+        "Invalid context management name: must contain only lowercase letters, numbers, hyphens, and underscores, and must be less than 50 characters";
+    private static final String INVALID_CONTEXT_MANAGEMENT_CONFIG_ERROR = "Invalid context management configuration";
+    private static final String CONTEXT_MANAGEMENT_NAME_NULL_ERROR = "Context management name cannot be null, empty, or whitespace";
+    private static final String CONTEXT_MANAGEMENT_NOT_FOUND_ERROR = "Context management not found: ";
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final ClusterService clusterService;
@@ -71,10 +76,15 @@ public class ContextManagementTemplateService {
      */
     public void saveTemplate(String templateName, ContextManagementTemplate template, ActionListener<Boolean> listener) {
         try {
-            // Validate template
-            if (!template.isValid()) {
+            // Validate template name first
+            if (!template.isValidName()) {
+                listener.onFailure(new IllegalArgumentException(INVALID_CONTEXT_MANAGEMENT_NAME_ERROR));
+                return;
+            }
 
-                listener.onFailure(new IllegalArgumentException(INVALID_CONTEXT_MANAGEMENT_TEMPLATE_EXCEPTION_MESSAGE));
+            // Validate full template
+            if (!template.isValid()) {
+                listener.onFailure(new IllegalArgumentException(INVALID_CONTEXT_MANAGEMENT_CONFIG_ERROR));
                 return;
             }
 
@@ -139,7 +149,7 @@ public class ContextManagementTemplateService {
     public void getTemplate(String templateName, ActionListener<ContextManagementTemplate> listener) {
         try {
             if (templateName == null || templateName.trim().isEmpty()) {
-                listener.onFailure(new IllegalArgumentException("context management name cannot be null, empty, or whitespace"));
+                listener.onFailure(new IllegalArgumentException(CONTEXT_MANAGEMENT_NAME_NULL_ERROR));
                 return;
             }
 
@@ -150,7 +160,10 @@ public class ContextManagementTemplateService {
 
                 client.get(getRequest, ActionListener.wrap(getResponse -> {
                     if (!getResponse.isExists()) {
-                        wrappedListener.onFailure(new IllegalArgumentException("Context management not found: " + templateName));
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(CONTEXT_MANAGEMENT_NOT_FOUND_ERROR + templateName, RestStatus.NOT_FOUND)
+                            );
                         return;
                     }
 
@@ -168,7 +181,10 @@ public class ContextManagementTemplateService {
                     }
                 }, exception -> {
                     if (exception instanceof IndexNotFoundException) {
-                        wrappedListener.onFailure(new IllegalArgumentException("Context management not found: " + templateName));
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(CONTEXT_MANAGEMENT_NOT_FOUND_ERROR + templateName, RestStatus.NOT_FOUND)
+                            );
                     } else {
                         log.error("Failed to get context management: {}", templateName, exception);
                         wrappedListener.onFailure(exception);
@@ -245,7 +261,7 @@ public class ContextManagementTemplateService {
     public void deleteTemplate(String templateName, ActionListener<Boolean> listener) {
         try {
             if (templateName == null || templateName.trim().isEmpty()) {
-                listener.onFailure(new IllegalArgumentException("context management name cannot be null, empty, or whitespace"));
+                listener.onFailure(new IllegalArgumentException(CONTEXT_MANAGEMENT_NAME_NULL_ERROR));
                 return;
             }
 
@@ -314,13 +330,19 @@ public class ContextManagementTemplateService {
     public void updateTemplate(String templateName, ContextManagementTemplate template, ActionListener<UpdateResponse> listener) {
         try {
             if (templateName == null || templateName.trim().isEmpty()) {
-                listener.onFailure(new IllegalArgumentException("context management name cannot be null, empty, or whitespace"));
+                listener.onFailure(new IllegalArgumentException(CONTEXT_MANAGEMENT_NAME_NULL_ERROR));
                 return;
             }
 
-            // Validate template
+            // Validate template name first
+            if (!template.isValidName()) {
+                listener.onFailure(new IllegalArgumentException(INVALID_CONTEXT_MANAGEMENT_NAME_ERROR));
+                return;
+            }
+
+            // Validate full template
             if (!template.isValid()) {
-                listener.onFailure(new IllegalArgumentException(INVALID_CONTEXT_MANAGEMENT_TEMPLATE_EXCEPTION_MESSAGE));
+                listener.onFailure(new IllegalArgumentException(INVALID_CONTEXT_MANAGEMENT_CONFIG_ERROR));
                 return;
             }
 
@@ -342,7 +364,10 @@ public class ContextManagementTemplateService {
                     wrappedListener.onResponse(updateResponse);
                 }, exception -> {
                     if (exception instanceof IndexNotFoundException) {
-                        wrappedListener.onFailure(new IllegalArgumentException("Context management not found: " + templateName));
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(CONTEXT_MANAGEMENT_NOT_FOUND_ERROR + templateName, RestStatus.NOT_FOUND)
+                            );
                     } else {
                         log.error("Failed to update context management: {}", templateName, exception);
                         wrappedListener.onFailure(exception);
