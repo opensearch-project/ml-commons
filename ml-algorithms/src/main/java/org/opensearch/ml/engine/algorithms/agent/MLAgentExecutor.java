@@ -17,7 +17,9 @@ import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 
@@ -252,6 +254,23 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         final MLAgent finalMlAgent = mlAgent;
 
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
+                                        if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+                                            boolean usesRemoteMemory = memorySpec != null
+                                                && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(memorySpec.getType());
+                                            String memoryConfig = requestParameters != null
+                                                ? requestParameters.get(MEMORY_CONFIGURATION_FIELD)
+                                                : null;
+                                            if (usesRemoteMemory || !Strings.isNullOrEmpty(memoryConfig)) {
+                                                wrappedListener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE,
+                                                            RestStatus.FORBIDDEN
+                                                        )
+                                                    );
+                                                return;
+                                            }
+                                        }
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
                                         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
