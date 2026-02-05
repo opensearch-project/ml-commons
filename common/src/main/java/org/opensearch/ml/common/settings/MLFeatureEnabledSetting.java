@@ -21,6 +21,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUL
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
@@ -63,6 +64,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isAgenticMemoryEnabled;
 
+    private volatile Boolean isRemoteAgenticMemoryEnabled;
+
     private volatile Boolean isIndexInsightEnabled;
 
     private volatile Boolean isStreamEnabled;
@@ -92,6 +95,7 @@ public class MLFeatureEnabledSetting {
         isExecuteToolEnabled = ML_COMMONS_EXECUTE_TOOL_ENABLED.get(settings);
         isMcpConnectorEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(settings);
         isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
+        isRemoteAgenticMemoryEnabled = ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
         maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
@@ -125,6 +129,9 @@ public class MLFeatureEnabledSetting {
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_EXECUTE_TOOL_ENABLED, it -> isExecuteToolEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> isMcpConnectorEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_MEMORY_ENABLED, it -> isAgenticMemoryEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED, it -> isRemoteAgenticMemoryEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
         clusterService
             .getClusterSettings()
@@ -252,6 +259,14 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isAgenticMemoryEnabled() {
         return isAgenticMemoryEnabled;
+    }
+
+    /**
+     * Whether the Remote Agentic Memory feature is enabled. If disabled, APIs in ml-commons will block remote agentic memory usage.
+     * @return whether the remote agentic memory feature is enabled.
+     */
+    public boolean isRemoteAgenticMemoryEnabled() {
+        return isRemoteAgenticMemoryEnabled;
     }
 
     @VisibleForTesting

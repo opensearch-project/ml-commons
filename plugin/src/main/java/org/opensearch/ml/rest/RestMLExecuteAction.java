@@ -10,6 +10,8 @@ import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
@@ -25,12 +27,15 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -164,6 +169,16 @@ public class RestMLExecuteAction extends BaseRestHandler {
                         + "The agent must be created using unified agent API. "
                         + "To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
                 );
+            }
+
+            if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+                if (agentMLInput.getInputDataset() instanceof RemoteInferenceInputDataSet inputDataSet
+                    && inputDataSet.getParameters() != null) {
+                    String memoryConfig = inputDataSet.getParameters().get(MEMORY_CONFIGURATION_FIELD);
+                    if (!Strings.isNullOrEmpty(memoryConfig)) {
+                        throw new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+                    }
+                }
             }
 
             // Check MCP header passthrough feature flag
