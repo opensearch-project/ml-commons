@@ -73,7 +73,7 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
         params
             .put(
                 INTERACTION_TEMPLATE_TOOL_RESPONSE,
-                "{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"${_interactions.tool_call_id}\",\"response\":${_interactions.tool_response}}}]}"
+                "{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"${_interactions.tool_call_id}\",\"response\":{\"text\":\"${_interactions.tool_response}\"}}}]}"
             );
 
         params.put(CHAT_HISTORY_QUESTION_TEMPLATE, "{\"role\":\"user\",\"parts\":[{\"text\":\"${_chat_history.message.question}\"}]}");
