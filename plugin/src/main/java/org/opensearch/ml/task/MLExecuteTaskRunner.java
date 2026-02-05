@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.task;
 
+import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.CONTEXT_MANAGEMENT_PROCESSED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 
@@ -344,14 +346,14 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
             RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
 
             // Check if context management has already been processed by MLAgentExecutor (for inline templates)
-            String contextManagementProcessed = dataset.getParameters().get("context_management_processed");
+            String contextManagementProcessed = dataset.getParameters().get(CONTEXT_MANAGEMENT_PROCESSED);
             if ("true".equals(contextManagementProcessed)) {
                 log.debug("Context management already processed by MLAgentExecutor, skipping template lookup");
                 return null;
             }
 
             // Check for context management name in runtime parameters
-            String runtimeContextManagementName = dataset.getParameters().get("context_management_name");
+            String runtimeContextManagementName = dataset.getParameters().get(CONTEXT_MANAGEMENT_NAME_FIELD);
             if (runtimeContextManagementName != null && !runtimeContextManagementName.trim().isEmpty()) {
                 log.debug("Using runtime context management name from parameters: {}", runtimeContextManagementName);
                 return runtimeContextManagementName;

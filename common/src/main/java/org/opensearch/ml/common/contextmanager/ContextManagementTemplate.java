@@ -239,6 +239,21 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
             return false;
         }
 
+        // Name must not contain spaces
+        if (name.contains(" ")) {
+            return false;
+        }
+
+        // Name must not contain capital letters
+        if (!name.equals(name.toLowerCase())) {
+            return false;
+        }
+
+        // Name length must be less than 50 characters
+        if (name.length() >= 50) {
+            return false;
+        }
+
         // Allow null hooks (no context management) but not empty hooks map (misconfiguration)
         if (hooks != null) {
             if (hooks.isEmpty()) {
