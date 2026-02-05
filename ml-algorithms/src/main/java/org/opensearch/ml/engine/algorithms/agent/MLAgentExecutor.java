@@ -200,19 +200,19 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
         if (MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_AGENT_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<Output> wrappedListener = ActionListener.runBefore(listener, context::restore);
                 sdkClient
                     .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor("opensearch_ml_general"))
                     .whenComplete((response, throwable) -> {
+                        context.restore();
                         log.debug("Completed Get Agent Request, Agent id:{}", agentId);
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                             if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
                                 log.error("Failed to get Agent index", cause);
-                                wrappedListener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
+                                listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                             } else {
                                 log.error("Failed to get ML Agent {}", agentId, cause);
-                                wrappedListener.onFailure(cause);
+                                listener.onFailure(cause);
                             }
                         } else {
                             try {
@@ -237,7 +237,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             ? agentMLInput.getHookRegistry()
                                             : new HookRegistry();
                                         if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
-                                            wrappedListener
+                                            listener
                                                 .onFailure(
                                                     new OpenSearchStatusException(
                                                         "You don't have permission to access this resource",
@@ -324,7 +324,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 memoryFactory = memoryFactoryMap.get(MLMemoryType.from(memorySpec.getType()).name());
                                             }
                                             if (memoryFactory == null) {
-                                                wrappedListener
+                                                listener
                                                     .onFailure(
                                                         new IllegalArgumentException(
                                                             "Memory factory not found for type: "
@@ -349,7 +349,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                     .getParameters()
                                                                     .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
                                                                 saveRootInteractionAndExecute(
-                                                                    wrappedListener,
+                                                                    listener,
                                                                     tenantId,
                                                                     memory,
                                                                     inputDataSet,
@@ -364,12 +364,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                 );
                                                             }, e -> {
                                                                 log.error("Failed to get existing interaction for regeneration", e);
-                                                                wrappedListener.onFailure(e);
+                                                                listener.onFailure(e);
                                                             })
                                                         );
                                                 } else {
                                                     saveRootInteractionAndExecute(
-                                                        wrappedListener,
+                                                        listener,
                                                         tenantId,
                                                         memory,
                                                         inputDataSet,
@@ -385,7 +385,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 }
                                             }, ex -> {
                                                 log.error("Failed to read conversation memory", ex);
-                                                wrappedListener.onFailure(ex);
+                                                listener.onFailure(ex);
                                             }));
                                         } else {
                                             Map<String, Object> memoryParams = createMemoryParams(
@@ -431,14 +431,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         finalMlAgent,
                                                                         outputs,
                                                                         modelTensors,
-                                                                        wrappedListener,
+                                                                        listener,
                                                                         createdMemory,
                                                                         channel,
                                                                         hookRegistry
                                                                     ),
                                                                     ex -> {
                                                                         log.error("Failed to find memory with memory_id: {}", memoryId, ex);
-                                                                        wrappedListener.onFailure(ex);
+                                                                        listener.onFailure(ex);
                                                                     }
                                                                 )
                                                         );
@@ -454,7 +454,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 finalMlAgent,
                                                 outputs,
                                                 modelTensors,
-                                                wrappedListener,
+                                                listener,
                                                 null,
                                                 channel,
                                                 hookRegistry
@@ -462,10 +462,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         }
                                     } catch (Exception e) {
                                         log.error("Failed to parse ml agent {}", agentId, e);
-                                        wrappedListener.onFailure(e);
+                                        listener.onFailure(e);
                                     }
                                 } else {
-                                    wrappedListener
+                                    listener
                                         .onFailure(
                                             new OpenSearchStatusException(
                                                 "Failed to find agent with the provided agent id: " + agentId,
@@ -475,7 +475,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to get agent", e);
-                                wrappedListener.onFailure(e);
+                                listener.onFailure(e);
                             }
                         }
                     });
@@ -1140,23 +1140,23 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     public void indexMLTask(MLTask mlTask, ActionListener<IndexResponse> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<IndexResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             sdkClient
                 .putDataObjectAsync(
                     PutDataObjectRequest.builder().index(ML_TASK_INDEX).tenantId(mlTask.getTenantId()).dataObject(mlTask).build()
                 )
                 .whenComplete((r, throwable) -> {
+                    context.restore();
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         log.error("Failed to index ML task", cause);
-                        wrappedListener.onFailure(cause);
+                        listener.onFailure(cause);
                     } else {
                         try {
                             IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
                             log.info("Task creation result: {}, Task id: {}", indexResponse.getResult(), indexResponse.getId());
-                            wrappedListener.onResponse(indexResponse);
+                            listener.onResponse(indexResponse);
                         } catch (Exception e) {
-                            wrappedListener.onFailure(e);
+                            listener.onFailure(e);
                         }
                     }
                 });
