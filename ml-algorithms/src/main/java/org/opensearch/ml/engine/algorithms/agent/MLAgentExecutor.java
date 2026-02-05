@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
@@ -120,6 +121,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final String ERROR_MESSAGE = "error_message";
+    public static final String CONTEXT_MANAGEMENT_PROCESSED = "context_management_processed";
 
     private Client client;
     private SdkClient sdkClient;
@@ -652,7 +654,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private void processContextManagement(MLAgent mlAgent, HookRegistry hookRegistry, RemoteInferenceInputDataSet inputDataSet) {
         try {
             // Check if context_management is already specified in runtime parameters
-            String runtimeContextManagement = inputDataSet.getParameters().get("context_management");
+            String runtimeContextManagement = inputDataSet.getParameters().get(CONTEXT_MANAGEMENT_NAME_FIELD);
             if (runtimeContextManagement != null && !runtimeContextManagement.trim().isEmpty()) {
                 log.info("Using runtime context management parameter: {}", runtimeContextManagement);
                 return; // Runtime parameter takes precedence, let MLExecuteTaskRunner handle it
@@ -667,7 +669,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 log.info("Agent '{}' has context management template reference: {}", mlAgent.getName(), templateName);
                 // For now, we'll pass the template name to parameters for MLExecuteTaskRunner
                 // to handle
-                inputDataSet.getParameters().put("context_management", templateName);
+                inputDataSet.getParameters().put(CONTEXT_MANAGEMENT_NAME_FIELD, templateName);
                 return; // Let MLExecuteTaskRunner handle template resolution
             } else if (mlAgent.getInlineContextManagement() != null) {
                 // Inline template - process directly
@@ -680,8 +682,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 // Process inline context management template
                 processInlineContextManagement(template, hookRegistry);
                 // Mark as processed to prevent MLExecuteTaskRunner from processing it again
-                inputDataSet.getParameters().put("context_management_processed", "true");
-                inputDataSet.getParameters().put("context_management", templateName);
+
+                inputDataSet.getParameters().put(CONTEXT_MANAGEMENT_PROCESSED, "true");
+                inputDataSet.getParameters().put(CONTEXT_MANAGEMENT_NAME_FIELD, templateName);
             }
         } catch (Exception e) {
             log.error("Failed to process context management for agent '{}': {}", mlAgent.getName(), e.getMessage(), e);
