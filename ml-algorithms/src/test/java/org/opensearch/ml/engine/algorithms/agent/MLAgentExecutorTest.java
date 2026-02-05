@@ -573,62 +573,6 @@ public class MLAgentExecutorTest {
     }
 
     @Test
-    public void test_ProcessAgentInput_AGUIAgent_WithContext_LegacyInterface() {
-        // AGUI agent with legacy interface and context
-        MLAgent agent = MLAgent
-            .builder()
-            .name("agui_agent_with_context")
-            .type(MLAgentType.AG_UI.name())
-            .llm(LLMSpec.builder().modelId("gpt-4").build())
-            .build();
-
-        AgentInput agentInput = new AgentInput();
-        agentInput.setInput("What is the weather?");
-
-        Map<String, String> existingParams = new HashMap<>();
-        existingParams.put("context", "User is in San Francisco");
-        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(existingParams).build();
-        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, dataset, false);
-
-        mlAgentExecutor.processAgentInput(agentMLInput, agent);
-
-        // Verify context is prepended to question for AGUI agents
-        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        String question = updatedDataset.getParameters().get(QUESTION);
-        Assert.assertNotNull(question);
-        Assert.assertTrue(question.contains("Context: User is in San Francisco"));
-        Assert.assertTrue(question.contains("Question: What is the weather?"));
-    }
-
-    @Test
-    public void test_ProcessAgentInput_AGUIAgent_WithContext_RevampInterface() {
-        // AGUI agent with revamp interface and context
-        MLAgent agent = MLAgent
-            .builder()
-            .name("agui_agent_revamp_context")
-            .type(MLAgentType.AG_UI.name())
-            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
-            .build();
-
-        AgentInput agentInput = new AgentInput();
-        agentInput.setInput("What time is it?");
-
-        Map<String, String> existingParams = new HashMap<>();
-        existingParams.put("context", "User timezone: PST");
-        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(existingParams).build();
-        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, dataset, false);
-
-        mlAgentExecutor.processAgentInput(agentMLInput, agent);
-
-        // Verify context is prepended to question for AGUI agents
-        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        String question = updatedDataset.getParameters().get(QUESTION);
-        Assert.assertNotNull(question);
-        Assert.assertTrue(question.contains("Context: User timezone: PST"));
-        Assert.assertTrue(question.contains("Question: What time is it?"));
-    }
-
-    @Test
     public void test_ProcessAgentInput_AGUIAgent_WithoutContext() {
         // AGUI agent without context - question should not be modified
         MLAgent agent = MLAgent
@@ -649,6 +593,69 @@ public class MLAgentExecutorTest {
         String question = dataset.getParameters().get(QUESTION);
         Assert.assertEquals("Hello world", question);
         Assert.assertFalse(question.contains("Context:"));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithContext_LegacyInterface() {
+        // AGUI agent with legacy LLM interface
+        // Context has already been appended by AGUIInputConverter before reaching MLAgentExecutor
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_legacy_context")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            .build();
+
+        // Simulate message with context already appended (as done by AGUIInputConverter)
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Context:\n- Location: San Francisco\n\nWhat is the weather?");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify question contains context that was already appended
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        String question = dataset.getParameters().get(QUESTION);
+        Assert.assertNotNull(question);
+        Assert.assertTrue(question.contains("Context:"));
+        Assert.assertTrue(question.contains("San Francisco"));
+        Assert.assertTrue(question.contains("What is the weather?"));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_WithContext_RevampInterface() {
+        // AGUI agent with revamp model interface
+        // Context has already been appended by AGUIInputConverter before reaching MLAgentExecutor
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_revamp_context")
+            .type(MLAgentType.AG_UI.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+
+        // Simulate message with context already appended (as done by AGUIInputConverter)
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Context:\n- User Location: New York\n- Time Zone: EST\n\nWhat time is it?");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify question contains context that was already appended
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        String question = dataset.getParameters().get(QUESTION);
+        Assert.assertNotNull(question);
+        Assert.assertTrue(question.contains("Context:"));
+        Assert.assertTrue(question.contains("New York"));
+        Assert.assertTrue(question.contains("EST"));
+        Assert.assertTrue(question.contains("What time is it?"));
     }
 
     @Test

@@ -360,7 +360,7 @@ public class AgentInputProcessorTest {
             IllegalArgumentException.class,
             () -> AgentInputProcessor.validateInput(agentInput)
         );
-        assertEquals("Message content cannot be null or empty", exception.getMessage());
+        assertEquals("user message must have content", exception.getMessage());
     }
 
     @Test
@@ -377,11 +377,11 @@ public class AgentInputProcessorTest {
             IllegalArgumentException.class,
             () -> AgentInputProcessor.validateInput(agentInput)
         );
-        assertEquals("Message content cannot be null or empty", exception.getMessage());
+        assertEquals("user message must have content", exception.getMessage());
     }
 
     @Test
-    public void testValidateInput_LastMessage_NotFromUser() {
+    public void testValidateInput_LastMessage_NotFromUserOrTool() {
         // Arrange
         List<Message> messages = new ArrayList<>();
 
@@ -402,7 +402,7 @@ public class AgentInputProcessorTest {
             IllegalArgumentException.class,
             () -> AgentInputProcessor.validateInput(agentInput)
         );
-        assertEquals("Last message must be from role 'user'", exception.getMessage());
+        assertEquals("Last message must be from role 'user' or 'tool'", exception.getMessage());
     }
 
     @Test
@@ -883,5 +883,525 @@ public class AgentInputProcessorTest {
         assertEquals(2, result.size());
         assertEquals("User 2", result.get(0).getContent().get(0).getText());
         assertEquals("User 3", result.get(1).getContent().get(0).getText());
+    }
+
+    // ========== Assistant Message with Tool Calls Tests ==========
+
+    @Test
+    public void testValidateInput_AssistantMessage_WithContent() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Let me check that");
+        List<ContentBlock> content = new ArrayList<>();
+        content.add(textBlock);
+
+        Message assistantMsg = new Message("assistant", content);
+        messages.add(assistantMsg);
+
+        // Add user message to satisfy last message requirement
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert - should not throw
+        AgentInputProcessor.validateInput(agentInput);
+    }
+
+    @Test
+    public void testValidateInput_AssistantMessage_WithToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // User message
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What's the weather?");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        // Assistant message with tool calls
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{}");
+        ToolCall toolCall = new ToolCall("call-123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Tool result message
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("72F and sunny");
+        List<ContentBlock> toolContent = new ArrayList<>();
+        toolContent.add(toolBlock);
+        Message toolMsg = new Message("tool", toolContent);
+        toolMsg.setToolCallId("call-123");
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert - should not throw
+        AgentInputProcessor.validateInput(agentInput);
+    }
+
+    @Test
+    public void testValidateInput_AssistantMessage_WithContentAndToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // Assistant message with both content and tool calls
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Let me check the weather for you");
+        List<ContentBlock> content = new ArrayList<>();
+        content.add(textBlock);
+
+        Message assistantMsg = new Message("assistant", content);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{}");
+        ToolCall toolCall = new ToolCall("call-123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Tool result message
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("72F");
+        List<ContentBlock> toolContent = new ArrayList<>();
+        toolContent.add(toolBlock);
+        Message toolMsg = new Message("tool", toolContent);
+        toolMsg.setToolCallId("call-123");
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert - should not throw
+        AgentInputProcessor.validateInput(agentInput);
+    }
+
+    @Test
+    public void testValidateInput_AssistantMessage_WithoutContentOrToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        messages.add(assistantMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Assistant message must have either content or tool calls", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_AssistantMessage_WithEmptyContentAndNoToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", new ArrayList<>());
+        messages.add(assistantMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Assistant message must have either content or tool calls", exception.getMessage());
+    }
+
+    // ========== Tool Message Validation Tests ==========
+
+    @Test
+    public void testValidateInput_ToolMessage_Valid() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("Tool result");
+        List<ContentBlock> toolContent = new ArrayList<>();
+        toolContent.add(toolBlock);
+
+        Message toolMsg = new Message("tool", toolContent);
+        toolMsg.setToolCallId("call-123");
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert - should not throw
+        AgentInputProcessor.validateInput(agentInput);
+    }
+
+    @Test
+    public void testValidateInput_ToolMessage_MissingToolCallId() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("Tool result");
+        List<ContentBlock> toolContent = new ArrayList<>();
+        toolContent.add(toolBlock);
+
+        Message toolMsg = new Message("tool", toolContent);
+        // No toolCallId set
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool message must have toolCallId", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolMessage_EmptyToolCallId() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("Tool result");
+        List<ContentBlock> toolContent = new ArrayList<>();
+        toolContent.add(toolBlock);
+
+        Message toolMsg = new Message("tool", toolContent);
+        toolMsg.setToolCallId("   ");
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool message must have toolCallId", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolMessage_MissingContent() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message toolMsg = new Message("tool", null);
+        toolMsg.setToolCallId("call-123");
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool message must have content", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolMessage_EmptyContent() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message toolMsg = new Message("tool", new ArrayList<>());
+        toolMsg.setToolCallId("call-123");
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool message must have content", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_LastMessage_ToolRole() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // User message
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        // Assistant with tool call
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_info", "{}");
+        ToolCall toolCall = new ToolCall("call-123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Tool message (last message)
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("Tool result");
+        List<ContentBlock> toolContent = new ArrayList<>();
+        toolContent.add(toolBlock);
+        Message toolMsg = new Message("tool", toolContent);
+        toolMsg.setToolCallId("call-123");
+        messages.add(toolMsg);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert - should not throw (last message can be tool)
+        AgentInputProcessor.validateInput(agentInput);
+    }
+
+    // ========== Tool Call Validation Tests ==========
+
+    @Test
+    public void testValidateInput_ToolCall_MissingId() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{}");
+        ToolCall toolCall = new ToolCall(null, "function", function); // null id
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Add user to satisfy last message requirement
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool call must have an id", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolCall_EmptyId() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{}");
+        ToolCall toolCall = new ToolCall("   ", "function", function); // empty id
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Add user to satisfy last message requirement
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool call must have an id", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolCall_MissingType() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{}");
+        ToolCall toolCall = new ToolCall("call-123", null, function); // null type
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Add user to satisfy last message requirement
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool call must have a type", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolCall_MissingFunction() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall toolCall = new ToolCall("call-123", "function", null); // null function
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Add user to satisfy last message requirement
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool call must have a function", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolCall_MissingFunctionName() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction(null, "{}"); // null name
+        ToolCall toolCall = new ToolCall("call-123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Add user to satisfy last message requirement
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool call function must have a name", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_ToolCall_MissingFunctionArguments() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", null); // null arguments
+        ToolCall toolCall = new ToolCall("call-123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Add user to satisfy last message requirement
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Question");
+        List<ContentBlock> userContent = new ArrayList<>();
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentInputProcessor.validateInput(agentInput)
+        );
+        assertEquals("Tool call function must have arguments", exception.getMessage());
+    }
+
+    @Test
+    public void testValidateInput_MultipleToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        Message assistantMsg = new Message("assistant", null);
+        List<ToolCall> toolCalls = new ArrayList<>();
+
+        ToolCall.ToolFunction function1 = new ToolCall.ToolFunction("get_weather", "{}");
+        ToolCall toolCall1 = new ToolCall("call-1", "function", function1);
+        toolCalls.add(toolCall1);
+
+        ToolCall.ToolFunction function2 = new ToolCall.ToolFunction("get_time", "{}");
+        ToolCall toolCall2 = new ToolCall("call-2", "function", function2);
+        toolCalls.add(toolCall2);
+
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Add tool result messages
+        ContentBlock toolBlock1 = new ContentBlock();
+        toolBlock1.setType(ContentType.TEXT);
+        toolBlock1.setText("72F");
+        List<ContentBlock> toolContent1 = new ArrayList<>();
+        toolContent1.add(toolBlock1);
+        Message toolMsg1 = new Message("tool", toolContent1);
+        toolMsg1.setToolCallId("call-1");
+        messages.add(toolMsg1);
+
+        ContentBlock toolBlock2 = new ContentBlock();
+        toolBlock2.setType(ContentType.TEXT);
+        toolBlock2.setText("3:00 PM");
+        List<ContentBlock> toolContent2 = new ArrayList<>();
+        toolContent2.add(toolBlock2);
+        Message toolMsg2 = new Message("tool", toolContent2);
+        toolMsg2.setToolCallId("call-2");
+        messages.add(toolMsg2);
+
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Act & Assert - should not throw
+        AgentInputProcessor.validateInput(agentInput);
     }
 }
