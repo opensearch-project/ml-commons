@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -39,6 +40,8 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_MODIFIED_FIELD = "last_modified";
     public static final String CREATED_BY_FIELD = "created_by";
+
+    private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[a-z0-9_-]{1,49}$");
 
     /**
      * Unique name for the context management template
@@ -242,36 +245,7 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
      * Validate only the template name
      */
     public boolean isValidName() {
-        if (name == null || name.trim().isEmpty()) {
-            return false;
-        }
-
-        // Name must not contain spaces
-        if (name.contains(" ")) {
-            return false;
-        }
-
-        // Name must not contain capital letters
-        if (!name.equals(name.toLowerCase())) {
-            return false;
-        }
-
-        // Name must not contain control characters
-        if (name.indexOf('\r') >= 0 || name.indexOf('\n') >= 0 || name.chars().anyMatch(ch -> ch < 32)) {
-            return false;
-        }
-
-        // Name must only contain lowercase letters, numbers, hyphens, and underscores
-        if (!name.matches("^[a-z0-9_-]+$")) {
-            return false;
-        }
-
-        // Name length must be less than 50 characters
-        if (name.length() >= 50) {
-            return false;
-        }
-
-        return true;
+        return name != null && VALID_NAME_PATTERN.matcher(name).matches();
     }
 
     /**

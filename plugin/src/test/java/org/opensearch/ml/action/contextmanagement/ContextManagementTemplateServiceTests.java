@@ -729,7 +729,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertTrue(exceptionCaptor.getValue().getMessage().contains("less than 50 characters"));
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("between 1 and 49 characters"));
     }
 
     @Test

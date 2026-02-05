@@ -51,7 +51,7 @@ public class ContextManagementTemplateService {
 
     private static final int DEFAULT_MAX_TEMPLATES = 1000;
     private static final String INVALID_CONTEXT_MANAGEMENT_NAME_ERROR =
-        "Invalid context management name: must contain only lowercase letters, numbers, hyphens, and underscores, and must be less than 50 characters";
+        "Invalid context management name: must contain only lowercase letters, numbers, hyphens, and underscores, and must be between 1 and 49 characters";
     private static final String INVALID_CONTEXT_MANAGEMENT_CONFIG_ERROR = "Invalid context management configuration";
     private static final String CONTEXT_MANAGEMENT_NAME_NULL_ERROR = "Context management name cannot be null, empty, or whitespace";
     private static final String CONTEXT_MANAGEMENT_NOT_FOUND_ERROR = "Context management not found: ";
