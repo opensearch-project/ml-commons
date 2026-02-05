@@ -263,7 +263,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 ? requestParameters.get(MEMORY_CONFIGURATION_FIELD)
                                                 : null;
                                             if (usesRemoteMemory || !Strings.isNullOrEmpty(memoryConfig)) {
-                                                wrappedListener
+                                                listener
                                                     .onFailure(
                                                         new OpenSearchStatusException(
                                                             ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE,
