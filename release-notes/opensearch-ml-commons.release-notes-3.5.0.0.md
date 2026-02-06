@@ -14,6 +14,12 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.5.0
 
 ### Enhancements
 * Enhancement: Enable remote conversational agentic memory through REST HTTP call ([#4564](https://github.com/opensearch-project/ml-commons/pull/4564))
+* move ssl configuration to client_config ([#4616](https://github.com/opensearch-project/ml-commons/pull/4616))
+* Add validation to context managers ([#4602](https://github.com/opensearch-project/ml-commons/pull/4602))
+* Add remote agentic memory feature flag and fix trace filtering in agentic memory queries ([#4597](https://github.com/opensearch-project/ml-commons/pull/4597))
+* Support tool messages in agent revamp ([#4596](https://github.com/opensearch-project/ml-commons/pull/4596))
+* [Gemini Model Support] Filter Agent final response, address comments ([#4586](https://github.com/opensearch-project/ml-commons/pull/4586))
+* Support OpenAI Chat Completions API with new Agent Interface ([#4591](https://github.com/opensearch-project/ml-commons/pull/4591))
 * Enabling custom named connector actions and support PUT/DELETE action ([#4538](https://github.com/opensearch-project/ml-commons/pull/4538))
 * Support unified pre/post processing for Nova MME model ([#4425](https://github.com/opensearch-project/ml-commons/pull/4425))
 * Sanitize error messages to prevent user input reflection ([#4315](https://github.com/opensearch-project/ml-commons/pull/4315))
@@ -28,6 +34,12 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.5.0
 * Allow higher maximum number of batch inference job tasks ([#4474](https://github.com/opensearch-project/ml-commons/pull/4474))
 
 ### Bug Fixes
+* fix: restore thread context in other agent related class to fix agentic memory ([#4621](https://github.com/opensearch-project/ml-commons/pull/4621))
+* Fix: Restore Thread Context in MLAgentExecutor properly to fix Memory Access ([#4608](https://github.com/opensearch-project/ml-commons/pull/4608))
+* Fix gemini function calling in tool failure case ([#4599](https://github.com/opensearch-project/ml-commons/pull/4599))
+* fix: set disable session by default to false ([#4584](https://github.com/opensearch-project/ml-commons/pull/4584))
+* Use dedicated thread pool in response handler to fix connection cannot get error when executing PER agent ([#4579](https://github.com/opensearch-project/ml-commons/pull/4579))
+* fix: type mismatch in AgenticConversationMemory ([#4578](https://github.com/opensearch-project/ml-commons/pull/4578))
 * Bump netty version to resolve CVE-2025-58057 ([#4576](https://github.com/opensearch-project/ml-commons/pull/4576))
 * Fix stream threadpool ([#4574](https://github.com/opensearch-project/ml-commons/pull/4574))
 * fix miss npe for index insight ([#4562](https://github.com/opensearch-project/ml-commons/pull/4562))
