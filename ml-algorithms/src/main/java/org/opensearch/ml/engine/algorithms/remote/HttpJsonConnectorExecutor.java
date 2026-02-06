@@ -196,12 +196,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-            boolean skipSslVerification = false;
-            if (connector.getParameters() != null && connector.getParameters().containsKey(SKIP_SSL_VERIFICATION)) {
-                skipSslVerification = Boolean.parseBoolean(connector.getParameters().get(SKIP_SSL_VERIFICATION));
-                if (skipSslVerification) {
-                    log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
-                }
+            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
+            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
+            if (skipSslVerificationValue) {
+                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
             }
             log
                 .info(
@@ -215,7 +213,13 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .compareAndSet(
                     null,
                     MLHttpClientFactory
-                        .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled, skipSslVerification)
+                        .getAsyncHttpClient(
+                            connectionTimeout,
+                            readTimeout,
+                            maxConnection,
+                            connectorPrivateIpEnabled,
+                            skipSslVerificationValue
+                        )
                 );
         }
         return httpClientRef.get();
