@@ -74,7 +74,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         // Get connector client configuration
         Duration connectionTimeout = Duration.ofMillis(connectorClientConfig.getConnectionTimeoutMillis());
-        Duration readTimeout = Duration.ofMillis(connectorClientConfig.getReadTimeoutMillis());
+        Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeoutSeconds());
 
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
