@@ -38,6 +38,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.httpclient.MLValidatableAsyncHttpClient;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memory.Memory;
@@ -963,14 +964,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                         Duration readTimeout = Duration.ofSeconds(10);
                         int maxConnections = 100;
 
-                        SdkAsyncHttpClient delegate = NettyNioAsyncHttpClient
-                            .builder()
-                            .connectionTimeout(connectionTimeout)
-                            .readTimeout(readTimeout)
-                            .maxConcurrency(maxConnections)
-                            .build();
-
-                        defaultHttpClient = new MLValidatableAsyncHttpClient(delegate, false);
+                        defaultHttpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnections, false);
                     } catch (Exception e) {
                         log.error("Failed to create default HTTP client for RemoteAgenticConversationMemory", e);
                         throw new RuntimeException("Failed to create default HTTP client", e);
@@ -1106,7 +1100,6 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             executor.setXContentRegistry(xContentRegistry);
             executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
 
-            // Set the default HTTP client with 64 threads
             executor.setAsyncHttpClient(getOrCreateDefaultHttpClient());
 
             // Prepare parameters for the action
