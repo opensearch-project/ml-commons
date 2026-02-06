@@ -1225,26 +1225,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             // Set parameters to processed params
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
 
-            // For AG_UI agents, prepend context to question if available
-            String questionToSet = question;
-            if (agentType == MLAgentType.AG_UI) {
-                String context = remoteDataSet.getParameters().get("context");
-                if (context != null && !context.isEmpty()) {
-                    questionToSet = "Context: " + context + "\nQuestion: " + question;
-                }
-            }
-
             // For agent with revamped interface, use ModelProvider to map the entire AgentInput
             if (mlAgent.getModel() != null) {
                 ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
                 Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
 
-                parameters.put(QUESTION, questionToSet);
+                parameters.put(QUESTION, question);
 
                 remoteDataSet.getParameters().putAll(parameters);
             } else {
                 // For old-style AG_UI agents without model field
-                remoteDataSet.getParameters().putIfAbsent(QUESTION, questionToSet);
+                remoteDataSet.getParameters().putIfAbsent(QUESTION, question);
             }
         } catch (Exception e) {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);

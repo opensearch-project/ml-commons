@@ -24,6 +24,7 @@ import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
+import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.utils.ToolUtils;
@@ -80,6 +81,12 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
         "{\"type\":\"image_url\",\"image_url\":{\"url\":\"${parameters.image_data}\"}}";
 
     private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"content\":[${parameters.msg_content_array}]}";
+
+    private static final String MESSAGE_WITH_TOOL_CALLS_TEMPLATE =
+        "{\"role\":\"${parameters.msg_role}\",\"content\":[${parameters.msg_content_array}],\"tool_calls\":[${parameters.tool_calls_array}]}";
+
+    private static final String MESSAGE_WITH_TOOL_CALL_ID_TEMPLATE =
+        "{\"role\":\"${parameters.msg_role}\",\"content\":[${parameters.msg_content_array}],\"tool_call_id\":\"${parameters.tool_call_id}\"}";
 
     private static final String OPENAI_REASONING_EFFORT = "reasoning_effort";
 
@@ -247,7 +254,7 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
 
     /**
      * Builds messages array using templates for OpenAI Chat Completions API.
-     * Converts messages to conversation history format.
+     * Converts messages to conversation history format, handling tool calls and results.
      */
     private String buildMessagesArray(List<Message> messages, MLAgentType type) {
         if (messages == null || messages.isEmpty()) {
@@ -266,11 +273,58 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
             Map<String, Object> msgParams = new HashMap<>();
             msgParams.put("msg_role", message.getRole());
             msgParams.put("msg_content_array", contentArray);
+
+            // Determine which template to use based on message properties
+            String template = MESSAGE_TEMPLATE;
+
+            // Assistant messages with tool calls
+            if ("assistant".equalsIgnoreCase(message.getRole()) && message.getToolCalls() != null && !message.getToolCalls().isEmpty()) {
+                String toolCallsArray = buildToolCallsArray(message.getToolCalls());
+                msgParams.put("tool_calls_array", toolCallsArray);
+                template = MESSAGE_WITH_TOOL_CALLS_TEMPLATE;
+            }
+            // Tool result messages
+            else if ("tool".equalsIgnoreCase(message.getRole()) && message.getToolCallId() != null) {
+                msgParams.put("tool_call_id", message.getToolCallId());
+                template = MESSAGE_WITH_TOOL_CALL_ID_TEMPLATE;
+            }
+
             StringSubstitutor msgSubstitutor = new StringSubstitutor(msgParams, "${parameters.", "}");
-            messagesArray.append(msgSubstitutor.replace(MESSAGE_TEMPLATE));
+            messagesArray.append(msgSubstitutor.replace(template));
         }
 
         return messagesArray.toString();
+    }
+
+    /**
+     * Builds tool calls array for OpenAI Chat Completions API format.
+     */
+    private String buildToolCallsArray(List<ToolCall> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder toolCallsArray = new StringBuilder();
+        boolean first = true;
+        for (ToolCall toolCall : toolCalls) {
+            if (!first) {
+                toolCallsArray.append(",");
+            }
+            first = false;
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("tool_call_id", toolCall.getId());
+            params.put("tool_call_type", toolCall.getType() != null ? toolCall.getType() : "function");
+            params.put("function_name", toolCall.getFunction().getName());
+            params.put("function_arguments", StringEscapeUtils.escapeJson(toolCall.getFunction().getArguments()));
+
+            String template =
+                "{\"id\":\"${parameters.tool_call_id}\",\"type\":\"${parameters.tool_call_type}\",\"function\":{\"name\":\"${parameters.function_name}\",\"arguments\":\"${parameters.function_arguments}\"}}";
+            StringSubstitutor substitutor = new StringSubstitutor(params, "${parameters.", "}");
+            toolCallsArray.append(substitutor.replace(template));
+        }
+
+        return toolCallsArray.toString();
     }
 
     /**
