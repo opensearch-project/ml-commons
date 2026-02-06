@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
@@ -26,16 +25,16 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lease.Releasable;
@@ -54,7 +53,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.http.HttpChunk;
 import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.agui.BaseEvent;
@@ -75,6 +73,8 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.utils.error.ErrorMessage;
+import org.opensearch.ml.utils.error.ErrorMessageFactory;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
@@ -163,17 +163,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         String agentId = request.param(PARAMETER_AGENT_ID);
 
-        // Validate agent and model synchronously before starting stream
-        MLAgent agent = validateAndGetAgent(agentId, client);
-        if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
-            if (!isModelValid(agent.getLlm().getModelId(), request, client)) {
-                throw new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND);
-            }
-        }
-
-        final StreamingRestChannelConsumer consumer = (channel) -> {
-
-            Supplier<ThreadContext.StoredContext> supplier = client.threadPool().getThreadContext().newRestorableContext(true);
+        return channel -> {
+            StreamingRestChannel streamingChannel = (StreamingRestChannel) channel;
 
             Map<String, List<String>> headers = Map
                 .of(
@@ -184,160 +175,191 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     "Connection",
                     List.of("keep-alive")
                 );
-            channel.prepareResponse(RestStatus.OK, headers);
+            streamingChannel.prepareResponse(RestStatus.OK, headers);
 
-            Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
-                try (ThreadContext.StoredContext context = supplier.get()) {
-
+            Flux.from(streamingChannel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
+                final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
+                try {
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
-
-                    // Send RUN_STARTED event immediately for AG-UI agents (ReAct cycle begins)
-                    if (isAGUI) {
-                        String threadId = extractThreadId(mlExecuteTaskRequest);
-                        String runId = extractRunId(mlExecuteTaskRequest);
-
-                        BaseEvent runStartedEvent = new RunStartedEvent(threadId, runId);
-                        HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
-                        channel.sendChunk(startChunk);
-                        log.debug("AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", threadId, runId);
-                    }
-
-                    final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
-                    StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
-                        @Override
-                        public void handleStreamResponse(StreamTransportResponse<MLTaskResponse> streamResponse) {
-                            try {
-                                MLTaskResponse response = streamResponse.nextResponse();
-
-                                if (response != null) {
-                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI);
-                                    channel.sendChunk(responseChunk);
-
-                                    // Recursively handle the next response
-                                    client
-                                        .threadPool()
-                                        .executor(STREAM_EXECUTE_THREAD_POOL)
-                                        .execute(() -> handleStreamResponse(streamResponse));
-                                } else {
-                                    log.info("No more responses, closing stream");
-                                    future.complete(XContentHttpChunk.last());
-                                    streamResponse.close();
-                                }
-                            } catch (Exception e) {
-                                future.completeExceptionally(e);
-                                log.error("Error in stream handling", e);
-                            }
-                        }
-
-                        @Override
-                        public void handleException(TransportException exp) {
-                            future.completeExceptionally(exp);
-                        }
-
-                        @Override
-                        public String executor() {
-                            return STREAM_EXECUTE_THREAD_POOL;
-                        }
-
-                        @Override
-                        public MLTaskResponse read(StreamInput in) throws IOException {
-                            return new MLTaskResponse(in);
-                        }
-                    };
-
-                    StreamTransportService streamTransportService = TransportExecuteStreamTaskAction.getStreamTransportService();
-                    streamTransportService
-                        .sendRequest(
-                            clusterService.localNode(),
-                            MLExecuteStreamTaskAction.NAME,
-                            mlExecuteTaskRequest,
-                            TransportRequestOptions.builder().withType(TransportRequestOptions.Type.STREAM).build(),
-                            handler
-                        );
-
-                    return Mono.fromCompletionStage(future);
+                    validateAgentAndModel(client, agentId, request, mlExecuteTaskRequest, isAGUI, streamingChannel, future);
                 } catch (Exception e) {
                     log.error("Failed to parse or process request", e);
-                    return Mono.error(e);
+                    sendErrorChunk(streamingChannel, e, future);
                 }
-            }).doOnNext(channel::sendChunk).onErrorResume(ex -> {
-                log.error("Error occurred", ex);
+                return Mono.fromCompletionStage(future);
+            }).doOnNext(streamingChannel::sendChunk).onErrorComplete(ex -> {
                 try {
-                    String errorMessage = ex instanceof IOException
-                        ? "Failed to parse request: " + ex.getMessage()
-                        : "Error processing request: " + ex.getMessage();
-                    HttpChunk errorChunk = createHttpChunk("data: {\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}\n\n", true);
-                    channel.sendChunk(errorChunk);
-                } catch (Exception e) {
-                    log.error("Failed to send error chunk", e);
+                    streamingChannel.sendResponse(new BytesRestResponse(streamingChannel, (Exception) ex));
+                    return true;
+                } catch (final IOException e) {
+                    throw new UncheckedIOException(e);
                 }
-                return Mono.empty();
             }).subscribe();
-        };
-
-        return channel -> {
-            if (channel instanceof StreamingRestChannel) {
-                consumer.accept((StreamingRestChannel) channel);
-            } else {
-                final ActionRequestValidationException validationError = new ActionRequestValidationException();
-                validationError.addValidationError("Unable to initiate request / response streaming over non-streaming channel");
-                channel.sendResponse(new BytesRestResponse(channel, validationError));
-            }
         };
     }
 
-    @VisibleForTesting
-    MLAgent validateAndGetAgent(String agentId, NodeClient client) {
-        try {
-            CompletableFuture<MLAgent> future = new CompletableFuture<>();
-
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.get(new GetRequest(ML_AGENT_INDEX, agentId), ActionListener.runBefore(ActionListener.wrap(response -> {
-                    if (response.isExists()) {
-                        try {
-                            XContentParser parser = jsonXContent
-                                .createParser(null, LoggingDeprecationHandler.INSTANCE, response.getSourceAsString());
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            future.complete(MLAgent.parse(parser));
-                        } catch (Exception e) {
-                            future.completeExceptionally(e);
-                        }
-                    } else {
-                        future.completeExceptionally(new OpenSearchStatusException("Agent not found", RestStatus.NOT_FOUND));
-                    }
-                }, future::completeExceptionally), context::restore));
+    private void validateAgentAndModel(
+        NodeClient client,
+        String agentId,
+        RestRequest request,
+        MLExecuteTaskRequest mlExecuteTaskRequest,
+        boolean isAGUI,
+        StreamingRestChannel channel,
+        CompletableFuture<HttpChunk> future
+    ) {
+        ActionListener<MLAgent> agentListener = ActionListener.wrap(agent -> {
+            if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
+                validateModel(client, agent.getLlm().getModelId(), request, mlExecuteTaskRequest, isAGUI, channel, future);
             }
+        }, e -> sendErrorChunk(channel, e, future));
 
-            // TODO: Make validation async
-            return future.get(5, SECONDS);
-        } catch (Exception e) {
-            log.error("Failed to validate agent {}", agentId, e);
-            throw new OpenSearchStatusException("Failed to find agent with the provided agent id: " + agentId, RestStatus.NOT_FOUND);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            validateAgent(agentId, client, ActionListener.runBefore(agentListener, context::restore));
         }
     }
 
-    @VisibleForTesting
-    boolean isModelValid(String modelId, RestRequest request, NodeClient client) throws IOException {
-        try {
-            CompletableFuture<MLModel> future = new CompletableFuture<>();
-
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+    private void validateModel(
+        NodeClient client,
+        String modelId,
+        RestRequest request,
+        MLExecuteTaskRequest mlExecuteTaskRequest,
+        boolean isAGUI,
+        StreamingRestChannel channel,
+        CompletableFuture<HttpChunk> future
+    ) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            try {
                 mlModelManager
                     .getModel(
                         modelId,
                         getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
-                        ActionListener.runBefore(ActionListener.wrap(future::complete, future::completeExceptionally), context::restore)
+                        ActionListener
+                            .runBefore(
+                                ActionListener
+                                    .wrap(
+                                        model -> executeStreamingRequest(client, mlExecuteTaskRequest, isAGUI, channel, future),
+                                        e -> sendErrorChunk(channel, e, future)
+                                    ),
+                                context::restore
+                            )
+                    );
+            } catch (Exception e) {
+                sendErrorChunk(channel, e, future);
+            }
+        }
+    }
+
+    private void validateAgent(String agentId, NodeClient client, ActionListener<MLAgent> listener) {
+        if (!clusterService.state().metadata().hasIndex(ML_AGENT_INDEX)) {
+            listener.onFailure(new ResourceNotFoundException("Agent index not found"));
+            return;
+        }
+
+        client.get(new GetRequest(ML_AGENT_INDEX, agentId), ActionListener.wrap(response -> {
+            if (response.isExists()) {
+                try {
+                    XContentParser parser = jsonXContent
+                        .createParser(null, LoggingDeprecationHandler.INSTANCE, response.getSourceAsString());
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    listener.onResponse(MLAgent.parse(parser));
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
+            } else {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException("Failed to find agent with the provided agent id: " + agentId, RestStatus.NOT_FOUND)
                     );
             }
+        }, listener::onFailure));
+    }
 
-            // TODO: make model validation async
-            future.get(5, SECONDS);
-            return true;
+    private void executeStreamingRequest(
+        NodeClient client,
+        MLExecuteTaskRequest mlExecuteTaskRequest,
+        boolean isAGUI,
+        StreamingRestChannel channel,
+        CompletableFuture<HttpChunk> future
+    ) {
+        try {
+            // Send RUN_STARTED event immediately for AG-UI agents (ReAct cycle begins)
+            if (isAGUI) {
+                String threadId = extractThreadId(mlExecuteTaskRequest);
+                String runId = extractRunId(mlExecuteTaskRequest);
+
+                BaseEvent runStartedEvent = new RunStartedEvent(threadId, runId);
+                HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
+                channel.sendChunk(startChunk);
+                log.debug("AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", threadId, runId);
+            }
+            StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
+                @Override
+                public void handleStreamResponse(StreamTransportResponse<MLTaskResponse> streamResponse) {
+                    try {
+                        MLTaskResponse response = streamResponse.nextResponse();
+
+                        if (response != null) {
+                            HttpChunk responseChunk = convertToHttpChunk(response, isAGUI);
+                            channel.sendChunk(responseChunk);
+
+                            // Recursively handle the next response
+                            client.threadPool().executor(STREAM_EXECUTE_THREAD_POOL).execute(() -> handleStreamResponse(streamResponse));
+                        } else {
+                            log.info("No more responses, closing stream");
+                            streamResponse.close();
+                            future.complete(XContentHttpChunk.last());
+                        }
+                    } catch (Exception e) {
+                        future.completeExceptionally(e);
+                        log.error("Error in stream handling", e);
+                    }
+                }
+
+                @Override
+                public void handleException(TransportException exp) {
+                    future.completeExceptionally(exp);
+                }
+
+                @Override
+                public String executor() {
+                    return STREAM_EXECUTE_THREAD_POOL;
+                }
+
+                @Override
+                public MLTaskResponse read(StreamInput in) throws IOException {
+                    return new MLTaskResponse(in);
+                }
+            };
+
+            StreamTransportService streamTransportService = TransportExecuteStreamTaskAction.getStreamTransportService();
+            streamTransportService
+                .sendRequest(
+                    clusterService.localNode(),
+                    MLExecuteStreamTaskAction.NAME,
+                    mlExecuteTaskRequest,
+                    TransportRequestOptions.builder().withType(TransportRequestOptions.Type.STREAM).build(),
+                    handler
+                );
         } catch (Exception e) {
-            log.error("Failed to validate model {}", e.getMessage());
-            return false;
+            log.error("Failed to execute streaming request", e);
+            sendErrorChunk(channel, e, future);
+        }
+    }
+
+    private void sendErrorChunk(StreamingRestChannel channel, Throwable error, CompletableFuture<HttpChunk> future) {
+        try {
+            RestStatus status = error instanceof OpenSearchStatusException ? ((OpenSearchStatusException) error).status()
+                : error instanceof ResourceNotFoundException ? RestStatus.NOT_FOUND
+                : RestStatus.INTERNAL_SERVER_ERROR;
+            ErrorMessage errorMessage = ErrorMessageFactory.createErrorMessage(error, status.getStatus());
+            String sseData = String.format("data: %s\n\n", errorMessage.toString().replace("\n", "\\n"));
+            channel.sendChunk(createHttpChunk(sseData, true));
+            future.complete(XContentHttpChunk.last());
+        } catch (Exception ex) {
+            log.error("Failed to send error chunk", ex);
+            future.completeExceptionally(ex);
         }
     }
 
@@ -438,9 +460,10 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             Map<String, ?> dataMap = extractDataMap(response);
 
             if (dataMap.containsKey("error")) {
-                // Error response - handle errors
-                content = (String) dataMap.get("error");
-                isLast = true;
+                // Error response - return error chunk format
+                String errorContent = (String) dataMap.get("error");
+                String sseData = String.format("data: {\"error\": \"%s\"}\n\n", errorContent.replace("\"", "\\\"").replace("\n", "\\n"));
+                return createHttpChunk(sseData, true);
             } else {
                 // TODO: refactor to handle other types of agents
                 // Regular response - extract values and build proper structure
@@ -451,8 +474,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }
         } catch (Exception e) {
             log.error("Failed to process response", e);
-            content = "Processing failed";
-            isLast = true;
+            String sseData = "data: {\"error\": \"Processing failed\"}\n\n";
+            return createHttpChunk(sseData, true);
         }
 
         String finalContent = content;
