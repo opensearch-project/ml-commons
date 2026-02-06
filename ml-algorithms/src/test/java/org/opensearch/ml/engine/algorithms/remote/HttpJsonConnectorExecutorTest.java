@@ -18,7 +18,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
-import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.SKIP_SSL_VERIFICATION;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -41,7 +40,9 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
@@ -290,12 +291,13 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .url("http://openai.com/mock")
                 .requestBody("hello world")
                 .build();
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, true);
             Connector connector = HttpConnector
                 .builder()
                 .name("test connector")
                 .version("1")
                 .protocol("http")
-                .parameters(Map.of(SKIP_SSL_VERIFICATION, "true"))
+                .connectorClientConfig(clientConfig)
                 .actions(Arrays.asList(predictAction))
                 .build();
             SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
@@ -347,12 +349,13 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .url("http://openai.com/mock")
                 .requestBody("hello world")
                 .build();
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, false);
             Connector connector = HttpConnector
                 .builder()
                 .name("test connector")
                 .version("1")
                 .protocol("http")
-                .parameters(Map.of(SKIP_SSL_VERIFICATION, "false"))
+                .connectorClientConfig(clientConfig)
                 .actions(Arrays.asList(predictAction))
                 .build();
             SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
@@ -395,7 +398,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
-    public void invokeRemoteService_SkipSslVerification_InvalidInput() {
+    public void invokeRemoteService_SkipSslVerification_Null() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
             ConnectorAction predictAction = ConnectorAction
                 .builder()
@@ -404,12 +407,13 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .url("http://openai.com/mock")
                 .requestBody("hello world")
                 .build();
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null);
             Connector connector = HttpConnector
                 .builder()
                 .name("test connector")
                 .version("1")
                 .protocol("http")
-                .parameters(Map.of(SKIP_SSL_VERIFICATION, "abc"))
+                .connectorClientConfig(clientConfig)
                 .actions(Arrays.asList(predictAction))
                 .build();
             SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
@@ -446,8 +450,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             sslVerificationCaptor.capture()
                         )
                 );
-            // Assert that skipSslVerification was set to false when configure with an invalid string
-            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
+            // Assert that skipSslVerification defaults to false when null
+            assertFalse("SSL verification should be enabled when null", sslVerificationCaptor.getValue());
         }
     }
 
