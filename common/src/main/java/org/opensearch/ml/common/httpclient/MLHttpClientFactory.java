@@ -22,6 +22,30 @@ public class MLHttpClientFactory {
         Duration connectionTimeout,
         Duration readTimeout,
         int maxConnections,
+        boolean connectorPrivateIpEnabled
+    ) {
+        return doPrivileged(() -> {
+            log
+                .debug(
+                    "Creating MLHttpClient with connectionTimeout: {}, readTimeout: {}, maxConnections: {}",
+                    connectionTimeout,
+                    readTimeout,
+                    maxConnections
+                );
+            SdkAsyncHttpClient delegate = NettyNioAsyncHttpClient
+                .builder()
+                .connectionTimeout(connectionTimeout)
+                .readTimeout(readTimeout)
+                .maxConcurrency(maxConnections)
+                .build();
+            return new MLValidatableAsyncHttpClient(delegate, connectorPrivateIpEnabled);
+        });
+    }
+
+    public static SdkAsyncHttpClient getAsyncHttpClient(
+        Duration connectionTimeout,
+        Duration readTimeout,
+        int maxConnections,
         boolean connectorPrivateIpEnabled,
         boolean skipSslVerification
     ) {
