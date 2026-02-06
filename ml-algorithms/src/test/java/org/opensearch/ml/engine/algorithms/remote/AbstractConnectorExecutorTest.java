@@ -46,7 +46,7 @@ public class AbstractConnectorExecutorTest {
         executor.initialize(mockConnector);
         assertEquals(Integer.valueOf(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE), executor.getConnectorClientConfig().getMaxConnections());
         assertEquals(Integer.valueOf(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getConnectionTimeoutMillis());
-        assertEquals(Integer.valueOf(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getReadTimeoutMillis());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getReadTimeoutSeconds());
     }
 
     @Test
@@ -55,7 +55,7 @@ public class AbstractConnectorExecutorTest {
         executor.initialize(mockConnector);
         assertEquals(Integer.valueOf(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE), executor.getConnectorClientConfig().getMaxConnections());
         assertEquals(Integer.valueOf(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getConnectionTimeoutMillis());
-        assertEquals(Integer.valueOf(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getReadTimeoutMillis());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getReadTimeoutSeconds());
     }
 
     @Test

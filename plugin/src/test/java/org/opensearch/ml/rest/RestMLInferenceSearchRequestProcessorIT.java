@@ -52,7 +52,7 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
         + "\"\n"
         + "  },\n"
         + "\"client_config\": {\n"
-        + "    \"read_timeout\": 60000\n"
+        + "    \"read_timeout\": 60\n"
         + "  },\n"
         + "  \"actions\": [\n"
         + "      {\n"

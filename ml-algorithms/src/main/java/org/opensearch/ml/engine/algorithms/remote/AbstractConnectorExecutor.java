@@ -36,7 +36,7 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
 
     private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
-    private ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
+    private volatile ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
 
     public void initialize(Connector connector) {
         if (connector.getConnectorClientConfig() != null) {
@@ -63,24 +63,28 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
                         .orElse(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE)
                 );
             Duration readTimeout = Duration
-                .ofMillis(
+                .ofSeconds(
                     Optional
-                        .ofNullable(connectorClientConfig.getReadTimeoutMillis())
+                        .ofNullable(connectorClientConfig.getReadTimeoutSeconds())
                         .orElse(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE)
                 );
             int maxConnection = Optional
                 .ofNullable(connectorClientConfig.getMaxConnections())
                 .orElse(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE);
+            Boolean skipSslVerification = connectorClientConfig.getSkipSslVerification();
+            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
             log
                 .info(
-                    "{} creating HTTP client with maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    "{} creating HTTP client with maxConnections: {}, connectionTimeout: {}ms, readTimeout: {}s, connector private ip enabled: {}, skip SSL verification: {}",
                     this.getClass().getSimpleName(),
                     maxConnection,
                     this.getConnectorClientConfig().getConnectionTimeoutMillis(),
-                    this.getConnectorClientConfig().getReadTimeoutMillis()
+                    this.getConnectorClientConfig().getReadTimeoutSeconds(),
+                    connectorPrivateIpEnabled,
+                    skipSslVerificationValue
                 );
             SdkAsyncHttpClient newClient = MLHttpClientFactory
-                .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled);
+                .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled, skipSslVerificationValue);
             httpClientRef.set(newClient);
             return newClient;
         }

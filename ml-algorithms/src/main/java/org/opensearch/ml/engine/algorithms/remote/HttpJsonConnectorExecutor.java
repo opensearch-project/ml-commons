@@ -179,39 +179,4 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
     }
-
-    @VisibleForTesting
-    protected SdkAsyncHttpClient getHttpClient() {
-        if (httpClientRef.get() == null) {
-            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
-            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
-            if (skipSslVerificationValue) {
-                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
-            }
-            log
-                .info(
-                    "HttpJsonConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
-                    connector.getName(),
-                    maxConnection,
-                    super.getConnectorClientConfig().getConnectionTimeout(),
-                    super.getConnectorClientConfig().getReadTimeout()
-                );
-            this.httpClientRef
-                .compareAndSet(
-                    null,
-                    MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            connectionTimeout,
-                            readTimeout,
-                            maxConnection,
-                            connectorPrivateIpEnabled,
-                            skipSslVerificationValue
-                        )
-                );
-        }
-        return httpClientRef.get();
-    }
 }
