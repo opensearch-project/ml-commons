@@ -38,8 +38,9 @@ import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_R
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.EXECUTOR_RESPONSIBILITY;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_RESPONSIBILITY;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getCommonInstructionWithCustomInstruction;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getPlanExecuteReflectResponseFormat;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -115,8 +116,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private String plannerWithHistoryPromptTemplate;
 
     @VisibleForTesting
-    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = PLANNER_RESPONSIBILITY + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT
-        + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
+    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX + getCommonInstructionWithCustomInstruction("")
+        + getPlanExecuteReflectResponseFormat(null, null, null) + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 
     @VisibleForTesting
     static final String DEFAULT_EXECUTOR_SYSTEM_PROMPT = EXECUTOR_RESPONSIBILITY;
@@ -136,6 +137,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD = "plan_execute_reflect_response_format";
     public static final String PROMPT_TEMPLATE_FIELD = "prompt_template";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String CUSTOM_INSTRUCTION_EXPEND = "custom_instruction_expend";
+    public static final String RESULT_EXPEND_OVERRIDE = "result_expend_and_override";
+    public static final String IMPORTANT_RULES_EXPEND = "important_rules_expend";
+    public static final String TOPOLOGY_RULES = "topology_rules";
     public static final String QUESTION_FIELD = "question";
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String PARENT_INTERACTION_ID_FIELD = "parent_interaction_id";
@@ -194,7 +199,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void setupPromptParameters(Map<String, String> params) {
+    void setupPromptParameters(Map<String, String> params, boolean injectDate, String currentDateTime) {
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
@@ -202,15 +207,37 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String userPrompt = params.get(QUESTION_FIELD);
         params.put(USER_PROMPT_FIELD, userPrompt);
 
-        boolean injectDate = Boolean.parseBoolean(params.getOrDefault(INJECT_DATETIME_FIELD, "false"));
-        String dateFormat = params.get(DATETIME_FORMAT_FIELD);
-        String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
+        String clientBusinessPrompt = params.get(SYSTEM_PROMPT_FIELD);
+        String resultExpendOverride = params.get(RESULT_EXPEND_OVERRIDE);
+        String importantRulesExpend = params.get(IMPORTANT_RULES_EXPEND);
+        String topologyRules = params.get(TOPOLOGY_RULES);
+        String customInstructionExpend = params.get(CUSTOM_INSTRUCTION_EXPEND);
 
-        String plannerSystemPrompt = params.getOrDefault(SYSTEM_PROMPT_FIELD, DEFAULT_PLANNER_SYSTEM_PROMPT);
-        if (injectDate) {
-            plannerSystemPrompt = String.format("%s\n\n%s", plannerSystemPrompt, currentDateTime);
+        String finalPlannerPrompt;
+
+        if (clientBusinessPrompt == null || clientBusinessPrompt.trim().isEmpty()) {
+            if (resultExpendOverride == null || resultExpendOverride.trim().isEmpty()) {
+                // default ml-commons prompt
+                finalPlannerPrompt = DEFAULT_PLANNER_SYSTEM_PROMPT;
+            } else {
+                // investigation
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.append(DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX).append("\n");
+                stringBuilder.append(getCommonInstructionWithCustomInstruction(customInstructionExpend)).append("\n");
+                stringBuilder.append(getPlanExecuteReflectResponseFormat(resultExpendOverride, importantRulesExpend, topologyRules));
+
+                finalPlannerPrompt = stringBuilder.toString();
+            }
+        } else {
+            // re-investigation
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.append(getCommonInstructionWithCustomInstruction(customInstructionExpend)).append("\n\n");
+            stringBuilder.append(getPlanExecuteReflectResponseFormat(resultExpendOverride, importantRulesExpend, topologyRules));
+
+            finalPlannerPrompt = clientBusinessPrompt + "\n" + stringBuilder.toString();
         }
-        params.put(SYSTEM_PROMPT_FIELD, plannerSystemPrompt);
+
+        params.put(SYSTEM_PROMPT_FIELD, finalPlannerPrompt);
 
         String executorSystemPrompt = params.getOrDefault(EXECUTOR_SYSTEM_PROMPT_FIELD, DEFAULT_EXECUTOR_SYSTEM_PROMPT);
         if (injectDate) {
@@ -240,7 +267,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             this.plannerWithHistoryPromptTemplate = params.get(PLANNER_WITH_HISTORY_TEMPLATE_FIELD);
         }
 
-        params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT);
+        params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, getPlanExecuteReflectResponseFormat(null, null, null));
 
         params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
 
@@ -259,7 +286,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void usePlannerPromptTemplate(Map<String, String> params) {
+    void usePlannerPromptTemplate(Map<String, String> params, boolean injectDate, String currentDateTime) {
+        if (injectDate) {
+            this.plannerPromptTemplate = this.plannerPromptTemplate + "\n\n" + currentDateTime;
+        }
         params.put(PROMPT_TEMPLATE_FIELD, this.plannerPromptTemplate);
         populatePrompt(params);
     }
@@ -292,10 +322,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         allParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         log.debug("MLPlanExecuteAndReflectAgentRunner called with allParams: {}", allParams);
 
-        setupPromptParameters(allParams);
+        boolean injectDate = Boolean.parseBoolean(allParams.getOrDefault(INJECT_DATETIME_FIELD, "false"));
+        String dateFormat = allParams.get(DATETIME_FORMAT_FIELD);
+        String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
+
+        setupPromptParameters(allParams, injectDate, currentDateTime);
 
         // planner prompt for the first call
-        usePlannerPromptTemplate(allParams);
+        usePlannerPromptTemplate(allParams, injectDate, currentDateTime);
 
         if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
             List<String> completedSteps = new ArrayList<>();
