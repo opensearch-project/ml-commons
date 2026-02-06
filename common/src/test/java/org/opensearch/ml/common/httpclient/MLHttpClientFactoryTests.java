@@ -17,8 +17,10 @@ public class MLHttpClientFactoryTests {
 
     @Test
     public void test_getSdkAsyncHttpClient_success() {
-        SdkAsyncHttpClient client = MLHttpClientFactory.getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false);
+        SdkAsyncHttpClient client = MLHttpClientFactory
+            .getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false, false);
+        assertNotNull(client);
+        client = MLHttpClientFactory.getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false, true);
         assertNotNull(client);
     }
-
 }
