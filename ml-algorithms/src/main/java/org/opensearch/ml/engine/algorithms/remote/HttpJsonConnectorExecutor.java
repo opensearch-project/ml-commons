@@ -224,4 +224,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
         return httpClientRef.get();
     }
+
+    public void setAsyncHttpClient(SdkAsyncHttpClient client) {
+        if (this.httpClientRef.get() == null) {
+            this.httpClientRef.compareAndSet(null, client);
+        }
+    }
 }

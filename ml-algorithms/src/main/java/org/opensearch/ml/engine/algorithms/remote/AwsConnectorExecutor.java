@@ -237,7 +237,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
 
     public void setAsyncHttpClient(SdkAsyncHttpClient client) {
         if (this.httpClientRef.get() == null) {
-            this.httpClientRef.set(client);
+            this.httpClientRef.compareAndSet(null, client);
         }
     }
 }
