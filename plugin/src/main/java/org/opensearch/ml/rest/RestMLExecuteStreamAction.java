@@ -212,6 +212,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         ActionListener<MLAgent> agentListener = ActionListener.wrap(agent -> {
             if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
                 validateModel(client, agent.getLlm().getModelId(), request, mlExecuteTaskRequest, isAGUI, channel, future);
+            } else {
+                executeStreamingRequest(client, mlExecuteTaskRequest, isAGUI, channel, future);
             }
         }, e -> sendErrorChunk(channel, e, future));
 
@@ -460,10 +462,14 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             Map<String, ?> dataMap = extractDataMap(response);
 
             if (dataMap.containsKey("error")) {
-                // Error response - return error chunk format
-                String errorContent = (String) dataMap.get("error");
-                String sseData = String.format("data: {\"error\": \"%s\"}\n\n", errorContent.replace("\"", "\\\"").replace("\n", "\\n"));
-                return createHttpChunk(sseData, true);
+                Object errorObj = dataMap.get("error");
+                try (XContentBuilder errorBuilder = XContentFactory.jsonBuilder()) {
+                    errorBuilder.startObject();
+                    errorBuilder.field("error", errorObj);
+                    errorBuilder.endObject();
+                    String sseData = String.format("data: %s\n\n", errorBuilder);
+                    return createHttpChunk(sseData, true);
+                }
             } else {
                 // TODO: refactor to handle other types of agents
                 // Regular response - extract values and build proper structure

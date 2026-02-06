@@ -224,8 +224,7 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
             BytesRestResponse response = new BytesRestResponse(channel, status, (Exception) error);
             String sseData = String.format("data: %s\n\n", response.content().utf8ToString().replace("\n", "\\n"));
             HttpChunk errorChunk = createHttpChunk(sseData, true);
-            channel.sendChunk(errorChunk);
-            future.complete(XContentHttpChunk.last());
+            future.complete(errorChunk);
         } catch (Exception ex) {
             log.error("Failed to send error chunk", ex);
             future.completeExceptionally(ex);
