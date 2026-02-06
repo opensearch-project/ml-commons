@@ -6,8 +6,11 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -15,7 +18,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.SKIP_SSL_VERIFICATION;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +31,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.collect.Tuple;
@@ -39,16 +45,21 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
-public class HttpJsonConnectorExecutorTest {
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+
+public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -267,6 +278,177 @@ public class HttpJsonConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor
             .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
+    }
+
+    @Test
+    public void invokeRemoteService_SkipSslVerification_True() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            ConnectorAction predictAction = ConnectorAction
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://openai.com/mock")
+                .requestBody("hello world")
+                .build();
+            Connector connector = HttpConnector
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(Map.of(SKIP_SSL_VERIFICATION, "true"))
+                .actions(Arrays.asList(predictAction))
+                .build();
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setClient(client);
+            when(client.threadPool()).thenReturn(threadPool);
+            when(threadPool.getThreadContext()).thenReturn(threadContext);
+            executor
+                .invokeRemoteService(
+                    PREDICT.name(),
+                    createMLInput(),
+                    new HashMap<>(),
+                    "hello world",
+                    new ExecutionContext(0),
+                    actionListener
+                );
+            verify(actionListener, never()).onFailure(any());
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification was set to true
+            assertTrue("SSL verification should be disabled", sslVerificationCaptor.getValue());
+        }
+    }
+
+    @Test
+    public void invokeRemoteService_SkipSslVerification_False() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            ConnectorAction predictAction = ConnectorAction
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://openai.com/mock")
+                .requestBody("hello world")
+                .build();
+            Connector connector = HttpConnector
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(Map.of(SKIP_SSL_VERIFICATION, "false"))
+                .actions(Arrays.asList(predictAction))
+                .build();
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setClient(client);
+            when(client.threadPool()).thenReturn(threadPool);
+            when(threadPool.getThreadContext()).thenReturn(threadContext);
+            executor
+                .invokeRemoteService(
+                    PREDICT.name(),
+                    createMLInput(),
+                    new HashMap<>(),
+                    "hello world",
+                    new ExecutionContext(0),
+                    actionListener
+                );
+            verify(actionListener, never()).onFailure(any());
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification was set to false
+            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
+        }
+    }
+
+    @Test
+    public void invokeRemoteService_SkipSslVerification_InvalidInput() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            ConnectorAction predictAction = ConnectorAction
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://openai.com/mock")
+                .requestBody("hello world")
+                .build();
+            Connector connector = HttpConnector
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(Map.of(SKIP_SSL_VERIFICATION, "abc"))
+                .actions(Arrays.asList(predictAction))
+                .build();
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setClient(client);
+            when(client.threadPool()).thenReturn(threadPool);
+            when(threadPool.getThreadContext()).thenReturn(threadContext);
+            executor
+                .invokeRemoteService(
+                    PREDICT.name(),
+                    createMLInput(),
+                    new HashMap<>(),
+                    "hello world",
+                    new ExecutionContext(0),
+                    actionListener
+                );
+            verify(actionListener, never()).onFailure(any());
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification was set to false when configure with an invalid string
+            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
+        }
     }
 
     @Test
