@@ -26,6 +26,7 @@ import org.opensearch.ml.common.input.execute.agent.DocumentContent;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
+import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
 
 public class BedrockConverseModelProviderTest {
@@ -840,5 +841,163 @@ public class BedrockConverseModelProviderTest {
 
         // Act
         provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+    }
+
+    @Test
+    public void testMapMessages_WithAssistantToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // User message
+        List<ContentBlock> userContent = new ArrayList<>();
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What's the weather?");
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        // Assistant message with tool calls
+        List<ContentBlock> assistantContent = new ArrayList<>();
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("Let me check the weather");
+        assistantContent.add(assistantBlock);
+
+        Message assistantMsg = new Message("assistant", assistantContent);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"NYC\"}");
+        ToolCall toolCall = new ToolCall("call-123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Act
+        Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.containsKey("body"));
+        String body = result.get("body");
+        assertTrue(body.contains("toolUse"));
+        assertTrue(body.contains("call-123"));
+        assertTrue(body.contains("get_weather"));
+    }
+
+    @Test
+    public void testMapMessages_WithToolResultMessages() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // User message
+        List<ContentBlock> userContent = new ArrayList<>();
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What's the weather?");
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        // Tool result message
+        List<ContentBlock> toolContent = new ArrayList<>();
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("72F and sunny");
+        toolContent.add(toolBlock);
+
+        Message toolMsg = new Message("tool", toolContent);
+        toolMsg.setToolCallId("call-123");
+        messages.add(toolMsg);
+
+        // Act
+        Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.containsKey("body"));
+        String body = result.get("body");
+        assertTrue(body.contains("toolResult"));
+        assertTrue(body.contains("call-123"));
+        assertTrue(body.contains("72F and sunny"));
+        // Tool role should be converted to user
+        assertTrue(body.contains("\"role\":\"user\""));
+    }
+
+    @Test
+    public void testMapMessages_WithMultipleConsecutiveToolResults() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // User message
+        List<ContentBlock> userContent = new ArrayList<>();
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("Get weather and time");
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        // First tool result
+        List<ContentBlock> tool1Content = new ArrayList<>();
+        ContentBlock tool1Block = new ContentBlock();
+        tool1Block.setType(ContentType.TEXT);
+        tool1Block.setText("72F and sunny");
+        tool1Content.add(tool1Block);
+        Message toolMsg1 = new Message("tool", tool1Content);
+        toolMsg1.setToolCallId("call-1");
+        messages.add(toolMsg1);
+
+        // Second tool result
+        List<ContentBlock> tool2Content = new ArrayList<>();
+        ContentBlock tool2Block = new ContentBlock();
+        tool2Block.setType(ContentType.TEXT);
+        tool2Block.setText("3:00 PM");
+        tool2Content.add(tool2Block);
+        Message toolMsg2 = new Message("tool", tool2Content);
+        toolMsg2.setToolCallId("call-2");
+        messages.add(toolMsg2);
+
+        // Act
+        Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.containsKey("body"));
+        String body = result.get("body");
+        // Both tool results should be in the same user message
+        assertTrue(body.contains("call-1"));
+        assertTrue(body.contains("call-2"));
+        assertTrue(body.contains("72F and sunny"));
+        assertTrue(body.contains("3:00 PM"));
+    }
+
+    @Test
+    public void testMapMessages_WithAssistantToolCallsAndContent() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // Assistant message with both content and tool calls
+        List<ContentBlock> assistantContent = new ArrayList<>();
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("I'll check that for you");
+        assistantContent.add(assistantBlock);
+
+        Message assistantMsg = new Message("assistant", assistantContent);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("search", "{}");
+        ToolCall toolCall = new ToolCall("call-456", "function", function);
+        toolCalls.add(toolCall);
+        assistantMsg.setToolCalls(toolCalls);
+        messages.add(assistantMsg);
+
+        // Act
+        Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.containsKey("body"));
+        String body = result.get("body");
+        // Should contain both text content and toolUse
+        assertTrue(body.contains("I'll check that for you"));
+        assertTrue(body.contains("toolUse"));
+        assertTrue(body.contains("search"));
     }
 }
