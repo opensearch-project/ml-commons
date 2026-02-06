@@ -54,7 +54,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         MLIndexInsightType.STATISTICAL_DATA,
         MLIndexInsightType.FIELD_DESCRIPTION,
         MLIndexInsightType.LOG_RELATED_INDEX_CHECK,
-        MLIndexInsightType.INDEX_CORRELATION};
+        MLIndexInsightType.INDEX_CORRELATION };
 
     private final Client client;
     private final SdkClient sdkClient;

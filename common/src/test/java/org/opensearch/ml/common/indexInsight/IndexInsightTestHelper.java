@@ -45,6 +45,7 @@ import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -177,15 +178,21 @@ public class IndexInsightTestHelper {
      */
     public static void mockCorrelationMissAndPatternCacheHit(SdkClient sdkClient, String pattern, String type, long ageMillis) {
         long lastUpdateTime = Instant.now().toEpochMilli() - ageMillis;
-        Map<String, Object> cacheContent = Map.of(
-            STATUS_FIELD, "COMPLETED",
-            LAST_UPDATE_FIELD, lastUpdateTime,
-            CONTENT_FIELD, String.format(
-                "{\"pattern\":\"%s\",\"sample_indices\":[],\"type\":\"%s\"," +
-                "\"time_field\":\"time\",\"trace_id_field\":\"traceId\",\"span_id_field\":\"spanId\"}",
-                pattern, type
-            )
-        );
+        Map<String, Object> cacheContent = Map
+            .of(
+                STATUS_FIELD,
+                "COMPLETED",
+                LAST_UPDATE_FIELD,
+                lastUpdateTime,
+                CONTENT_FIELD,
+                String
+                    .format(
+                        "{\"pattern\":\"%s\",\"sample_indices\":[],\"type\":\"%s\","
+                            + "\"time_field\":\"time\",\"trace_id_field\":\"traceId\",\"span_id_field\":\"spanId\"}",
+                        pattern,
+                        type
+                    )
+            );
 
         doAnswer(invocation -> {
             GetDataObjectRequest request = invocation.getArgument(0);
@@ -233,15 +240,21 @@ public class IndexInsightTestHelper {
         when(getResponse.isExists()).thenReturn(true);
 
         long lastUpdateTime = Instant.now().toEpochMilli() - ageMillis;
-        Map<String, Object> cacheContent = Map.of(
-            STATUS_FIELD, "COMPLETED",
-            LAST_UPDATE_FIELD, lastUpdateTime,
-            CONTENT_FIELD, String.format(
-                "{\"pattern\":\"%s\",\"sample_indices\":[],\"type\":\"%s\"," +
-                "\"time_field\":\"time\",\"trace_id_field\":\"traceId\",\"span_id_field\":\"spanId\"}",
-                pattern, type
-            )
-        );
+        Map<String, Object> cacheContent = Map
+            .of(
+                STATUS_FIELD,
+                "COMPLETED",
+                LAST_UPDATE_FIELD,
+                lastUpdateTime,
+                CONTENT_FIELD,
+                String
+                    .format(
+                        "{\"pattern\":\"%s\",\"sample_indices\":[],\"type\":\"%s\","
+                            + "\"time_field\":\"time\",\"trace_id_field\":\"traceId\",\"span_id_field\":\"spanId\"}",
+                        pattern,
+                        type
+                    )
+            );
 
         when(getResponse.getSourceAsMap()).thenReturn(cacheContent);
 

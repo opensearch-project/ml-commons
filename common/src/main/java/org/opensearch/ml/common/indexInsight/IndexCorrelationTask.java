@@ -5,37 +5,31 @@
 
 package org.opensearch.ml.common.indexInsight;
 
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_STORAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.PATTERN_TYPE_CACHE_EXPIRATION;
 import static org.opensearch.ml.common.utils.StringUtils.MAPPER;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.admin.cluster.state.ClusterStateRequest;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -55,41 +49,40 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class IndexCorrelationTask extends AbstractIndexInsightTask {
 
-    private static final String LLM_TYPE_DETECTION_TEMPLATE =
-        """
-            I will provide you with an index pattern, sample index names, mapping fields, and actual sample documents.
+    private static final String LLM_TYPE_DETECTION_TEMPLATE = """
+        I will provide you with an index pattern, sample index names, mapping fields, and actual sample documents.
 
-            Index Pattern: {pattern}
-            Sample Indices: {sampleIndices}
-            Sample Mapping Fields: {sampleFields}
+        Index Pattern: {pattern}
+        Sample Indices: {sampleIndices}
+        Sample Mapping Fields: {sampleFields}
 
-            Sample Documents (up to 5):
-            {sampleDocuments}
+        Sample Documents (up to 5):
+        {sampleDocuments}
 
-            Please determine if this index pattern represents LOG, TRACE, or METRIC data based on:
-            1. Index naming conventions (e.g., "logs-", "jaeger-span-", "metrics-")
-            2. Field names in the mapping (e.g., "spanId", "traceId", "severity", "message")
-            3. Actual document content and structure from the sample documents
-            4. Common observability patterns (OpenTelemetry, Jaeger, Prometheus, etc.)
+        Please determine if this index pattern represents LOG, TRACE, or METRIC data based on:
+        1. Index naming conventions (e.g., "logs-", "jaeger-span-", "metrics-")
+        2. Field names in the mapping (e.g., "spanId", "traceId", "severity", "message")
+        3. Actual document content and structure from the sample documents
+        4. Common observability patterns (OpenTelemetry, Jaeger, Prometheus, etc.)
 
-            Return your analysis in the following JSON format inside tags:
+        Return your analysis in the following JSON format inside tags:
 
-            <index_type_analysis>
-            {
-              "type": "LOG" | "TRACE" | "METRIC" | "UNKNOWN",
-              "confidence": "high" | "medium" | "low",
-              "reasoning": "brief explanation",
-              "time_field": "name of the time field or null",
-              "trace_id_field": "name of trace ID field or null (for TRACE/LOG)",
-              "span_id_field": "name of span ID field or null (for TRACE/LOG)"
-            }
-            </index_type_analysis>
+        <index_type_analysis>
+        {
+          "type": "LOG" | "TRACE" | "METRIC" | "UNKNOWN",
+          "confidence": "high" | "medium" | "low",
+          "reasoning": "brief explanation",
+          "time_field": "name of the time field or null",
+          "trace_id_field": "name of trace ID field or null (for TRACE/LOG)",
+          "span_id_field": "name of span ID field or null (for TRACE/LOG)"
+        }
+        </index_type_analysis>
 
-            Rules:
-            - If you cannot confidently determine the type, use "UNKNOWN"
-            - time_field should be the primary timestamp field
-            - trace_id_field and span_id_field are only relevant for TRACE and LOG types
-            """;
+        Rules:
+        - If you cannot confidently determine the type, use "UNKNOWN"
+        - time_field should be the primary timestamp field
+        - trace_id_field and span_id_field are only relevant for TRACE and LOG types
+        """;
 
     private List<String> allIndices;
     private Map<String, PatternInfo> detectedPatterns;
@@ -180,7 +173,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         }
 
         // Threshold for considering indices as same pattern (70% overlap)
-        final double OVERLAP_THRESHOLD = 0.7;
+        final double OVERLAP_THRESHOLD = 0.8;
 
         List<IndexGroup> groups = new ArrayList<>();
 
@@ -221,18 +214,50 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
      * LCS captures the similarity between strings even when differences are in the middle,
      * making it more robust than simple prefix/suffix matching.
      */
-    private double calculateOverlap(String index1, String index2) {
-        if (index1.equals(index2)) {
-            return 1.0;
+    private double calculateOverlap(String s1, String s2) {
+        if (s1 == null || s2 == null)
+            return 0.0;
+
+        int n1 = s1.length();
+        int n2 = s2.length();
+        int minLen = Math.min(n1, n2);
+        if (minLen == 0)
+            return 0.0;
+
+        int prefix = commonPrefixLen(s1, s2);
+
+        // Ensure no overlap: suffixLen <= minLen - prefix
+        int maxSuffixAllowed = Math.max(0, minLen - prefix);
+        int suffix = commonSuffixLenWithCap(s1, s2, maxSuffixAllowed);
+
+        return (prefix + suffix) / (double) minLen;
+    }
+
+    // Longest common prefix length
+    private static int commonPrefixLen(String a, String b) {
+        int n = Math.min(a.length(), b.length());
+        int i = 0;
+        while (i < n && a.charAt(i) == b.charAt(i)) {
+            i++;
         }
+        return i;
+    }
 
-        // Calculate LCS length
-        int lcsLength = longestCommonSubsequence(index1, index2);
+    /**
+     * Longest common suffix length, but capped so that prefix+suffix won't overlap.
+     * cap is max suffix length allowed.
+     */
+    private static int commonSuffixLenWithCap(String a, String b, int cap) {
+        int i = a.length() - 1;
+        int j = b.length() - 1;
+        int matched = 0;
 
-        // Calculate overlap ratio based on LCS
-        int maxLen = Math.max(index1.length(), index2.length());
-
-        return (double) lcsLength / maxLen;
+        while (matched < cap && i >= 0 && j >= 0 && a.charAt(i) == b.charAt(j)) {
+            matched++;
+            i--;
+            j--;
+        }
+        return matched;
     }
 
     /**
@@ -400,38 +425,30 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             String pattern = entry.getKey();
             List<String> sampleIndices = entry.getValue();
 
-            detectSinglePattern(pattern, sampleIndices, tenantId, ActionListener.wrap(
-                patternInfo -> {
-                    if (patternInfo != null) {
-                        result.put(pattern, patternInfo);
-                    }
-
-                    // Check if all patterns are processed
-                    if (pendingCount.decrementAndGet() == 0) {
-                        listener.onResponse(result);
-                    }
-                },
-                e -> {
-                    log.error("Failed to detect type for pattern: {}", pattern, e);
-
-                    // Continue even if this pattern fails
-                    if (pendingCount.decrementAndGet() == 0) {
-                        listener.onResponse(result);
-                    }
+            detectSinglePattern(pattern, sampleIndices, tenantId, ActionListener.wrap(patternInfo -> {
+                if (patternInfo != null) {
+                    result.put(pattern, patternInfo);
                 }
-            ));
+
+                // Check if all patterns are processed
+                if (pendingCount.decrementAndGet() == 0) {
+                    listener.onResponse(result);
+                }
+            }, e -> {
+                log.error("Failed to detect type for pattern: {}", pattern, e);
+
+                // Continue even if this pattern fails
+                if (pendingCount.decrementAndGet() == 0) {
+                    listener.onResponse(result);
+                }
+            }));
         }
     }
 
     /**
      * Detect a single pattern's type with caching (used in parallel execution)
      */
-    private void detectSinglePattern(
-        String pattern,
-        List<String> sampleIndices,
-        String tenantId,
-        ActionListener<PatternInfo> listener
-    ) {
+    private void detectSinglePattern(String pattern, List<String> sampleIndices, String tenantId, ActionListener<PatternInfo> listener) {
 
         // Step 1: Check cache first
         getPatternFromCache(pattern, tenantId, ActionListener.wrap(cachedPatternInfo -> {
@@ -457,10 +474,15 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                     // Use LLM to detect type
                     detectPatternType(pattern, sampleIndices, fields, sampleDocs, tenantId, ActionListener.wrap(patternInfo -> {
                         // Step 3: Save to cache (fire and forget)
-                        savePatternToCache(patternInfo, tenantId, ActionListener.wrap(
-                            success -> {}, // Ignore success
-                            e -> log.warn("Cache save failed for pattern: {}", pattern, e)
-                        ));
+                        savePatternToCache(
+                            patternInfo,
+                            tenantId,
+                            ActionListener
+                                .wrap(
+                                    success -> {}, // Ignore success
+                                    e -> log.warn("Cache save failed for pattern: {}", pattern, e)
+                                )
+                        );
 
                         listener.onResponse(patternInfo);
 
@@ -472,16 +494,24 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                 }, e -> {
                     log.warn("Failed to get sample documents for index: {}, proceeding with empty list", sampleIndex, e);
                     // Proceed with empty sample documents list
-                    detectPatternType(pattern, sampleIndices, fields, Collections.emptyList(), tenantId, ActionListener.wrap(patternInfo -> {
-                        savePatternToCache(patternInfo, tenantId, ActionListener.wrap(
-                            success -> {},
-                            e2 -> log.warn("Cache save failed for pattern: {}", pattern, e2)
-                        ));
-                        listener.onResponse(patternInfo);
-                    }, e2 -> {
-                        log.error("Failed to detect type for pattern: {}", pattern, e2);
-                        listener.onFailure(e2);
-                    }));
+                    detectPatternType(
+                        pattern,
+                        sampleIndices,
+                        fields,
+                        Collections.emptyList(),
+                        tenantId,
+                        ActionListener.wrap(patternInfo -> {
+                            savePatternToCache(
+                                patternInfo,
+                                tenantId,
+                                ActionListener.wrap(success -> {}, e2 -> log.warn("Cache save failed for pattern: {}", pattern, e2))
+                            );
+                            listener.onResponse(patternInfo);
+                        }, e2 -> {
+                            log.error("Failed to detect type for pattern: {}", pattern, e2);
+                            listener.onFailure(e2);
+                        })
+                    );
                 }));
 
             }, e -> {
@@ -503,12 +533,19 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                     }));
                 }, e2 -> {
                     log.warn("Failed to get sample documents for index: {}, proceeding with empty list", sampleIndex, e2);
-                    detectPatternType(pattern, sampleIndices, fields, Collections.emptyList(), tenantId, ActionListener.wrap(patternInfo -> {
-                        listener.onResponse(patternInfo);
-                    }, e3 -> {
-                        log.error("Failed to detect type for pattern: {}", pattern, e3);
-                        listener.onFailure(e3);
-                    }));
+                    detectPatternType(
+                        pattern,
+                        sampleIndices,
+                        fields,
+                        Collections.emptyList(),
+                        tenantId,
+                        ActionListener.wrap(patternInfo -> {
+                            listener.onResponse(patternInfo);
+                        }, e3 -> {
+                            log.error("Failed to detect type for pattern: {}", pattern, e3);
+                            listener.onFailure(e3);
+                        })
+                    );
                 }));
             }, e2 -> {
                 log.error("Failed to get mapping for index: {}", sampleIndex, e2);
@@ -548,9 +585,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
      * Returns up to 5 sample documents
      */
     private void getSampleDocuments(String indexName, ActionListener<List<Map<String, Object>>> listener) {
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-            .query(QueryBuilders.matchAllQuery())
-            .size(5);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()).size(5);
 
         SearchRequest searchRequest = new SearchRequest(indexName).source(searchSourceBuilder);
 
@@ -656,11 +691,10 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
      */
     private PatternInfo parseTypeDetectionResponse(String response, String pattern, List<String> indices) {
         try {
-            String json = response.split("<index_type_analysis>", 2)[1]
-                .split("</index_type_analysis>", 2)[0]
-                .trim();
+            String json = response.split("<index_type_analysis>", 2)[1].split("</index_type_analysis>", 2)[0].trim();
 
-            Map<String, Object> analysis = MAPPER.readValue(json, new TypeReference<>() {});
+            Map<String, Object> analysis = MAPPER.readValue(json, new TypeReference<>() {
+            });
 
             String type = (String) analysis.get("type");
             String timeField = (String) analysis.get("time_field");
@@ -708,38 +742,35 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                 otherTypes[1],
                 secondTypePatterns,
                 tenantId,
-                ActionListener.wrap(
-                    tuple -> {
-                        result.put("source_index", sourceIndex);
-                        result.put("source_pattern", sourcePatternInfo.pattern);
-                        result.put("source_type", sourceType);
-                        result.put("total_indices_scanned", allIndices.size());
-                        result.put("total_patterns_detected", detectedPatterns.size());
-                        result.put("correlation_tuple", tuple);
-                        result.put("all_patterns", buildAllPatternsInfo());
-                        listener.onResponse(result);
-                    },
-                    e -> {
-                        log.warn("Failed to use LLM for pattern matching, falling back to simple selection", e);
-                        // Fallback to simple selection (first pattern of each type)
-                        Map<String, Object> tuple = buildCorrelationTupleFromSource(
-                            sourcePatternInfo,
-                            sourceType,
-                            firstTypePatterns.isEmpty() ? null : firstTypePatterns.get(0),
-                            otherTypes[0],
-                            secondTypePatterns.isEmpty() ? null : secondTypePatterns.get(0),
-                            otherTypes[1]
-                        );
-                        result.put("source_index", sourceIndex);
-                        result.put("source_pattern", sourcePatternInfo.pattern);
-                        result.put("source_type", sourceType);
-                        result.put("total_indices_scanned", allIndices.size());
-                        result.put("total_patterns_detected", detectedPatterns.size());
-                        result.put("correlation_tuple", tuple);
-                        result.put("all_patterns", buildAllPatternsInfo());
-                        listener.onResponse(result);
-                    }
-                )
+                ActionListener.wrap(tuple -> {
+                    result.put("source_index", sourceIndex);
+                    result.put("source_pattern", sourcePatternInfo.pattern);
+                    result.put("source_type", sourceType);
+                    result.put("total_indices_scanned", allIndices.size());
+                    result.put("total_patterns_detected", detectedPatterns.size());
+                    result.put("correlation_tuple", tuple);
+                    result.put("all_patterns", buildAllPatternsInfo());
+                    listener.onResponse(result);
+                }, e -> {
+                    log.warn("Failed to use LLM for pattern matching, falling back to simple selection", e);
+                    // Fallback to simple selection (first pattern of each type)
+                    Map<String, Object> tuple = buildCorrelationTupleFromSource(
+                        sourcePatternInfo,
+                        sourceType,
+                        firstTypePatterns.isEmpty() ? null : firstTypePatterns.get(0),
+                        otherTypes[0],
+                        secondTypePatterns.isEmpty() ? null : secondTypePatterns.get(0),
+                        otherTypes[1]
+                    );
+                    result.put("source_index", sourceIndex);
+                    result.put("source_pattern", sourcePatternInfo.pattern);
+                    result.put("source_type", sourceType);
+                    result.put("total_indices_scanned", allIndices.size());
+                    result.put("total_patterns_detected", detectedPatterns.size());
+                    result.put("correlation_tuple", tuple);
+                    result.put("all_patterns", buildAllPatternsInfo());
+                    listener.onResponse(result);
+                })
             );
         } else {
             // Simple case: 0 or 1 pattern per type, no need for LLM
@@ -780,13 +811,13 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     private String[] getOtherTypes(String sourceType) {
         switch (sourceType) {
             case "LOG":
-                return new String[]{"TRACE", "METRIC"};
+                return new String[] { "TRACE", "METRIC" };
             case "TRACE":
-                return new String[]{"LOG", "METRIC"};
+                return new String[] { "LOG", "METRIC" };
             case "METRIC":
-                return new String[]{"LOG", "TRACE"};
+                return new String[] { "LOG", "TRACE" };
             default:
-                return new String[]{"LOG", "TRACE"};
+                return new String[] { "LOG", "TRACE" };
         }
     }
 
@@ -932,7 +963,12 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an expert in analyzing OpenSearch observability data.\n\n");
         prompt.append("I have a source index: ").append(sourceIndex).append("\n");
-        prompt.append("This index belongs to pattern: ").append(sourcePattern.pattern).append(" (type: ").append(sourcePattern.type).append(")\n\n");
+        prompt
+            .append("This index belongs to pattern: ")
+            .append(sourcePattern.pattern)
+            .append(" (type: ")
+            .append(sourcePattern.type)
+            .append(")\n\n");
 
         prompt.append("Pattern details:\n");
         prompt.append("- Time field: ").append(sourcePattern.timeField).append("\n");
@@ -1020,7 +1056,8 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             }
 
             // Parse JSON
-            Map<String, Object> selection = MAPPER.readValue(jsonStr, new TypeReference<>() {});
+            Map<String, Object> selection = MAPPER.readValue(jsonStr, new TypeReference<>() {
+            });
 
             String selectedFirstPattern = (String) selection.get("selected_" + firstType.toLowerCase() + "_pattern");
             String selectedSecondPattern = (String) selection.get("selected_" + secondType.toLowerCase() + "_pattern");
@@ -1078,29 +1115,21 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         if (patternStr == null || "null".equals(patternStr)) {
             return null;
         }
-        return patterns.stream()
-            .filter(p -> p.pattern.equals(patternStr))
-            .findFirst()
-            .orElse(null);
+        return patterns.stream().filter(p -> p.pattern.equals(patternStr)).findFirst().orElse(null);
     }
 
     /**
      * Find all patterns by type (used for intelligent matching)
      */
     private List<PatternInfo> findPatternsByType(String type) {
-        return detectedPatterns.values().stream()
-            .filter(p -> type.equals(p.type))
-            .collect(java.util.stream.Collectors.toList());
+        return detectedPatterns.values().stream().filter(p -> type.equals(p.type)).collect(java.util.stream.Collectors.toList());
     }
 
     /**
      * Find pattern by type (returns first match)
      */
     private PatternInfo findPatternByType(String type) {
-        return detectedPatterns.values().stream()
-            .filter(p -> type.equals(p.type))
-            .findFirst()
-            .orElse(null);
+        return detectedPatterns.values().stream().filter(p -> type.equals(p.type)).findFirst().orElse(null);
     }
 
     /**
@@ -1143,7 +1172,8 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             // Parse cached PatternInfo
             try {
                 String content = (String) source.get(IndexInsight.CONTENT_FIELD);
-                Map<String, Object> cachedData = MAPPER.readValue(content, new TypeReference<>() {});
+                Map<String, Object> cachedData = MAPPER.readValue(content, new TypeReference<>() {
+                });
 
                 String cachedPattern = (String) cachedData.get("pattern");
                 List<String> sampleIndices = (List<String>) cachedData.get("sample_indices");
@@ -1176,7 +1206,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Save pattern detection result to cache
      */
-    private void savePatternToCache (PatternInfo patternInfo, String tenantId, ActionListener<Boolean> listener) {
+    private void savePatternToCache(PatternInfo patternInfo, String tenantId, ActionListener<Boolean> listener) {
         try {
             Map<String, Object> cacheData = new HashMap<>();
             cacheData.put("pattern", patternInfo.pattern);
@@ -1189,7 +1219,8 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             String content = MAPPER.writeValueAsString(cacheData);
             String docId = generatePatternCacheDocId(patternInfo.pattern);
 
-            IndexInsight cacheInsight = IndexInsight.builder()
+            IndexInsight cacheInsight = IndexInsight
+                .builder()
                 .index(patternInfo.pattern)
                 .taskType(MLIndexInsightType.PATTERN_TYPE_CACHE)
                 .content(content)
