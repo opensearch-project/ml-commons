@@ -17,7 +17,7 @@ import lombok.Data;
 public class GeminiMessage implements LLMMessage {
 
     private String role;
-    private List<Object> parts = new ArrayList<>();
+    private List<Object> content;
 
     GeminiMessage() {
         this("user");
@@ -27,18 +27,15 @@ public class GeminiMessage implements LLMMessage {
         this(role, null);
     }
 
-    GeminiMessage(String role, List<Object> parts) {
-        this.role = role;
-        if (parts != null) {
-            this.parts = parts;
-        }
-    }
-
-    public Object getContent() {
-        return parts;
+    GeminiMessage(String role, List<Object> content) {
+        this.role = role != null ? role : "user";
+        this.content = content != null ? new ArrayList<>(content) : new ArrayList<>();
     }
 
     public String getResponse() {
-        return StringUtils.toJson(Map.of("role", role, "parts", parts));
+        String roleToUse = role != null ? role : "user";
+        List<Object> contentToUse = content != null ? content : new ArrayList<>();
+        // Gemini API uses "parts" in JSON structure, not "content"
+        return StringUtils.toJson(Map.of("role", roleToUse, "parts", contentToUse));
     }
 }

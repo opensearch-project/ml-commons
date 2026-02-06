@@ -252,6 +252,7 @@ public final class MLCommonsSettings {
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
                     "^https://api\\.deepseek\\.com/.*$",
+                    "^https://generativelanguage\\.googleapis\\.com/.*$",
                     "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
@@ -487,6 +488,18 @@ public final class MLCommonsSettings {
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agentic_memory_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE =
         "The Agentic Memory APIs are not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
+
+    // Feature flag for Remote Agentic Memory
+    public static final Setting<Boolean> ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "remote_agentic_memory_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE =
+        "The remote agentic memory feature is not enabled. To enable, please update the setting "
+            + ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.getKey();
 
     // Feature flag for global tenant id in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting

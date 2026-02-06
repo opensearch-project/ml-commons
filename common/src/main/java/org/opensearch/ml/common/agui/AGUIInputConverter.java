@@ -39,6 +39,7 @@ import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
+import org.opensearch.ml.common.input.execute.agent.ToolCall;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -137,6 +138,11 @@ public class AGUIInputConverter {
                 JsonArray messagesArray = messages.getAsJsonArray();
                 List<Message> agentMessages = convertAGUIMessages(messagesArray);
 
+                // Append context to the latest user message if context is provided
+                if (context != null && context.isJsonArray()) {
+                    appendContextToLatestUserMessage(agentMessages, context.getAsJsonArray());
+                }
+
                 // Create AgentInput from converted messages
                 AgentInput agentInput = new AgentInput(agentMessages);
                 agentMLInput.setAgentInput(agentInput);
@@ -153,39 +159,80 @@ public class AGUIInputConverter {
 
     /**
      * Converts AG-UI messages to standard Message format.
+     * Preserves tool-related data in Message objects for proper handling by ModelProviders.
      */
     private static List<Message> convertAGUIMessages(JsonArray aguiMessages) {
         List<Message> messages = new ArrayList<>();
 
         for (JsonElement msgElement : aguiMessages) {
-
-            JsonObject aguiMsg = msgElement.getAsJsonObject();
-
-            String role = aguiMsg.get(AGUI_FIELD_ROLE).getAsString();
-
-            // Skip tool role messages
-            if ("tool".equalsIgnoreCase(role)) {
+            if (!msgElement.isJsonObject()) {
                 continue;
             }
 
-            // Skip assistant messages with only toolCalls and no content
-            if ("assistant".equalsIgnoreCase(role) && aguiMsg.has(AGUI_FIELD_TOOL_CALLS)) {
-                JsonElement contentElement = aguiMsg.get(AGUI_FIELD_CONTENT);
-                boolean hasContent = contentElement != null
-                    && !contentElement.isJsonNull()
-                    && (!contentElement.isJsonPrimitive() || !contentElement.getAsString().isEmpty());
+            JsonObject aguiMsg = msgElement.getAsJsonObject();
+            String role = getStringField(aguiMsg, AGUI_FIELD_ROLE);
 
-                if (!hasContent) {
-                    continue;
+            if (role == null) {
+                continue;
+            }
+
+            // Parse content blocks
+            List<ContentBlock> contentBlocks = parseContent(aguiMsg.get(AGUI_FIELD_CONTENT));
+
+            // Create message with role and content
+            Message message = new Message(role, contentBlocks);
+
+            // Preserve tool calls for assistant messages
+            if ("assistant".equalsIgnoreCase(role) && aguiMsg.has(AGUI_FIELD_TOOL_CALLS)) {
+                JsonElement toolCallsElement = aguiMsg.get(AGUI_FIELD_TOOL_CALLS);
+                if (toolCallsElement.isJsonArray()) {
+                    List<ToolCall> toolCalls = parseToolCalls(toolCallsElement.getAsJsonArray());
+                    message.setToolCalls(toolCalls);
                 }
             }
 
-            List<ContentBlock> contentBlocks = parseContent(aguiMsg.get(AGUI_FIELD_CONTENT));
-            Message message = new Message(role, contentBlocks);
+            // Preserve tool call ID for tool result messages
+            if ("tool".equalsIgnoreCase(role) && aguiMsg.has(AGUI_FIELD_TOOL_CALL_ID)) {
+                String toolCallId = getStringField(aguiMsg, AGUI_FIELD_TOOL_CALL_ID);
+                message.setToolCallId(toolCallId);
+            }
+
             messages.add(message);
         }
 
         return messages;
+    }
+
+    /**
+     * Parses AG-UI tool calls array into ToolCall objects.
+     */
+    private static List<ToolCall> parseToolCalls(JsonArray toolCallsArray) {
+        List<ToolCall> toolCalls = new ArrayList<>();
+
+        for (JsonElement toolCallElement : toolCallsArray) {
+            if (!toolCallElement.isJsonObject()) {
+                continue;
+            }
+
+            JsonObject toolCallObj = toolCallElement.getAsJsonObject();
+            String id = getStringField(toolCallObj, "id");
+            String type = getStringField(toolCallObj, "type");
+            JsonElement functionElement = toolCallObj.get("function");
+
+            if (id != null && functionElement != null && functionElement.isJsonObject()) {
+                JsonObject functionObj = functionElement.getAsJsonObject();
+                String name = getStringField(functionObj, "name");
+                String arguments = getStringField(functionObj, "arguments");
+
+                if (name != null && arguments != null) {
+                    ToolCall.ToolFunction function = new ToolCall.ToolFunction(name, arguments);
+                    ToolCall toolCall = new ToolCall(id, type, function);
+                    toolCalls.add(toolCall);
+                }
+            }
+        }
+
+        return toolCalls;
     }
 
     /**
@@ -286,56 +333,73 @@ public class AGUIInputConverter {
     }
 
     /**
-     * Extracts tool calls JSON from ALL assistant messages with tool calls.
-     * Returns list of JSON strings (one per assistant message with tool calls).
-     * Used by MLAGUIAgentRunner to format via FunctionCalling.
+     * Appends context to the latest user message in the messages list.
+     * Context is prepended to the last text content block of the latest user message.
+     *
+     * @param messages the list of messages to modify
+     * @param contextArray the context array from AG-UI input
      */
-    public static List<String> extractToolCalls(JsonArray aguiMessages) {
-        List<String> toolCallsJsonList = new ArrayList<>();
+    private static void appendContextToLatestUserMessage(List<Message> messages, JsonArray contextArray) {
+        if (messages == null || messages.isEmpty() || contextArray == null || contextArray.size() == 0) {
+            return;
+        }
 
-        for (JsonElement msgElement : aguiMessages) {
-            if (msgElement.isJsonObject()) {
-                JsonObject msg = msgElement.getAsJsonObject();
-                String role = getStringField(msg, AGUI_FIELD_ROLE);
-
-                if ("assistant".equalsIgnoreCase(role) && msg.has(AGUI_FIELD_TOOL_CALLS)) {
-                    JsonElement toolCallsElement = msg.get(AGUI_FIELD_TOOL_CALLS);
-                    if (toolCallsElement != null && toolCallsElement.isJsonArray()) {
-                        toolCallsJsonList.add(gson.toJson(toolCallsElement));
-                    }
-                }
+        // Find the latest user message (iterate from end)
+        Message latestUserMessage = null;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message message = messages.get(i);
+            if ("user".equalsIgnoreCase(message.getRole())) {
+                latestUserMessage = message;
+                break;
             }
         }
 
-        return toolCallsJsonList;
-    }
+        if (latestUserMessage == null) {
+            log.debug("No user message found to append context to, skipping context appending");
+            return;
+        }
 
-    /**
-     * Extracts ALL tool results from AG-UI messages.
-     * Used by MLAGUIAgentRunner to process tool executions.
-     */
-    public static List<Map<String, String>> extractToolResults(JsonArray aguiMessages) {
-        List<Map<String, String>> toolResults = new ArrayList<>();
+        // Build context string from context array
+        StringBuilder contextBuilder = new StringBuilder();
+        contextBuilder.append("Context:\n");
+        for (JsonElement contextItemElement : contextArray) {
+            if (contextItemElement.isJsonObject()) {
+                JsonObject contextItem = contextItemElement.getAsJsonObject();
+                String description = getStringField(contextItem, "description");
+                String value = getStringField(contextItem, "value");
 
-        for (JsonElement msgElement : aguiMessages) {
-            if (msgElement.isJsonObject()) {
-                JsonObject msg = msgElement.getAsJsonObject();
-                String role = getStringField(msg, AGUI_FIELD_ROLE);
-
-                if ("tool".equalsIgnoreCase(role)) {
-                    String content = getStringField(msg, AGUI_FIELD_CONTENT);
-                    String toolCallId = getStringField(msg, AGUI_FIELD_TOOL_CALL_ID);
-
-                    if (content != null && toolCallId != null) {
-                        Map<String, String> toolResult = new HashMap<>();
-                        toolResult.put("tool_call_id", toolCallId);
-                        toolResult.put("content", content);
-                        toolResults.add(toolResult);
-                    }
+                if (description != null && value != null) {
+                    contextBuilder.append("- ").append(description).append(": ").append(value).append("\n");
                 }
             }
         }
+        contextBuilder.append("\n");
 
-        return toolResults;
+        // Prepend context to the last text content block
+        List<ContentBlock> contentBlocks = latestUserMessage.getContent();
+        if (contentBlocks != null && !contentBlocks.isEmpty()) {
+            // Find the last text content block
+            ContentBlock lastTextBlock = null;
+            for (int i = contentBlocks.size() - 1; i >= 0; i--) {
+                ContentBlock block = contentBlocks.get(i);
+                if (block.getType() == ContentType.TEXT) {
+                    lastTextBlock = block;
+                    break;
+                }
+            }
+
+            if (lastTextBlock != null) {
+                String originalText = lastTextBlock.getText();
+                String newText = contextBuilder.toString() + originalText;
+                lastTextBlock.setText(newText);
+                log.debug("AG-UI: Appended context to latest user message");
+            } else {
+                // should not happen as user message has to have content
+                log.warn("No text content block found in latest user message, skipping context appending");
+            }
+        } else {
+            // should not happen as requests will always contain at least one user message
+            log.debug("No content blocks found in latest user message, skipping context appending");
+        }
     }
 }
