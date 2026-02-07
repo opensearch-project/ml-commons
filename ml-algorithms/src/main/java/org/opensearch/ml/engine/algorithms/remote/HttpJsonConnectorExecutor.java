@@ -15,11 +15,9 @@ import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -31,7 +29,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -44,15 +41,12 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @ConnectorExecutor(HTTP)
@@ -76,10 +70,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private MLGuard mlGuard;
-    @Setter
-    private volatile boolean connectorPrivateIpEnabled;
-
-    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     @Setter
     @Getter
@@ -188,40 +178,5 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             default:
                 throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
-    }
-
-    @VisibleForTesting
-    protected SdkAsyncHttpClient getHttpClient() {
-        if (httpClientRef.get() == null) {
-            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
-            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
-            if (skipSslVerificationValue) {
-                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
-            }
-            log
-                .info(
-                    "HttpJsonConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
-                    connector.getName(),
-                    maxConnection,
-                    super.getConnectorClientConfig().getConnectionTimeout(),
-                    super.getConnectorClientConfig().getReadTimeout()
-                );
-            this.httpClientRef
-                .compareAndSet(
-                    null,
-                    MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            connectionTimeout,
-                            readTimeout,
-                            maxConnection,
-                            connectorPrivateIpEnabled,
-                            skipSslVerificationValue
-                        )
-                );
-        }
-        return httpClientRef.get();
     }
 }
