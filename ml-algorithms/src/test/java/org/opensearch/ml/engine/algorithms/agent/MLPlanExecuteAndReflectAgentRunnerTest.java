@@ -20,7 +20,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getPlanExecuteReflectResponseFormat;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -612,14 +612,14 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
         testParams.put(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD, "custom system prompt");
 
-        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams, true, "");
 
         assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
         assertTrue(testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD).contains("custom system prompt"));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD));
         assertEquals(
-            PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT,
+            getPlanExecuteReflectResponseFormat("", "", ""),
             testParams.get(MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD)
         );
     }
@@ -630,7 +630,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
         testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "true");
 
-        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams, true, "");
 
         assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
 
@@ -647,7 +647,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD));
         assertEquals(
-            PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT,
+            getPlanExecuteReflectResponseFormat("", "", ""),
             testParams.get(MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD)
         );
     }
@@ -658,7 +658,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
         testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "false");
 
-        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams, true, "");
 
         assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
 
@@ -676,7 +676,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     @Test
     public void testUsePlannerPromptTemplate() {
         Map<String, String> testParams = new HashMap<>();
-        mlPlanExecuteAndReflectAgentRunner.usePlannerPromptTemplate(testParams);
+        mlPlanExecuteAndReflectAgentRunner.usePlannerPromptTemplate(testParams, true, "");
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_TEMPLATE_FIELD));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_FIELD));
     }

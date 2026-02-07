@@ -81,51 +81,77 @@ public class PromptTemplate {
                 6. The final response should be fully self-contained and detailed, allowing a user to understand the full investigation without needing to reference prior messages and steps.
             """;
 
-    public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT = "Response Instructions: \n"
-        + "Only respond in JSON format. Always follow the given response instructions. Do not return any content that does not follow the response instructions. Do not add anything before or after the expected JSON. \n"
-        + "Always respond with a valid JSON object that strictly follows the below schema:\n"
-        + "{\n"
-        + "\t\"steps\": array[string], \n"
-        + "\t\"result\": string \n"
-        + "}\n"
-        + "Use \"steps\" to return an array of strings where each string is a step to complete the objective, leave it empty if you know the final result. Please wrap each step in quotes and escape any special characters within the string. \n"
-        + "Use \"result\" return the final response when you have enough information, leave it empty if you want to execute more steps. Please escape any special characters within the result. \n"
-        + "Here are examples of valid responses following the required JSON schema:\n\n"
-        + "Example 1 - When you need to execute steps:\n"
-        + "{\n"
-        + "\t\"steps\": [\"This is an example step\", \"this is another example step\"],\n"
-        + "\t\"result\": \"\"\n"
-        + "}\n\n"
-        + "Example 2 - When you have the final result:\n"
-        + "{\n"
-        + "\t\"steps\": [],\n"
-        + "\t\"result\": \"This is an example result\\n with escaped special characters\"\n"
-        + "}\n"
-        + "Important rules for the response:\n"
-        + "1. Do not use commas within individual steps \n"
-        + "2. Do not add any content before or after the JSON \n"
-        + "3. Only respond with a pure JSON object \n\n";
+    public static final String getPlanExecuteReflectResponseFormat(
+        String resultExpendAndOverride,
+        String importantRulesExpend,
+        String topologyRules
+    ) {
+        String resultExample = "Here are examples of valid responses following the required JSON schema:\n\n"
+            + "Example 1 - When you need to execute steps:\n"
+            + "{\n"
+            + "\t\"steps\": [\"This is an example step\", \"this is another example step\"],\n"
+            + "\t\"result\": \"\"\n"
+            + "}\n\n"
+            + "Example 2 - When you have the final result:\n"
+            + "{\n"
+            + "\t\"steps\": [],\n"
+            + "\t\"result\": \"This is an example result\\n with escaped special characters\"\n"
+            + "}\n";
 
-    public static final String PLANNER_RESPONSIBILITY =
-        """
-            You are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.
+        return "# Response Format\n\n"
+            + "## JSON Response Requirements\n"
+            + "Only respond in JSON format. Always follow the given response instructions. Do not return any content that does not follow the response instructions. Do not add anything before or after the expected JSON\n\n"
+            + "Always respond with a valid JSON object that strictly follows the below schema:\n"
+            + "```json\n"
+            + "{\n"
+            + "  \"steps\": array[string],\n"
+            + "  \"result\": string\n"
+            + "}\n"
+            + "```\n"
+            + "\n"
+            + "- Use \"steps\" to return an array of strings where each string is a step to complete the objective, leave it empty if you know the final result. Please wrap each step in quotes and escape any special characters within the string\n"
+            + "- Use \"result\" to return the final response when you have enough information, leave it empty if you want to execute more steps. "
+            + (resultExpendAndOverride == null ? "" : resultExpendAndOverride)
+            + "\n"
+            + (resultExpendAndOverride == null ? resultExample : "")
+            + "## Critical Rules\n"
+            + "1. Do not use commas within individual steps\n"
+            + "2. Do not add any content before or after the JSON\n"
+            + "3. Only respond with a pure JSON object\n"
+            + (importantRulesExpend == null ? "" : importantRulesExpend)
+            + "\n"
+            + topologyRules;
+    }
 
-            Instructions:
-            - Break the objective into an ordered list of atomic, self-contained Steps that, if executed, will lead to the final result or complete the objective.
-            - Each Step must state what to do, where, and which tool/parameters would be used. You do not execute tools, only reference them for planning.
-            - Use only the provided tools; do not invent or assume tools. If no suitable tool applies, use reasoning or observations instead.
-            - Base your plan only on the data and information explicitly provided; do not rely on unstated knowledge or external facts.
-            - If there is insufficient information to create a complete plan, summarize what is known so far and clearly state what additional information is required to proceed.
-            - Stop and summarize if the task is complete or further progress is unlikely.
-            - Avoid vague instructions; be specific about data sources, indexes, or parameters.
-            - Never make assumptions or rely on implicit knowledge.
-            - Respond only in JSON format.
+    public static String DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX =
+        "# Investigation Planner Agent\n\nYou are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.\n\n";
 
-            Step examples:
-            Good example: \"Use Tool to sample documents from index: 'my-index'\"
-            Bad example: \"Use Tool to sample documents from each index\"
-            Bad example: \"Use Tool to sample documents from all indices\"
+    public static String getCommonInstructionWithCustomInstruction(String customInstruction) {
+        return """
+            # Instructions
+            
+            ## Core Planning Rules
+            - Break the objective into an ordered list of atomic, self-contained Steps that, if executed, will lead to the final result or complete the objective
+            - Each Step must state what to do, where, and which tool/parameters would be used. You do not execute tools, only reference them for planning
+            - Use only the provided tools; do not invent or assume tools. If no suitable tool applies, use reasoning or observations instead
+            - Base your plan only on the data and information explicitly provided; do not rely on unstated knowledge or external facts
+            - If there is insufficient information to create a complete plan, summarize what is known so far and clearly state what additional information is required to proceed
+            - Stop and summarize if the task is complete or further progress is unlikely
+            - Avoid vague instructions; be specific about data sources, indexes, or parameters
+            - Never make assumptions or rely on implicit knowledge
+            - Respond only in JSON format
+            """
+            + customInstruction
+            + """
+            ## Step Examples
+            **Good example:** "Use Tool to sample documents from index: 'my-index'"
+            
+            **Bad example:** "Use Tool to sample documents from each index"
+            
+            **Bad example:** "Use Tool to sample documents from all indices"
+            
             """;
+    }
 
     public static final String EXECUTOR_RESPONSIBILITY =
         """
