@@ -247,9 +247,10 @@ public class SummarizationManager implements ContextManager {
     ) {
         try {
             // Create summarized interaction
-            String summarizedInteraction = "{\"role\":\"assistant\",\"content\":\"Summarized previous interactions: "
-                + processTextDoc(summary)
-                + "\"}";
+            String summarizedInteraction =
+                "{\"role\":\"assistant\",\"content\":[{\"type\": \"text\", \"text\": \"Summarized previous interactions: "
+                    + processTextDoc(summary)
+                    + "\"}]}";
 
             // Update interactions: summary + remaining messages
             List<String> updatedInteractions = new ArrayList<>();
