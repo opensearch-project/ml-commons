@@ -191,7 +191,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     }
 
     @VisibleForTesting
-    protected SdkAsyncHttpClient getHttpClient() {
+    public SdkAsyncHttpClient getHttpClient() {
         if (httpClientRef.get() == null) {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
@@ -223,5 +223,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 );
         }
         return httpClientRef.get();
+    }
+
+    public void setAsyncHttpClient(SdkAsyncHttpClient client) {
+        if (this.httpClientRef.get() == null) {
+            this.httpClientRef.compareAndSet(null, client);
+        }
     }
 }
