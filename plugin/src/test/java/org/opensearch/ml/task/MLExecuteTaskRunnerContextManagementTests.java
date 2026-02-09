@@ -15,8 +15,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.CONTEXT_MANAGEMENT_PROCESSED;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,8 +32,6 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
-import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
@@ -40,7 +39,6 @@ import org.opensearch.ml.action.contextmanagement.ContextManagerFactory;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManager;
 import org.opensearch.ml.common.contextmanager.ContextManagerConfig;
@@ -175,9 +173,10 @@ public class MLExecuteTaskRunnerContextManagementTests {
         // This agent has context_management_name = "agent_default_template"
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn(
-            "{\"name\":\"test_agent\",\"type\":\"CONVERSATIONAL\",\"context_management_name\":\"" + agentDefaultTemplate + "\"}"
-        );
+        when(getResponse.getSourceAsString())
+            .thenReturn(
+                "{\"name\":\"test_agent\",\"type\":\"CONVERSATIONAL\",\"context_management_name\":\"" + agentDefaultTemplate + "\"}"
+            );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(getResponse);
@@ -251,7 +250,9 @@ public class MLExecuteTaskRunnerContextManagementTests {
         String agentJson = "{"
             + "\"name\":\"test_agent\","
             + "\"type\":\"conversational\","
-            + "\"context_management_name\":\"" + agentTemplateRef + "\","
+            + "\"context_management_name\":\""
+            + agentTemplateRef
+            + "\","
             + "\"llm\":{\"model_id\":\"test-model-id\",\"parameters\":{}}"
             + "}";
 
@@ -335,14 +336,14 @@ public class MLExecuteTaskRunnerContextManagementTests {
             + "\"type\":\"conversational\","
             + "\"llm\":{\"model_id\":\"test-model-id\",\"parameters\":{}},"
             + "\"context_management\":{"
-                + "\"name\":\"customer-service-optimizer\","
-                + "\"description\":\"Optimized context management for customer service\","
-                + "\"hooks\":{"
-                    + "\"PRE_LLM\":[{\"type\":\"SlidingWindowManager\",\"config\":{\"max_messages\":6}}],"
-                    + "\"POST_TOOL\":[{\"type\":\"ToolsOutputTruncateManager\",\"config\":{\"max_output_length\":50000}}]"
-                + "}"
+            + "\"name\":\"customer-service-optimizer\","
+            + "\"description\":\"Optimized context management for customer service\","
+            + "\"hooks\":{"
+            + "\"PRE_LLM\":[{\"type\":\"SlidingWindowManager\",\"config\":{\"max_messages\":6}}],"
+            + "\"POST_TOOL\":[{\"type\":\"ToolsOutputTruncateManager\",\"config\":{\"max_output_length\":50000}}]"
             + "}"
-        + "}";
+            + "}"
+            + "}";
 
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
