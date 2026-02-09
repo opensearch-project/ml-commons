@@ -310,7 +310,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         listener.onResponse(insight);
     }
 
-    private void getIndexInsight(String docId, String tenantId, ActionListener<GetResponse> listener) {
+    protected void getIndexInsight(String docId, String tenantId, ActionListener<GetResponse> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                 .getDataObjectAsync(
@@ -339,6 +339,13 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
 
     private void writeIndexInsight(IndexInsight indexInsight, String tenantId, ActionListener<Boolean> listener) {
         String docId = generateDocId();
+        writeIndexInsight(indexInsight, docId, tenantId, listener);
+    }
+
+    /**
+     * Write index insight with custom document ID
+     */
+    protected void writeIndexInsight(IndexInsight indexInsight, String docId, String tenantId, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                 .putDataObjectAsync(

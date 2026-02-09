@@ -148,6 +148,7 @@ public class CommonValue {
     public static final String INDEX_INSIGHT_AGENT_NAME = "os_index_insight_agent";
     public static final long INDEX_INSIGHT_GENERATING_TIMEOUT = 3 * 60 * 1000;
     public static final long INDEX_INSIGHT_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
+    public static final long PATTERN_TYPE_CACHE_EXPIRATION = 7 * 24 * 60 * 60 * 1000;
 
     // JSON-RPC Error Codes
     public static final int JSON_RPC_PARSE_ERROR = -32700;

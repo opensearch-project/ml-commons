@@ -171,4 +171,45 @@ public class IndexInsightTestHelper {
         return content;
     }
 
+    /**
+     * Mock cache hit with valid, non-expired cached pattern data
+     */
+    public static void mockPatternCacheHit(SdkClient sdkClient, String pattern, String type, long ageMillis) {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+
+        long lastUpdateTime = Instant.now().toEpochMilli() - ageMillis;
+        Map<String, Object> cacheContent = Map.of(
+            STATUS_FIELD, "COMPLETED",
+            LAST_UPDATE_FIELD, lastUpdateTime,
+            CONTENT_FIELD, String.format(
+                "{\"pattern\":\"%s\",\"sample_indices\":[],\"type\":\"%s\"," +
+                "\"time_field\":\"time\",\"trace_id_field\":\"traceId\",\"span_id_field\":\"spanId\"}",
+                pattern, type
+            )
+        );
+
+        when(getResponse.getSourceAsMap()).thenReturn(cacheContent);
+
+        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+        when(sdkResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+    }
+
+    /**
+     * Mock cache miss (document not found)
+     */
+    public static void mockPatternCacheMiss(SdkClient sdkClient) {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+
+        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+        when(sdkResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+    }
+
 }
