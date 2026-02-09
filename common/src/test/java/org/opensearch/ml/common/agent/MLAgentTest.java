@@ -59,6 +59,7 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
             null,
@@ -82,6 +83,7 @@ public class MLAgentTest {
             null,
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
             null,
@@ -105,6 +107,7 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             null,
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
             null,
@@ -121,13 +124,14 @@ public class MLAgentTest {
     @Test
     public void constructor_DuplicateTool() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate tool defined: test");
+        exceptionRule.expectMessage("Duplicate tool defined in agent configuration");
 
         MLAgent agent = new MLAgent(
             "test_name",
             MLAgentType.CONVERSATIONAL.name(),
             "test_description",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec, mlToolSpec),
             null,
             null,
@@ -148,9 +152,10 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -178,9 +183,10 @@ public class MLAgentTest {
             "FLOW",
             "test",
             null,
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -203,9 +209,10 @@ public class MLAgentTest {
             "FLOW",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -228,9 +235,10 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -253,6 +261,7 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
             null,
@@ -278,6 +287,7 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List
                 .of(
                     new MLToolSpec(
@@ -293,7 +303,7 @@ public class MLAgentTest {
                     )
                 ),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -350,9 +360,10 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -376,13 +387,14 @@ public class MLAgentTest {
     @Test
     public void constructor_InvalidAgentType() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage(" is not a valid Agent Type");
+        exceptionRule.expectMessage("Invalid Agent Type");
 
         new MLAgent(
             "test_name",
             "INVALID_TYPE",
             "test_description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -404,6 +416,7 @@ public class MLAgentTest {
                 MLAgentType.FLOW.name(),
                 "test_description",
                 null,
+                null, // MLAgentModelSpec model
                 null,
                 null,
                 null,
@@ -428,6 +441,7 @@ public class MLAgentTest {
             "FLOW",
             "test",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -495,9 +509,10 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test description",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("_llm_interface", "bedrock"),
-            new MLMemorySpec("conversation_index", "123", 10),
+            new MLMemorySpec("conversation_index", "123", 10, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test_app",
@@ -523,6 +538,7 @@ public class MLAgentTest {
             "flow",
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -554,6 +570,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -574,6 +591,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -606,6 +624,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -631,6 +650,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -656,6 +676,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -696,6 +717,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -731,6 +753,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -810,6 +833,7 @@ public class MLAgentTest {
             "FLOW",
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -844,6 +868,7 @@ public class MLAgentTest {
             "FLOW",
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,

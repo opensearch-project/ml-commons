@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.ml.common.utils.StringUtils.isJsonOrNdjson;
 import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 
 import java.io.IOException;
@@ -360,12 +361,14 @@ public class HttpConnector extends AbstractConnector {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
-            if (!isJson(payload)) {
+            if (!isJsonOrNdjson(payload)) {
                 throw new IllegalArgumentException("Invalid payload: " + payload);
             } else if (neededStreamParameterInPayload(parameters)) {
-                JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
-                jsonObject.addProperty("stream", true);
-                payload = jsonObject.toString();
+                if (isJson(payload)) {
+                    JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
+                    jsonObject.addProperty("stream", true);
+                    payload = jsonObject.toString();
+                }
             }
             return (T) payload;
         }

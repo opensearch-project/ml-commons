@@ -8,15 +8,15 @@ package org.opensearch.ml.action.agents;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -26,19 +26,25 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.action.agent.MLAgentRegistrationValidator;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
+import org.opensearch.ml.common.agent.AgentModelService;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -85,7 +91,53 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
+
+        if (mlAgent.getMemory() != null
+            && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(mlAgent.getMemory().getType())
+            && !mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
+
+        // Check if this agent needs model creation
+        if (mlAgent.getModel() != null) {
+            createModelAndRegisterAgent(mlAgent, listener);
+            return;
+        }
+
         registerAgent(mlAgent, listener);
+    }
+
+    private void createModelAndRegisterAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
+        try {
+            MLRegisterModelInput modelInput = AgentModelService.createModelFromSpec(mlAgent.getModel());
+            MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
+
+            client.execute(MLRegisterModelAction.INSTANCE, modelRequest, ActionListener.wrap(modelResponse -> {
+                String modelId = modelResponse.getModelId();
+
+                Map<String, String> parameters = new HashMap<>();
+                if (mlAgent.getParameters() != null) {
+                    parameters.putAll(mlAgent.getParameters());
+                }
+
+                String llmInterface = AgentModelService.inferLLMInterface(mlAgent.getModel().getModelProvider());
+                if (llmInterface != null) {
+                    parameters.put(LLM_INTERFACE, llmInterface);
+                }
+
+                LLMSpec llmSpec = LLMSpec.builder().modelId(modelId).parameters(mlAgent.getModel().getModelParameters()).build();
+
+                // Create sanitized model spec without credentials and model parameters
+                // (stored in the model document and LLMSpec respectively)
+                MLAgentModelSpec sanitizedModelSpec = mlAgent.getModel().toBuilder().modelParameters(null).credential(null).build();
+                // ToDo: store model details within agent to prevent creating a new model document
+                MLAgent agent = mlAgent.toBuilder().llm(llmSpec).model(sanitizedModelSpec).parameters(parameters).build();
+                registerAgent(agent, listener);
+            }, listener::onFailure));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
@@ -160,9 +212,6 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
-        // Update QueryPlanningTool to include model_id if missing
-        List<MLToolSpec> updatedTools = processQueryPlannerTools(agent);
-
         String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
         if (llmInterface != null) {
             if (llmInterface.trim().isEmpty()) {
@@ -173,14 +222,14 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             try {
                 FunctionCallingFactory.create(llmInterface);
             } catch (Exception e) {
-                listener.onFailure(new IllegalArgumentException("Invalid _llm_interface: " + llmInterface));
+                listener.onFailure(new IllegalArgumentException("Invalid _llm_interface"));
                 return;
             }
         }
 
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
-        MLAgent mlAgent = agent.toBuilder().tools(updatedTools).createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
+        MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
         String tenantId = agent.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
@@ -198,25 +247,6 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         } else {
             registerAgentToIndex(mlAgent, tenantId, listener);
         }
-    }
-
-    private List<MLToolSpec> processQueryPlannerTools(MLAgent agent) {
-        List<MLToolSpec> tools = agent.getTools();
-        List<MLToolSpec> updatedTools = tools;
-        if (tools != null) {
-            // Update QueryPlanningTool with model_id if missing and LLM exists
-            if (agent.getLlm() != null && agent.getLlm().getModelId() != null && !agent.getLlm().getModelId().isBlank()) {
-                updatedTools = tools.stream().map(tool -> {
-                    if (tool.getType().equals(QueryPlanningTool.TYPE)) {
-                        Map<String, String> params = tool.getParameters() != null ? new HashMap<>(tool.getParameters()) : new HashMap<>();
-                        params.putIfAbsent("model_id", agent.getLlm().getModelId());
-                        return tool.toBuilder().parameters(params).build();
-                    }
-                    return tool;
-                }).collect(Collectors.toList());
-            }
-        }
-        return updatedTools;
     }
 
     private void createConversationAgent(MLAgent planExecuteReflectAgent, String tenantId, ActionListener<String> listener) {

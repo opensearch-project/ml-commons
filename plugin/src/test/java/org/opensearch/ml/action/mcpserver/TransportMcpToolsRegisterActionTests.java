@@ -250,7 +250,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Unable to register tools: [ListIndexTool] as they already exist", argumentCaptor.getValue().getMessage());
+        assertEquals("Unable to register tool: a tool with the same name already exists.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_doExecute_bulkIndexAllFailed() {
@@ -280,10 +280,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Failed to persist 1 mcp tool(s) into system index", argumentCaptor.getValue().getMessage());
     }
 
     public void test_doExecute_bulkIndexPartialFailed() {
@@ -323,10 +320,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Failed to persist 1 mcp tool(s) into system index", argumentCaptor.getValue().getMessage());
     }
 
     public void test_doExecute_registerOnNodeHasFailure() {
@@ -350,7 +344,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Tools: [ListIndexTool] are persisted successfully but failed to register to mcp server memory with error: Network issue",
+            "Tools are persisted successfully but failed to register to mcp server memory",
             argumentCaptor.getValue().getMessage()
         );
     }

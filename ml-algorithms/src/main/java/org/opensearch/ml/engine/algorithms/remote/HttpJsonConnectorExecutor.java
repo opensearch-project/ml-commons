@@ -8,8 +8,10 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static software.amazon.awssdk.http.SdkHttpMethod.DELETE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
+import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
@@ -21,8 +23,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -109,11 +113,23 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
                 case "GET":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, GET);
+                    break;
+                case "PUT":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, PUT);
+                    break;
+                case "DELETE":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, DELETE);
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
             }
+            ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+
+            // TODO: We should have an idea to identify the source of the request(predict/agent execution),
+            // but currently it's not easy, so reusing the predict thread pool won't harm anything.
+            ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = createThreadedListener(log, actionListener);
+
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(request)
@@ -121,7 +137,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        actionListener,
+                        ActionListener.runBefore(threadedListener, storedContext::restore),
                         parameters,
                         connector,
                         scriptService,
@@ -157,7 +173,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             validateLLMInterface(llmInterface);
 
             StreamingHandler handler = StreamingHandlerFactory
-                .createHandler(llmInterface, connector, null, super.getConnectorClientConfig());
+                .createHandler(llmInterface, connector, null, super.getConnectorClientConfig(), parameters);
             handler.startStream(action, parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);
@@ -180,10 +196,30 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
+            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
+            if (skipSslVerificationValue) {
+                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
+            }
+            log
+                .info(
+                    "HttpJsonConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    connector.getName(),
+                    maxConnection,
+                    super.getConnectorClientConfig().getConnectionTimeout(),
+                    super.getConnectorClientConfig().getReadTimeout()
+                );
             this.httpClientRef
                 .compareAndSet(
                     null,
-                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
+                    MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            connectionTimeout,
+                            readTimeout,
+                            maxConnection,
+                            connectorPrivateIpEnabled,
+                            skipSslVerificationValue
+                        )
                 );
         }
         return httpClientRef.get();

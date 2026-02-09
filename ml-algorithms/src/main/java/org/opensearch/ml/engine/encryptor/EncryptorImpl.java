@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLConfig.CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES;
 import static org.opensearch.ml.common.utils.StringUtils.hashString;
 
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import javax.crypto.spec.SecretKeySpec;
 
@@ -50,6 +52,11 @@ import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.jce.JceMasterKey;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -61,17 +68,56 @@ public class EncryptorImpl implements Encryptor {
     private ClusterService clusterService;
     private Client client;
     private SdkClient sdkClient;
-    private final Map<String, String> tenantMasterKeys;
     private final Map<String, List<ActionListener<Boolean>>> tenantWaitingListenerMap;
+    private final Cache<String, String> tenantMasterKeys;
     private MLIndicesHandler mlIndicesHandler;
+    private final Object lock = new Object();
+    private volatile long masterKeyCacheTtlMinutes;
 
     // concurrent map can't have null as a key. This is to support single tenancy
     // assigning some random string so that it can't be duplicate
     public static final String DEFAULT_TENANT_ID = "03000200-0400-0500-0006-000700080009";
 
     public EncryptorImpl(ClusterService clusterService, Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler) {
-        this.tenantMasterKeys = new ConcurrentHashMap<>();
         this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
+        this.masterKeyCacheTtlMinutes = ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES.get(clusterService.getSettings());
+        this.tenantMasterKeys = CacheBuilder
+            .newBuilder()
+            .expireAfterWrite(masterKeyCacheTtlMinutes, TimeUnit.MINUTES)
+            .removalListener(new RemovalListener<String, String>() {
+                @Override
+                public void onRemoval(RemovalNotification<String, String> notification) {
+                    log.info("Master key cache entry removed - Tenant: {}, Cause: {}", notification.getKey(), notification.getCause());
+                }
+            })
+            .build();
+        this.clusterService = clusterService;
+        this.client = client;
+        this.sdkClient = sdkClient;
+        this.mlIndicesHandler = mlIndicesHandler;
+    }
+
+    // Package-private constructor for testing with custom TTL
+    @VisibleForTesting
+    EncryptorImpl(
+        ClusterService clusterService,
+        Client client,
+        SdkClient sdkClient,
+        MLIndicesHandler mlIndicesHandler,
+        long cacheTtl,
+        TimeUnit timeUnit
+    ) {
+        this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
+        this.tenantMasterKeys = CacheBuilder
+            .newBuilder()
+            .expireAfterWrite(cacheTtl, timeUnit)
+            .removalListener(new RemovalListener<String, String>() {
+                @Override
+                public void onRemoval(RemovalNotification<String, String> notification) {
+                    log.info("Master key cache entry removed - Tenant: {}, Cause: {}", notification.getKey(), notification.getCause());
+                }
+            })
+            .build();
         this.clusterService = clusterService;
         this.client = client;
         this.sdkClient = sdkClient;
@@ -79,8 +125,22 @@ public class EncryptorImpl implements Encryptor {
     }
 
     public EncryptorImpl(String tenantId, String masterKey) {
-        this.tenantMasterKeys = new ConcurrentHashMap<>();
-        this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
+        this(tenantId, masterKey, 5, TimeUnit.MINUTES);  // Default 5 minutes for testing
+    }
+
+    // Package-private constructor for testing with custom TTL
+    EncryptorImpl(String tenantId, String masterKey, long cacheTtl, TimeUnit timeUnit) {
+      this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
+        this.tenantMasterKeys = CacheBuilder
+            .newBuilder()
+            .expireAfterWrite(cacheTtl, timeUnit)
+            .removalListener(new RemovalListener<String, String>() {
+                @Override
+                public void onRemoval(RemovalNotification<String, String> notification) {
+                    log.info("Master key cache entry removed - Tenant: {}, Cause: {}", notification.getKey(), notification.getCause());
+                }
+            })
+            .build();
         this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
     }
 
@@ -91,31 +151,31 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public String getMasterKey(String tenantId) {
-        return tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
+        return tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
     }
 
     @Override
     public void encrypt(String plainText, String tenantId, ActionListener<String> listener) {
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
             final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-            JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
+            JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
             final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
                 .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
             listener.onResponse(Base64.getEncoder().encodeToString(encryptResult.getResult()));
         }, listener::onFailure);
-        initMasterKey(tenantId, initListener);
+        String masterKey = getOrInitMasterKey(tenantId);
     }
 
     @Override
     public void decrypt(String encryptedText, String tenantId, ActionListener<String> listener) {
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
             final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-            JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
+            JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
             final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
                 .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
             listener.onResponse(new String(decryptedResult.getResult()));
         }, listener::onFailure);
-        initMasterKey(tenantId, initListener);
+        String masterKey = getOrInitMasterKey(tenantId);
     }
 
     @Override
@@ -125,16 +185,34 @@ public class EncryptorImpl implements Encryptor {
         return Base64.getEncoder().encodeToString(keyBytes);
     }
 
-    private JceMasterKey createJceMasterKey(String tenantId) {
-        byte[] bytes = Base64.getDecoder().decode(tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)));
+    private JceMasterKey createJceMasterKey(String masterKey) {
+        byte[] bytes = Base64.getDecoder().decode(masterKey);
         return JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
     }
 
-    private void initMasterKey(String tenantId, ActionListener<Boolean> listener) {
-        tenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
-        if (tenantMasterKeys.containsKey(tenantId)) {
-            log.trace("Master key is already available for tenant {}", tenantId);
-            listener.onResponse(true);
+    private String getOrInitMasterKey(String tenantId) {
+        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
+        String masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
+        if (masterKey != null) {
+            return masterKey;
+        }
+
+        // Double-checked locking to prevent duplicate index writes under high concurrency
+        synchronized (lock) {
+            masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
+            if (masterKey == null) {
+                initMasterKey(tenantId);
+                masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
+                if (masterKey == null) {
+                    throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
+                }
+            }
+        }
+        return masterKey;
+    }
+
+    private void initMasterKey(String tenantId) {
+        if (tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) != null) {
             return;
         }
 
@@ -186,6 +264,9 @@ public class EncryptorImpl implements Encryptor {
                 waitingListeners.forEach(listener -> listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR)));
             }
             waitingListeners.clear();
+        }
+        if (tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) == null) {
+            throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
         }
     }
 

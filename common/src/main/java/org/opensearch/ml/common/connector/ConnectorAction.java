@@ -6,13 +6,16 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
@@ -33,6 +36,7 @@ import lombok.Getter;
 public class ConnectorAction implements ToXContentObject, Writeable {
 
     public static final String ACTION_TYPE_FIELD = "action_type";
+    public static final String NAME_FIELD = "name";
     public static final String METHOD_FIELD = "method";
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
@@ -51,7 +55,15 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     private static final String POST_PROCESS_FUNC = "PostProcessFunction";
     private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
 
+    // Name validation constants
+    public static final int MAX_NAME_LENGTH = 64;
+    public static final String NAME_INVALID_CHARACTERS_ERROR =
+        "Action name contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed";
+    public static final String NAME_INVALID_LENGTH_ERROR = "Action name exceeds maximum length of " + MAX_NAME_LENGTH + " characters";
+    public static final String NAME_CONTROL_CHARACTERS_ERROR = "Action name must not contain control characters";
+
     private ActionType actionType;
+    private String name;
     private String method;
     private String url;
     private Map<String, String> headers;
@@ -62,6 +74,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     @Builder(toBuilder = true)
     public ConnectorAction(
         ActionType actionType,
+        String name,
         String method,
         String url,
         Map<String, String> headers,
@@ -78,7 +91,10 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (method == null) {
             throw new IllegalArgumentException("method can't be null");
         }
+        // Validate name (optional identifier for this specific action within a connector)
+        validateName(name);
         this.actionType = actionType;
+        this.name = name;
         this.method = method;
         this.url = url;
         this.headers = headers;
@@ -97,6 +113,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.requestBody = input.readOptionalString();
         this.preProcessFunction = input.readOptionalString();
         this.postProcessFunction = input.readOptionalString();
+        if (input.getVersion().onOrAfter(VERSION_3_5_0)) {
+            this.name = input.readOptionalString();
+        }
     }
 
     @Override
@@ -113,6 +132,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         out.writeOptionalString(requestBody);
         out.writeOptionalString(preProcessFunction);
         out.writeOptionalString(postProcessFunction);
+        if (out.getVersion().onOrAfter(VERSION_3_5_0)) {
+            out.writeOptionalString(name);
+        }
     }
 
     @Override
@@ -139,6 +161,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (postProcessFunction != null) {
             builder.field(ACTION_POST_PROCESS_FUNCTION, postProcessFunction);
         }
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
+        }
         return builder.endObject();
     }
 
@@ -149,6 +174,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
     public static ConnectorAction parse(XContentParser parser) throws IOException {
         ActionType actionType = null;
+        String name = null;
         String method = null;
         String url = null;
         Map<String, String> headers = null;
@@ -164,6 +190,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case ACTION_TYPE_FIELD:
                     actionType = ActionType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case NAME_FIELD:
+                    name = parser.text();
                     break;
                 case METHOD_FIELD:
                     method = parser.text();
@@ -191,6 +220,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         return ConnectorAction
             .builder()
             .actionType(actionType)
+            .name(name)
             .method(method)
             .url(url)
             .headers(headers)
@@ -198,6 +228,44 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             .preProcessFunction(preProcessFunction)
             .postProcessFunction(postProcessFunction)
             .build();
+    }
+
+    /**
+     * Validates the action name according to security constraints.
+     * Name must:
+     * - Be at most 64 characters long
+     * - Contain only alphanumeric characters, hyphens (-), and underscores (_)
+     * - Not contain control characters (CR, LF, etc.)
+     * - Not be an ActionType value
+     *
+     * @param name The action name to validate (null is allowed)
+     * @throws IllegalArgumentException if name violates constraints
+     */
+    private static void validateName(String name) {
+        if (name == null) {
+            return; // null is allowed (name is optional)
+        }
+
+        // Check for control characters
+        if (name.indexOf('\r') >= 0 || name.indexOf('\n') >= 0 || name.chars().anyMatch(ch -> ch < 32)) {
+            throw new IllegalArgumentException(NAME_CONTROL_CHARACTERS_ERROR);
+        }
+
+        // Check length
+        if (name.length() > MAX_NAME_LENGTH) {
+            throw new IllegalArgumentException(NAME_INVALID_LENGTH_ERROR);
+        }
+
+        // Check allowed characters: alphanumeric, hyphen, underscore
+        Pattern validPattern = Pattern.compile("^[a-zA-Z0-9_-]+$");
+        if (!validPattern.matcher(name).matches()) {
+            throw new IllegalArgumentException(NAME_INVALID_CHARACTERS_ERROR);
+        }
+
+        // Check not an action type
+        if (ActionType.isValidAction(name)) {
+            throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
+        }
     }
 
     /**

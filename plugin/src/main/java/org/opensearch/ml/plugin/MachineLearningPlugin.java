@@ -164,11 +164,11 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
@@ -267,8 +267,10 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
+import org.opensearch.ml.engine.memory.AgenticConversationMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.memory.RemoteAgenticConversationMemory;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexInsightTool;
@@ -867,6 +869,14 @@ public class MachineLearningPlugin extends Plugin
         conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
         memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
 
+        AgenticConversationMemory.Factory agenticConversationMemoryFactory = new AgenticConversationMemory.Factory();
+        agenticConversationMemoryFactory.init(client);
+        memoryFactoryMap.put(AgenticConversationMemory.TYPE, agenticConversationMemoryFactory);
+
+        RemoteAgenticConversationMemory.Factory remoteAgenticConversationMemoryFactory = new RemoteAgenticConversationMemory.Factory();
+        remoteAgenticConversationMemoryFactory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting);
+        memoryFactoryMap.put(RemoteAgenticConversationMemory.TYPE, remoteAgenticConversationMemoryFactory);
+
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
             client,
             sdkClient,
@@ -1391,6 +1401,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
                 MLCommonsSettings.ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK,
                 MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES,
                 MLCommonsSettings.REMOTE_METADATA_TYPE,
                 MLCommonsSettings.REMOTE_METADATA_ENDPOINT,
                 MLCommonsSettings.REMOTE_METADATA_REGION,
@@ -1401,11 +1412,15 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
                 MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE
+                MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
+                MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
             );
         return settings;
     }

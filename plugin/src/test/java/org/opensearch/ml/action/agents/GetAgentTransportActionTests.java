@@ -43,6 +43,7 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -315,6 +316,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List
                 .of(
                     new MLToolSpec(
@@ -330,7 +332,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
                     )
                 ),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
@@ -391,5 +393,75 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener, times(1)).onResponse(captor.capture());
         MLAgentGetResponse mlAgentGetResponse = captor.getValue();
         assertNotNull(mlAgentGetResponse.getMlAgent().getLlm());
+    }
+
+    @Test
+    public void testCredentialsAreRemoved() throws IOException {
+        String agentId = "test-agent-id";
+        GetResponse getResponse = prepareMLAgentWithCredentials(agentId);
+        ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true, null);
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getAgentTransportAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<MLAgentGetResponse> captor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
+        verify(actionListener, times(1)).onResponse(captor.capture());
+        MLAgentGetResponse mlAgentGetResponse = captor.getValue();
+
+        // Verify credentials are removed
+        assertNotNull(mlAgentGetResponse.getMlAgent().getModel());
+        assertNull(mlAgentGetResponse.getMlAgent().getModel().getCredential());
+    }
+
+    private GetResponse prepareMLAgentWithCredentials(String agentId) throws IOException {
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
+            .modelId("test-model-id")
+            .modelProvider("bedrock")
+            .credential(Map.of("access_key", "secret-key", "secret_key", "secret-value"))
+            .modelParameters(Map.of("temperature", "0.7"))
+            .build();
+
+        mlAgent = new MLAgent(
+            "test",
+            MLAgentType.CONVERSATIONAL.name(),
+            "test",
+            null,
+            modelSpec,
+            List
+                .of(
+                    new MLToolSpec(
+                        "test",
+                        "test",
+                        "test",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null,
+                        null
+                    )
+                ),
+            Map.of("test", "test"),
+            new MLMemorySpec("test", "123", 0, null),
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false,
+            null,
+            null,
+            null
+        );
+
+        XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", agentId, 111l, 111l, 111l, true, bytesReference, null, null);
+        return new GetResponse(getResult);
     }
 }

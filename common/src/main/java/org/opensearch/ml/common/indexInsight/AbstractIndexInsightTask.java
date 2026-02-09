@@ -249,6 +249,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .tenantId(tenantId)
             .index(sourceIndex)
             .taskType(taskType)
+            .lastUpdatedTime(Instant.now())
             .status(IndexInsightTaskStatus.FAILED)
             .build();
         writeIndexInsight(

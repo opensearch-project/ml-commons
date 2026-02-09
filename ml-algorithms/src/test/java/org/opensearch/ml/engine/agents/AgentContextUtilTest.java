@@ -12,7 +12,7 @@ import org.junit.Test;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.hooks.HookRegistry;
-import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.memory.Memory;
 
 public class AgentContextUtilTest {
 
