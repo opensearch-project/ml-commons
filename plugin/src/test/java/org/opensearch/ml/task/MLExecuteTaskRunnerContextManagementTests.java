@@ -64,6 +64,8 @@ import org.opensearch.transport.client.Client;
  *
  * The CONTEXT_MANAGEMENT_PROCESSED flag prevents double-processing when MLExecuteTaskRunner
  * has already handled context management at priority 1 or 2.
+ *
+ * MLExecuteTaskRunner set CONTEXT_MANAGEMENT_PROCESSED is true when priority 1
  */
 public class MLExecuteTaskRunnerContextManagementTests {
 
