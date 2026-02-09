@@ -34,6 +34,8 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.5.0
 * Allow higher maximum number of batch inference job tasks ([#4474](https://github.com/opensearch-project/ml-commons/pull/4474))
 
 ### Bug Fixes
+* fix deserialization failing for models with built-in connector ([#4627](https://github.com/opensearch-project/ml-commons/pull/4627))
+* fix: add overload constructor to unblock skills plugin ([#4626](https://github.com/opensearch-project/ml-commons/pull/4626))
 * fix: restore thread context in other agent related class to fix agentic memory ([#4621](https://github.com/opensearch-project/ml-commons/pull/4621))
 * Fix: Restore Thread Context in MLAgentExecutor properly to fix Memory Access ([#4608](https://github.com/opensearch-project/ml-commons/pull/4608))
 * Fix gemini function calling in tool failure case ([#4599](https://github.com/opensearch-project/ml-commons/pull/4599))
