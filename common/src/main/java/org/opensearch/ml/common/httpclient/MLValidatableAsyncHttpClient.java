@@ -21,7 +21,7 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
     private final SdkAsyncHttpClient delegate;
     private final boolean connectorPrivateIpEnabled;
 
-    protected MLValidatableAsyncHttpClient(SdkAsyncHttpClient client, boolean connectorPrivateIpEnabled) {
+    public MLValidatableAsyncHttpClient(SdkAsyncHttpClient client, boolean connectorPrivateIpEnabled) {
         this.delegate = client;
         this.connectorPrivateIpEnabled = connectorPrivateIpEnabled;
     }
