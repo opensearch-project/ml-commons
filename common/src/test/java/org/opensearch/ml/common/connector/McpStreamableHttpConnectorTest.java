@@ -193,7 +193,7 @@ public class McpStreamableHttpConnectorTest {
         updatedCredential.put("new_key", "new_value");
         List<String> updatedBackendRoles = List.of("role3", "role4");
         AccessMode updatedAccessMode = AccessMode.PRIVATE;
-        ConnectorClientConfig updatedClientConfig = new ConnectorClientConfig(40, 40000, 40000, 20, 20, 5, CONSTANT);
+        ConnectorClientConfig updatedClientConfig = new ConnectorClientConfig(40, 40000, 40000, 20, 20, 5, CONSTANT, null);
         String updatedUrl = "https://updated.test.com";
         Map<String, String> updatedHeaders = new HashMap<>();
         updatedHeaders.put("new_header", "new_header_value");
@@ -280,7 +280,7 @@ public class McpStreamableHttpConnectorTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("endpoint", "/custom/endpoint");
 
-        ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
 
         return McpStreamableHttpConnector
             .builder()

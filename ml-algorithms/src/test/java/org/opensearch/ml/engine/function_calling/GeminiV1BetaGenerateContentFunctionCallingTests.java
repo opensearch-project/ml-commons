@@ -10,9 +10,9 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
-import static org.opensearch.ml.engine.function_calling.GeminiGenerateContentFunctionCalling.GEMINI_TOOL_TEMPLATE;
-import static org.opensearch.ml.engine.function_calling.GeminiGenerateContentFunctionCalling.INPUT;
-import static org.opensearch.ml.engine.function_calling.GeminiGenerateContentFunctionCalling.NAME;
+import static org.opensearch.ml.engine.function_calling.GeminiV1BetaGenerateContentFunctionCalling.GEMINI_TOOL_TEMPLATE;
+import static org.opensearch.ml.engine.function_calling.GeminiV1BetaGenerateContentFunctionCalling.INPUT;
+import static org.opensearch.ml.engine.function_calling.GeminiV1BetaGenerateContentFunctionCalling.NAME;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -27,7 +27,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
-public class GeminiGenerateContentFunctionCallingTests {
+public class GeminiV1BetaGenerateContentFunctionCallingTests {
 
     FunctionCalling functionCalling;
     ModelTensorOutput mlModelTensorOutput;
@@ -75,8 +75,8 @@ public class GeminiGenerateContentFunctionCallingTests {
         Assert.assertEquals(1, messages.size());
         GeminiMessage message = (GeminiMessage) messages.get(0);
         Assert.assertEquals("user", message.getRole());
-        Assert.assertEquals(1, message.getParts().size());
-        Map<String, Object> contentMap = (Map<String, Object>) message.getParts().get(0);
+        Assert.assertEquals(1, message.getContent().size());
+        Map<String, Object> contentMap = (Map<String, Object>) message.getContent().get(0);
         Map<String, Object> functionResponse = (Map<String, Object>) contentMap.get("functionResponse");
         Assert.assertEquals("test_tool_call_id", functionResponse.get("name"));
         Assert.assertEquals(toolResultMap, functionResponse.get("response"));

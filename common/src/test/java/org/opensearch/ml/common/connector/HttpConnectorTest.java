@@ -405,7 +405,7 @@ public class HttpConnectorTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
-        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
 
         HttpConnector connector = HttpConnector
             .builder()

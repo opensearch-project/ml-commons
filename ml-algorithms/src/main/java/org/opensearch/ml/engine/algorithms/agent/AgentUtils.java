@@ -391,6 +391,7 @@ public class AgentUtils {
         List<String> interactions,
         FunctionCalling functionCalling
     ) {
+        // TODO: Handle Function calling in a different function
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
         String llmResponseExcludePath = parameters.get(LLM_RESPONSE_EXCLUDE_PATH);
@@ -429,6 +430,12 @@ public class AgentUtils {
                 llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
             }
             if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason) || isToolUseResponse) {
+                // Handles tool calls
+                // TODO: Refactor tool call detection logic into FunctionCalling interface.
+                // Currently, we rely on finish_reason to detect tool calls, but some LLMs (e.g., Gemini)
+                // use the same finish_reason for both tool calls and final responses. The workaround
+                // uses isToolUseResponse flag or checks if functionCalling.handle() returns tool calls.
+                // This logic should be centralized in the FunctionCalling interface to handle LLM-specific differences.
                 List<Map<String, String>> toolCalls = null;
                 try {
                     String toolName = "";
@@ -897,17 +904,17 @@ public class AgentUtils {
             .build();
 
         try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<Connector> wrappedListener = ActionListener.runBefore(listener, ctx::restore);
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
                 log.debug("Completed Get Connector Request, id:{}", connectorId);
+                ctx.restore();
                 if (throwable != null) {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
                         log.error("Failed to get connector index", cause);
-                        wrappedListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                        listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get ML connector {}", connectorId, cause);
-                        wrappedListener.onFailure(cause);
+                        listener.onFailure(cause);
                     }
                 } else {
                     try {
@@ -921,17 +928,17 @@ public class AgentUtils {
                             ) {
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector connector = Connector.createConnector(parser);
-                                wrappedListener.onResponse(connector);
+                                listener.onResponse(connector);
                             } catch (Exception e) {
                                 log.error("Failed to parse connector:{}", connectorId);
-                                wrappedListener.onFailure(e);
+                                listener.onFailure(e);
                             }
                         } else {
-                            wrappedListener
+                            listener
                                 .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
                         }
                     } catch (Exception e) {
-                        wrappedListener.onFailure(e);
+                        listener.onFailure(e);
                     }
                 }
             });
