@@ -6,6 +6,9 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import java.net.http.HttpRequest;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.support.ThreadedActionListener;
@@ -15,23 +18,75 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @Setter
 @Getter
 public abstract class AbstractConnectorExecutor implements RemoteConnectorExecutor {
-    private ConnectorClientConfig connectorClientConfig;
+
+    @Setter
+    private volatile boolean connectorPrivateIpEnabled;
+
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+
+    private volatile ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
 
     public void initialize(Connector connector) {
         if (connector.getConnectorClientConfig() != null) {
             connectorClientConfig = connector.getConnectorClientConfig();
-        } else {
-            connectorClientConfig = new ConnectorClientConfig();
+        }
+    }
+
+    protected SdkAsyncHttpClient getHttpClient() {
+        // This block for high performance retrieval after http client is created.
+        SdkAsyncHttpClient existingClient = httpClientRef.get();
+        if (existingClient != null) {
+            return existingClient;
+        }
+        // This block handles concurrent http client creation.
+        synchronized (this) {
+            existingClient = httpClientRef.get();
+            if (existingClient != null) {
+                return existingClient;
+            }
+            Duration connectionTimeout = Duration
+                .ofMillis(
+                    Optional
+                        .ofNullable(connectorClientConfig.getConnectionTimeoutMillis())
+                        .orElse(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE)
+                );
+            Duration readTimeout = Duration
+                .ofSeconds(
+                    Optional
+                        .ofNullable(connectorClientConfig.getReadTimeoutSeconds())
+                        .orElse(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE)
+                );
+            int maxConnection = Optional
+                .ofNullable(connectorClientConfig.getMaxConnections())
+                .orElse(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE);
+            Boolean skipSslVerification = connectorClientConfig.getSkipSslVerification();
+            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
+            log
+                .info(
+                    "{} creating HTTP client with maxConnections: {}, connectionTimeout: {}ms, readTimeout: {}s, connector private ip enabled: {}, skip SSL verification: {}",
+                    this.getClass().getSimpleName(),
+                    maxConnection,
+                    this.getConnectorClientConfig().getConnectionTimeoutMillis(),
+                    this.getConnectorClientConfig().getReadTimeoutSeconds(),
+                    connectorPrivateIpEnabled,
+                    skipSslVerificationValue
+                );
+            SdkAsyncHttpClient newClient = MLHttpClientFactory
+                .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled, skipSslVerificationValue);
+            httpClientRef.set(newClient);
+            return newClient;
         }
     }
 
@@ -61,6 +116,13 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
                 builder.setHeader(headerName, headerValue);
                 log.debug("Get MCP header: {}", headerName);
             }
+        }
+    }
+
+    public void close() {
+        SdkAsyncHttpClient httpClient = httpClientRef.getAndSet(null);
+        if (httpClient != null) {
+            httpClient.close();
         }
     }
 

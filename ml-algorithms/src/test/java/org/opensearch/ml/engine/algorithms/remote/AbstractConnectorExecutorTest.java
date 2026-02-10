@@ -44,18 +44,18 @@ public class AbstractConnectorExecutorTest {
     public void testValidateWithNullConfig() {
         when(mockConnector.getConnectorClientConfig()).thenReturn(null);
         executor.initialize(mockConnector);
-        assertEquals(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getConnectorClientConfig().getMaxConnections());
-        assertEquals(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getConnectionTimeout());
-        assertEquals(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getReadTimeout());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE), executor.getConnectorClientConfig().getMaxConnections());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getConnectionTimeoutMillis());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getReadTimeoutSeconds());
     }
 
     @Test
     public void testValidateWithNonNullConfigButNullValues() {
         when(mockConnector.getConnectorClientConfig()).thenReturn(connectorClientConfig);
         executor.initialize(mockConnector);
-        assertEquals(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getConnectorClientConfig().getMaxConnections());
-        assertEquals(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getConnectionTimeout());
-        assertEquals(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getReadTimeout());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE), executor.getConnectorClientConfig().getMaxConnections());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getConnectionTimeoutMillis());
+        assertEquals(Integer.valueOf(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE), executor.getConnectorClientConfig().getReadTimeoutSeconds());
     }
 
     @Test

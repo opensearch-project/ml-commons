@@ -72,8 +72,9 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         this.llmInterface = llmInterface;
         this.parameters = parameters;
 
-        Duration connectionTimeout = Duration.ofSeconds(connectorClientConfig.getConnectionTimeout());
-        Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeout());
+        // Get connector client configuration
+        Duration connectionTimeout = Duration.ofMillis(connectorClientConfig.getConnectionTimeoutMillis());
+        Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeoutSeconds());
 
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {

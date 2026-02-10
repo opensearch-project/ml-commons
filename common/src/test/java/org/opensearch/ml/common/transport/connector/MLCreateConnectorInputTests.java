@@ -68,7 +68,7 @@ public class MLCreateConnectorInputTests {
         + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
         + "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false,"
         + "\"access_mode\":\"PUBLIC\",\"client_config\":{\"max_connection\":20,"
-        + "\"connection_timeout\":10000,\"read_timeout\":10000,"
+        + "\"connection_timeout\":10000,\"read_timeout\":10,"
         + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
     @Before
@@ -95,7 +95,7 @@ public class MLCreateConnectorInputTests {
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(
             20,
             10000,
-            10000,
+            10,
             10,
             10,
             -1,
@@ -359,8 +359,8 @@ public class MLCreateConnectorInputTests {
         testParseFromJsonString(expectedInputStr, parsedInput -> {
             assertEquals(TEST_CONNECTOR_NAME, parsedInput.getName());
             assertEquals(20, parsedInput.getConnectorClientConfig().getMaxConnections().intValue());
-            assertEquals(10000, parsedInput.getConnectorClientConfig().getReadTimeout().intValue());
-            assertEquals(10000, parsedInput.getConnectorClientConfig().getConnectionTimeout().intValue());
+            assertEquals(10, parsedInput.getConnectorClientConfig().getReadTimeoutSeconds().intValue());
+            assertEquals(10000, parsedInput.getConnectorClientConfig().getConnectionTimeoutMillis().intValue());
         });
     }
 
