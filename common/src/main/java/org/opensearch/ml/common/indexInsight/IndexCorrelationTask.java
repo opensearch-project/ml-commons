@@ -166,14 +166,15 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Extract index patterns based on name overlapping
      * Logic: Group indices by name similarity - if overlap exceeds threshold, they belong to same pattern
+     * Strategy: First mask consecutive digits, then calculate prefix/suffix overlap with high threshold
      */
     private Map<String, List<String>> extractIndexPatterns(List<String> indices) {
         if (indices.isEmpty()) {
             return new HashMap<>();
         }
 
-        // Threshold for considering indices as same pattern (70% overlap)
-        final double OVERLAP_THRESHOLD = 0.8;
+        // High threshold (80%) after masking digits - ensures very similar patterns
+        final double OVERLAP_THRESHOLD = 0.85;
 
         List<IndexGroup> groups = new ArrayList<>();
 
@@ -208,29 +209,68 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     }
 
     /**
-     * Calculate name overlap between two index names using Longest Common Subsequence (LCS)
+     * Mask consecutive digits (length >= 2) in index name with a placeholder
+     * Single digits are preserved as they often represent versions (v1, v2, etc.)
+     * This normalizes index names for similarity comparison
+     *
+     * Examples:
+     * - "logs-otel-v1-000001" -> "logs-otel-v1-#"  (v1 preserved, 000001 masked)
+     * - "jaeger-span-2025-12-19" -> "jaeger-span-#-#-#"  (all multi-digit numbers masked)
+     * - "ss4o_metrics-otel-2025.12.19" -> "ss4o_metrics-otel-#.#.#"
+     * - "logs-v2-2025" -> "logs-v2-#"  (v2 preserved, 2025 masked)
+     */
+    private String maskConsecutiveDigits(String indexName) {
+        if (indexName == null) {
+            return null;
+        }
+        // Replace consecutive digits with length >= 2 with a single '#' placeholder
+        // Single digits (like v1, v2) are preserved
+        return indexName.replaceAll("\\d{2,}", "#");
+    }
+
+    /**
+     * Calculate name overlap between two index names
+     * Strategy: First mask consecutive digits (length >= 2), then calculate prefix+suffix overlap
      * Returns a value between 0.0 and 1.0
      *
-     * LCS captures the similarity between strings even when differences are in the middle,
-     * making it more robust than simple prefix/suffix matching.
+     * Examples:
+     * - "logs-otel-v1-000001" vs "logs-otel-v1-000002"
+     *   -> masked: "logs-otel-v1-#" vs "logs-otel-v1-#"
+     *   -> overlap: 1.0 (perfect match, v1 preserved)
+     *
+     * - "logs-otel-2025-01" vs "logs-app-2025-01"
+     *   -> masked: "logs-otel-#-01" vs "logs-app-#-01"
+     *   -> overlap: ~0.65 (prefix "logs-" + suffix "-01")
+     *
+     * - "logs-v1-2025" vs "logs-v2-2025"
+     *   -> masked: "logs-v1-#" vs "logs-v2-#"
+     *   -> overlap: ~0.82 (prefix "logs-v" + suffix "-#", but v1 vs v2 differs)
      */
     private double calculateOverlap(String s1, String s2) {
-        if (s1 == null || s2 == null)
+        if (s1 == null || s2 == null) {
             return 0.0;
+        }
 
-        int n1 = s1.length();
-        int n2 = s2.length();
+        // Step 1: Mask consecutive digits to normalize index names
+        String masked1 = maskConsecutiveDigits(s1);
+        String masked2 = maskConsecutiveDigits(s2);
+
+        int n1 = masked1.length();
+        int n2 = masked2.length();
         int minLen = Math.min(n1, n2);
-        if (minLen == 0)
+        if (minLen == 0) {
             return 0.0;
+        }
 
-        int prefix = commonPrefixLen(s1, s2);
+        // Step 2: Calculate common prefix length
+        int prefix = commonPrefixLen(masked1, masked2);
 
-        // Ensure no overlap: suffixLen <= minLen - prefix
+        // Step 3: Calculate common suffix length (without overlapping with prefix)
         int maxSuffixAllowed = Math.max(0, minLen - prefix);
-        int suffix = commonSuffixLenWithCap(s1, s2, maxSuffixAllowed);
+        int suffix = commonSuffixLenWithCap(masked1, masked2, maxSuffixAllowed);
 
-        return (prefix + suffix) / (double) minLen;
+        // Step 4: Return overlap ratio
+        return (prefix + suffix) / (double) Math.max(n1, n2);
     }
 
     // Longest common prefix length
@@ -749,7 +789,6 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                     result.put("total_indices_scanned", allIndices.size());
                     result.put("total_patterns_detected", detectedPatterns.size());
                     result.put("correlation_tuple", tuple);
-                    result.put("all_patterns", buildAllPatternsInfo());
                     listener.onResponse(result);
                 }, e -> {
                     log.warn("Failed to use LLM for pattern matching, falling back to simple selection", e);
@@ -768,7 +807,6 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                     result.put("total_indices_scanned", allIndices.size());
                     result.put("total_patterns_detected", detectedPatterns.size());
                     result.put("correlation_tuple", tuple);
-                    result.put("all_patterns", buildAllPatternsInfo());
                     listener.onResponse(result);
                 })
             );
@@ -788,7 +826,6 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             result.put("total_indices_scanned", allIndices.size());
             result.put("total_patterns_detected", detectedPatterns.size());
             result.put("correlation_tuple", tuple);
-            result.put("all_patterns", buildAllPatternsInfo());
             listener.onResponse(result);
         }
     }
@@ -819,21 +856,6 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             default:
                 return new String[] { "LOG", "TRACE" };
         }
-    }
-
-    /**
-     * Build all patterns info for debugging
-     */
-    private List<Map<String, Object>> buildAllPatternsInfo() {
-        List<Map<String, Object>> allPatterns = new ArrayList<>();
-        for (PatternInfo info : detectedPatterns.values()) {
-            Map<String, Object> patternMap = new HashMap<>();
-            patternMap.put("pattern", info.pattern);
-            patternMap.put("type", info.type);
-            patternMap.put("sample_count", info.sampleIndices.size());
-            allPatterns.add(patternMap);
-        }
-        return allPatterns;
     }
 
     /**
