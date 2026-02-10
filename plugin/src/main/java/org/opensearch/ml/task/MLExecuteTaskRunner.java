@@ -257,6 +257,12 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 AgentMLInput agentInput = (AgentMLInput) request.getInput();
                 agentInput.setHookRegistry(hookRegistry);
 
+                // Mark context management as processed to prevent MLAgentExecutor from applying agent's stored config
+                if (agentInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+                    RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+                    dataset.getParameters().put(CONTEXT_MANAGEMENT_PROCESSED, "true");
+                }
+
                 log
                     .debug(
                         "Executing agent with context management template: {} using {} context managers",
