@@ -78,7 +78,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     private static final String CREATED_TIME_FIELD = "created_time";
     private static final Gson GSON = new Gson();
 
-    private static volatile SdkAsyncHttpClient defaultHttpClient = null;
+    private static volatile SdkAsyncHttpClient DEFAULT_HTTP_CLIENT = null;
     // The connector is an inline connector so we use default connector client configs.
     private static final ConnectorClientConfig DEFAULT_CONNECTOR_CLIENT_CONFIG = new ConnectorClientConfig();
     // The connector will be used to handle all the memory operations during agent running and one agent consumes one connection at any
@@ -954,9 +954,9 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
      * This is shared across all RemoteAgenticConversationMemory instances.
      */
     private static SdkAsyncHttpClient getOrCreateDefaultHttpClient() {
-        if (defaultHttpClient == null) {
+        if (DEFAULT_HTTP_CLIENT == null) {
             synchronized (RemoteAgenticConversationMemory.class) {
-                if (defaultHttpClient == null) {
+                if (DEFAULT_HTTP_CLIENT == null) {
                     try {
                         log
                             .info(
@@ -965,7 +965,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                                 DEFAULT_CONNECTOR_CLIENT_CONFIG.getReadTimeout(),
                                 MAX_CONNECTIONS
                             );
-                        defaultHttpClient = MLHttpClientFactory
+                        DEFAULT_HTTP_CLIENT = MLHttpClientFactory
                             .getAsyncHttpClient(
                                 Duration.ofMillis(DEFAULT_CONNECTOR_CLIENT_CONFIG.getConnectionTimeout()),
                                 Duration.ofSeconds(DEFAULT_CONNECTOR_CLIENT_CONFIG.getReadTimeout()),
@@ -980,7 +980,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                 }
             }
         }
-        return defaultHttpClient;
+        return DEFAULT_HTTP_CLIENT;
     }
 
     /**
