@@ -23,15 +23,18 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
 
@@ -39,8 +42,8 @@ public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
+    TriConsumer<String, String, ActionListener<String>> encryptFunction;
+    TriConsumer<String, String, ActionListener<String>> decryptFunction;
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
@@ -56,8 +59,8 @@ public class HttpConnectorTest {
 
     @Before
     public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
+        encryptFunction = (s, v, l) -> l.onResponse("encrypted: " + s.toLowerCase(Locale.ROOT));
+        decryptFunction = (s, v, l) -> l.onResponse("decrypted: " + s.toUpperCase(Locale.ROOT));
     }
 
     @Test
@@ -140,6 +143,16 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void decrypt_Throws_Exception() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Exception during decrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> decryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during decrypting credentials"));
+        HttpConnector connector = createHttpConnector();
+        connector.decrypt(PREDICT.name(), decryptErrorFunction, null);
+    }
+
+    @Test
     public void encrypted() {
         HttpConnector connector = createHttpConnector();
         connector.encrypt(encryptFunction, null);
@@ -151,6 +164,16 @@ public class HttpConnectorTest {
         Assert.assertNull(connector.getCredential());
         Assert.assertNull(connector.getDecryptedCredential());
         Assert.assertNull(connector.getDecryptedHeaders());
+    }
+
+    @Test
+    public void encrypt_Throws_Exception() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Exception during encrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> encryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during encrypting credentials"));
+        HttpConnector connector = createHttpConnector();
+        connector.encrypt(encryptErrorFunction, null);
     }
 
     @Test

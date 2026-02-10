@@ -51,6 +51,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -72,6 +73,8 @@ import com.google.common.collect.ImmutableMap;
 public class RemoteConnectorExecutorTest {
 
     Encryptor encryptor;
+
+    Connector connector;
 
     @Mock
     Client client;
@@ -96,7 +99,7 @@ public class RemoteConnectorExecutorTest {
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
     }
 
-    private Connector getConnector(Map<String, String> parameters) {
+    private void createConnector(Map<String, String> parameters) {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -104,18 +107,23 @@ public class RemoteConnectorExecutorTest {
             .url("http:///mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
-        Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
-        return AwsConnector
-            .awsConnectorBuilder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(parameters)
-            .credential(credential)
-            .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
-            .build();
+        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
+            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
+                connector = AwsConnector
+                    .awsConnectorBuilder()
+                    .name("test connector")
+                    .version("1")
+                    .protocol("http")
+                    .parameters(parameters)
+                    .credential(credential)
+                    .actions(Arrays.asList(predictAction))
+                    .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+                    .build();
+            }, error -> {});
+            encryptor.encrypt("test_secret_key", null, listener2);
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test_key", null, listener1);
     }
 
     private AwsConnectorExecutor getExecutor(Connector connector) {
@@ -132,7 +140,7 @@ public class RemoteConnectorExecutorTest {
     public void executePreparePayloadAndInvoke_SkipValidateMissingParameterDisabled() {
         Map<String, String> parameters = ImmutableMap
             .of(SKIP_VALIDATE_MISSING_PARAMETERS, "false", SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -155,7 +163,7 @@ public class RemoteConnectorExecutorTest {
     public void executePreparePayloadAndInvoke_SkipValidateMissingParameterEnabled() {
         Map<String, String> parameters = ImmutableMap
             .of(SKIP_VALIDATE_MISSING_PARAMETERS, "true", SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -175,7 +183,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_SkipValidateMissingParameterDefault() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -197,7 +205,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_PassingParameter() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -229,7 +237,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_GetParamsIOException() throws Exception {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -253,7 +261,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executeGetParams_MissingParameter() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -287,7 +295,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executeGetParams_PassingParameter() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -322,7 +330,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executeGetParams_ConvertToString() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -358,7 +366,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executeAction_WithTransportChannel() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "bedrock", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -398,7 +406,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_WithInputProcessors_EmptyList() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -420,7 +428,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_WithInputProcessors_ExtractJson() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         // Create input processors configuration
@@ -451,7 +459,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_WithInputProcessors_JsonString() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         // Create input processors as JSON string

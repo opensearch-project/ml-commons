@@ -258,7 +258,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             connector.addAction(connectorAction);
         }
         // multi-tenancy isn't implemented in batch, so setting null as tenant by default
-        connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, null), null);
+        connector
+            .decrypt(CANCEL_BATCH_PREDICT.name(), (credential, tenantId, listener) -> encryptor.decrypt(credential, null, listener), null);
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setScriptService(scriptService);
         connectorExecutor.setClusterService(clusterService);
