@@ -51,6 +51,19 @@ public class ToolsOutputTruncateManager implements ContextManager {
         // Initialize activation rules from config
         @SuppressWarnings("unchecked")
         Map<String, Object> activationConfig = (Map<String, Object>) config.get("activation");
+
+        // Validate: tokens_exceed doesn't make sense for POST_TOOL hook
+        // tokens_exceed measures the entire context window (prompts + history + tool interactions)
+        // and is meant for PRE_LLM hooks to prevent context overflow before LLM invocation.
+        // POST_TOOL hook should always truncate tool output proactively, not based on total context size.
+        if (activationConfig != null && activationConfig.containsKey("tokens_exceed")) {
+            throw new IllegalArgumentException(
+                "ToolsOutputTruncateManager does not support 'tokens_exceed' activation rule. "
+                    + "The 'tokens_exceed' rule measures the entire context window and is designed for PRE_LLM hooks. "
+                    + "For POST_TOOL hooks, either use no activation rules (always truncate) or remove the 'activation' config entirely."
+            );
+        }
+
         this.activationRules = ActivationRuleFactory.createRules(activationConfig);
 
         log.info("Initialized ToolsOutputTruncateManager: maxOutputLength={}", maxOutputLength);
