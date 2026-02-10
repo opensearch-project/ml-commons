@@ -68,6 +68,21 @@ public class ToolsOutputTruncateManagerTest {
     }
 
     @Test
+    public void testInitializeWithMessageCountExceedThrowsException() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("max_output_length", 10000);
+
+        Map<String, Object> activation = new HashMap<>();
+        activation.put("message_count_exceed", 10);
+        config.put("activation", activation);
+
+        // Should throw IllegalArgumentException when message_count_exceed is used
+        IllegalArgumentException exception = Assert.assertThrows(IllegalArgumentException.class, () -> manager.initialize(config));
+
+        Assert.assertTrue(exception.getMessage().contains("does not support 'message_count_exceed' activation rule"));
+    }
+
+    @Test
     public void testInitializeWithOtherActivationRulesSucceeds() {
         Map<String, Object> config = new HashMap<>();
         config.put("max_output_length", 10000);
