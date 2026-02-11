@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.AGENT_LLM_MODEL_ID;
@@ -37,9 +38,13 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
+import org.opensearch.ml.common.transport.model.MLModelGetAction;
+import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.ml.engine.tools.parser.ToolParser;
@@ -93,6 +98,10 @@ public class QueryPlanningTool implements WithModelTool {
     private static final Set<String> AGENT_CONTEXT_EXCLUDED_PARAMS = Set
         .of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
 
+    // Model validation error messages
+    private static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model not found. Please provide a valid model ID.";
+    private static final String LLM_MODEL_NOT_REMOTE_ERROR = "Query Planning Tool requires a remote LLM model.";
+
     @Getter
     private final String generationType;
     @Getter
@@ -127,16 +136,25 @@ public class QueryPlanningTool implements WithModelTool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
     private final Client client;
+    private final String modelId;
+    private volatile boolean validated = false;
 
     @Setter
     @Getter
     private Parser outputParser;
 
-    public QueryPlanningTool(String generationType, MLModelTool queryGenerationTool, Client client, String searchTemplates) {
+    public QueryPlanningTool(
+        String generationType,
+        MLModelTool queryGenerationTool,
+        Client client,
+        String searchTemplates,
+        String modelId
+    ) {
         this.generationType = generationType;
         this.queryGenerationTool = queryGenerationTool;
         this.client = client;
         this.searchTemplates = searchTemplates;
+        this.modelId = modelId;
         this.attributes = new HashMap<>(DEFAULT_ATTRIBUTES);
     }
 
@@ -156,6 +174,25 @@ public class QueryPlanningTool implements WithModelTool {
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
             Map<String, String> parameters = stripAgentContextParameters(ToolUtils.extractInputParameters(originalParameters, attributes));
+            String tenantId = originalParameters.get(TENANT_ID_FIELD);
+
+            // Validate that the model is of REMOTE type (only on first run)
+            if (!validated) {
+                validateModelIsRemote(modelId, tenantId, ActionListener.wrap(valid -> {
+                    validated = true;
+                    runAfterModelValidation(parameters, listener);
+                }, listener::onFailure));
+            } else {
+                runAfterModelValidation(parameters, listener);
+            }
+        } catch (Exception e) {
+            log.error("Failed to run QueryPlannerTool", e);
+            listener.onFailure(e);
+        }
+    }
+
+    private <T> void runAfterModelValidation(Map<String, String> parameters, ActionListener<T> listener) {
+        try {
             if (!validate(parameters)) {
                 listener
                     .onFailure(
@@ -225,6 +262,41 @@ public class QueryPlanningTool implements WithModelTool {
             log.error("Failed to run QueryPlannerTool", e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Validates that the model exists and is of REMOTE type.
+     * QueryPlanningTool requires an LLM model which must be of REMOTE type.
+     *
+     * @param modelId  The model ID to validate
+     * @param tenantId The tenant ID for multi-tenancy support
+     * @param listener Action listener that receives true on success, or error on failure
+     */
+    private void validateModelIsRemote(String modelId, String tenantId, ActionListener<Boolean> listener) {
+        if (modelId == null || modelId.isEmpty()) {
+            listener.onFailure(new IllegalArgumentException(LLM_MODEL_NOT_FOUND_ERROR));
+            return;
+        }
+
+        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, false, tenantId);
+        client.execute(MLModelGetAction.INSTANCE, getRequest, ActionListener.wrap(response -> {
+            MLModel model = response.getMlModel();
+            if (model == null) {
+                listener.onFailure(new IllegalArgumentException(LLM_MODEL_NOT_FOUND_ERROR));
+                return;
+            }
+
+            FunctionName algorithm = model.getAlgorithm();
+            if (algorithm != FunctionName.REMOTE) {
+                listener.onFailure(new IllegalArgumentException(LLM_MODEL_NOT_REMOTE_ERROR));
+                return;
+            }
+
+            listener.onResponse(true);
+        }, e -> {
+            log.error("Failed to get LLM model: {}", modelId, e);
+            listener.onFailure(new IllegalArgumentException(LLM_MODEL_NOT_FOUND_ERROR, e));
+        }));
     }
 
     @SuppressWarnings("unchecked")
@@ -426,6 +498,8 @@ public class QueryPlanningTool implements WithModelTool {
                 params.put(MODEL_ID_FIELD, params.get(AGENT_LLM_MODEL_ID));
             }
 
+            String modelId = (String) params.get(MODEL_ID_FIELD);
+
             MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(params);
 
             String type = (String) params.get(GENERATION_TYPE_FIELD);
@@ -455,7 +529,7 @@ public class QueryPlanningTool implements WithModelTool {
                 }
             }
 
-            QueryPlanningTool queryPlanningTool = new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates);
+            QueryPlanningTool queryPlanningTool = new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates, modelId);
 
             // Create parser with default extract_json processor + any custom processors
             queryPlanningTool.setOutputParser(createParserWithDefaultExtractJson(params));
