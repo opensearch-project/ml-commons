@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.task;
 
+import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.CONTEXT_MANAGEMENT_PROCESSED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 
@@ -14,6 +16,7 @@ import java.io.IOException;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
@@ -254,6 +257,12 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 AgentMLInput agentInput = (AgentMLInput) request.getInput();
                 agentInput.setHookRegistry(hookRegistry);
 
+                // Mark context management as processed to prevent MLAgentExecutor from applying agent's stored config
+                if (agentInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+                    RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+                    dataset.getParameters().put(CONTEXT_MANAGEMENT_PROCESSED, "true");
+                }
+
                 log
                     .debug(
                         "Executing agent with context management template: {} using {} context managers",
@@ -306,31 +315,35 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         // Priority 2: Check agent's stored configuration directly
         String agentId = agentInput.getAgentId();
         if (agentId != null) {
-            client.get(new GetRequest(CommonValue.ML_AGENT_INDEX, agentId), ActionListener.wrap(response -> {
-                if (response.isExists()) {
-                    try {
-                        XContentParser parser = JsonXContent.jsonXContent
-                            .createParser(null, LoggingDeprecationHandler.INSTANCE, response.getSourceAsString());
-                        XContentParserUtils.ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        MLAgent mlAgent = MLAgent.parse(parser);
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<org.opensearch.action.get.GetResponse> internalListener = ActionListener.wrap(response -> {
+                    if (response.isExists()) {
+                        try {
+                            XContentParser parser = JsonXContent.jsonXContent
+                                .createParser(null, LoggingDeprecationHandler.INSTANCE, response.getSourceAsString());
+                            XContentParserUtils.ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                            MLAgent mlAgent = MLAgent.parse(parser);
 
-                        if (mlAgent.hasContextManagementTemplate()) {
-                            String templateName = mlAgent.getContextManagementTemplateName();
-                            if (templateName != null && !templateName.trim().isEmpty()) {
-                                listener.onResponse(templateName);
-                                return;
+                            if (mlAgent.hasContextManagementTemplate()) {
+                                String templateName = mlAgent.getContextManagementTemplateName();
+                                if (templateName != null && !templateName.trim().isEmpty()) {
+                                    listener.onResponse(templateName);
+                                    return;
+                                }
                             }
+                        } catch (Exception e) {
+                            log.debug("Failed to parse agent, using fallback: {}", e.getMessage());
                         }
-                    } catch (Exception e) {
-                        log.debug("Failed to parse agent, using fallback: {}", e.getMessage());
                     }
-                }
-                // Agent not found or no template, continue to fallback
-                listener.onResponse(getFallbackContextManagementName(agentInput));
-            }, e -> {
-                log.debug("Failed to retrieve agent, using fallback: {}", e.getMessage());
-                listener.onResponse(getFallbackContextManagementName(agentInput));
-            }));
+                    // Agent not found or no template, continue to fallback
+                    listener.onResponse(getFallbackContextManagementName(agentInput));
+                }, e -> {
+                    log.debug("Failed to retrieve agent, using fallback: {}", e.getMessage());
+                    listener.onResponse(getFallbackContextManagementName(agentInput));
+                });
+                client
+                    .get(new GetRequest(CommonValue.ML_AGENT_INDEX, agentId), ActionListener.runBefore(internalListener, context::restore));
+            }
             return;
         }
 
@@ -344,14 +357,14 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
             RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
 
             // Check if context management has already been processed by MLAgentExecutor (for inline templates)
-            String contextManagementProcessed = dataset.getParameters().get("context_management_processed");
+            String contextManagementProcessed = dataset.getParameters().get(CONTEXT_MANAGEMENT_PROCESSED);
             if ("true".equals(contextManagementProcessed)) {
                 log.debug("Context management already processed by MLAgentExecutor, skipping template lookup");
                 return null;
             }
 
             // Check for context management name in runtime parameters
-            String runtimeContextManagementName = dataset.getParameters().get("context_management_name");
+            String runtimeContextManagementName = dataset.getParameters().get(CONTEXT_MANAGEMENT_NAME_FIELD);
             if (runtimeContextManagementName != null && !runtimeContextManagementName.trim().isEmpty()) {
                 log.debug("Using runtime context management name from parameters: {}", runtimeContextManagementName);
                 return runtimeContextManagementName;

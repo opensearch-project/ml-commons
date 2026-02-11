@@ -6,8 +6,11 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -21,7 +24,10 @@ import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FI
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +39,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -56,12 +63,14 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -72,7 +81,9 @@ import org.opensearch.transport.client.Client;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-public class AwsConnectorExecutorTest {
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+
+public class AwsConnectorExecutorTest extends MLStaticMockBase {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -152,7 +163,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
         connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -239,7 +250,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
         connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -291,7 +302,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
         connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -351,7 +362,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
         connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -408,7 +419,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
         connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -708,7 +719,7 @@ public class AwsConnectorExecutorTest {
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
         // execute with retry disabled
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null);
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -742,7 +753,7 @@ public class AwsConnectorExecutorTest {
         verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
         // execute with retry enabled
-        ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT, null);
         Connector connector2 = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -800,7 +811,7 @@ public class AwsConnectorExecutorTest {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT, null);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -847,7 +858,7 @@ public class AwsConnectorExecutorTest {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, 5, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, 5, RetryBackoffPolicy.CONSTANT, null);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -894,7 +905,7 @@ public class AwsConnectorExecutorTest {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT, null);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -962,5 +973,134 @@ public class AwsConnectorExecutorTest {
         verify(actionListener).onFailure(captor.capture());
         assertTrue(captor.getValue() instanceof MLException);
         assertEquals("Fail to execute streaming", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_With_SkipSslVerification_True() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, true);
+            AwsConnector mockConnector = mock(AwsConnector.class);
+            when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+            when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+            when(mockConnector.getRegion()).thenReturn("us-east-1");
+            when(mockConnector.getConnectorClientConfig()).thenReturn(clientConfig);
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+            MLInput mlInput = mock(MLInput.class);
+            Map<String, String> parameters = Map
+                .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+            String payload = "{\"input\": \"test input\"}";
+            ExecutionContext executionContext = new ExecutionContext(123);
+            StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+            executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification was set to true
+            assertTrue("SSL verification should be disabled", sslVerificationCaptor.getValue());
+        }
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_With_SkipSslVerification_False() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, false);
+            AwsConnector mockConnector = mock(AwsConnector.class);
+            when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+            when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+            when(mockConnector.getRegion()).thenReturn("us-east-1");
+            when(mockConnector.getConnectorClientConfig()).thenReturn(clientConfig);
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+            MLInput mlInput = mock(MLInput.class);
+            Map<String, String> parameters = Map
+                .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+            String payload = "{\"input\": \"test input\"}";
+            ExecutionContext executionContext = new ExecutionContext(123);
+            StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+            executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification was set to false
+            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
+        }
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_With_SkipSslVerification_Null() {
+        try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null);
+            AwsConnector mockConnector = mock(AwsConnector.class);
+            when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+            when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+            when(mockConnector.getRegion()).thenReturn("us-east-1");
+            when(mockConnector.getConnectorClientConfig()).thenReturn(clientConfig);
+            SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
+            mockedFactory
+                .when(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                )
+                .thenReturn(mockClient);
+
+            AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+            MLInput mlInput = mock(MLInput.class);
+            Map<String, String> parameters = Map
+                .of(LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, "model", "claude-v2", "inputs", "test input");
+            String payload = "{\"input\": \"test input\"}";
+            ExecutionContext executionContext = new ExecutionContext(123);
+            StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+            executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+
+            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
+            mockedFactory
+                .verify(
+                    () -> MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            sslVerificationCaptor.capture()
+                        )
+                );
+            // Assert that skipSslVerification defaults to false when null
+            assertFalse("SSL verification should be enabled when null", sslVerificationCaptor.getValue());
+        }
     }
 }

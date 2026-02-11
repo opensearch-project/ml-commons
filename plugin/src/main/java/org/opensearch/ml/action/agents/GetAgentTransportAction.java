@@ -95,17 +95,17 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
             .build();
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLAgentGetResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                context.restore();
                 log.debug("Completed Get Agent Request, Agent id:{}", agentId);
                 if (throwable != null) {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
                         log.error("Failed to get Agent index", cause);
-                        wrappedListener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
+                        actionListener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get ML Agent {}", agentId, cause);
-                        wrappedListener.onFailure(cause);
+                        actionListener.onFailure(cause);
                     }
                 } else {
                     try {
@@ -118,9 +118,9 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 MLAgent mlAgent = MLAgent.parse(parser);
                                 if (TenantAwareHelper
-                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlAgent.getTenantId(), wrappedListener)) {
+                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlAgent.getTenantId(), actionListener)) {
                                     if (mlAgent.getIsHidden() && !isSuperAdmin) {
-                                        wrappedListener
+                                        actionListener
                                             .onFailure(
                                                 new OpenSearchStatusException(
                                                     "User doesn't have privilege to perform this operation on this agent",
@@ -130,16 +130,16 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                                     } else {
                                         // Remove credentials before returning to user
                                         mlAgent.removeCredential();
-                                        wrappedListener.onResponse(MLAgentGetResponse.builder().mlAgent(mlAgent).build());
+                                        actionListener.onResponse(MLAgentGetResponse.builder().mlAgent(mlAgent).build());
                                     }
                                 }
 
                             } catch (Exception e) {
                                 log.error("Failed to parse ml agent {}", agentId, e);
-                                wrappedListener.onFailure(e);
+                                actionListener.onFailure(e);
                             }
                         } else {
-                            wrappedListener
+                            actionListener
                                 .onFailure(
                                     new OpenSearchStatusException(
                                         "Failed to find agent with the provided agent id: " + agentId,
@@ -148,7 +148,7 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                                 );
                         }
                     } catch (Exception e) {
-                        wrappedListener.onFailure(e);
+                        actionListener.onFailure(e);
                     }
                 }
             });

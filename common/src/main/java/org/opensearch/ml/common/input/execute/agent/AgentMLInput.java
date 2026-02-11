@@ -8,6 +8,7 @@ package org.opensearch.ml.common.input.execute.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
 
 import java.io.IOException;
 import java.util.Map;
@@ -149,8 +150,8 @@ public class AgentMLInput extends MLInput {
                     Map<String, Object> parameterObjs = parser.map();
                     Map<String, String> parameters = StringUtils.getParameterMap(parameterObjs);
                     // Extract context_management from parameters
-                    if (parameterObjs.containsKey("context_management")) {
-                        contextManagementName = (String) parameterObjs.get("context_management");
+                    if (parameterObjs.containsKey(CONTEXT_MANAGEMENT_NAME_FIELD)) {
+                        contextManagementName = (String) parameterObjs.get(CONTEXT_MANAGEMENT_NAME_FIELD);
                     }
                     inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
