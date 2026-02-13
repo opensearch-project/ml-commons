@@ -484,6 +484,146 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     }
 
     /**
+     * Save a message in Strands format (for V2 agents)
+     * Stores the complete message structure with role and content blocks
+     *
+     * @param role Message role (user, assistant, tool, etc.)
+     * @param contentBlocks List of content blocks (text, image, etc.)
+     * @param messageId Sequential message ID
+     * @param listener Action listener for save completion
+     */
+    public void saveMessageInStrandsFormat(
+        String role,
+        List<Map<String, Object>> contentBlocks,
+        Integer messageId,
+        ActionListener<CreateInteractionResponse> listener
+    ) {
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
+            return;
+        }
+
+        // Build namespace with session_id
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put(SESSION_ID_FIELD, conversationId);
+
+        // Build message structure in Strands format
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", role);
+        message.put("content", contentBlocks);
+
+        // Build structured_data_blob
+        Map<String, Object> structuredData = new HashMap<>();
+        structuredData.put("message", message);
+        structuredData.put("message_id", messageId);
+
+        // Add timestamps
+        java.time.Instant now = java.time.Instant.now();
+        structuredData.put("created_at", now.toString());
+        structuredData.put("updated_at", now.toString());
+
+        // Metadata
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("type", "message");
+        metadata.put("role", role);
+        metadata.put("format", "strands");
+
+        // Create MLAddMemoriesInput
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .structuredDataBlob(structuredData)
+            .messageId(messageId)
+            .namespace(namespace)
+            .metadata(metadata)
+            .infer(false)
+            .build();
+
+        MLAddMemoriesRequest request = MLAddMemoriesRequest.builder().mlAddMemoryInput(input).build();
+
+        // Execute the add memories action
+        client.execute(MLAddMemoriesAction.INSTANCE, request, ActionListener.wrap(response -> {
+            CreateInteractionResponse interactionResponse = new CreateInteractionResponse(response.getWorkingMemoryId());
+            listener.onResponse(interactionResponse);
+        }, e -> {
+            log.error("Failed to save message in Strands format to memory container", e);
+            listener.onFailure(e);
+        }));
+    }
+
+    /**
+     * Get full conversation history including tool interactions (for V2 agents)
+     * Returns conversation turns with complete structured data
+     *
+     * @param limit Maximum number of conversation turns to retrieve
+     * @param listener Action listener for the conversation history
+     */
+    public void getFullConversationHistory(int limit, ActionListener<List<Map<String, Object>>> listener) {
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
+            return;
+        }
+
+        // Build search query for working memory by session_id
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        boolQuery.must(QueryBuilders.termQuery("namespace." + SESSION_ID_FIELD, conversationId));
+        boolQuery.mustNot(QueryBuilders.termQuery("metadata.type", "trace")); // Exclude traces for now
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQuery);
+        searchSourceBuilder.size(limit);
+        searchSourceBuilder.sort(CREATED_TIME_FIELD, SortOrder.ASC);
+
+        MLSearchMemoriesInput searchInput = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(MemoryType.WORKING)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
+
+        client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
+            List<Map<String, Object>> conversationHistory = new ArrayList<>();
+
+            for (SearchHit hit : searchResponse.getHits().getHits()) {
+                Map<String, Object> sourceMap = hit.getSourceAsMap();
+
+                // Extract structured_data_blob which contains the full conversation data
+                @SuppressWarnings("unchecked")
+                Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
+
+                if (structuredData != null) {
+                    // Create a conversation turn with all available data
+                    Map<String, Object> turn = new HashMap<>();
+                    turn.put("id", hit.getId());
+                    turn.put("structured_data", structuredData);
+
+                    // Add metadata
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> metadata = (Map<String, String>) sourceMap.get("metadata");
+                    if (metadata != null) {
+                        turn.put("metadata", metadata);
+                    }
+
+                    // Add timestamps
+                    Long createdTimeMs = (Long) sourceMap.get("created_time");
+                    if (createdTimeMs != null) {
+                        turn.put("created_time", java.time.Instant.ofEpochMilli(createdTimeMs));
+                    }
+
+                    conversationHistory.add(turn);
+                }
+            }
+
+            listener.onResponse(conversationHistory);
+        }, e -> {
+            log.error("Failed to retrieve full conversation history from memory container", e);
+            listener.onFailure(e);
+        }));
+    }
+
+    /**
      * Factory for creating AgenticConversationMemory instances
      */
     public static class Factory implements Memory.Factory<AgenticConversationMemory> {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.agent;
+package org.opensearch.ml.engine.agents.models;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +15,7 @@ import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -28,9 +29,11 @@ import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
-import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.agents.models.ModelProvider;
+
+import com.google.gson.Gson;
 
 /**
  * Model provider for Bedrock Converse API.
@@ -78,6 +81,8 @@ public class BedrockConverseModelProvider extends ModelProvider {
         "{\"video\":{\"format\":\"${parameters.video_format}\",\"source\":{\"${parameters.video_source_type}\":\"${parameters.video_data}\"}}}";
 
     private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"content\":[${parameters.msg_content_array}]}";
+
+    private static final Gson gson = new Gson();
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
@@ -247,6 +252,20 @@ public class BedrockConverseModelProvider extends ModelProvider {
                     StringSubstitutor videoSubstitutor = new StringSubstitutor(videoParams, "${parameters.", "}");
                     contentArray.append(videoSubstitutor.replace(VIDEO_CONTENT_TEMPLATE));
                     break;
+                case TOOL_USE:
+                    // Serialize toolUse map directly to JSON
+                    // Format: {"toolUse": {"toolUseId": "...", "name": "...", "input": {...}}}
+                    Map<String, Object> toolUseWrapper = new HashMap<>();
+                    toolUseWrapper.put("toolUse", block.getToolUse());
+                    contentArray.append(gson.toJson(toolUseWrapper));
+                    break;
+                case TOOL_RESULT:
+                    // Serialize toolResult map directly to JSON
+                    // Format: {"toolResult": {"toolUseId": "...", "status": "...", "content": [...]}}
+                    Map<String, Object> toolResultWrapper = new HashMap<>();
+                    toolResultWrapper.put("toolResult", block.getToolResult());
+                    contentArray.append(gson.toJson(toolResultWrapper));
+                    break;
                 default:
                     // Skip unsupported content types
                     break;
@@ -405,5 +424,174 @@ public class BedrockConverseModelProvider extends ModelProvider {
                 throw new IllegalArgumentException("Unsupported source type. Supported types: " + supportedTypes);
             }
         };
+    }
+
+    // Tool-related methods for agent execution
+
+    @Override
+    public String formatToolConfiguration(Map<String, org.opensearch.ml.common.spi.tools.Tool> tools, Map<String, MLToolSpec> toolSpecMap) {
+        if (tools == null || tools.isEmpty()) {
+            return "";
+        }
+
+        // Bedrock format: "toolConfig":{"tools":[{"toolSpec":{...}}]}
+        StringBuilder toolsJson = new StringBuilder();
+        toolsJson.append(",\"toolConfig\":{\"tools\":[");
+
+        boolean first = true;
+        for (Map.Entry<String, org.opensearch.ml.common.spi.tools.Tool> entry : tools.entrySet()) {
+            String toolType = entry.getKey();
+            org.opensearch.ml.common.spi.tools.Tool tool = entry.getValue();
+            MLToolSpec toolSpec = toolSpecMap.get(toolType);
+
+            if (!first) {
+                toolsJson.append(",");
+            }
+            first = false;
+
+            // Get tool metadata
+            String toolName = tool.getName();
+            if (toolName == null || toolName.trim().isEmpty()) {
+                toolName = toolType;
+            }
+
+            String toolDescription = tool.getDescription();
+            if (toolDescription == null) {
+                toolDescription = "";
+            }
+
+            // Get input schema
+            String inputSchema = getToolInputSchema(tool);
+
+            // Build Bedrock toolSpec format
+            toolsJson.append("{\"toolSpec\":{");
+            toolsJson.append("\"name\":\"").append(StringEscapeUtils.escapeJson(toolName)).append("\",");
+            toolsJson.append("\"description\":\"").append(StringEscapeUtils.escapeJson(toolDescription)).append("\"");
+
+            // Add inputSchema
+            if (inputSchema != null && !inputSchema.trim().isEmpty()) {
+                toolsJson.append(",\"inputSchema\":{\"json\":");
+                if (inputSchema.startsWith("{") || inputSchema.startsWith("[")) {
+                    toolsJson.append(inputSchema);
+                } else {
+                    toolsJson.append(gson.toJson(inputSchema));
+                }
+                toolsJson.append("}");
+            } else {
+                toolsJson.append(",\"inputSchema\":{\"json\":{\"type\":\"object\",\"properties\":{}}}");
+            }
+
+            toolsJson.append("}}");
+        }
+
+        toolsJson.append("]}");
+        return toolsJson.toString();
+    }
+
+    @Override
+    public String formatAssistantToolUseMessage(List<Map<String, Object>> content, List<Map<String, Object>> toolUseBlocks) {
+        // Bedrock format: {"role":"assistant","content":[{"toolUse":{...}}]}
+        return "{\"role\":\"assistant\",\"content\":" + gson.toJson(content) + "}";
+    }
+
+    @Override
+    public String formatToolResultMessages(List<Map<String, Object>> toolResults) {
+        // Bedrock format: Single {"role":"user","content":[{"toolResult":{...}}]} message
+        StringBuilder toolResultContent = new StringBuilder();
+        toolResultContent.append("[");
+
+        boolean first = true;
+        for (Map<String, Object> toolResult : toolResults) {
+            if (!first) {
+                toolResultContent.append(",");
+            }
+            first = false;
+
+            String toolUseId = (String) toolResult.get("toolUseId");
+            String status = (String) toolResult.get("status");
+            List<Map<String, Object>> content = (List<Map<String, Object>>) toolResult.get("content");
+
+            toolResultContent.append("{\"toolResult\":{");
+            toolResultContent.append("\"toolUseId\":\"").append(toolUseId).append("\",");
+            toolResultContent.append("\"status\":\"").append(status).append("\",");
+            toolResultContent.append("\"content\":").append(gson.toJson(content));
+            toolResultContent.append("}}");
+        }
+
+        toolResultContent.append("]");
+        return "{\"role\":\"user\",\"content\":" + toolResultContent.toString() + "}";
+    }
+
+    @Override
+    public org.opensearch.ml.engine.agents.models.ModelProvider.ParsedLLMResponse parseResponse(Map<String, Object> rawResponse) {
+        org.opensearch.ml.engine.agents.models.ModelProvider.ParsedLLMResponse parsed =
+            new org.opensearch.ml.engine.agents.models.ModelProvider.ParsedLLMResponse();
+
+        // Bedrock format: {output: {message: {...}}, stopReason: "..."}
+        Map<String, Object> output = (Map<String, Object>) rawResponse.get("output");
+        if (output == null) {
+            throw new RuntimeException("No output in Bedrock response");
+        }
+
+        parsed.setStopReason((String) rawResponse.get("stopReason"));
+        parsed.setMessage((Map<String, Object>) output.get("message"));
+
+        if (parsed.getMessage() == null) {
+            throw new RuntimeException("No message in Bedrock output");
+        }
+
+        List<Map<String, Object>> content = (List<Map<String, Object>>) parsed.getMessage().get("content");
+        if (content == null) {
+            content = new java.util.ArrayList<>();
+        }
+        parsed.setContent(content);
+
+        // Extract toolUse blocks from content
+        List<Map<String, Object>> toolUseBlocks = new java.util.ArrayList<>();
+        for (Map<String, Object> block : content) {
+            if (block.containsKey("toolUse")) {
+                toolUseBlocks.add((Map<String, Object>) block.get("toolUse"));
+            }
+        }
+        parsed.setToolUseBlocks(toolUseBlocks);
+
+        // Extract usage information
+        // Bedrock format: {usage: {inputTokens: 123, outputTokens: 456, totalTokens: 579}}
+        Map<String, Object> usage = (Map<String, Object>) rawResponse.get("usage");
+        if (usage != null) {
+            // Normalize to Strands format with camelCase
+            Map<String, Object> normalizedUsage = new java.util.HashMap<>();
+            if (usage.containsKey("inputTokens")) {
+                normalizedUsage.put("inputTokens", usage.get("inputTokens"));
+            }
+            if (usage.containsKey("outputTokens")) {
+                normalizedUsage.put("outputTokens", usage.get("outputTokens"));
+            }
+            if (usage.containsKey("totalTokens")) {
+                normalizedUsage.put("totalTokens", usage.get("totalTokens"));
+            }
+            parsed.setUsage(normalizedUsage);
+        }
+
+        return parsed;
+    }
+
+    /**
+     * Gets input schema from MLToolSpec or Tool attributes
+     */
+    private String getToolInputSchema(org.opensearch.ml.common.spi.tools.Tool tool) {
+        String inputSchema = null;
+
+        // Get input schema from Tool.getAttributes().get("input_schema")
+        if (tool.getAttributes() != null && tool.getAttributes().containsKey("input_schema")) {
+            Object schemaObj = tool.getAttributes().get("input_schema");
+            if (schemaObj instanceof String) {
+                inputSchema = (String) schemaObj;
+            } else if (schemaObj instanceof Map) {
+                inputSchema = gson.toJson(schemaObj);
+            }
+        }
+
+        return inputSchema;
     }
 }

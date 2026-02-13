@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.agent;
+package org.opensearch.ml.engine.agents.models;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +15,7 @@ import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
@@ -25,9 +26,10 @@ import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
-import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.agents.models.ModelProvider;
 
 /**
  * Model provider for OpenAI Chat Completions API.
@@ -67,7 +69,9 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
         + ",\"reasoning_effort\":\"${parameters.reasoning_effort}\"}";
 
     // Body templates for different input types
-    private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":\"${parameters.user_text}\"}";
+    // OpenAI requires content to be an array with type field, even for simple text
+    private static final String TEXT_INPUT_BODY_TEMPLATE =
+        "{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.user_text}\"}]}";
 
     private static final String CONTENT_BLOCKS_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[${parameters.content_array}]}";
 
@@ -348,5 +352,253 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
                 throw new IllegalArgumentException("Unsupported image source type. Supported types: " + supportedTypes);
             }
         };
+    }
+
+    @Override
+    public String formatToolConfiguration(Map<String, org.opensearch.ml.common.spi.tools.Tool> tools, Map<String, MLToolSpec> toolSpecMap) {
+        if (tools == null || tools.isEmpty()) {
+            return "";
+        }
+
+        // OpenAI format: "tools":[{"type":"function","function":{...}}]
+        StringBuilder toolsJson = new StringBuilder();
+        toolsJson.append(",\"tools\":[");
+
+        boolean first = true;
+        for (Map.Entry<String, org.opensearch.ml.common.spi.tools.Tool> entry : tools.entrySet()) {
+            String toolType = entry.getKey();
+            org.opensearch.ml.common.spi.tools.Tool tool = entry.getValue();
+            MLToolSpec toolSpec = toolSpecMap.get(toolType);
+
+            if (!first) {
+                toolsJson.append(",");
+            }
+            first = false;
+
+            // Get tool metadata
+            String toolName = tool.getName();
+            if (toolName == null || toolName.trim().isEmpty()) {
+                toolName = toolType;
+            }
+
+            String toolDescription = tool.getDescription();
+            if (toolDescription == null) {
+                toolDescription = "";
+            }
+
+            // Get input schema
+            String inputSchema = getToolInputSchema(tool);
+
+            // Build OpenAI function format
+            toolsJson.append("{\"type\":\"function\",\"function\":{");
+            toolsJson.append("\"name\":\"").append(StringEscapeUtils.escapeJson(toolName)).append("\",");
+            toolsJson.append("\"description\":\"").append(StringEscapeUtils.escapeJson(toolDescription)).append("\"");
+
+            // Add parameters
+            if (inputSchema != null && !inputSchema.trim().isEmpty()) {
+                toolsJson.append(",\"parameters\":");
+                if (inputSchema.startsWith("{") || inputSchema.startsWith("[")) {
+                    toolsJson.append(inputSchema);
+                } else {
+                    toolsJson.append(StringUtils.gson.toJson(inputSchema));
+                }
+            } else {
+                toolsJson.append(",\"parameters\":{\"type\":\"object\",\"properties\":{}}");
+            }
+
+            toolsJson.append("}}");
+        }
+
+        toolsJson.append("],\"tool_choice\":\"auto\"");
+        return toolsJson.toString();
+    }
+
+    @Override
+    public String formatAssistantToolUseMessage(List<Map<String, Object>> content, List<Map<String, Object>> toolUseBlocks) {
+        // OpenAI format: {"role":"assistant","content":null,"tool_calls":[...]}
+        StringBuilder message = new StringBuilder();
+        message.append("{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[");
+
+        boolean first = true;
+        for (Map<String, Object> toolUse : toolUseBlocks) {
+            if (!first) {
+                message.append(",");
+            }
+            first = false;
+
+            String toolUseId = (String) toolUse.get("toolUseId");
+            String name = (String) toolUse.get("name");
+            Map<String, Object> input = (Map<String, Object>) toolUse.get("input");
+
+            // Convert input to JSON string, then convert that to a JSON string literal
+            // OpenAI expects arguments to be a string: "arguments": "{\"indices\":[]}"
+            String argumentsJson = StringUtils.gson.toJson(input); // {"indices":[]}
+
+            message.append("{");
+            message.append("\"id\":\"").append(toolUseId).append("\",");
+            message.append("\"type\":\"function\",");
+            message.append("\"function\":{");
+            message.append("\"name\":\"").append(name).append("\",");
+            message.append("\"arguments\":").append(StringUtils.gson.toJson(argumentsJson)); // Wrap as JSON string
+            message.append("}}");
+        }
+
+        message.append("]}");
+        return message.toString();
+    }
+
+    @Override
+    public String formatToolResultMessages(List<Map<String, Object>> toolResults) {
+        // OpenAI format: Multiple {"role":"tool","content":"...","tool_call_id":"..."} messages
+        StringBuilder messages = new StringBuilder();
+        boolean first = true;
+
+        for (Map<String, Object> toolResult : toolResults) {
+            if (!first) {
+                messages.append(",");
+            }
+            first = false;
+
+            String toolUseId = (String) toolResult.get("toolUseId");
+            List<Map<String, Object>> contentList = (List<Map<String, Object>>) toolResult.get("content");
+
+            // Extract text from content
+            StringBuilder contentText = new StringBuilder();
+            for (Map<String, Object> contentItem : contentList) {
+                if (contentItem.containsKey("text")) {
+                    contentText.append(contentItem.get("text"));
+                }
+            }
+
+            messages.append("{\"role\":\"tool\",");
+            messages.append("\"content\":\"").append(StringEscapeUtils.escapeJson(contentText.toString())).append("\",");
+            messages.append("\"tool_call_id\":\"").append(toolUseId).append("\"}");
+        }
+
+        return messages.toString();
+    }
+
+    @Override
+    public org.opensearch.ml.engine.agents.models.ModelProvider.ParsedLLMResponse parseResponse(Map<String, Object> rawResponse) {
+        org.opensearch.ml.engine.agents.models.ModelProvider.ParsedLLMResponse parsed =
+            new org.opensearch.ml.engine.agents.models.ModelProvider.ParsedLLMResponse();
+
+        // OpenAI format: {choices: [{message: {...}, finish_reason: "..."}]}
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) rawResponse.get("choices");
+        if (choices == null || choices.isEmpty()) {
+            throw new RuntimeException("No choices in OpenAI response");
+        }
+
+        Map<String, Object> choice = choices.get(0);
+        parsed.setStopReason((String) choice.get("finish_reason"));
+
+        Map<String, Object> rawMessage = (Map<String, Object>) choice.get("message");
+        if (rawMessage == null) {
+            throw new RuntimeException("No message in OpenAI choice");
+        }
+
+        // Convert OpenAI tool_calls to toolUse blocks and normalize content
+        List<Map<String, Object>> toolUseBlocks = new java.util.ArrayList<>();
+        List<Map<String, Object>> content = new java.util.ArrayList<>();
+
+        // Check if there's text content (OpenAI returns content as string)
+        Object contentObj = rawMessage.get("content");
+        if (contentObj instanceof String && contentObj != null) {
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("text", contentObj);
+            content.add(textBlock);
+        }
+
+        // Check for tool_calls
+        List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) rawMessage.get("tool_calls");
+        if (toolCalls != null && !toolCalls.isEmpty()) {
+            for (Map<String, Object> toolCall : toolCalls) {
+                Map<String, Object> function = (Map<String, Object>) toolCall.get("function");
+                if (function != null) {
+                    // Convert OpenAI tool_call to Bedrock toolUse format
+                    Map<String, Object> toolUse = new HashMap<>();
+                    toolUse.put("toolUseId", toolCall.get("id"));
+                    toolUse.put("name", function.get("name"));
+
+                    // Parse arguments JSON string to Map
+                    String argumentsJson = (String) function.get("arguments");
+                    try {
+                        Map<String, Object> input = StringUtils.gson.fromJson(argumentsJson, Map.class);
+                        toolUse.put("input", input);
+                    } catch (Exception e) {
+                        toolUse.put("input", new HashMap<>());
+                    }
+
+                    toolUseBlocks.add(toolUse);
+
+                    // Add toolUse block to content for storage
+                    Map<String, Object> toolUseBlock = new HashMap<>();
+                    toolUseBlock.put("toolUse", toolUse);
+                    content.add(toolUseBlock);
+                }
+            }
+        }
+
+        // Build normalized Strands-format message (remove OpenAI-specific fields)
+        Map<String, Object> normalizedMessage = new HashMap<>();
+        normalizedMessage.put("role", rawMessage.get("role")); // "assistant"
+        normalizedMessage.put("content", content); // Array of content blocks (Strands format)
+
+        parsed.setMessage(normalizedMessage);
+        parsed.setContent(content);
+        parsed.setToolUseBlocks(toolUseBlocks);
+
+        // Normalize finish_reason to match Bedrock convention
+        if ("tool_calls".equals(parsed.getStopReason())) {
+            parsed.setStopReason("tool_use");
+        }
+
+        // Extract usage information
+        // OpenAI format: {usage: {prompt_tokens: 123, completion_tokens: 456, total_tokens: 579}}
+        Map<String, Object> usage = (Map<String, Object>) rawResponse.get("usage");
+        if (usage != null) {
+            // Normalize to Strands format (inputTokens, outputTokens, totalTokens)
+            Map<String, Object> normalizedUsage = new java.util.HashMap<>();
+            if (usage.containsKey("prompt_tokens")) {
+                normalizedUsage.put("inputTokens", usage.get("prompt_tokens"));
+            }
+            if (usage.containsKey("completion_tokens")) {
+                normalizedUsage.put("outputTokens", usage.get("completion_tokens"));
+            }
+            if (usage.containsKey("total_tokens")) {
+                normalizedUsage.put("totalTokens", usage.get("total_tokens"));
+            }
+            // Include cache-related tokens if present (for providers that support it)
+            if (usage.containsKey("prompt_tokens_details")) {
+                Map<String, Object> details = (Map<String, Object>) usage.get("prompt_tokens_details");
+                if (details != null) {
+                    if (details.containsKey("cached_tokens")) {
+                        normalizedUsage.put("cacheReadInputTokens", details.get("cached_tokens"));
+                    }
+                }
+            }
+            parsed.setUsage(normalizedUsage);
+        }
+
+        return parsed;
+    }
+
+    /**
+     * Gets input schema from MLToolSpec or Tool attributes
+     */
+    private String getToolInputSchema(org.opensearch.ml.common.spi.tools.Tool tool) {
+        String inputSchema = null;
+
+        // Get input schema from Tool.getAttributes().get("input_schema")
+        if (tool.getAttributes() != null && tool.getAttributes().containsKey("input_schema")) {
+            Object schemaObj = tool.getAttributes().get("input_schema");
+            if (schemaObj instanceof String) {
+                inputSchema = (String) schemaObj;
+            } else if (schemaObj instanceof Map) {
+                inputSchema = StringUtils.gson.toJson(schemaObj);
+            }
+        }
+
+        return inputSchema;
     }
 }

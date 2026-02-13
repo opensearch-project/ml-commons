@@ -12,5 +12,7 @@ public enum ContentType {
     TEXT,
     IMAGE,
     VIDEO,
-    DOCUMENT
+    DOCUMENT,
+    TOOL_USE,
+    TOOL_RESULT
 }

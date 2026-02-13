@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.agent;
+package org.opensearch.ml.engine.agents.models;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +15,7 @@ import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
@@ -26,9 +27,9 @@ import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
-import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.agents.models.ModelProvider;
 
 /**
  * Model provider for Google Gemini generateContent API (v1beta).
@@ -295,6 +296,30 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                 throw new IllegalArgumentException("Unsupported image source type. Supported types: " + supportedTypes);
             }
         };
+    }
+
+    @Override
+    public String formatToolConfiguration(Map<String, org.opensearch.ml.common.spi.tools.Tool> tools, Map<String, MLToolSpec> toolSpecMap) {
+        // TODO: Implement tool configuration for Gemini
+        throw new UnsupportedOperationException("Tool configuration not yet implemented for Gemini");
+    }
+
+    @Override
+    public String formatAssistantToolUseMessage(List<Map<String, Object>> content, List<Map<String, Object>> toolUseBlocks) {
+        // TODO: Implement assistant tool use message formatting for Gemini
+        throw new UnsupportedOperationException("Assistant tool use message formatting not yet implemented for Gemini");
+    }
+
+    @Override
+    public String formatToolResultMessages(List<Map<String, Object>> toolResults) {
+        // TODO: Implement tool result message formatting for Gemini
+        throw new UnsupportedOperationException("Tool result message formatting not yet implemented for Gemini");
+    }
+
+    @Override
+    public org.opensearch.ml.engine.agents.models.ModelProvider.ParsedLLMResponse parseResponse(Map<String, Object> rawResponse) {
+        // TODO: Implement response parsing for Gemini
+        throw new UnsupportedOperationException("Response parsing not yet implemented for Gemini");
     }
 
 }

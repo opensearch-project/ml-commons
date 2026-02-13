@@ -163,12 +163,21 @@ public class RestMLExecuteAction extends BaseRestHandler {
 
             // Check if standardized input is being used but unified agent API is not enabled
             AgentMLInput agentMLInput = (AgentMLInput) input;
-            if (agentMLInput.getAgentInput() != null && !mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()) {
-                throw new IllegalArgumentException(
-                    "Standardized input cannot be used if unified agent API is not enabled. "
-                        + "The agent must be created using unified agent API. "
-                        + "To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
-                );
+            if (agentMLInput.getAgentInput() != null) {
+                if (!mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()) {
+                    throw new IllegalArgumentException(
+                        "Standardized input cannot be used if unified agent API is not enabled. "
+                            + "The agent must be created using unified agent API. "
+                            + "To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
+                    );
+                }
+
+                // Validate the AgentInput structure
+                try {
+                    org.opensearch.ml.common.input.execute.agent.AgentInputProcessor.validateInput(agentMLInput.getAgentInput());
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Invalid agent input: " + e.getMessage(), e);
+                }
             }
 
             if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {

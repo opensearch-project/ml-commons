@@ -31,7 +31,6 @@ import org.opensearch.ml.action.agent.MLAgentRegistrationValidator;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLMemoryType;
-import org.opensearch.ml.common.agent.AgentModelService;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
@@ -121,9 +120,20 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                     parameters.putAll(mlAgent.getParameters());
                 }
 
-                String llmInterface = AgentModelService.inferLLMInterface(mlAgent.getModel().getModelProvider());
-                if (llmInterface != null) {
-                    parameters.put(LLM_INTERFACE, llmInterface);
+                // For V2 agents, configure model_provider instead of _llm_interface
+                MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+                if (agentType == MLAgentType.CONVERSATIONAL_V2) {
+                    String modelProvider = mlAgent.getModel().getModelProvider();
+                    if (modelProvider != null && !modelProvider.trim().isEmpty()) {
+                        parameters.put("model_provider", modelProvider);
+                        log.debug("Configured model_provider='{}' for V2 agent '{}'", modelProvider, mlAgent.getName());
+                    }
+                } else {
+                    // For non-V2 agents, use legacy _llm_interface
+                    String llmInterface = AgentModelService.inferLLMInterface(mlAgent.getModel().getModelProvider());
+                    if (llmInterface != null) {
+                        parameters.put(LLM_INTERFACE, llmInterface);
+                    }
                 }
 
                 LLMSpec llmSpec = LLMSpec.builder().modelId(modelId).parameters(mlAgent.getModel().getModelParameters()).build();
@@ -148,6 +158,14 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void validateAgent(MLAgent agent, ActionListener<MLAgent> listener) {
+        // Validate V2 agent requirements
+        try {
+            validateV2AgentRequirements(agent);
+        } catch (Exception e) {
+            listener.onFailure(e);
+            return;
+        }
+
         // Validate context management configuration
         if (agent.hasContextManagementTemplate()) {
             // Validate context management template access
@@ -178,6 +196,56 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         } else {
             // No context management configuration - that's fine
             listener.onResponse(agent);
+        }
+    }
+
+    private void validateV2AgentRequirements(MLAgent agent) {
+        MLAgentType agentType = MLAgentType.from(agent.getType());
+        if (agentType != MLAgentType.CONVERSATIONAL_V2) {
+            return; // Not a V2 agent, skip validation
+        }
+
+        // V2 agents must have agentic_memory
+        if (agent.getMemory() == null) {
+            throw new IllegalArgumentException(
+                "Agent type 'conversational/v2' requires memory configuration. " + "Please specify memory: {\"type\": \"agentic_memory\"}"
+            );
+        }
+
+        String memoryType = agent.getMemory().getType();
+        if (memoryType == null || memoryType.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                "Agent type 'conversational/v2' requires memory type to be specified. "
+                    + "Please specify memory: {\"type\": \"agentic_memory\"}"
+            );
+        }
+
+        // Must use agentic_memory
+        if (!MLMemoryType.AGENTIC_MEMORY.name().equalsIgnoreCase(memoryType)) {
+            if (MLMemoryType.CONVERSATION_INDEX.name().equalsIgnoreCase(memoryType)) {
+                throw new IllegalArgumentException(
+                    "Agent type 'conversational/v2' does not support 'conversation_index' memory. "
+                        + "Use 'agentic_memory' instead for full multi-modal support."
+                );
+            } else if (MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(memoryType)) {
+                throw new IllegalArgumentException(
+                    "Agent type 'conversational/v2' does not support 'remote_agentic_memory'. " + "Use 'agentic_memory' instead."
+                );
+            } else {
+                throw new IllegalArgumentException(
+                    "Agent type 'conversational/v2' requires memory type 'agentic_memory'. " + "Current type: " + memoryType
+                );
+            }
+        }
+
+        // Log deprecation warning if using old parameter style
+        if (agent.getParameters() != null && agent.getParameters().containsKey(LLM_INTERFACE)) {
+            log
+                .warn(
+                    "Agent '{}' uses deprecated '_llm_interface' parameter. "
+                        + "This is auto-configured for v2 agents based on model provider.",
+                    agent.getName()
+                );
         }
     }
 
@@ -212,18 +280,22 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
-        String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
-        if (llmInterface != null) {
-            if (llmInterface.trim().isEmpty()) {
-                listener.onFailure(new IllegalArgumentException("_llm_interface cannot be blank or empty"));
-                return;
-            }
+        // V2 agents don't use _llm_interface, so skip this validation
+        MLAgentType agentType = MLAgentType.from(agent.getType());
+        if (agentType != MLAgentType.CONVERSATIONAL_V2) {
+            String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
+            if (llmInterface != null) {
+                if (llmInterface.trim().isEmpty()) {
+                    listener.onFailure(new IllegalArgumentException("_llm_interface cannot be blank or empty"));
+                    return;
+                }
 
-            try {
-                FunctionCallingFactory.create(llmInterface);
-            } catch (Exception e) {
-                listener.onFailure(new IllegalArgumentException("Invalid _llm_interface"));
-                return;
+                try {
+                    FunctionCallingFactory.create(llmInterface);
+                } catch (Exception e) {
+                    listener.onFailure(new IllegalArgumentException("Invalid _llm_interface"));
+                    return;
+                }
             }
         }
 

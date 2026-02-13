@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.agent;
+package org.opensearch.ml.action.agents;
 
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
-import org.opensearch.ml.common.model.ModelProvider;
-import org.opensearch.ml.common.model.ModelProviderFactory;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.engine.agents.models.ModelProvider;
+import org.opensearch.ml.engine.agents.models.ModelProviderFactory;
 
 import lombok.extern.log4j.Log4j2;
 

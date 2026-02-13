@@ -3,11 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.model;
+package org.opensearch.ml.engine.agents.models;
 
-import org.opensearch.ml.common.agent.BedrockConverseModelProvider;
-import org.opensearch.ml.common.agent.GeminiV1BetaGenerateContentModelProvider;
-import org.opensearch.ml.common.agent.OpenaiV1ChatCompletionsModelProvider;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 
 /**

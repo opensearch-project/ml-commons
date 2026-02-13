@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
@@ -29,6 +30,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +45,7 @@ import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -74,8 +77,6 @@ import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.InputType;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
-import org.opensearch.ml.common.model.ModelProvider;
-import org.opensearch.ml.common.model.ModelProviderFactory;
 import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -90,6 +91,8 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
+import org.opensearch.ml.engine.agents.models.ModelProvider;
+import org.opensearch.ml.engine.agents.models.ModelProviderFactory;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
@@ -983,8 +986,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     ) {
         return ActionListener.wrap(output -> {
             if (output != null) {
-                processOutput(output, modelTensors);
-                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
+                // For V2 agents, return clean structured output instead of wrapping in ModelTensor
+                if (MLAgentType.CONVERSATIONAL_V2.name().equalsIgnoreCase(agentType) && output instanceof Map) {
+                    Map<String, Object> responseMap = (Map<String, Object>) output;
+                    listener.onResponse(org.opensearch.ml.common.output.agent.MLAgentV2Output.fromMap(responseMap));
+                } else {
+                    processOutput(output, modelTensors);
+                    listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
+                }
             } else {
                 listener.onResponse(null);
             }
@@ -1115,6 +1124,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     sdkClient,
                     encryptor
                 );
+            case CONVERSATIONAL_V2:
+                return new MLChatAgentRunnerV2(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor,
+                    hookRegistry
+                );
             default:
                 throw new IllegalArgumentException("Unsupported agent type");
         }
@@ -1234,10 +1255,35 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             // For agent with revamped interface, use ModelProvider to map the entire AgentInput
             if (mlAgent.getModel() != null) {
-                ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+                // Get model provider from model spec or parameters (V2 agents may have it in parameters)
+                String modelProviderStr = mlAgent.getModel().getModelProvider();
+                if (modelProviderStr == null && mlAgent.getParameters() != null) {
+                    modelProviderStr = mlAgent.getParameters().get("model_provider");
+                }
+
+                if (modelProviderStr == null) {
+                    throw new IllegalArgumentException(
+                        "Model provider not configured. Please specify 'model_provider' in model configuration or agent parameters."
+                    );
+                }
+
+                ModelProvider modelProvider = ModelProviderFactory.getProvider(modelProviderStr);
                 Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
 
                 parameters.put(QUESTION, question);
+
+                // For V2 agents, also pass the original AgentInput for Strands format storage
+                if (agentType == MLAgentType.CONVERSATIONAL_V2 && agentMLInput.getAgentInput() != null) {
+                    try {
+                        // Serialize AgentInput using Writeable interface and Base64 encode
+                        BytesStreamOutput out = new BytesStreamOutput();
+                        agentMLInput.getAgentInput().writeTo(out);
+                        String encoded = Base64.getEncoder().encodeToString(out.bytes().toBytesRef().bytes);
+                        parameters.put("__agent_input_bytes__", encoded);
+                    } catch (Exception e) {
+                        log.warn("Failed to serialize AgentInput for V2 agent", e);
+                    }
+                }
 
                 remoteDataSet.getParameters().putAll(parameters);
             } else {

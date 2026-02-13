@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.agent;
+package org.opensearch.ml.action.agents;
 
 import static org.junit.Assert.*;
 
@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 

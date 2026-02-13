@@ -3,21 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.model;
+package org.opensearch.ml.engine.agents.models;
 
 import java.util.List;
 import java.util.Map;
 
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.InputType;
 import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 /**
- * Abstract base class for model providers
+ * Abstract base class for model providers.
+ * Handles all provider-specific operations for agents including connector creation,
+ * input mapping, tool configuration, and response parsing.
  */
 public abstract class ModelProvider {
 
@@ -102,5 +106,97 @@ public abstract class ModelProvider {
             }
             default -> throw new IllegalArgumentException("Unsupported input type: " + inputType);
         };
+    }
+
+    // Tool-related methods for agent execution
+
+    /**
+     * Formats tool configuration for this provider.
+     * Generates the tool_configs parameter value that will be inserted into the request template.
+     *
+     * @param tools Map of tool type to Tool instance
+     * @param toolSpecMap Map of tool type to MLToolSpec
+     * @return JSON string to append to LLM request parameters (e.g., ",\"tools\":[...]" or ",\"toolConfig\":{...}")
+     */
+    public abstract String formatToolConfiguration(Map<String, Tool> tools, Map<String, MLToolSpec> toolSpecMap);
+
+    /**
+     * Formats assistant message with tool use requests.
+     * Used when storing conversation history after LLM requests tools.
+     *
+     * @param content Content blocks (may include text and toolUse)
+     * @param toolUseBlocks List of toolUse blocks extracted from content
+     * @return JSON string representing the assistant message
+     */
+    public abstract String formatAssistantToolUseMessage(List<Map<String, Object>> content, List<Map<String, Object>> toolUseBlocks);
+
+    /**
+     * Formats tool result messages.
+     * Used when storing conversation history after tools execute.
+     *
+     * @param toolResults List of tool results (each with toolUseId, status, content)
+     * @return JSON string representing tool result message(s)
+     */
+    public abstract String formatToolResultMessages(List<Map<String, Object>> toolResults);
+
+    /**
+     * Parses LLM response into a unified format.
+     * Normalizes provider-specific response structures.
+     *
+     * @param rawResponse Raw response map from LLM
+     * @return Parsed response with normalized fields
+     */
+    public abstract ParsedLLMResponse parseResponse(Map<String, Object> rawResponse);
+
+    /**
+     * Unified parsed LLM response format.
+     * Normalizes differences between provider response structures.
+     */
+    public static class ParsedLLMResponse {
+        private String stopReason;
+        private Map<String, Object> message;
+        private List<Map<String, Object>> content;
+        private List<Map<String, Object>> toolUseBlocks;
+        private Map<String, Object> usage;
+
+        public String getStopReason() {
+            return stopReason;
+        }
+
+        public void setStopReason(String stopReason) {
+            this.stopReason = stopReason;
+        }
+
+        public Map<String, Object> getMessage() {
+            return message;
+        }
+
+        public void setMessage(Map<String, Object> message) {
+            this.message = message;
+        }
+
+        public List<Map<String, Object>> getContent() {
+            return content;
+        }
+
+        public void setContent(List<Map<String, Object>> content) {
+            this.content = content;
+        }
+
+        public List<Map<String, Object>> getToolUseBlocks() {
+            return toolUseBlocks;
+        }
+
+        public void setToolUseBlocks(List<Map<String, Object>> toolUseBlocks) {
+            this.toolUseBlocks = toolUseBlocks;
+        }
+
+        public Map<String, Object> getUsage() {
+            return usage;
+        }
+
+        public void setUsage(Map<String, Object> usage) {
+            this.usage = usage;
+        }
     }
 }
