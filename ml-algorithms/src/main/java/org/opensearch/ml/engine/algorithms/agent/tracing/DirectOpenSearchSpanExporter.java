@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.agent.tracing;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -45,7 +47,9 @@ public class DirectOpenSearchSpanExporter implements SpanExporter {
 
         try {
             for (SpanData span : spans) {
-                String indexName = indexPrefix + "-" + Instant.ofEpochSecond(0, span.getStartEpochNanos()).toString().substring(0, 10);
+                String indexName = indexPrefix
+                    + "-"
+                    + LocalDate.ofInstant(Instant.ofEpochSecond(0, span.getStartEpochNanos()), ZoneId.of("UTC"));
 
                 Map<String, Object> document = createSpanDocument(span);
 

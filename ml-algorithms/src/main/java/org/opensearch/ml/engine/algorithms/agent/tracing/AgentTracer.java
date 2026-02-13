@@ -12,9 +12,10 @@ import java.net.URI;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,6 +42,7 @@ import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import io.opentelemetry.semconv.ResourceAttributes;
+import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import okhttp3.Interceptor;
 import okhttp3.MediaType;
@@ -93,7 +95,7 @@ public final class AgentTracer {
     private static final String OSIS_SERVICE_NAME = "osis";
     private static final String DEFAULT_REGION = "us-east-1";
     private static final Pattern REGION_PATTERN = Pattern.compile("\\.([a-z]{2}-[a-z]+-\\d)\\.osis\\.amazonaws\\.com");
-    private static final ConcurrentHashMap<String, Long> toolStartTimes = new ConcurrentHashMap<>();
+    private static final Map<String, Long> toolStartTimes = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static volatile OpenTelemetrySdk sdk;
     private static volatile Tracer tracer;
@@ -116,6 +118,31 @@ public final class AgentTracer {
     public static final String TOKEN_FIELD_TOTAL_TOKENS_ALT = "total_tokens";
 
     private AgentTracer() {}
+
+    public static class TraceParent {
+        @Getter
+        private final String traceId;
+        @Getter
+        private final String spanId;
+        private final String traceFlags;
+
+        private TraceParent(String traceId, String spanId, String traceFlags) {
+            this.traceId = traceId;
+            this.spanId = spanId;
+            this.traceFlags = traceFlags;
+        }
+
+        public static TraceParent parse(String traceparent) {
+            if (traceparent == null || !traceparent.startsWith("00-")) {
+                return null;
+            }
+            String[] parts = traceparent.split("-");
+            if (parts.length != 4) {
+                return null;
+            }
+            return new TraceParent(parts[1], parts[2], parts[3]);
+        }
+    }
 
     /**
      * Extract AWS region from OSIS endpoint URL.
@@ -574,6 +601,7 @@ public final class AgentTracer {
         return tracer
             .spanBuilder(SpanNames.AGENT_RUN)
             .setSpanKind(SpanKind.SERVER)
+            .setNoParent()
             .setAttribute(AGENT_TYPE, agentType)
             .setAttribute(CONVERSATION_ID, sessionId != null ? sessionId : "")
             .setAttribute(REQUEST_ID, runId != null ? runId : "")
@@ -727,21 +755,17 @@ public final class AgentTracer {
     // ============ Span Completion Methods ============
 
     /**
-     * End a span successfully.
+     * End a span successfully with token information.
      */
     public static void endSpan(Span span, boolean success, String output, Map<String, Integer> extractedTokens) {
-        log.info("[AgentTracer] endSpan called: span={}, success={}", span != null ? span.getSpanContext().getSpanId() : "null", success);
-        if (span == null || !span.getSpanContext().isValid()) {
-            log.warn("[AgentTracer] endSpan: span is null or invalid, skipping");
+        if (span == null || !span.getSpanContext().isValid())
             return;
-        }
 
         span.setAttribute(RESULT_SUCCESS, success);
         if (output != null) {
             span.setAttribute(RESULT_OUTPUT, truncate(output, 500));
         }
 
-        // Set token attributes
         if (extractedTokens != null && !extractedTokens.isEmpty()) {
             if (extractedTokens.containsKey(TOKEN_FIELD_INPUT_TOKENS)) {
                 span.setAttribute(INPUT_TOKENS, (long) extractedTokens.get(TOKEN_FIELD_INPUT_TOKENS));
@@ -754,17 +778,30 @@ public final class AgentTracer {
             }
         }
 
-        // Add duration for tool spans
+        span.setStatus(success ? StatusCode.OK : StatusCode.ERROR);
+        span.end();
+    }
+
+    /**
+     * End a tool span with tool duration.
+     */
+    public static void endToolSpan(Span span, boolean success, String output) {
+        if (span == null || !span.getSpanContext().isValid())
+            return;
+
+        span.setAttribute(RESULT_SUCCESS, success);
+        if (output != null) {
+            span.setAttribute(RESULT_OUTPUT, truncate(output, 500));
+        }
+
         String spanId = span.getSpanContext().getSpanId();
         Long startTime = toolStartTimes.remove(spanId);
         if (startTime != null) {
-            long duration = System.currentTimeMillis() - startTime;
-            span.setAttribute(TOOL_DURATION_MS, duration);
+            span.setAttribute(TOOL_DURATION_MS, System.currentTimeMillis() - startTime);
         }
 
         span.setStatus(success ? StatusCode.OK : StatusCode.ERROR);
         span.end();
-        log.info("[AgentTracer] endSpan: span ended successfully, spanId={}", span.getSpanContext().getSpanId());
     }
 
     /**
@@ -862,6 +899,10 @@ public final class AgentTracer {
             return extractedTokens;
         }
         String provider = detectProviderFromParameters(parameters);
+        if (PROVIDER_UNKNOWN.equalsIgnoreCase(provider)) {
+            log.warn("[AGENT_TRACE] Could not identify provider from LLM interface: {}", parameters.get(PARAM_LLM_INTERFACE));
+            return extractedTokens;
+        }
         for (ModelTensors output : modelTensorOutput.getMlModelOutputs()) {
             if (output.getMlModelTensors() != null) {
                 for (ModelTensor tensor : output.getMlModelTensors()) {
@@ -893,11 +934,12 @@ public final class AgentTracer {
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> usage = (Map<String, Object>) usageObj;
-
-        if (provider.toLowerCase().contains(PROVIDER_BEDROCK)) {
+        if (provider.equalsIgnoreCase(PROVIDER_BEDROCK)) {
             extractBedrockTokens(usage, extractedTokens);
-        } else if (provider.toLowerCase().contains(PROVIDER_OPENAI)) {
+            log.debug("Successfully extracted Bedrock tokens: {}", extractedTokens);
+        } else if (provider.equalsIgnoreCase(PROVIDER_OPENAI)) {
             extractOpenAITokens(usage, extractedTokens);
+            log.debug("Successfully extracted OpenAI tokens: {}", extractedTokens);
         } else {
             // TODO: find general method for all providers
         }
