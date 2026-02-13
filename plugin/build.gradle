@@ -372,6 +372,7 @@ testClusters.integTest {
     def awsSecretKey = System.getProperty("awsSecretKey") ?: System.getenv("AWS_SECRET_ACCESS_KEY") ?: ""
     def awsSessionToken = System.getProperty("awsSessionToken") ?: System.getenv("AWS_SESSION_TOKEN") ?: ""
     def awsRegion = System.getProperty("awsRegion") ?: System.getenv("AWS_REGION") ?: ""
+    def directExport = System.getProperty("directExport") ?: "false"
     if (awsAccessKey && awsSecretKey) {
         setting 'plugins.ml_commons.agent_tracing.aws_access_key', awsAccessKey
         setting 'plugins.ml_commons.agent_tracing.aws_secret_key', awsSecretKey
@@ -382,7 +383,7 @@ testClusters.integTest {
             setting 'plugins.ml_commons.agent_tracing.aws_region', awsRegion
         }
     }
-
+    setting 'plugins.ml_commons.agent_tracing.direct_export', directExport
     configureClusterPlugins(delegate, jobSchedulerFile, securityPluginFile, securityEnabled)
 }
 

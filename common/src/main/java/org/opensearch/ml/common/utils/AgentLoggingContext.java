@@ -41,10 +41,10 @@ public final class AgentLoggingContext {
             return;
         }
 
-        if (runId != null && !runId.isEmpty()) {
+        if (runId != null && !runId.isEmpty() && !runId.equals(threadContext.getTransient(RUN_ID_KEY))) {
             threadContext.putTransient(RUN_ID_KEY, runId);
         }
-        if (threadId != null && !threadId.isEmpty()) {
+        if (threadId != null && !threadId.isEmpty() && !threadId.equals(threadContext.getTransient(THREAD_ID_KEY))) {
             threadContext.putTransient(THREAD_ID_KEY, threadId);
         }
     }
