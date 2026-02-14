@@ -6,12 +6,15 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.CONTEXT_MANAGEMENT_PROCESSED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.get.GetRequest;
@@ -21,6 +24,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.core.xcontent.XContentParserUtils;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
@@ -29,6 +33,7 @@ import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.ConnectorSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManager;
@@ -43,6 +48,10 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.algorithms.remote.AgentProxyConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.AgentProxyRouter;
+import org.opensearch.ml.engine.algorithms.remote.ExecutionContext;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -55,6 +64,9 @@ import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.stream.StreamTransportResponse;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -184,6 +196,16 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 // Handle agent execution with context management
                 if (FunctionName.AGENT.equals(functionName) && input instanceof AgentMLInput) {
                     AgentMLInput agentInput = (AgentMLInput) input;
+
+                    // Check if the REST layer flagged this as a proxy agent
+                    if (agentInput.getInputDataset() instanceof RemoteInferenceInputDataSet dataset
+                        && dataset.getParameters() != null
+                        && dataset.getParameters().containsKey("_agent_proxy_connectors")) {
+                        executeAgentProxy(agentInput, dataset.getParameters(), request, channel, listener);
+                        return;
+                    }
+
+                    // Non-proxy agents: check context management
                     getEffectiveContextManagementNameAsync(agentInput, ActionListener.wrap(contextManagementName -> {
                         if (contextManagementName != null && !contextManagementName.trim().isEmpty()) {
                             // Execute agent with context management
@@ -226,6 +248,70 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
             }
         });
+    }
+
+    /**
+     * Execute agent proxy request.
+     * Parses connectors from serialized parameter (injected by REST layer) and
+     * routes to external proxy based on AGUI context.
+     */
+    private void executeAgentProxy(
+        AgentMLInput agentInput,
+        Map<String, String> parameters,
+        MLExecuteTaskRequest request,
+        TransportChannel channel,
+        ActionListener<MLExecuteTaskResponse> listener
+    ) {
+        try {
+            // Parse connectors from the serialized parameter injected by the REST layer
+            String connectorsJson = parameters.get("_agent_proxy_connectors");
+            List<ConnectorSpec> connectors = parseConnectors(connectorsJson);
+
+            // Parse context array for routing
+            String contextJson = parameters.get(AGUI_PARAM_CONTEXT);
+            JsonArray contextArray = null;
+            if (contextJson != null && !contextJson.isEmpty()) {
+                contextArray = JsonParser.parseString(contextJson).getAsJsonArray();
+            }
+
+            // Select connector based on routing rules
+            ConnectorSpec selectedConnector = AgentProxyRouter.selectConnector(contextArray, connectors);
+            log.info("Selected connector for agent proxy: {}", selectedConnector.getProxyUrl());
+
+            // Create executor for selected connector
+            AgentProxyConnectorExecutor executor = new AgentProxyConnectorExecutor(selectedConnector);
+
+            // Create streaming listener for agent proxy
+            StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, MLExecuteTaskRequest> streamListener =
+                new StreamPredictActionListener<>(channel);
+
+            // Execute proxy request
+            org.opensearch.ml.common.input.MLInput mlInput = org.opensearch.ml.common.input.MLInput
+                .builder()
+                .algorithm(request.getFunctionName())
+                .inputDataset(agentInput.getInputDataset())
+                .build();
+            executor.executeStream("predict", mlInput, parameters, new ExecutionContext(0), streamListener);
+
+        } catch (Exception e) {
+            log.error("Failed to execute agent proxy", e);
+            listener.onFailure(e);
+        }
+    }
+
+    private List<ConnectorSpec> parseConnectors(String connectorsJson) {
+        List<ConnectorSpec> connectors = new java.util.ArrayList<>();
+        try {
+            XContentParser parser = JsonXContent.jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, connectorsJson);
+            XContentParserUtils.ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
+            while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                connectors.add(ConnectorSpec.parse(parser));
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to parse agent proxy connectors", e);
+        }
+        return connectors;
     }
 
     /**

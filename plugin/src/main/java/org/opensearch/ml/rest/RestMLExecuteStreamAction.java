@@ -192,6 +192,24 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
+                    boolean isProxy = agent.getConnectors() != null && !agent.getConnectors().isEmpty();
+
+                    // Inject serialized connectors into parameters so MLExecuteTaskRunner
+                    // can route to the proxy path without re-fetching the agent.
+                    if (isProxy && mlExecuteTaskRequest.getInput() instanceof AgentMLInput agentInput) {
+                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+                        try {
+                            XContentBuilder xb = XContentFactory.jsonBuilder();
+                            xb.startArray();
+                            for (org.opensearch.ml.common.agent.ConnectorSpec c : agent.getConnectors()) {
+                                c.toXContent(xb, ToXContent.EMPTY_PARAMS);
+                            }
+                            xb.endArray();
+                            inputDataSet.getParameters().put("_agent_proxy_connectors", xb.toString());
+                        } catch (IOException ex) {
+                            log.error("Failed to serialize connectors", ex);
+                        }
+                    }
 
                     // Send RUN_STARTED event immediately for AG-UI agents (ReAct cycle begins)
                     if (isAGUI) {

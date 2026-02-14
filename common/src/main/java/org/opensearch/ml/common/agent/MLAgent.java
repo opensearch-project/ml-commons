@@ -45,6 +45,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String DESCRIPTION_FIELD = "description";
     public static final String LLM_FIELD = "llm";
     public static final String MODEL_FIELD = "model";
+    public static final String CONNECTORS_FIELD = "connectors";
     public static final String TOOLS_FIELD = "tools";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String MEMORY_FIELD = "memory";
@@ -69,6 +70,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private String description;
     private LLMSpec llm;
     private MLAgentModelSpec model;
+    private List<ConnectorSpec> connectors;
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
@@ -88,6 +90,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String description,
         LLMSpec llm,
         MLAgentModelSpec model,
+        List<ConnectorSpec> connectors,
         List<MLToolSpec> tools,
         Map<String, String> parameters,
         MLMemorySpec memory,
@@ -104,6 +107,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.description = description;
         this.llm = llm;
         this.model = model;
+        this.connectors = connectors;
         this.tools = tools;
         this.parameters = parameters;
         this.memory = memory;
@@ -141,6 +145,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             description,
             llm,
             null,
+            null,
             tools,
             parameters,
             memory,
@@ -165,8 +170,11 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         validateMLAgentType(type);
         if ((type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString())
-            || type.equalsIgnoreCase(MLAgentType.PLAN_EXECUTE_AND_REFLECT.toString())) && llm == null && model == null) {
-            throw new IllegalArgumentException("We need model information for the conversational agent type");
+            || type.equalsIgnoreCase(MLAgentType.PLAN_EXECUTE_AND_REFLECT.toString()))
+            && llm == null
+            && model == null
+            && (connectors == null || connectors.isEmpty())) {
+            throw new IllegalArgumentException("We need model information (llm, model, or connectors) for the conversational agent type");
         }
         Set<String> toolNames = new HashSet<>();
         if (tools != null) {
@@ -217,6 +225,13 @@ public class MLAgent implements ToXContentObject, Writeable {
             model = new MLAgentModelSpec(input);
         }
         if (input.readBoolean()) {
+            connectors = new ArrayList<>();
+            int connectorsSize = input.readInt();
+            for (int i = 0; i < connectorsSize; i++) {
+                connectors.add(new ConnectorSpec(input));
+            }
+        }
+        if (input.readBoolean()) {
             tools = new ArrayList<>();
             int size = input.readInt();
             for (int i = 0; i < size; i++) {
@@ -263,6 +278,15 @@ public class MLAgent implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        if (connectors != null && !connectors.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeInt(connectors.size());
+            for (ConnectorSpec connector : connectors) {
+                connector.writeTo(out);
+            }
+        } else {
+            out.writeBoolean(false);
+        }
         if (tools != null && !tools.isEmpty()) {
             out.writeBoolean(true);
             out.writeInt(tools.size());
@@ -306,12 +330,17 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     /**
-     * Remove credentials from the agent's model spec.
+     * Remove credentials from the agent's model spec and connectors.
      * Should be called before returning to user-facing APIs.
      */
     public void removeCredential() {
         if (this.model != null) {
             this.model.removeCredential();
+        }
+        if (this.connectors != null) {
+            for (ConnectorSpec connector : this.connectors) {
+                connector.removeCredential();
+            }
         }
     }
 
@@ -332,6 +361,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (model != null) {
             builder.field(MODEL_FIELD, model);
+        }
+        if (connectors != null && connectors.size() > 0) {
+            builder.field(CONNECTORS_FIELD, connectors);
         }
         if (tools != null && tools.size() > 0) {
             builder.field(TOOLS_FIELD, tools);
@@ -382,6 +414,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String description = null;
         LLMSpec llm = null;
         MLAgentModelSpec model = null;
+        List<ConnectorSpec> connectors = null;
         List<MLToolSpec> tools = null;
         Map<String, String> parameters = null;
         MLMemorySpec memory = null;
@@ -413,6 +446,13 @@ public class MLAgent implements ToXContentObject, Writeable {
                     break;
                 case MODEL_FIELD:
                     model = MLAgentModelSpec.parse(parser);
+                    break;
+                case CONNECTORS_FIELD:
+                    connectors = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        connectors.add(ConnectorSpec.parse(parser));
+                    }
                     break;
                 case TOOLS_FIELD:
                     tools = new ArrayList<>();
@@ -462,6 +502,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             .description(description)
             .llm(llm)
             .model(model)
+            .connectors(connectors)
             .tools(tools)
             .parameters(parameters)
             .memory(memory)
