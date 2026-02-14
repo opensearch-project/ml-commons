@@ -109,6 +109,8 @@ public class AGUIInputConverter {
             Map<String, String> parameters = new HashMap<>();
             parameters.put(AGUI_PARAM_THREAD_ID, threadId);
             parameters.put(AGUI_PARAM_RUN_ID, runId);
+            // Use threadId as memory_id for conversation history
+            parameters.put("memory_id", threadId);
 
             if (state != null) {
                 parameters.put(AGUI_PARAM_STATE, gson.toJson(state));

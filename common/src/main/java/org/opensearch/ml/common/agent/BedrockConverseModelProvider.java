@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.agent;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,7 @@ import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
 
 /**
@@ -405,5 +407,81 @@ public class BedrockConverseModelProvider extends ModelProvider {
                 throw new IllegalArgumentException("Unsupported source type. Supported types: " + supportedTypes);
             }
         };
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Message parseResponseMessage(String json) {
+        Map<String, Object> parsed = StringUtils.fromJson(json, "response");
+        if (parsed == null) {
+            return null;
+        }
+
+        String role = (String) parsed.get("role");
+        List<Map<String, Object>> contentList = (List<Map<String, Object>>) parsed.get("content");
+        if (contentList == null || contentList.isEmpty()) {
+            return null;
+        }
+
+        List<ContentBlock> textBlocks = new ArrayList<>();
+        List<ToolCall> toolCalls = new ArrayList<>();
+        String toolCallId = null;
+
+        for (Map<String, Object> contentItem : contentList) {
+            if (contentItem.containsKey("text")) {
+                ContentBlock block = new ContentBlock();
+                block.setType(ContentType.TEXT);
+                block.setText(String.valueOf(contentItem.get("text")));
+                textBlocks.add(block);
+            } else if (contentItem.containsKey("toolUse")) {
+                // Bedrock tool call: {"toolUse":{"name":"...","input":{...},"toolUseId":"..."}}
+                Map<String, Object> toolUse = (Map<String, Object>) contentItem.get("toolUse");
+                if (toolUse != null) {
+                    String id = String.valueOf(toolUse.getOrDefault("toolUseId", ""));
+                    String name = String.valueOf(toolUse.getOrDefault("name", ""));
+                    Object input = toolUse.get("input");
+                    String arguments = input != null ? StringUtils.toJson(input) : "{}";
+                    toolCalls.add(new ToolCall(id, "function", new ToolCall.ToolFunction(name, arguments)));
+                }
+            } else if (contentItem.containsKey("toolResult")) {
+                // Bedrock tool result: {"toolResult":{"toolUseId":"...","content":[{"text":"..."}]}}
+                // Bedrock sends tool results as role=user; map to role=tool for unified format
+                Map<String, Object> toolResult = (Map<String, Object>) contentItem.get("toolResult");
+                if (toolResult != null) {
+                    toolCallId = String.valueOf(toolResult.getOrDefault("toolUseId", ""));
+                    role = "tool";
+                    List<Map<String, Object>> resultContent = (List<Map<String, Object>>) toolResult.get("content");
+                    if (resultContent != null) {
+                        StringBuilder sb = new StringBuilder();
+                        for (Map<String, Object> rc : resultContent) {
+                            if (rc.containsKey("text")) {
+                                sb.append(String.valueOf(rc.get("text")));
+                            }
+                        }
+                        if (sb.length() > 0) {
+                            ContentBlock block = new ContentBlock();
+                            block.setType(ContentType.TEXT);
+                            block.setText(sb.toString());
+                            textBlocks.add(block);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (textBlocks.isEmpty() && toolCalls.isEmpty()) {
+            return null;
+        }
+
+        Message msg = new Message();
+        msg.setRole(role != null ? role : "assistant");
+        msg.setContent(textBlocks.isEmpty() ? null : textBlocks);
+        if (!toolCalls.isEmpty()) {
+            msg.setToolCalls(toolCalls);
+        }
+        if (toolCallId != null) {
+            msg.setToolCallId(toolCallId);
+        }
+        return msg;
     }
 }

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.memory;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
@@ -13,6 +14,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateResponse;
@@ -22,8 +25,8 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
-import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.memorycontainer.MLWorkingMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
@@ -40,11 +43,14 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryR
 import org.opensearch.ml.common.transport.session.MLCreateSessionAction;
 import org.opensearch.ml.common.transport.session.MLCreateSessionInput;
 import org.opensearch.ml.common.transport.session.MLCreateSessionRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.transport.client.Client;
+
+import com.google.gson.reflect.TypeToken;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -55,7 +61,9 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @Getter
-public class AgenticConversationMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
+public class AgenticConversationMemory
+    implements
+        Memory<org.opensearch.ml.common.memory.Message, CreateInteractionResponse, UpdateResponse> {
 
     public static final String TYPE = MLMemoryType.AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
@@ -82,7 +90,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     }
 
     @Override
-    public void save(Message message, String parentId, Integer traceNum, String action) {
+    public void save(org.opensearch.ml.common.memory.Message message, String parentId, Integer traceNum, String action) {
         this.save(message, parentId, traceNum, action, ActionListener.<CreateInteractionResponse>wrap(r -> {
             log.info("Saved message to agentic memory, session id: {}, working memory id: {}", conversationId, r.getId());
         }, e -> { log.error("Failed to save message to agentic memory", e); }));
@@ -90,7 +98,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
     @Override
     public void save(
-        Message message,
+        org.opensearch.ml.common.memory.Message message,
         String parentId,
         Integer traceNum,
         String action,
@@ -254,7 +262,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     }
 
     @Override
-    public void getMessages(int size, ActionListener<List<Message>> listener) {
+    public void getMessages(int size, ActionListener<List<org.opensearch.ml.common.memory.Message>> listener) {
         if (Strings.isNullOrEmpty(memoryContainerId)) {
             listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
             return;
@@ -281,7 +289,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
 
         client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
-            List<Message> interactions = parseSearchResponseToInteractions(searchResponse);
+            List<org.opensearch.ml.common.memory.Message> interactions = parseSearchResponseToInteractions(searchResponse);
             listener.onResponse(interactions);
         }, e -> {
             log.error("Failed to search memories in memory container", e);
@@ -289,8 +297,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         }));
     }
 
-    private List<Message> parseSearchResponseToInteractions(SearchResponse searchResponse) {
-        List<Message> interactions = new ArrayList<>();
+    private List<org.opensearch.ml.common.memory.Message> parseSearchResponseToInteractions(SearchResponse searchResponse) {
+        List<org.opensearch.ml.common.memory.Message> interactions = new ArrayList<>();
         for (SearchHit hit : searchResponse.getHits().getHits()) {
             Map<String, Object> sourceMap = hit.getSourceAsMap();
 
@@ -367,6 +375,121 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     @Override
     public void clear() {
         throw new UnsupportedOperationException("clear method is not supported in AgenticConversationMemory");
+    }
+
+    @Override
+    public void getStructuredMessages(ActionListener<List<Message>> listener) {
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
+            return;
+        }
+
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        boolQuery.must(QueryBuilders.termQuery("namespace." + SESSION_ID_FIELD, conversationId));
+        boolQuery.must(QueryBuilders.termQuery("metadata.type", "structured_message"));
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQuery);
+        searchSourceBuilder.size(Memory.MAX_MESSAGES_TO_RETRIEVE);
+        searchSourceBuilder.sort(CREATED_TIME_FIELD, SortOrder.ASC);
+
+        MLSearchMemoriesInput searchInput = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(MemoryType.WORKING)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
+
+        client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
+            List<Message> messages = new ArrayList<>();
+            for (SearchHit hit : searchResponse.getHits().getHits()) {
+                Map<String, Object> sourceMap = hit.getSourceAsMap();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
+
+                if (structuredData != null && structuredData.containsKey("message")) {
+                    Object messageObj = structuredData.get("message");
+                    Message message = gson.fromJson(gson.toJson(messageObj), Message.class);
+                    messages.add(message);
+                }
+            }
+            listener.onResponse(messages);
+        }, e -> {
+            log.error("Failed to retrieve structured messages", e);
+            listener.onFailure(e);
+        }));
+    }
+
+    @Override
+    public void saveStructuredMessages(List<Message> messages, ActionListener<Void> listener) {
+        log
+            .debug(
+                "saveStructuredMessages: Entry - memoryContainerId={}, conversationId={}, messages count={}",
+                memoryContainerId,
+                conversationId,
+                messages != null ? messages.size() : "null"
+            );
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
+            return;
+        }
+
+        if (messages == null || messages.isEmpty()) {
+            listener.onResponse(null);
+            return;
+        }
+
+        AtomicInteger remaining = new AtomicInteger(messages.size());
+        AtomicBoolean hasError = new AtomicBoolean(false);
+
+        for (Message message : messages) {
+            // Build namespace
+            Map<String, String> namespace = new HashMap<>();
+            namespace.put(SESSION_ID_FIELD, conversationId);
+
+            // Build structured_data_blob
+            Map<String, Object> structuredData = new HashMap<>();
+            Map<String, Object> serializableMessage = gson.fromJson(StringUtils.toJson(message), new TypeToken<Map<String, Object>>() {
+            }.getType());
+            structuredData.put("message", serializableMessage);
+            structuredData.put("created_at", java.time.Instant.now().toString());
+            structuredData.put("updated_at", java.time.Instant.now().toString());
+
+            // Build metadata
+            Map<String, String> metadata = new HashMap<>();
+            metadata.put("type", "structured_message");
+            if (message.getRole() != null) {
+                metadata.put("role", message.getRole());
+            }
+
+            // Create MLAddMemoriesInput
+            MLAddMemoriesInput input = MLAddMemoriesInput
+                .builder()
+                .memoryContainerId(memoryContainerId)
+                .structuredDataBlob(structuredData)
+                .namespace(namespace)
+                .metadata(metadata)
+                .infer(false)
+                .build();
+
+            MLAddMemoriesRequest request = MLAddMemoriesRequest.builder().mlAddMemoryInput(input).build();
+
+            // Execute save
+            client.execute(MLAddMemoriesAction.INSTANCE, request, ActionListener.wrap(response -> {
+                log.debug("Saved structured message to session {}", conversationId);
+                if (remaining.decrementAndGet() == 0 && !hasError.get()) {
+                    listener.onResponse(null);
+                }
+            }, e -> {
+                log.error("Failed to save structured message to session {}", conversationId, e);
+                hasError.set(true);
+                if (remaining.decrementAndGet() == 0) {
+                    listener.onFailure(e);
+                }
+            }));
+        }
     }
 
     @Override

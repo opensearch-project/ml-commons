@@ -510,6 +510,18 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     }
 
     @Override
+    public void getStructuredMessages(ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> listener) {
+        listener
+            .onFailure(new UnsupportedOperationException("getStructuredMessages is not yet supported in RemoteAgenticConversationMemory"));
+    }
+
+    @Override
+    public void saveStructuredMessages(List<org.opensearch.ml.common.input.execute.agent.Message> messages, ActionListener<Void> listener) {
+        listener
+            .onFailure(new UnsupportedOperationException("saveStructuredMessages is not yet supported in RemoteAgenticConversationMemory"));
+    }
+
+    @Override
     public void deleteInteractionAndTrace(String interactionId, ActionListener<Boolean> listener) {
         // For now, delegate to a simple implementation
         // In the future, this could use delete_memory action

@@ -19,6 +19,11 @@ import org.opensearch.core.action.ActionListener;
 public interface Memory<T extends Message, R, S> {
 
     /**
+     * Maximum number of messages to retrieve from storage.
+     */
+    int MAX_MESSAGES_TO_RETRIEVE = 10000;
+
+    /**
      * Get memory type.
      * @return memory type
      */
@@ -37,6 +42,21 @@ public interface Memory<T extends Message, R, S> {
     default void update(String messageId, Map<String, Object> updateContent, ActionListener<S> updateListener) {}
 
     default void getMessages(int size, ActionListener<List<T>> listener) {}
+
+    /**
+     * Get structured messages from memory.
+     *
+     * @param listener Action listener that receives the messages
+     */
+    void getStructuredMessages(ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> listener);
+
+    /**
+     * Save structured messages to memory.
+     *
+     * @param messages List of AgentInput messages to save (may be null or empty)
+     * @param listener Action listener for save completion
+     */
+    void saveStructuredMessages(List<org.opensearch.ml.common.input.execute.agent.Message> messages, ActionListener<Void> listener);
 
     /**
      * Clear all memory.
