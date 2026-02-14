@@ -833,6 +833,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
         } else { // TODO: add failure to interaction to let LLM regenerate ?
             String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
+            interactions
+                .add(
+                    substitute(
+                        tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
+                        Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + res),
+                        INTERACTIONS_PREFIX
+                    )
+                );
             nextStepListener.onResponse(res);
         }
     }
