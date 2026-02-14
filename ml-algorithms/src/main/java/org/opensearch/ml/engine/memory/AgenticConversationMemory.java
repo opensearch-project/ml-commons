@@ -587,9 +587,7 @@ public class AgenticConversationMemory
                 Long createdTimeMs = (Long) sourceMap.get("created_time");
                 Long updatedTimeMs = (Long) sourceMap.get("last_updated_time");
 
-                Instant createTime = createdTimeMs != null
-                    ? Instant.ofEpochMilli(createdTimeMs)
-                    : Instant.now();
+                Instant createTime = createdTimeMs != null ? Instant.ofEpochMilli(createdTimeMs) : Instant.now();
                 Instant updatedTime = updatedTimeMs != null ? Instant.ofEpochMilli(updatedTimeMs) : null;
 
                 // Create Interaction object for trace

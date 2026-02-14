@@ -2057,4 +2057,202 @@ public class AgentUtilsTest extends MLStaticMockBase {
         // Verify it's a different map (shallow copy)
         assertNotSame(params, result);
     }
+
+    // ==================== Tests for extractTextFromMessage ====================
+
+    @Test
+    public void testExtractTextFromMessage_SingleTextBlock() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText("Hello world");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("Hello world", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_MultipleTextBlocks() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block1 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block1.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block1.setText("First");
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block2 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block2.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block2.setText("Second");
+
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Arrays.asList(block1, block2)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("First\nSecond", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_MixedContentTypes() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock textBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        textBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        textBlock.setText("Text content");
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock imageBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        imageBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.IMAGE);
+
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Arrays.asList(textBlock, imageBlock)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("Text content", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullMessage() {
+        assertEquals("", AgentUtils.extractTextFromMessage(null));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullContent() {
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            null
+        );
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_EmptyContent() {
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.emptyList()
+        );
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullTextInBlock() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText(null);
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_WhitespaceTrimmed() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText("  Hello  ");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        assertEquals("Hello", AgentUtils.extractTextFromMessage(message));
+    }
+
+    // ==================== Tests for extractMessagePairs ====================
+
+    private org.opensearch.ml.common.input.execute.agent.Message createMessage(String role, String text) {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText(text);
+        return new org.opensearch.ml.common.input.execute.agent.Message(role, Collections.singletonList(block));
+    }
+
+    @Test
+    public void testExtractMessagePairs_SinglePair() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "What is AI?"), createMessage("assistant", "AI is artificial intelligence."));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "session1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("What is AI?", pairs.get(0).getQuestion());
+        assertEquals("AI is artificial intelligence.", pairs.get(0).getResponse());
+        assertEquals("session1", pairs.get(0).getSessionId());
+        assertTrue(pairs.get(0).getFinalAnswer());
+    }
+
+    @Test
+    public void testExtractMessagePairs_MultiplePairs() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(
+                createMessage("user", "Q1"),
+                createMessage("assistant", "A1"),
+                createMessage("user", "Q2"),
+                createMessage("assistant", "A2")
+            );
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", "app");
+
+        assertEquals(2, pairs.size());
+        // Chronological order
+        assertEquals("Q1", pairs.get(0).getQuestion());
+        assertEquals("A1", pairs.get(0).getResponse());
+        assertEquals("Q2", pairs.get(1).getQuestion());
+        assertEquals("A2", pairs.get(1).getResponse());
+        assertEquals("app", pairs.get(0).getType());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsTrailingUserMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "Q1"), createMessage("assistant", "A1"), createMessage("user", "Trailing question"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+        assertEquals("A1", pairs.get(0).getResponse());
+    }
+
+    @Test
+    public void testExtractMessagePairs_OnlyUserMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Collections
+            .singletonList(createMessage("user", "Just a question"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+        assertTrue(pairs.isEmpty());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsSystemMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("system", "System prompt"), createMessage("user", "Q1"), createMessage("assistant", "A1"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsNullMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "Q1"), null, createMessage("assistant", "A1"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+    }
+
+    @Test
+    public void testExtractMessagePairs_EmptyList() {
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils
+            .extractMessagePairs(Collections.emptyList(), "s1", null);
+        assertTrue(pairs.isEmpty());
+    }
 }

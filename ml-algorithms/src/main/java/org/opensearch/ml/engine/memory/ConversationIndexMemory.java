@@ -170,17 +170,6 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
             return;
         }
 
-        // Extract app type from agent context if available
-        String appType = null; // Default to null for now
-        extractAndSaveMessagePairs(messages, appType, listener);
-    }
-
-    /**
-     * Extract text-only content from messages and save as conversation pairs.
-     */
-    private void extractAndSaveMessagePairs(List<Message> messages, String appType, ActionListener<Void> listener) {
-        List<ConversationIndexMessage> messagePairs = AgentUtils.extractMessagePairs(messages, conversationId, appType);
-
         // Detect multimodal content and warn
         boolean hasMultimodalContent = false;
         for (Message message : messages) {
@@ -206,27 +195,24 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
                 );
         }
 
-        // If no pairs to save, complete immediately
+        List<ConversationIndexMessage> messagePairs = AgentUtils.extractMessagePairs(messages, conversationId, null);
+
         if (messagePairs.isEmpty()) {
             listener.onResponse(null);
             return;
         }
 
-        // Save all pairs sequentially, tracking errors
-        saveMessagePairsSequentially(messagePairs, 0, new AtomicBoolean(false), listener);
+        // Save pairs sequentially, continuing on individual failures
+        savePairsSequentially(messagePairs, 0, new AtomicBoolean(false), listener);
     }
 
-    /**
-     * Helper method to save message pairs sequentially.
-     * Continues on individual failures but reports error to the listener if any save failed.
-     */
-    private void saveMessagePairsSequentially(
-        List<ConversationIndexMessage> messagePairs,
+    private void savePairsSequentially(
+        List<ConversationIndexMessage> pairs,
         int index,
         AtomicBoolean hasError,
         ActionListener<Void> finalListener
     ) {
-        if (index >= messagePairs.size()) {
+        if (index >= pairs.size()) {
             if (hasError.get()) {
                 finalListener.onFailure(new RuntimeException("One or more message pairs failed to save to conversation index"));
             } else {
@@ -235,24 +221,14 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
             return;
         }
 
-        ConversationIndexMessage msg = messagePairs.get(index);
-
-        ActionListener<CreateInteractionResponse> saveListener = ActionListener.wrap(interaction -> {
-            log
-                .info(
-                    "Stored message pair {} of {} in conversation index with interaction ID: {}",
-                    index + 1,
-                    messagePairs.size(),
-                    interaction.getId()
-                );
-            saveMessagePairsSequentially(messagePairs, index + 1, hasError, finalListener);
+        save(pairs.get(index), null, null, null, ActionListener.wrap(interaction -> {
+            log.info("Stored message pair {} of {} with interaction ID: {}", index + 1, pairs.size(), interaction.getId());
+            savePairsSequentially(pairs, index + 1, hasError, finalListener);
         }, ex -> {
-            log.error("Failed to store message pair {} of {} in conversation index", index + 1, messagePairs.size(), ex);
+            log.error("Failed to store message pair {} of {}", index + 1, pairs.size(), ex);
             hasError.set(true);
-            saveMessagePairsSequentially(messagePairs, index + 1, hasError, finalListener);
-        });
-
-        save(msg, null, null, null, saveListener);
+            savePairsSequentially(pairs, index + 1, hasError, finalListener);
+        }));
     }
 
     @Override

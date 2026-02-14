@@ -571,10 +571,12 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             }
 
             Map<String, Object> structuredData = new HashMap<>();
-            Map<String, Object> serializableMessage = GSON.fromJson(
-                org.opensearch.ml.common.utils.StringUtils.toJson(message),
-                new com.google.gson.reflect.TypeToken<Map<String, Object>>() {}.getType()
-            );
+            Map<String, Object> serializableMessage = GSON
+                .fromJson(
+                    org.opensearch.ml.common.utils.StringUtils.toJson(message),
+                    new com.google.gson.reflect.TypeToken<Map<String, Object>>() {
+                    }.getType()
+                );
             structuredData.put("message", serializableMessage);
 
             Map<String, String> metadata = new HashMap<>();
