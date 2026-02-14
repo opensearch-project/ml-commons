@@ -71,6 +71,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -79,9 +80,13 @@ import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.memory.Memory;
-import org.opensearch.ml.common.memory.Message;
+import org.opensearch.ml.common.model.ModelProvider;
+import org.opensearch.ml.common.model.ModelProviderFactory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -159,6 +164,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     private Encryptor encryptor;
     private StreamingWrapper streamingWrapper;
     private HookRegistry hookRegistry;
+    private List<Message> inputMessages;
 
     public MLChatAgentRunner(
         Client client,
@@ -196,6 +202,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     @Override
+    public void setInputMessages(List<Message> inputMessages) {
+        this.inputMessages = inputMessages;
+    }
+
+    @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener, TransportChannel channel) {
         Map<String, String> params = new HashMap<>();
         if (mlAgent.getParameters() != null) {
@@ -217,7 +228,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
-            runAgent(mlAgent, params, listener, null, null, functionCalling);
+            runAgent(mlAgent, params, listener, null, functionCalling);
             return;
         }
 
@@ -256,69 +267,106 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
-                List<Message> messageList = new ArrayList<>();
-                for (Interaction next : r) {
-                    String question = next.getInput();
-                    String response = next.getResponse();
-                    // As we store the conversation with empty response first and then update when
-                    // have final answer,
-                    // filter out those in-flight requests when run in parallel
-                    if (Strings.isNullOrEmpty(response)) {
-                        continue;
-                    }
-                    messageList
-                        .add(
-                            ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .sessionId(memory.getId())
-                                .question(question)
-                                .response(response)
-                                .build()
-                        );
-                }
-                if (!messageList.isEmpty()) {
-                    if (chatHistoryQuestionTemplate == null) {
-                        StringBuilder chatHistoryBuilder = new StringBuilder();
-                        chatHistoryBuilder.append(chatHistoryPrefix);
-                        for (Message message : messageList) {
-                            chatHistoryBuilder.append(message.toString()).append("\n");
+
+            // Check if agent uses unified interface (has model field)
+            // Unified interface agents store and retrieve structured messages with function calling
+            boolean usesUnifiedInterface = mlAgent.getModel() != null;
+
+            if (usesUnifiedInterface) {
+                // Get history first, then save new input messages
+                memory.getStructuredMessages(ActionListener.wrap(allMessages -> {
+                    // Apply history limit
+                    List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
+                        ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
+                        : allMessages;
+
+                    // Save input messages
+                    memory.saveStructuredMessages(inputMessages, ActionListener.wrap(v -> {
+                        if (!history.isEmpty()) {
+                            // Format history messages using the model provider for API-compatible output
+                            ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+                            MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+                            Map<String, String> historyParams = modelProvider.mapMessages(history, agentType);
+                            String formattedHistory = historyParams.get("body");
+                            if (formattedHistory != null && !formattedHistory.isEmpty()) {
+                                params.put(NEW_CHAT_HISTORY, formattedHistory + ", ");
+                            }
                         }
-                        params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
-                        // to input params to validate
-                        inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-                    } else {
-                        List<String> chatHistory = new ArrayList<>();
-                        for (Message message : messageList) {
-                            Map<String, String> messageParams = new HashMap<>();
-                            messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
-
-                            StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
-                            chatHistory.add(chatQuestionMessage);
-
-                            messageParams.clear();
-                            messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
-                            substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
-                            chatHistory.add(chatResponseMessage);
+                        runAgent(mlAgent, params, listener, memory, functionCalling);
+                    }, e -> {
+                        log.error("Failed to save input messages", e);
+                        listener.onFailure(e);
+                    }));
+                }, e -> {
+                    log.error("Failed to get history", e);
+                    listener.onFailure(e);
+                }));
+            } else {
+                // For legacy interface, use text-based messages
+                memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
+                    List<ConversationIndexMessage> messageList = new ArrayList<>();
+                    for (Interaction next : r) {
+                        String question = next.getInput();
+                        String response = next.getResponse();
+                        // As we store the conversation with empty response first and then update when
+                        // have final answer,
+                        // filter out those in-flight requests when run in parallel
+                        if (Strings.isNullOrEmpty(response)) {
+                            continue;
                         }
-                        params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                        params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
-                        // to input params to validate
-                        inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        messageList
+                            .add(
+                                ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .sessionId(memory.getId())
+                                    .question(question)
+                                    .response(response)
+                                    .build()
+                            );
                     }
-                }
+                    if (!messageList.isEmpty()) {
+                        if (chatHistoryQuestionTemplate == null) {
+                            StringBuilder chatHistoryBuilder = new StringBuilder();
+                            chatHistoryBuilder.append(chatHistoryPrefix);
+                            for (ConversationIndexMessage message : messageList) {
+                                chatHistoryBuilder.append(message.toString()).append("\n");
+                            }
+                            params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
 
-                runAgent(mlAgent, params, listener, memory, memory.getId(), functionCalling);
-            }, e -> {
-                log.error("Failed to get chat history", e);
-                listener.onFailure(e);
-            }));
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
+                            // to input params to validate
+                            inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+                        } else {
+                            List<String> chatHistory = new ArrayList<>();
+                            for (ConversationIndexMessage message : messageList) {
+                                Map<String, String> messageParams = new HashMap<>();
+                                messageParams.put("question", processTextDoc(message.getQuestion()));
+
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
+                                chatHistory.add(chatQuestionMessage);
+
+                                messageParams.clear();
+                                messageParams.put("response", processTextDoc(message.getResponse()));
+                                substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
+                                chatHistory.add(chatResponseMessage);
+                            }
+                            params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                            params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
+                            // to input params to validate
+                            inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        }
+                    }
+
+                    runAgent(mlAgent, params, listener, memory, functionCalling);
+                }, e -> {
+                    log.error("Failed to get chat history", e);
+                    listener.onFailure(e);
+                }));
+            }
         }, listener::onFailure));
     }
 
@@ -357,7 +405,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> params,
         ActionListener<Object> listener,
         Memory memory,
-        String sessionId,
         FunctionCalling functionCalling
     ) {
         List<Map<String, Object>> frontendTools = new ArrayList<>();
@@ -367,7 +414,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             String aguiToolCallResults = params.get(AGUI_PARAM_TOOL_CALL_RESULTS);
             if (aguiToolCallResults != null && !aguiToolCallResults.isEmpty()) {
                 // Process tool call results from frontend
-                processAGUIToolResults(mlAgent, params, listener, memory, sessionId, functionCalling, aguiToolCallResults);
+                processAGUIToolResults(mlAgent, params, listener, memory, functionCalling, aguiToolCallResults);
                 return;
             }
 
@@ -375,21 +422,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
             String aguiTools = params.get(AGUI_PARAM_TOOLS);
             frontendTools = parseFrontendTools(aguiTools);
         }
-        processUnifiedTools(mlAgent, params, listener, memory, sessionId, functionCalling, frontendTools);
+        processUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools);
     }
 
     private void runReAct(
-        LLMSpec llm,
+        MLAgent mlAgent,
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
         Map<String, String> parameters,
         Memory memory,
-        String sessionId,
-        String tenantId,
         ActionListener<Object> listener,
         FunctionCalling functionCalling,
         Map<String, Tool> backendTools
     ) {
+        LLMSpec llm = mlAgent.getLlm();
+        String tenantId = mlAgent.getTenantId();
+        String sessionId = memory != null ? memory.getId() : null;
+        boolean usesUnifiedInterface = mlAgent.getModel() != null;
+        ModelProvider modelProvider = usesUnifiedInterface ? ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider()) : null;
+
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
         tmpParameters.put(PROMPT, prompt);
@@ -465,7 +516,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             memory,
                             traceNumber,
                             additionalInfo,
-                            finalAnswer
+                            finalAnswer,
+                            usesUnifiedInterface,
+                            new ArrayList<>(interactions),
+                            modelProvider
                         );
                         cleanUpResource(tools);
                         return;
@@ -515,7 +569,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tools,
                             llm,
                             tenantId,
-                            tmpParameters
+                            tmpParameters,
+                            usesUnifiedInterface,
+                            new ArrayList<>(interactions),
+                            modelProvider
                         );
                         return;
                     }
@@ -657,7 +714,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tools,
                             llm,
                             tenantId,
-                            tmpParameters
+                            tmpParameters,
+                            usesUnifiedInterface,
+                            new ArrayList<>(interactions),
+                            modelProvider
                         );
                         return;
                     }
@@ -892,36 +952,135 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Memory memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
-        String finalAnswer
+        String finalAnswer,
+        boolean usesUnifiedInterface,
+        List<String> toolInteractions,
+        ModelProvider modelProvider
     ) {
         // Send completion chunk for streaming
         streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
 
         if (memory != null) {
             String copyOfFinalAnswer = finalAnswer;
-            ActionListener saveTraceListener = ActionListener.wrap(r -> {
-                memory
-                    .update(
-                        parentInteractionId,
-                        Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
-                        ActionListener.wrap(res -> {
-                            returnFinalResponse(
-                                sessionId,
-                                listener,
+
+            // For unified interface, save assistant response as structured message
+            if (usesUnifiedInterface) {
+                saveAssistantResponseAsStructuredMessage(
+                    memory,
+                    copyOfFinalAnswer,
+                    toolInteractions,
+                    modelProvider,
+                    ActionListener.wrap(v -> {
+                        // After saving structured messages, update parent interaction and return response
+                        memory
+                            .update(
                                 parentInteractionId,
-                                verbose,
-                                cotModelTensors,
-                                additionalInfo,
-                                copyOfFinalAnswer
+                                Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
+                                ActionListener.wrap(res -> {
+                                    returnFinalResponse(
+                                        sessionId,
+                                        listener,
+                                        parentInteractionId,
+                                        verbose,
+                                        cotModelTensors,
+                                        additionalInfo,
+                                        copyOfFinalAnswer
+                                    );
+                                }, e -> { listener.onFailure(e); })
                             );
-                        }, e -> { listener.onFailure(e); })
-                    );
-            }, e -> { listener.onFailure(e); });
-            saveMessage(memory, question, finalAnswer, sessionId, parentInteractionId, traceNumber, true, traceDisabled, saveTraceListener);
+                    }, e -> {
+                        log.error("Failed to save assistant response as structured message", e);
+                        listener.onFailure(e);
+                    })
+                );
+            } else {
+                // For legacy interface, use traditional saveMessage
+                ActionListener saveTraceListener = ActionListener.wrap(r -> {
+                    memory
+                        .update(
+                            parentInteractionId,
+                            Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
+                            ActionListener.wrap(res -> {
+                                returnFinalResponse(
+                                    sessionId,
+                                    listener,
+                                    parentInteractionId,
+                                    verbose,
+                                    cotModelTensors,
+                                    additionalInfo,
+                                    copyOfFinalAnswer
+                                );
+                            }, e -> { listener.onFailure(e); })
+                        );
+                }, e -> { listener.onFailure(e); });
+                saveMessage(
+                    memory,
+                    question,
+                    finalAnswer,
+                    sessionId,
+                    parentInteractionId,
+                    traceNumber,
+                    true,
+                    traceDisabled,
+                    saveTraceListener
+                );
+            }
         } else {
             streamingWrapper
                 .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
         }
+    }
+
+    /**
+     * Save assistant response as a structured message for unified interface agents.
+     * Should be called after agent execution completes with the final answer.
+     *
+     * @param memory The memory instance
+     * @param finalAnswer The assistant's final response text
+     * @param toolInteractions Tool calls/results from current turn (from interactions list)
+     * @param modelProvider The model provider for parsing LLM-native response format
+     * @param listener Callback listener
+     */
+    @VisibleForTesting
+    void saveAssistantResponseAsStructuredMessage(
+        Memory memory,
+        String finalAnswer,
+        List<String> toolInteractions,
+        ModelProvider modelProvider,
+        ActionListener<Void> listener
+    ) {
+        List<Message> assistantMessages = new ArrayList<>();
+
+        // Add tool interactions from this turn if any.
+        // Tool interaction JSON uses LLM-native format (e.g. Bedrock's "toolUse"/"toolResult")
+        // which doesn't map to ContentBlock fields. Use the model provider to convert to
+        // unified Message objects with TEXT content blocks for storage.
+        if (toolInteractions != null && !toolInteractions.isEmpty()) {
+            for (String interactionJson : toolInteractions) {
+                try {
+                    Message msg = modelProvider.parseResponseMessage(interactionJson);
+                    if (msg != null) {
+                        assistantMessages.add(msg);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse tool interaction message", e);
+                }
+            }
+        }
+
+        // Add final assistant message with the answer
+        ContentBlock contentBlock = new ContentBlock();
+        contentBlock.setType(ContentType.TEXT);
+        contentBlock.setText(finalAnswer);
+
+        Message assistantMessage = new Message();
+        assistantMessage.setRole("assistant");
+        assistantMessage.setContent(List.of(contentBlock));
+
+        assistantMessages.add(assistantMessage);
+
+        // Save assistant response messages (tool interactions + final answer)
+        memory.saveStructuredMessages(assistantMessages, ActionListener.wrap(v -> listener.onResponse(null), listener::onFailure));
     }
 
     public static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
@@ -1070,7 +1229,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool> tools,
         LLMSpec llmSpec,
         String tenantId,
-        Map<String, String> parameters
+        Map<String, String> parameters,
+        boolean usesUnifiedInterface,
+        List<String> toolInteractions,
+        ModelProvider modelProvider
     ) {
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             sendTraditionalMaxIterationsResponse(
@@ -1085,7 +1247,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 traceNumber,
                 additionalInfo,
                 response,
-                tools
+                tools,
+                usesUnifiedInterface,
+                toolInteractions,
+                modelProvider
             );
         }, listener::onFailure);
 
@@ -1125,7 +1290,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         String response,
-        Map<String, Tool> tools
+        Map<String, Tool> tools,
+        boolean usesUnifiedInterface,
+        List<String> toolInteractions,
+        ModelProvider modelProvider
     ) {
         sendFinalAnswer(
             sessionId,
@@ -1138,7 +1306,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
             memory,
             traceNumber,
             additionalInfo,
-            response
+            response,
+            usesUnifiedInterface,
+            toolInteractions,
+            modelProvider
         );
         cleanUpResource(tools);
     }
@@ -1291,7 +1462,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> params,
         ActionListener<Object> listener,
         Memory memory,
-        String sessionId,
         FunctionCalling functionCalling,
         List<Map<String, Object>> frontendTools
     ) {
@@ -1309,17 +1479,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
 
             // Create unified tool list for function calling (frontend + backend)
-            processUnifiedToolsWithBackend(
-                mlAgent,
-                params,
-                listener,
-                memory,
-                sessionId,
-                functionCalling,
-                frontendTools,
-                backendToolsMap,
-                toolSpecMap
-            );
+            processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
         }, e -> {
             // Even if MCP tools fail, continue with base backend tools
 
@@ -1327,17 +1487,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
             createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
 
-            processUnifiedToolsWithBackend(
-                mlAgent,
-                params,
-                listener,
-                memory,
-                sessionId,
-                functionCalling,
-                frontendTools,
-                backendToolsMap,
-                toolSpecMap
-            );
+            processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
         }));
     }
 
@@ -1349,7 +1499,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> params,
         ActionListener<Object> listener,
         Memory memory,
-        String sessionId,
         FunctionCalling functionCalling,
         List<Map<String, Object>> frontendTools,
         Map<String, Tool> backendToolsMap,
@@ -1388,19 +1537,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         // Call runReAct with unified tools - both frontend and backend tools will be visible to LLM
-        // Pass backendToolsMap so runReAct can distinguish between frontend and backend tools
-        runReAct(
-            mlAgent.getLlm(),
-            unifiedToolsMap,
-            toolSpecMap,
-            params,
-            memory,
-            sessionId,
-            mlAgent.getTenantId(),
-            listener,
-            functionCalling,
-            backendToolsMap
-        );
+        // Pass mlAgent and backendToolsMap so runReAct can distinguish between frontend and backend tools
+        runReAct(mlAgent, unifiedToolsMap, toolSpecMap, params, memory, listener, functionCalling, backendToolsMap);
     }
 
     /**
@@ -1411,7 +1549,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> params,
         ActionListener<Object> listener,
         Memory memory,
-        String sessionId,
         FunctionCalling functionCalling,
         String aguiToolCallResults
     ) {
@@ -1457,7 +1594,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     String aguiTools = params.get(AGUI_PARAM_TOOLS);
                     List<Map<String, Object>> frontendTools = parseFrontendTools(aguiTools);
 
-                    processUnifiedTools(mlAgent, updatedParams, listener, memory, sessionId, functionCalling, frontendTools);
+                    processUnifiedTools(mlAgent, updatedParams, listener, memory, functionCalling, frontendTools);
                 } else {
                     listener.onFailure(new RuntimeException("No LLM messages generated from tool results"));
                 }

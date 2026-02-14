@@ -1000,4 +1000,90 @@ public class BedrockConverseModelProviderTest {
         assertTrue(body.contains("toolUse"));
         assertTrue(body.contains("search"));
     }
+
+    // ==================== Tests for parseResponseMessage ====================
+
+    @Test
+    public void testParseResponseMessage_TextContent() {
+        String json = "{\"role\":\"assistant\",\"content\":[{\"text\":\"Hello world\"}]}";
+        Message result = provider.parseResponseMessage(json);
+
+        assertNotNull(result);
+        assertEquals("assistant", result.getRole());
+        assertNotNull(result.getContent());
+        assertEquals(1, result.getContent().size());
+        assertEquals(ContentType.TEXT, result.getContent().get(0).getType());
+        assertEquals("Hello world", result.getContent().get(0).getText());
+        assertNull(result.getToolCalls());
+    }
+
+    @Test
+    public void testParseResponseMessage_ToolUse() {
+        String json =
+            "{\"role\":\"assistant\",\"content\":[{\"toolUse\":{\"toolUseId\":\"tc_1\",\"name\":\"search\",\"input\":{\"query\":\"test\"}}}]}";
+        Message result = provider.parseResponseMessage(json);
+
+        assertNotNull(result);
+        assertEquals("assistant", result.getRole());
+        assertNull(result.getContent()); // no text blocks
+        assertNotNull(result.getToolCalls());
+        assertEquals(1, result.getToolCalls().size());
+        assertEquals("tc_1", result.getToolCalls().get(0).getId());
+        assertEquals("search", result.getToolCalls().get(0).getFunction().getName());
+        assertTrue(result.getToolCalls().get(0).getFunction().getArguments().contains("test"));
+    }
+
+    @Test
+    public void testParseResponseMessage_TextAndToolUse() {
+        String json = "{\"role\":\"assistant\",\"content\":["
+            + "{\"text\":\"Let me search\"},"
+            + "{\"toolUse\":{\"toolUseId\":\"tc_2\",\"name\":\"lookup\",\"input\":{}}}"
+            + "]}";
+        Message result = provider.parseResponseMessage(json);
+
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+        assertEquals("Let me search", result.getContent().get(0).getText());
+        assertEquals(1, result.getToolCalls().size());
+        assertEquals("lookup", result.getToolCalls().get(0).getFunction().getName());
+    }
+
+    @Test
+    public void testParseResponseMessage_ToolResult() {
+        String json =
+            "{\"role\":\"user\",\"content\":[{\"toolResult\":{\"toolUseId\":\"tc_1\",\"content\":[{\"text\":\"Result data\"}]}}]}";
+        Message result = provider.parseResponseMessage(json);
+
+        assertNotNull(result);
+        assertEquals("tool", result.getRole()); // Bedrock user+toolResult mapped to "tool"
+        assertEquals("tc_1", result.getToolCallId());
+        assertEquals(1, result.getContent().size());
+        assertEquals("Result data", result.getContent().get(0).getText());
+    }
+
+    @Test
+    public void testParseResponseMessage_NullJson() {
+        // fromJson throws on null
+        try {
+            provider.parseResponseMessage(null);
+            fail("Expected exception");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
+    public void testParseResponseMessage_EmptyContent() {
+        String json = "{\"role\":\"assistant\",\"content\":[]}";
+        Message result = provider.parseResponseMessage(json);
+        assertNull(result);
+    }
+
+    @Test
+    public void testParseResponseMessage_NoTextOrTools() {
+        // Content with only unknown keys
+        String json = "{\"role\":\"assistant\",\"content\":[{\"unknown\":\"value\"}]}";
+        Message result = provider.parseResponseMessage(json);
+        assertNull(result);
+    }
 }

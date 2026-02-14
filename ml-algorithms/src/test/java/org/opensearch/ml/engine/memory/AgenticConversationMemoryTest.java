@@ -774,4 +774,269 @@ public class AgenticConversationMemoryTest {
         structuredDataBlob.put("updated_time", Instant.now().toString());
         return structuredDataBlob;
     }
+
+    // ==================== Tests for saveStructuredMessages ====================
+
+    @Test
+    public void testSaveStructuredMessages_NullMessages() {
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            // Should complete successfully with null
+        }, e -> { throw new RuntimeException("Should not fail", e); });
+
+        agenticMemory.saveStructuredMessages(null, testListener);
+
+        // No API calls should be made
+        verify(client, never()).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    public void testSaveStructuredMessages_EmptyMessages() {
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            // Should complete successfully with empty list
+        }, e -> { throw new RuntimeException("Should not fail", e); });
+
+        agenticMemory.saveStructuredMessages(java.util.Collections.emptyList(), testListener);
+
+        verify(client, never()).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    public void testSaveStructuredMessages_SingleMessage() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock textBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        textBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        textBlock.setText("Hello world");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            java.util.Collections.singletonList(textBlock)
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<MLAddMemoriesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(MLAddMemoriesResponse.builder().workingMemoryId("wm_1").build());
+            return null;
+        }).when(client).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            // Success
+        }, e -> { throw new RuntimeException("Should not fail", e); });
+
+        agenticMemory.saveStructuredMessages(java.util.Collections.singletonList(message), testListener);
+
+        // Verify one save call was made
+        verify(client, times(1)).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    public void testSaveStructuredMessages_MultipleMessages() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block1 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block1.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block1.setText("Question");
+        org.opensearch.ml.common.input.execute.agent.Message msg1 = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            java.util.Collections.singletonList(block1)
+        );
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block2 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block2.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block2.setText("Answer");
+        org.opensearch.ml.common.input.execute.agent.Message msg2 = new org.opensearch.ml.common.input.execute.agent.Message(
+            "assistant",
+            java.util.Collections.singletonList(block2)
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<MLAddMemoriesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(MLAddMemoriesResponse.builder().workingMemoryId("wm_1").build());
+            return null;
+        }).when(client).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            // Success
+        }, e -> { throw new RuntimeException("Should not fail", e); });
+
+        agenticMemory.saveStructuredMessages(java.util.Arrays.asList(msg1, msg2), testListener);
+
+        // Verify two save calls were made (parallel)
+        verify(client, times(2)).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    public void testSaveStructuredMessages_WithoutMemoryContainerId() {
+        AgenticConversationMemory memoryWithoutContainer = new AgenticConversationMemory(client, "test_conversation_id", null);
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock textBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        textBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        textBlock.setText("Hello");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            java.util.Collections.singletonList(textBlock)
+        );
+
+        ActionListener<Void> testListener = ActionListener.wrap(response -> { throw new RuntimeException("Should have failed"); }, e -> {
+            assertTrue(e instanceof IllegalStateException);
+            assertTrue(e.getMessage().contains("Memory container ID is not configured"));
+        });
+
+        memoryWithoutContainer.saveStructuredMessages(java.util.Collections.singletonList(message), testListener);
+
+        verify(client, never()).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    public void testSaveStructuredMessages_PartialFailure() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block1 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block1.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block1.setText("Message 1");
+        org.opensearch.ml.common.input.execute.agent.Message msg1 = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            java.util.Collections.singletonList(block1)
+        );
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block2 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block2.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block2.setText("Message 2");
+        org.opensearch.ml.common.input.execute.agent.Message msg2 = new org.opensearch.ml.common.input.execute.agent.Message(
+            "assistant",
+            java.util.Collections.singletonList(block2)
+        );
+
+        // First call succeeds, second fails
+        java.util.concurrent.atomic.AtomicInteger callCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        doAnswer(invocation -> {
+            ActionListener<MLAddMemoriesResponse> listener = invocation.getArgument(2);
+            if (callCount.getAndIncrement() == 0) {
+                listener.onResponse(MLAddMemoriesResponse.builder().workingMemoryId("wm_1").build());
+            } else {
+                listener.onFailure(new RuntimeException("Save failed"));
+            }
+            return null;
+        }).when(client).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            throw new RuntimeException("Should have failed due to partial failure");
+        }, e -> {
+            // Expected - at least one save failed
+            assertNotNull(e);
+        });
+
+        agenticMemory.saveStructuredMessages(java.util.Arrays.asList(msg1, msg2), testListener);
+
+        verify(client, times(2)).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
+    }
+
+    // ==================== Tests for getStructuredMessages ====================
+
+    @Test
+    public void testGetStructuredMessages_Success() {
+        // Create mock search response with structured message data
+        Map<String, Object> messageData = new HashMap<>();
+        messageData.put("role", "user");
+        Map<String, Object> contentBlock = new HashMap<>();
+        contentBlock.put("type", "text");
+        contentBlock.put("text", "Hello world");
+        messageData.put("content", java.util.Collections.singletonList(contentBlock));
+
+        Map<String, Object> structuredData = new HashMap<>();
+        structuredData.put("message", messageData);
+
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put("structured_data_blob", structuredData);
+
+        String sourceJson = new com.google.gson.Gson().toJson(sourceMap);
+        BytesReference source = new BytesArray(sourceJson);
+        SearchHit hit = new SearchHit(1, "hit_1", null, null);
+        hit.sourceRef(source);
+
+        SearchHits searchHits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        SearchResponse searchResponse = new SearchResponse(
+            new SearchResponseSections(searchHits, null, null, false, false, null, 0),
+            null,
+            1,
+            1,
+            0,
+            10,
+            new ShardSearchFailure[] {},
+            SearchResponse.Clusters.EMPTY
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).execute(eq(MLSearchMemoriesAction.INSTANCE), any(), any());
+
+        ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> testListener = ActionListener.wrap(messages -> {
+            assertNotNull(messages);
+            assertEquals(1, messages.size());
+            assertEquals("user", messages.get(0).getRole());
+        }, e -> { throw new RuntimeException("Should not fail", e); });
+
+        agenticMemory.getStructuredMessages(testListener);
+
+        verify(client, times(1)).execute(eq(MLSearchMemoriesAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    public void testGetStructuredMessages_WithoutMemoryContainerId() {
+        AgenticConversationMemory memoryWithoutContainer = new AgenticConversationMemory(client, "test_conversation_id", null);
+
+        ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> testListener = ActionListener.wrap(messages -> {
+            throw new RuntimeException("Should have failed");
+        }, e -> {
+            assertTrue(e instanceof IllegalStateException);
+            assertTrue(e.getMessage().contains("Memory container ID is not configured"));
+        });
+
+        memoryWithoutContainer.getStructuredMessages(testListener);
+
+        verify(client, never()).execute(eq(MLSearchMemoriesAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    public void testGetStructuredMessages_EmptyResults() {
+        SearchHits searchHits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        SearchResponse searchResponse = new SearchResponse(
+            new SearchResponseSections(searchHits, null, null, false, false, null, 0),
+            null,
+            1,
+            1,
+            0,
+            10,
+            new ShardSearchFailure[] {},
+            SearchResponse.Clusters.EMPTY
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).execute(eq(MLSearchMemoriesAction.INSTANCE), any(), any());
+
+        ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> testListener = ActionListener.wrap(messages -> {
+            assertNotNull(messages);
+            assertEquals(0, messages.size());
+        }, e -> { throw new RuntimeException("Should not fail", e); });
+
+        agenticMemory.getStructuredMessages(testListener);
+    }
+
+    @Test
+    public void testGetStructuredMessages_Failure() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Search failed"));
+            return null;
+        }).when(client).execute(eq(MLSearchMemoriesAction.INSTANCE), any(), any());
+
+        ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> testListener = ActionListener.wrap(messages -> {
+            throw new RuntimeException("Should have failed");
+        }, e -> {
+            assertTrue(e instanceof RuntimeException);
+            assertEquals("Search failed", e.getMessage());
+        });
+
+        agenticMemory.getStructuredMessages(testListener);
+    }
 }

@@ -87,6 +87,9 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -97,6 +100,7 @@ import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExec
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -1278,5 +1282,138 @@ public class AgentUtils {
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    /**
+     * Extract text content from a message's content blocks.
+     *
+     * @param message The message to extract text from
+     * @return The concatenated text content, trimmed
+     */
+    public static String extractTextFromMessage(Message message) {
+        if (message == null || message.getContent() == null) {
+            return "";
+        }
+
+        StringBuilder textBuilder = new StringBuilder();
+        for (ContentBlock block : message.getContent()) {
+            if (block.getType() == ContentType.TEXT && block.getText() != null) {
+                textBuilder.append(block.getText().trim());
+                textBuilder.append("\n");
+            }
+        }
+
+        return textBuilder.toString().trim();
+    }
+
+    /**
+     * Extract user-assistant message pairs from a list of structured messages.
+     * Processes messages backwards to detect Q&A pairs, skipping trailing user messages,
+     * then reverses the result to maintain chronological order.
+     *
+     * @param messages The list of structured messages to process
+     * @param sessionId The session/conversation ID for the pairs
+     * @param appType The application type to set on each pair (may be null)
+     * @return A list of ConversationIndexMessage pairs in chronological order
+     */
+    public static List<ConversationIndexMessage> extractMessagePairs(List<Message> messages, String sessionId, String appType) {
+        List<ConversationIndexMessage> messagePairs = new ArrayList<>();
+
+        StringBuilder userTextBuilder = new StringBuilder();
+        StringBuilder assistantTextBuilder = new StringBuilder();
+        boolean skippingTrailingUsers = true;
+        String currentRole = null;
+
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message message = messages.get(i);
+
+            if (message == null || message.getRole() == null) {
+                continue;
+            }
+
+            String role = message.getRole().toLowerCase();
+
+            // Skip non-user/assistant roles
+            if (!role.equals("user") && !role.equals("assistant")) {
+                continue;
+            }
+
+            // Skip trailing user messages
+            if (skippingTrailingUsers && role.equals("user")) {
+                continue;
+            }
+
+            if (skippingTrailingUsers && role.equals("assistant")) {
+                skippingTrailingUsers = false;
+            }
+
+            // Detect role change from user to assistant (going backwards)
+            if (currentRole != null && currentRole.equals("user") && role.equals("assistant")) {
+                // Save the accumulated pair
+                String userText = userTextBuilder.toString().trim();
+                String assistantText = assistantTextBuilder.toString().trim();
+
+                if (!userText.isEmpty() && !assistantText.isEmpty()) {
+                    ConversationIndexMessage msg = ConversationIndexMessage
+                        .conversationIndexMessageBuilder()
+                        .type(appType)
+                        .question(userText)
+                        .response(assistantText)
+                        .finalAnswer(true)
+                        .sessionId(sessionId)
+                        .build();
+
+                    messagePairs.add(msg);
+                }
+
+                // Clear buffers for next pair
+                userTextBuilder.setLength(0);
+                assistantTextBuilder.setLength(0);
+            }
+
+            // Extract text
+            String text = extractTextFromMessage(message);
+
+            // Accumulate text based on role (prepending since we're going backwards)
+            if (role.equals("user")) {
+                if (!text.isEmpty()) {
+                    if (userTextBuilder.length() > 0) {
+                        userTextBuilder.insert(0, "\n");
+                    }
+                    userTextBuilder.insert(0, text);
+                }
+            } else if (role.equals("assistant")) {
+                if (!text.isEmpty()) {
+                    if (assistantTextBuilder.length() > 0) {
+                        assistantTextBuilder.insert(0, "\n");
+                    }
+                    assistantTextBuilder.insert(0, text);
+                }
+            }
+
+            currentRole = role;
+        }
+
+        // Save any remaining pair
+        String userText = userTextBuilder.toString().trim();
+        String assistantText = assistantTextBuilder.toString().trim();
+
+        if (!userText.isEmpty() && !assistantText.isEmpty()) {
+            ConversationIndexMessage msg = ConversationIndexMessage
+                .conversationIndexMessageBuilder()
+                .type(appType)
+                .question(userText)
+                .response(assistantText)
+                .finalAnswer(true)
+                .sessionId(sessionId)
+                .build();
+
+            messagePairs.add(msg);
+        }
+
+        // Reverse to maintain chronological order
+        Collections.reverse(messagePairs);
+
+        return messagePairs;
     }
 }

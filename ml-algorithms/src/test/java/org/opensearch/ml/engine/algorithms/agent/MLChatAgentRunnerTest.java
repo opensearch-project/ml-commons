@@ -51,6 +51,9 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -1588,5 +1591,62 @@ public class MLChatAgentRunnerTest {
 
         String response = (String) agentOutput.get(0).getDataAsMap().get("response");
         assertEquals("Agent reached maximum iterations (1) without completing the task. Last thought: Analyzing the problem", response);
+    }
+
+    @Test
+    public void testSetInputMessages_StoresMessages() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Hello");
+        Message message = new Message("user", java.util.Collections.singletonList(textBlock));
+        List<Message> messages = java.util.Collections.singletonList(message);
+
+        mlChatAgentRunner.setInputMessages(messages);
+
+        // Verify by accessing the field via reflection (since it's private)
+        try {
+            java.lang.reflect.Field field = MLChatAgentRunner.class.getDeclaredField("inputMessages");
+            field.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<Message> stored = (List<Message>) field.get(mlChatAgentRunner);
+            assertNotNull(stored);
+            assertEquals(1, stored.size());
+            assertEquals("user", stored.get(0).getRole());
+        } catch (Exception e) {
+            Assert.fail("Failed to verify inputMessages field: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testSetInputMessages_NullMessages() {
+        mlChatAgentRunner.setInputMessages(null);
+
+        try {
+            java.lang.reflect.Field field = MLChatAgentRunner.class.getDeclaredField("inputMessages");
+            field.setAccessible(true);
+            List<Message> stored = (List<Message>) field.get(mlChatAgentRunner);
+            Assert.assertNull(stored);
+        } catch (Exception e) {
+            Assert.fail("Failed to verify inputMessages field: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testMLAgentRunner_DefaultSetInputMessages_IsNoOp() {
+        // Verify the default interface method is a no-op
+        MLAgentRunner runner = new MLAgentRunner() {
+            @Override
+            public void run(
+                MLAgent mlAgent,
+                Map<String, String> params,
+                ActionListener<Object> listener,
+                org.opensearch.transport.TransportChannel channel
+            ) {
+                // no-op
+            }
+        };
+        // Should not throw
+        runner.setInputMessages(java.util.Collections.emptyList());
+        runner.setInputMessages(null);
     }
 }

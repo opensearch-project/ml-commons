@@ -29,7 +29,6 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -69,8 +68,6 @@ import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.AgentInputProcessor;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.input.execute.agent.ContentBlock;
-import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.InputType;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
@@ -434,7 +431,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         listener,
                                                                         createdMemory,
                                                                         channel,
-                                                                        hookRegistry
+                                                                        hookRegistry,
+                                                                        null
                                                                     ),
                                                                     ex -> {
                                                                         log.error("Failed to find memory with memory_id: {}", memoryId, ex);
@@ -457,7 +455,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 listener,
                                                 null,
                                                 channel,
-                                                hookRegistry
+                                                hookRegistry,
+                                                null
                                             );
                                         }
                                     } catch (Exception e) {
@@ -512,55 +511,30 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String question = inputDataSet.getParameters().get(QUESTION);
         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
 
-        // Store message pairs if input is of type MESSAGES, then create parent interaction
-        if (agentMLInput.getAgentInput() != null && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES) {
-            storeMessagesInMemory(
-                memory,
-                (List<Message>) agentMLInput.getAgentInput().getInput(),
-                appType,
-                ActionListener
-                    .<Void>wrap(
-                        v -> createParentInteractionAndExecute(
-                            tenantId,
-                            memory,
-                            appType,
-                            question,
-                            regenerateInteractionId,
-                            inputDataSet,
-                            mlTask,
-                            isAsync,
-                            mlAgent,
-                            outputs,
-                            modelTensors,
-                            listener,
-                            channel,
-                            hookRegistry
-                        ),
-                        ex -> {
-                            log.error("Failed to store message pairs in memory", ex);
-                            listener.onFailure(ex);
-                        }
-                    )
-            );
-        } else {
-            // No messages to store, proceed directly to create parent interaction
-            createParentInteractionAndExecute(
-                tenantId,
-                memory,
-                appType,
-                question,
-                regenerateInteractionId,
-                inputDataSet,
-                mlTask,
-                isAsync,
-                mlAgent,
-                outputs,
-                modelTensors,
-                listener,
-                channel,
-                hookRegistry
-            );
-        }
+        // Extract structured input messages to pass directly to the runner
+        @SuppressWarnings("unchecked")
+        List<Message> inputMessages = (agentMLInput.getAgentInput() != null
+            && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES)
+                ? (List<Message>) agentMLInput.getAgentInput().getInput()
+                : null;
+
+        createParentInteractionAndExecute(
+            tenantId,
+            memory,
+            appType,
+            question,
+            regenerateInteractionId,
+            inputDataSet,
+            mlTask,
+            isAsync,
+            mlAgent,
+            outputs,
+            modelTensors,
+            listener,
+            channel,
+            hookRegistry,
+            inputMessages
+        );
     }
 
     /**
@@ -580,7 +554,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener,
         TransportChannel channel,
-        HookRegistry hookRegistry
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
     ) {
         // Create root interaction ID for the current question
         ConversationIndexMessage msg = ConversationIndexMessage
@@ -613,7 +588,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     listener,
                                     memory,
                                     channel,
-                                    hookRegistry
+                                    hookRegistry,
+                                    inputMessages
                                 ),
                                 e -> {
                                     log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
@@ -634,7 +610,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     listener,
                     memory,
                     channel,
-                    hookRegistry
+                    hookRegistry,
+                    inputMessages
                 );
             }
         }, ex -> {
@@ -730,157 +707,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    @VisibleForTesting
-    void storeMessagesInMemory(Memory memory, List<Message> messages, String appType, ActionListener<Void> listener) {
-        // Parse backwards to extract historical conversation pairs, skipping trailing user messages
-        // (which will be stored later with the agent's response)
-        List<ConversationIndexMessage> messagePairs = new ArrayList<>();
-        StringBuilder userTextBuilder = new StringBuilder();
-        StringBuilder assistantTextBuilder = new StringBuilder();
-        boolean skippingTrailingUsers = true;
-        String currentRole = null;
-
-        // Process messages backwards
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message message = messages.get(i);
-
-            if (message == null || message.getRole() == null) {
-                continue;
-            }
-
-            String role = message.getRole().toLowerCase();
-
-            // Skip non-user/assistant roles
-            if (!role.equals("user") && !role.equals("assistant")) {
-                continue;
-            }
-
-            // Skip trailing user messages (they'll be stored with agent's response)
-            if (skippingTrailingUsers && role.equals("user")) {
-                continue;
-            }
-
-            // Once we hit an assistant, stop skipping
-            if (skippingTrailingUsers && role.equals("assistant")) {
-                skippingTrailingUsers = false;
-                log.info("Stopped skipping at assistant message at index {}", i);
-            }
-
-            // Detect role change from user to assistant (going backwards)
-            if (currentRole != null && currentRole.equals("user") && role.equals("assistant")) {
-                // Save the accumulated pair
-                String userText = userTextBuilder.toString().trim();
-                String assistantText = assistantTextBuilder.toString().trim();
-
-                if (!userText.isEmpty() && !assistantText.isEmpty()) {
-                    ConversationIndexMessage msg = ConversationIndexMessage
-                        .conversationIndexMessageBuilder()
-                        .type(appType)
-                        .question(userText)
-                        .response(assistantText)
-                        .finalAnswer(true)
-                        .sessionId(memory.getId())
-                        .build();
-
-                    messagePairs.add(msg);
-                }
-
-                // Clear buffers for next pair
-                userTextBuilder.setLength(0);
-                assistantTextBuilder.setLength(0);
-            }
-
-            // Accumulate text based on role (prepending since we're going backwards)
-            if (role.equals("user")) {
-                String text = extractTextFromMessage(message);
-                if (!text.isEmpty()) {
-                    if (userTextBuilder.length() > 0) {
-                        userTextBuilder.insert(0, "\n");
-                    }
-                    userTextBuilder.insert(0, text);
-                }
-            } else if (role.equals("assistant")) {
-                String text = extractTextFromMessage(message);
-                if (!text.isEmpty()) {
-                    if (assistantTextBuilder.length() > 0) {
-                        assistantTextBuilder.insert(0, "\n");
-                    }
-                    assistantTextBuilder.insert(0, text);
-                }
-            }
-
-            currentRole = role;
-        }
-
-        // Save any remaining pair
-        String userText = userTextBuilder.toString().trim();
-        String assistantText = assistantTextBuilder.toString().trim();
-
-        if (!userText.isEmpty() && !assistantText.isEmpty()) {
-            ConversationIndexMessage msg = ConversationIndexMessage
-                .conversationIndexMessageBuilder()
-                .type(appType)
-                .question(userText)
-                .response(assistantText)
-                .finalAnswer(true)
-                .sessionId(memory.getId())
-                .build();
-
-            messagePairs.add(msg);
-        }
-
-        // Reverse the list to maintain chronological order
-        Collections.reverse(messagePairs);
-
-        // If no pairs to save, complete immediately
-        if (messagePairs.isEmpty()) {
-            listener.onResponse(null);
-            return;
-        }
-
-        // Save all pairs to memory sequentially using iterative approach
-        saveMessagePairsSequentially(memory, messagePairs, listener);
-    }
-
-    /**
-     * Iteratively saves message pairs to memory in sequence.
-     * Each save waits for the previous one to complete before proceeding.
-     */
-    @VisibleForTesting
-    void saveMessagePairsSequentially(Memory memory, List<ConversationIndexMessage> messagePairs, ActionListener<Void> finalListener) {
-        saveNextMessagePair(memory, messagePairs, 0, finalListener);
-    }
-
-    /**
-     * Helper method to save a single message pair and chain to the next one.
-     * This creates a chain of listeners without recursion by building each listener
-     * at the point of invocation.
-     */
-    @VisibleForTesting
-    void saveNextMessagePair(Memory memory, List<ConversationIndexMessage> messagePairs, int index, ActionListener<Void> finalListener) {
-        if (index >= messagePairs.size()) {
-            // All pairs saved, complete
-            finalListener.onResponse(null);
-            return;
-        }
-
-        ConversationIndexMessage msg = messagePairs.get(index);
-
-        // Create the listener for this save operation
-        ActionListener<CreateInteractionResponse> saveListener = ActionListener.wrap(interaction -> {
-            log.info("Stored message pair {} of {} in memory with interaction ID: {}", index + 1, messagePairs.size(), interaction.getId());
-            // Save next pair
-            saveNextMessagePair(memory, messagePairs, index + 1, finalListener);
-        }, ex -> {
-            log.error("Failed to store message pair {} of {} in memory", index + 1, messagePairs.size(), ex);
-            // Continue with next pair even on failure
-            saveNextMessagePair(memory, messagePairs, index + 1, finalListener);
-        });
-
-        // Execute the save operation with the listener
-        memory.save(msg, null, null, null, saveListener);
-    }
-
     private void executeAgent(
         RemoteInferenceInputDataSet inputDataSet,
         String tenantId,
@@ -893,7 +719,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         ActionListener<Output> listener,
         Memory memory,
         TransportChannel channel,
-        HookRegistry hookRegistry
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
@@ -909,6 +736,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
 
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent, hookRegistry);
+        mlAgentRunner.setInputMessages(inputMessages);
         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
 
         // If async is true, index ML task and return the taskID. Also add memoryID to
@@ -1297,23 +1125,4 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         return mlAgent;
     }
 
-    /**
-     * Helper method to extract text from a message's content blocks.
-     */
-    @VisibleForTesting
-    String extractTextFromMessage(Message message) {
-        if (message == null || message.getContent() == null) {
-            return "";
-        }
-
-        StringBuilder textBuilder = new StringBuilder();
-        for (ContentBlock block : message.getContent()) {
-            if (block.getType() == ContentType.TEXT && block.getText() != null) {
-                textBuilder.append(block.getText().trim());
-                textBuilder.append("\n");
-            }
-        }
-
-        return textBuilder.toString().trim();
-    }
 }

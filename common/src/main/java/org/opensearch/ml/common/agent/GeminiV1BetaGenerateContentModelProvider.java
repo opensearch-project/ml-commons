@@ -297,4 +297,9 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         };
     }
 
+    @Override
+    public Message parseResponseMessage(String json) {
+        throw new UnsupportedOperationException("parseResponseMessage is not yet supported for Gemini model provider");
+    }
+
 }

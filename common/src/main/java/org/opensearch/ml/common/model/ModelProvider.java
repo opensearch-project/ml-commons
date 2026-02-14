@@ -75,6 +75,14 @@ public abstract class ModelProvider {
     public abstract Map<String, String> mapMessages(List<Message> messages, MLAgentType type);
 
     /**
+     * Parses an provider-specific format response message JSON string into a unified Message object.
+     *
+     * @param json JSON string in the provider's native message format
+     * @return a Message with content blocks
+     */
+    public abstract Message parseResponseMessage(String json);
+
+    /**
      * Maps standardized AgentInput to provider-specific request body parameters.
      * This is the main entry point that delegates to the specific mapping methods.
      *

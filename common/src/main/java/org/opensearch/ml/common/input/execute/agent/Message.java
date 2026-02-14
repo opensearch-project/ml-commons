@@ -7,6 +7,8 @@ package org.opensearch.ml.common.input.execute.agent;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -15,6 +17,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class Message {
     private String role; // flexible - any role allowed (user, assistant, system, etc.)
     private List<ContentBlock> content;

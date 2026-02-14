@@ -5,14 +5,18 @@
 
 package org.opensearch.ml.engine.memory;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateResponse;
@@ -22,8 +26,8 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
-import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.memorycontainer.MLWorkingMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
@@ -40,11 +44,14 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryR
 import org.opensearch.ml.common.transport.session.MLCreateSessionAction;
 import org.opensearch.ml.common.transport.session.MLCreateSessionInput;
 import org.opensearch.ml.common.transport.session.MLCreateSessionRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.transport.client.Client;
+
+import com.google.gson.reflect.TypeToken;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -55,11 +62,14 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @Getter
-public class AgenticConversationMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
+public class AgenticConversationMemory
+    implements
+        Memory<org.opensearch.ml.common.memory.Message, CreateInteractionResponse, UpdateResponse> {
 
     public static final String TYPE = MLMemoryType.AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
+    private static final String MESSAGE_ID_FIELD = "message_id";
 
     private final Client client;
     private final String conversationId;
@@ -82,7 +92,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     }
 
     @Override
-    public void save(Message message, String parentId, Integer traceNum, String action) {
+    public void save(org.opensearch.ml.common.memory.Message message, String parentId, Integer traceNum, String action) {
         this.save(message, parentId, traceNum, action, ActionListener.<CreateInteractionResponse>wrap(r -> {
             log.info("Saved message to agentic memory, session id: {}, working memory id: {}", conversationId, r.getId());
         }, e -> { log.error("Failed to save message to agentic memory", e); }));
@@ -90,7 +100,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
     @Override
     public void save(
-        Message message,
+        org.opensearch.ml.common.memory.Message message,
         String parentId,
         Integer traceNum,
         String action,
@@ -147,7 +157,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         }
 
         // Add timestamps
-        java.time.Instant now = java.time.Instant.now();
+        Instant now = Instant.now();
         structuredData.put("create_time", now.toString());
         structuredData.put("updated_time", now.toString());
 
@@ -214,7 +224,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             }
 
             // Update the timestamp
-            structuredData.put("updated_time", java.time.Instant.now().toString());
+            structuredData.put("updated_time", Instant.now().toString());
 
             // Step 4: Create update request with merged structured_data_blob
             Map<String, Object> finalUpdateContent = new HashMap<>();
@@ -254,7 +264,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     }
 
     @Override
-    public void getMessages(int size, ActionListener<List<Message>> listener) {
+    public void getMessages(int size, ActionListener<List<org.opensearch.ml.common.memory.Message>> listener) {
         if (Strings.isNullOrEmpty(memoryContainerId)) {
             listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
             return;
@@ -281,7 +291,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
 
         client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
-            List<Message> interactions = parseSearchResponseToInteractions(searchResponse);
+            List<org.opensearch.ml.common.memory.Message> interactions = parseSearchResponseToInteractions(searchResponse);
             listener.onResponse(interactions);
         }, e -> {
             log.error("Failed to search memories in memory container", e);
@@ -289,8 +299,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         }));
     }
 
-    private List<Message> parseSearchResponseToInteractions(SearchResponse searchResponse) {
-        List<Message> interactions = new ArrayList<>();
+    private List<org.opensearch.ml.common.memory.Message> parseSearchResponseToInteractions(SearchResponse searchResponse) {
+        List<org.opensearch.ml.common.memory.Message> interactions = new ArrayList<>();
         for (SearchHit hit : searchResponse.getHits().getHits()) {
             Map<String, Object> sourceMap = hit.getSourceAsMap();
 
@@ -310,19 +320,19 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 String createTimeStr = (String) structuredData.get("create_time");
                 String updatedTimeStr = (String) structuredData.get("updated_time");
 
-                java.time.Instant createTime = null;
-                java.time.Instant updatedTime = null;
+                Instant createTime = null;
+                Instant updatedTime = null;
 
                 if (createTimeStr != null) {
                     try {
-                        createTime = java.time.Instant.parse(createTimeStr);
+                        createTime = Instant.parse(createTimeStr);
                     } catch (Exception e) {
                         log.warn("Failed to parse create_time from structured_data", e);
                     }
                 }
                 if (updatedTimeStr != null) {
                     try {
-                        updatedTime = java.time.Instant.parse(updatedTimeStr);
+                        updatedTime = Instant.parse(updatedTimeStr);
                     } catch (Exception e) {
                         log.warn("Failed to parse updated_time from structured_data", e);
                     }
@@ -330,10 +340,10 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
                 // Fallback to document timestamps if structured_data timestamps not available
                 if (createTime == null && createdTimeMs != null) {
-                    createTime = java.time.Instant.ofEpochMilli(createdTimeMs);
+                    createTime = Instant.ofEpochMilli(createdTimeMs);
                 }
                 if (updatedTime == null && updatedTimeMs != null) {
-                    updatedTime = java.time.Instant.ofEpochMilli(updatedTimeMs);
+                    updatedTime = Instant.ofEpochMilli(updatedTimeMs);
                 }
 
                 // Extract metadata
@@ -347,7 +357,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                         .builder()
                         .id(hit.getId())
                         .conversationId(conversationId)
-                        .createTime(createTime != null ? createTime : java.time.Instant.now())
+                        .createTime(createTime != null ? createTime : Instant.now())
                         .updatedTime(updatedTime)
                         .input(input != null ? input : "")
                         .response(response != null ? response : "")
@@ -367,6 +377,128 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     @Override
     public void clear() {
         throw new UnsupportedOperationException("clear method is not supported in AgenticConversationMemory");
+    }
+
+    @Override
+    public void getStructuredMessages(ActionListener<List<Message>> listener) {
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
+            return;
+        }
+
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        boolQuery.must(QueryBuilders.termQuery("namespace." + SESSION_ID_FIELD, conversationId));
+        boolQuery.must(QueryBuilders.termQuery("metadata.type", "structured_message"));
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQuery);
+        searchSourceBuilder.size(Memory.MAX_MESSAGES_TO_RETRIEVE);
+        searchSourceBuilder.sort(CREATED_TIME_FIELD, SortOrder.ASC);
+        searchSourceBuilder.sort(MESSAGE_ID_FIELD, SortOrder.ASC);
+
+        MLSearchMemoriesInput searchInput = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(MemoryType.WORKING)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
+
+        client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
+            List<Message> messages = new ArrayList<>();
+            for (SearchHit hit : searchResponse.getHits().getHits()) {
+                Map<String, Object> sourceMap = hit.getSourceAsMap();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
+
+                if (structuredData != null && structuredData.containsKey("message")) {
+                    Object messageObj = structuredData.get("message");
+                    Message message = gson.fromJson(gson.toJson(messageObj), Message.class);
+                    messages.add(message);
+                }
+            }
+            listener.onResponse(messages);
+        }, e -> {
+            log.error("Failed to retrieve structured messages", e);
+            listener.onFailure(e);
+        }));
+    }
+
+    @Override
+    public void saveStructuredMessages(List<Message> messages, ActionListener<Void> listener) {
+        log
+            .debug(
+                "saveStructuredMessages: Entry - memoryContainerId={}, conversationId={}, messages count={}",
+                memoryContainerId,
+                conversationId,
+                messages != null ? messages.size() : "null"
+            );
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
+            return;
+        }
+
+        if (messages == null || messages.isEmpty()) {
+            listener.onResponse(null);
+            return;
+        }
+
+        AtomicInteger remaining = new AtomicInteger(messages.size());
+        AtomicBoolean hasError = new AtomicBoolean(false);
+
+        for (int i = 0; i < messages.size(); i++) {
+            Message message = messages.get(i);
+
+            // Build namespace
+            Map<String, String> namespace = new HashMap<>();
+            namespace.put(SESSION_ID_FIELD, conversationId);
+
+            // Build structured_data_blob
+            Map<String, Object> structuredData = new HashMap<>();
+            Map<String, Object> serializableMessage = gson.fromJson(StringUtils.toJson(message), new TypeToken<Map<String, Object>>() {
+            }.getType());
+            structuredData.put("message", serializableMessage);
+
+            // Build metadata
+            Map<String, String> metadata = new HashMap<>();
+            metadata.put("type", "structured_message");
+            if (message.getRole() != null) {
+                metadata.put("role", message.getRole());
+            }
+
+            // Use messageId as sequence number so retrieval can sort by
+            // (created_time ASC, message_id ASC) to preserve ordering.
+            MLAddMemoriesInput input = MLAddMemoriesInput
+                .builder()
+                .memoryContainerId(memoryContainerId)
+                .structuredDataBlob(structuredData)
+                .messageId(i)
+                .namespace(namespace)
+                .metadata(metadata)
+                .infer(false)
+                .build();
+
+            MLAddMemoriesRequest request = MLAddMemoriesRequest.builder().mlAddMemoryInput(input).build();
+
+            int index = i;
+            client.execute(MLAddMemoriesAction.INSTANCE, request, ActionListener.wrap(response -> {
+                log.debug("Saved structured message {} of {} to session {}", index + 1, messages.size(), conversationId);
+                if (remaining.decrementAndGet() == 0) {
+                    if (hasError.get()) {
+                        listener.onFailure(new RuntimeException("One or more structured messages failed to save"));
+                    } else {
+                        listener.onResponse(null);
+                    }
+                }
+            }, e -> {
+                log.error("Failed to save structured message {} of {} to session {}", index + 1, messages.size(), conversationId, e);
+                hasError.set(true);
+                if (remaining.decrementAndGet() == 0) {
+                    listener.onFailure(e);
+                }
+            }));
+        }
     }
 
     @Override
@@ -455,10 +587,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 Long createdTimeMs = (Long) sourceMap.get("created_time");
                 Long updatedTimeMs = (Long) sourceMap.get("last_updated_time");
 
-                java.time.Instant createTime = createdTimeMs != null
-                    ? java.time.Instant.ofEpochMilli(createdTimeMs)
-                    : java.time.Instant.now();
-                java.time.Instant updatedTime = updatedTimeMs != null ? java.time.Instant.ofEpochMilli(updatedTimeMs) : null;
+                Instant createTime = createdTimeMs != null ? Instant.ofEpochMilli(createdTimeMs) : Instant.now();
+                Instant updatedTime = updatedTimeMs != null ? Instant.ofEpochMilli(updatedTimeMs) : null;
 
                 // Create Interaction object for trace
                 if (input != null || response != null) {

@@ -681,4 +681,38 @@ public class AGUIInputConverterTest {
         assertEquals("get_weather", convertedMessages.get(0).getToolCalls().get(0).getFunction().getName());
         assertEquals("get_time", convertedMessages.get(0).getToolCalls().get(1).getFunction().getName());
     }
+
+    // ==================== Test for memory_id parameter ====================
+
+    @Test
+    public void testConvertFromAGUIInput_SetsMemoryIdFromThreadId() {
+        String threadId = "thread-memory-test-123";
+        String aguiInputJson = buildMinimalAGUIInput(threadId, "run-1");
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInputJson, "agent-id", null, false);
+
+        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
+        Map<String, String> params = dataSet.getParameters();
+        assertEquals(threadId, params.get("memory_id"));
+        assertEquals(threadId, params.get(AGUI_PARAM_THREAD_ID));
+    }
+
+    private String buildMinimalAGUIInput(String threadId, String runId) {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", threadId);
+        aguiInput.addProperty("runId", runId);
+        aguiInput.add("state", new JsonObject());
+        aguiInput.add("tools", new JsonArray());
+        aguiInput.add("context", new JsonArray());
+        aguiInput.add("forwardedProps", new JsonObject());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Hello");
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        return gson.toJson(aguiInput);
+    }
 }
