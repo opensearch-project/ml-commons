@@ -10,6 +10,7 @@ import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,6 +69,7 @@ public class AgenticConversationMemory
     public static final String TYPE = MLMemoryType.AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
+    private static final String MESSAGE_ID_FIELD = "message_id";
 
     private final Client client;
     private final String conversationId;
@@ -155,7 +157,7 @@ public class AgenticConversationMemory
         }
 
         // Add timestamps
-        java.time.Instant now = java.time.Instant.now();
+        Instant now = Instant.now();
         structuredData.put("create_time", now.toString());
         structuredData.put("updated_time", now.toString());
 
@@ -222,7 +224,7 @@ public class AgenticConversationMemory
             }
 
             // Update the timestamp
-            structuredData.put("updated_time", java.time.Instant.now().toString());
+            structuredData.put("updated_time", Instant.now().toString());
 
             // Step 4: Create update request with merged structured_data_blob
             Map<String, Object> finalUpdateContent = new HashMap<>();
@@ -318,19 +320,19 @@ public class AgenticConversationMemory
                 String createTimeStr = (String) structuredData.get("create_time");
                 String updatedTimeStr = (String) structuredData.get("updated_time");
 
-                java.time.Instant createTime = null;
-                java.time.Instant updatedTime = null;
+                Instant createTime = null;
+                Instant updatedTime = null;
 
                 if (createTimeStr != null) {
                     try {
-                        createTime = java.time.Instant.parse(createTimeStr);
+                        createTime = Instant.parse(createTimeStr);
                     } catch (Exception e) {
                         log.warn("Failed to parse create_time from structured_data", e);
                     }
                 }
                 if (updatedTimeStr != null) {
                     try {
-                        updatedTime = java.time.Instant.parse(updatedTimeStr);
+                        updatedTime = Instant.parse(updatedTimeStr);
                     } catch (Exception e) {
                         log.warn("Failed to parse updated_time from structured_data", e);
                     }
@@ -338,10 +340,10 @@ public class AgenticConversationMemory
 
                 // Fallback to document timestamps if structured_data timestamps not available
                 if (createTime == null && createdTimeMs != null) {
-                    createTime = java.time.Instant.ofEpochMilli(createdTimeMs);
+                    createTime = Instant.ofEpochMilli(createdTimeMs);
                 }
                 if (updatedTime == null && updatedTimeMs != null) {
-                    updatedTime = java.time.Instant.ofEpochMilli(updatedTimeMs);
+                    updatedTime = Instant.ofEpochMilli(updatedTimeMs);
                 }
 
                 // Extract metadata
@@ -355,7 +357,7 @@ public class AgenticConversationMemory
                         .builder()
                         .id(hit.getId())
                         .conversationId(conversationId)
-                        .createTime(createTime != null ? createTime : java.time.Instant.now())
+                        .createTime(createTime != null ? createTime : Instant.now())
                         .updatedTime(updatedTime)
                         .input(input != null ? input : "")
                         .response(response != null ? response : "")
@@ -392,6 +394,7 @@ public class AgenticConversationMemory
         searchSourceBuilder.query(boolQuery);
         searchSourceBuilder.size(Memory.MAX_MESSAGES_TO_RETRIEVE);
         searchSourceBuilder.sort(CREATED_TIME_FIELD, SortOrder.ASC);
+        searchSourceBuilder.sort(MESSAGE_ID_FIELD, SortOrder.ASC);
 
         MLSearchMemoriesInput searchInput = MLSearchMemoriesInput
             .builder()
@@ -444,7 +447,9 @@ public class AgenticConversationMemory
         AtomicInteger remaining = new AtomicInteger(messages.size());
         AtomicBoolean hasError = new AtomicBoolean(false);
 
-        for (Message message : messages) {
+        for (int i = 0; i < messages.size(); i++) {
+            Message message = messages.get(i);
+
             // Build namespace
             Map<String, String> namespace = new HashMap<>();
             namespace.put(SESSION_ID_FIELD, conversationId);
@@ -454,8 +459,6 @@ public class AgenticConversationMemory
             Map<String, Object> serializableMessage = gson.fromJson(StringUtils.toJson(message), new TypeToken<Map<String, Object>>() {
             }.getType());
             structuredData.put("message", serializableMessage);
-            structuredData.put("created_at", java.time.Instant.now().toString());
-            structuredData.put("updated_at", java.time.Instant.now().toString());
 
             // Build metadata
             Map<String, String> metadata = new HashMap<>();
@@ -464,11 +467,13 @@ public class AgenticConversationMemory
                 metadata.put("role", message.getRole());
             }
 
-            // Create MLAddMemoriesInput
+            // Use messageId as sequence number so retrieval can sort by
+            // (created_time ASC, message_id ASC) to preserve ordering.
             MLAddMemoriesInput input = MLAddMemoriesInput
                 .builder()
                 .memoryContainerId(memoryContainerId)
                 .structuredDataBlob(structuredData)
+                .messageId(i)
                 .namespace(namespace)
                 .metadata(metadata)
                 .infer(false)
@@ -476,14 +481,18 @@ public class AgenticConversationMemory
 
             MLAddMemoriesRequest request = MLAddMemoriesRequest.builder().mlAddMemoryInput(input).build();
 
-            // Execute save
+            int index = i;
             client.execute(MLAddMemoriesAction.INSTANCE, request, ActionListener.wrap(response -> {
-                log.debug("Saved structured message to session {}", conversationId);
-                if (remaining.decrementAndGet() == 0 && !hasError.get()) {
-                    listener.onResponse(null);
+                log.debug("Saved structured message {} of {} to session {}", index + 1, messages.size(), conversationId);
+                if (remaining.decrementAndGet() == 0) {
+                    if (hasError.get()) {
+                        listener.onFailure(new RuntimeException("One or more structured messages failed to save"));
+                    } else {
+                        listener.onResponse(null);
+                    }
                 }
             }, e -> {
-                log.error("Failed to save structured message to session {}", conversationId, e);
+                log.error("Failed to save structured message {} of {} to session {}", index + 1, messages.size(), conversationId, e);
                 hasError.set(true);
                 if (remaining.decrementAndGet() == 0) {
                     listener.onFailure(e);
@@ -578,10 +587,10 @@ public class AgenticConversationMemory
                 Long createdTimeMs = (Long) sourceMap.get("created_time");
                 Long updatedTimeMs = (Long) sourceMap.get("last_updated_time");
 
-                java.time.Instant createTime = createdTimeMs != null
-                    ? java.time.Instant.ofEpochMilli(createdTimeMs)
-                    : java.time.Instant.now();
-                java.time.Instant updatedTime = updatedTimeMs != null ? java.time.Instant.ofEpochMilli(updatedTimeMs) : null;
+                Instant createTime = createdTimeMs != null
+                    ? Instant.ofEpochMilli(createdTimeMs)
+                    : Instant.now();
+                Instant updatedTime = updatedTimeMs != null ? Instant.ofEpochMilli(updatedTimeMs) : null;
 
                 // Create Interaction object for trace
                 if (input != null || response != null) {

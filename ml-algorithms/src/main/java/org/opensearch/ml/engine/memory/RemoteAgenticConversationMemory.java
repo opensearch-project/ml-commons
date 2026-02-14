@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.get.GetResponse;
@@ -72,6 +74,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     public static final String TYPE = MLMemoryType.REMOTE_AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
+    private static final String MESSAGE_ID_FIELD = "message_id";
     private static final Gson GSON = new Gson();
 
     private final String conversationId;
@@ -511,14 +514,124 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
     @Override
     public void getStructuredMessages(ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> listener) {
-        listener
-            .onFailure(new UnsupportedOperationException("getStructuredMessages is not yet supported in RemoteAgenticConversationMemory"));
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured"));
+            return;
+        }
+
+        // Build search query for structured messages
+        Map<String, Object> query = new HashMap<>();
+        Map<String, Object> bool = new HashMap<>();
+        List<Map<String, Object>> must = new ArrayList<>();
+
+        must.add(Map.of("term", Map.of("namespace." + SESSION_ID_FIELD, conversationId)));
+        must.add(Map.of("term", Map.of("metadata.type", "structured_message")));
+
+        bool.put("must", must);
+        query.put("bool", bool);
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("memory_container_id", memoryContainerId);
+        searchRequest.put("memory_type", "working");
+        searchRequest.put("query", query);
+        searchRequest.put("size", Memory.MAX_MESSAGES_TO_RETRIEVE);
+        searchRequest.put("sort", List.of(Map.of(CREATED_TIME_FIELD, "asc"), Map.of(MESSAGE_ID_FIELD, "asc")));
+
+        executeConnectorAction("search_memories", searchRequest, ActionListener.wrap(response -> {
+            List<org.opensearch.ml.common.input.execute.agent.Message> messages = parseStructuredMessages(response);
+            listener.onResponse(messages);
+        }, e -> {
+            log.error("Failed to retrieve structured messages from remote memory", e);
+            listener.onFailure(e);
+        }));
     }
 
     @Override
     public void saveStructuredMessages(List<org.opensearch.ml.common.input.execute.agent.Message> messages, ActionListener<Void> listener) {
-        listener
-            .onFailure(new UnsupportedOperationException("saveStructuredMessages is not yet supported in RemoteAgenticConversationMemory"));
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured"));
+            return;
+        }
+
+        if (messages == null || messages.isEmpty()) {
+            listener.onResponse(null);
+            return;
+        }
+
+        AtomicInteger remaining = new AtomicInteger(messages.size());
+        AtomicBoolean hasError = new AtomicBoolean(false);
+
+        for (int i = 0; i < messages.size(); i++) {
+            org.opensearch.ml.common.input.execute.agent.Message message = messages.get(i);
+
+            Map<String, String> namespace = new HashMap<>();
+            namespace.put(SESSION_ID_FIELD, conversationId);
+            if (!Strings.isNullOrEmpty(userId)) {
+                namespace.put("user_id", userId);
+            }
+
+            Map<String, Object> structuredData = new HashMap<>();
+            Map<String, Object> serializableMessage = GSON.fromJson(
+                org.opensearch.ml.common.utils.StringUtils.toJson(message),
+                new com.google.gson.reflect.TypeToken<Map<String, Object>>() {}.getType()
+            );
+            structuredData.put("message", serializableMessage);
+
+            Map<String, String> metadata = new HashMap<>();
+            metadata.put("type", "structured_message");
+            if (message.getRole() != null) {
+                metadata.put("role", message.getRole());
+            }
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("memory_container_id", memoryContainerId);
+            requestBody.put("structured_data_blob", structuredData);
+            requestBody.put("message_id", i);
+            requestBody.put("namespace", namespace);
+            requestBody.put("metadata", metadata);
+            requestBody.put("infer", false);
+
+            int index = i;
+            executeConnectorAction("add_memory", requestBody, ActionListener.wrap(response -> {
+                log.debug("Saved structured message {} of {} to remote session {}", index + 1, messages.size(), conversationId);
+                if (remaining.decrementAndGet() == 0) {
+                    if (hasError.get()) {
+                        listener.onFailure(new RuntimeException("One or more structured messages failed to save"));
+                    } else {
+                        listener.onResponse(null);
+                    }
+                }
+            }, e -> {
+                log.error("Failed to save structured message {} of {} to remote session {}", index + 1, messages.size(), conversationId, e);
+                hasError.set(true);
+                if (remaining.decrementAndGet() == 0) {
+                    listener.onFailure(e);
+                }
+            }));
+        }
+    }
+
+    private List<org.opensearch.ml.common.input.execute.agent.Message> parseStructuredMessages(String response) {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = new ArrayList<>();
+        try {
+            SearchResponse searchResponse = parseSearchResponse(response);
+            if (searchResponse.getHits() != null && searchResponse.getHits().getHits() != null) {
+                for (SearchHit hit : searchResponse.getHits().getHits()) {
+                    Map<String, Object> sourceMap = hit.getSourceAsMap();
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
+                    if (structuredData != null && structuredData.containsKey("message")) {
+                        Object messageObj = structuredData.get("message");
+                        org.opensearch.ml.common.input.execute.agent.Message message = GSON
+                            .fromJson(GSON.toJson(messageObj), org.opensearch.ml.common.input.execute.agent.Message.class);
+                        messages.add(message);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse structured messages response", e);
+        }
+        return messages;
     }
 
     @Override

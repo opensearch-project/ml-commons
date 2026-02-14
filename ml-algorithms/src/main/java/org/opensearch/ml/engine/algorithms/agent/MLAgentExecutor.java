@@ -431,7 +431,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         listener,
                                                                         createdMemory,
                                                                         channel,
-                                                                        hookRegistry
+                                                                        hookRegistry,
+                                                                        null
                                                                     ),
                                                                     ex -> {
                                                                         log.error("Failed to find memory with memory_id: {}", memoryId, ex);
@@ -454,7 +455,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 listener,
                                                 null,
                                                 channel,
-                                                hookRegistry
+                                                hookRegistry,
+                                                null
                                             );
                                         }
                                     } catch (Exception e) {
@@ -509,15 +511,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String question = inputDataSet.getParameters().get(QUESTION);
         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
 
-        // If input is MESSAGES type, defer saving to the runner (after history retrieval)
-        // to avoid duplicating messages in both _chat_history and body.
-        // Serialize messages to JSON and pass via parameters so the runner can save them
-        // after retrieving conversation history.
-        if (agentMLInput.getAgentInput() != null && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES) {
-            @SuppressWarnings("unchecked")
-            List<Message> inputMessages = (List<Message>) agentMLInput.getAgentInput().getInput();
-            inputDataSet.getParameters().put("_input_structured_messages", new Gson().toJson(inputMessages));
-        }
+        // Extract structured input messages to pass directly to the runner
+        @SuppressWarnings("unchecked")
+        List<Message> inputMessages = (agentMLInput.getAgentInput() != null
+            && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES)
+                ? (List<Message>) agentMLInput.getAgentInput().getInput()
+                : null;
 
         createParentInteractionAndExecute(
             tenantId,
@@ -533,7 +532,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             modelTensors,
             listener,
             channel,
-            hookRegistry
+            hookRegistry,
+            inputMessages
         );
     }
 
@@ -554,7 +554,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener,
         TransportChannel channel,
-        HookRegistry hookRegistry
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
     ) {
         // Create root interaction ID for the current question
         ConversationIndexMessage msg = ConversationIndexMessage
@@ -587,7 +588,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     listener,
                                     memory,
                                     channel,
-                                    hookRegistry
+                                    hookRegistry,
+                                    inputMessages
                                 ),
                                 e -> {
                                     log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
@@ -608,7 +610,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     listener,
                     memory,
                     channel,
-                    hookRegistry
+                    hookRegistry,
+                    inputMessages
                 );
             }
         }, ex -> {
@@ -709,7 +712,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         ActionListener<Output> listener,
         Memory memory,
         TransportChannel channel,
-        HookRegistry hookRegistry
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
@@ -725,6 +729,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
 
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent, hookRegistry);
+        mlAgentRunner.setInputMessages(inputMessages);
         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
 
         // If async is true, index ML task and return the taskID. Also add memoryID to

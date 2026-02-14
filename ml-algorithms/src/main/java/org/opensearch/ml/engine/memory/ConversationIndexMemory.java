@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.core.action.ActionListener;
@@ -211,16 +212,26 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
             return;
         }
 
-        // Save all pairs sequentially
-        saveMessagePairsSequentially(messagePairs, 0, listener);
+        // Save all pairs sequentially, tracking errors
+        saveMessagePairsSequentially(messagePairs, 0, new AtomicBoolean(false), listener);
     }
 
     /**
      * Helper method to save message pairs sequentially.
+     * Continues on individual failures but reports error to the listener if any save failed.
      */
-    private void saveMessagePairsSequentially(List<ConversationIndexMessage> messagePairs, int index, ActionListener<Void> finalListener) {
+    private void saveMessagePairsSequentially(
+        List<ConversationIndexMessage> messagePairs,
+        int index,
+        AtomicBoolean hasError,
+        ActionListener<Void> finalListener
+    ) {
         if (index >= messagePairs.size()) {
-            finalListener.onResponse(null);
+            if (hasError.get()) {
+                finalListener.onFailure(new RuntimeException("One or more message pairs failed to save to conversation index"));
+            } else {
+                finalListener.onResponse(null);
+            }
             return;
         }
 
@@ -234,10 +245,11 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
                     messagePairs.size(),
                     interaction.getId()
                 );
-            saveMessagePairsSequentially(messagePairs, index + 1, finalListener);
+            saveMessagePairsSequentially(messagePairs, index + 1, hasError, finalListener);
         }, ex -> {
             log.error("Failed to store message pair {} of {} in conversation index", index + 1, messagePairs.size(), ex);
-            saveMessagePairsSequentially(messagePairs, index + 1, finalListener);
+            hasError.set(true);
+            saveMessagePairsSequentially(messagePairs, index + 1, hasError, finalListener);
         });
 
         save(msg, null, null, null, saveListener);

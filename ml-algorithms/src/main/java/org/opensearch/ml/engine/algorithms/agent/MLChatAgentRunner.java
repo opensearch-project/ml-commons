@@ -164,6 +164,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     private Encryptor encryptor;
     private StreamingWrapper streamingWrapper;
     private HookRegistry hookRegistry;
+    private List<Message> inputMessages;
 
     public MLChatAgentRunner(
         Client client,
@@ -198,6 +199,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
         this.hookRegistry = hookRegistry;
+    }
+
+    @Override
+    public void setInputMessages(List<Message> inputMessages) {
+        this.inputMessages = inputMessages;
     }
 
     @Override
@@ -267,17 +273,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             boolean usesUnifiedInterface = mlAgent.getModel() != null;
 
             if (usesUnifiedInterface) {
-                // Deserialize pending input messages (passed from MLAgentExecutor via params)
-                String pendingMessagesJson = params.remove("_input_structured_messages");
-                final List<Message> inputMessages;
-                if (pendingMessagesJson != null) {
-                    Type messageListType = new TypeToken<List<Message>>() {
-                    }.getType();
-                    inputMessages = gson.fromJson(pendingMessagesJson, messageListType);
-                } else {
-                    inputMessages = null;
-                }
-
                 // Get history first, then save new input messages
                 memory.getStructuredMessages(ActionListener.wrap(allMessages -> {
                     // Apply history limit
@@ -442,8 +437,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     ) {
         LLMSpec llm = mlAgent.getLlm();
         String tenantId = mlAgent.getTenantId();
-        String appType = mlAgent.getAppType();
-        String sessionId = memory.getId();
+        String sessionId = memory != null ? memory.getId() : null;
         boolean usesUnifiedInterface = mlAgent.getModel() != null;
         ModelProvider modelProvider = usesUnifiedInterface ? ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider()) : null;
 
@@ -525,7 +519,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             finalAnswer,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            appType,
                             modelProvider
                         );
                         cleanUpResource(tools);
@@ -579,7 +572,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tmpParameters,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            appType,
                             modelProvider
                         );
                         return;
@@ -725,7 +717,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tmpParameters,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            appType,
                             modelProvider
                         );
                         return;
@@ -964,7 +955,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String finalAnswer,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        String appType,
         ModelProvider modelProvider
     ) {
         // Send completion chunk for streaming
@@ -979,7 +969,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     memory,
                     copyOfFinalAnswer,
                     toolInteractions,
-                    appType,
                     modelProvider,
                     ActionListener.wrap(v -> {
                         // After saving structured messages, update parent interaction and return response
@@ -1057,7 +1046,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Memory memory,
         String finalAnswer,
         List<String> toolInteractions,
-        String appType,
         ModelProvider modelProvider,
         ActionListener<Void> listener
     ) {
@@ -1244,7 +1232,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> parameters,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        String appType,
         ModelProvider modelProvider
     ) {
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
@@ -1263,7 +1250,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tools,
                 usesUnifiedInterface,
                 toolInteractions,
-                appType,
                 modelProvider
             );
         }, listener::onFailure);
@@ -1307,7 +1293,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool> tools,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        String appType,
         ModelProvider modelProvider
     ) {
         sendFinalAnswer(
@@ -1324,7 +1309,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             response,
             usesUnifiedInterface,
             toolInteractions,
-            appType,
             modelProvider
         );
         cleanUpResource(tools);

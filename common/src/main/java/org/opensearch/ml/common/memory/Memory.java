@@ -48,7 +48,9 @@ public interface Memory<T extends Message, R, S> {
      *
      * @param listener Action listener that receives the messages
      */
-    void getStructuredMessages(ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> listener);
+    default void getStructuredMessages(ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> listener) {
+        listener.onFailure(new UnsupportedOperationException("getStructuredMessages is not supported by " + getType()));
+    }
 
     /**
      * Save structured messages to memory.
@@ -56,7 +58,12 @@ public interface Memory<T extends Message, R, S> {
      * @param messages List of AgentInput messages to save (may be null or empty)
      * @param listener Action listener for save completion
      */
-    void saveStructuredMessages(List<org.opensearch.ml.common.input.execute.agent.Message> messages, ActionListener<Void> listener);
+    default void saveStructuredMessages(
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages,
+        ActionListener<Void> listener
+    ) {
+        listener.onFailure(new UnsupportedOperationException("saveStructuredMessages is not supported by " + getType()));
+    }
 
     /**
      * Clear all memory.
