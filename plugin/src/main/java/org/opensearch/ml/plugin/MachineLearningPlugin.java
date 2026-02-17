@@ -130,6 +130,9 @@ import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
 import org.opensearch.ml.action.register.TransportRegisterModelAction;
 import org.opensearch.ml.action.session.TransportCreateSessionAction;
+import org.opensearch.ml.action.skill.TransportCreateSkillAction;
+import org.opensearch.ml.action.skill.TransportGetSkillAction;
+import org.opensearch.ml.action.skill.TransportUpdateSkillAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction;
@@ -235,6 +238,9 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskActio
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.session.MLCreateSessionAction;
+import org.opensearch.ml.common.transport.skill.MLCreateSkillAction;
+import org.opensearch.ml.common.transport.skill.MLGetSkillAction;
+import org.opensearch.ml.common.transport.skill.MLUpdateSkillAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
@@ -282,6 +288,7 @@ import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
+import org.opensearch.ml.engine.tools.SkillTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
@@ -328,6 +335,7 @@ import org.opensearch.ml.rest.RestMLCreateContextManagementTemplateAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
 import org.opensearch.ml.rest.RestMLCreateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLCreateSessionAction;
+import org.opensearch.ml.rest.RestMLCreateSkillAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteContextManagementTemplateAction;
@@ -352,6 +360,7 @@ import org.opensearch.ml.rest.RestMLGetMemoryAction;
 import org.opensearch.ml.rest.RestMLGetMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
+import org.opensearch.ml.rest.RestMLGetSkillAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
 import org.opensearch.ml.rest.RestMLListContextManagementTemplatesAction;
@@ -383,6 +392,7 @@ import org.opensearch.ml.rest.RestMLUpdateMemoryAction;
 import org.opensearch.ml.rest.RestMLUpdateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLUpdateModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
+import org.opensearch.ml.rest.RestMLUpdateSkillAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
 import org.opensearch.ml.rest.RestMemoryCreateInteractionAction;
@@ -581,6 +591,9 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class),
                 new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class),
                 new ActionHandler<>(MLCreateMemoryContainerAction.INSTANCE, TransportCreateMemoryContainerAction.class),
+                new ActionHandler<>(MLCreateSkillAction.INSTANCE, TransportCreateSkillAction.class),
+                new ActionHandler<>(MLGetSkillAction.INSTANCE, TransportGetSkillAction.class),
+                new ActionHandler<>(MLUpdateSkillAction.INSTANCE, TransportUpdateSkillAction.class),
                 new ActionHandler<>(MLCreateSessionAction.INSTANCE, TransportCreateSessionAction.class),
                 new ActionHandler<>(MLUpdateMemoryContainerAction.INSTANCE, TransportUpdateMemoryContainerAction.class),
                 new ActionHandler<>(MLMemoryContainerGetAction.INSTANCE, TransportGetMemoryContainerAction.class),
@@ -855,6 +868,7 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(QueryPlanningTool.TYPE, QueryPlanningTool.Factory.getInstance());
         toolFactories.put(WriteToScratchPadTool.TYPE, WriteToScratchPadTool.Factory.getInstance());
         toolFactories.put(ReadFromScratchPadTool.TYPE, ReadFromScratchPadTool.Factory.getInstance());
+        toolFactories.put(SkillTool.TYPE, SkillTool.Factory.getInstance());
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
         }
@@ -1055,6 +1069,9 @@ public class MachineLearningPlugin extends Plugin
         RestMLCreateMemoryContainerAction restMLCreateMemoryContainerAction = new RestMLCreateMemoryContainerAction(
             mlFeatureEnabledSetting
         );
+        RestMLCreateSkillAction restMLCreateSkillAction = new RestMLCreateSkillAction();
+        RestMLGetSkillAction restMLGetSkillAction = new RestMLGetSkillAction();
+        RestMLUpdateSkillAction restMLUpdateSkillAction = new RestMLUpdateSkillAction();
         RestMLCreateSessionAction restMLCreateSessionAction = new RestMLCreateSessionAction(mlFeatureEnabledSetting);
         RestMLUpdateMemoryContainerAction restMLUpdateMemoryContainerAction = new RestMLUpdateMemoryContainerAction(
             mlFeatureEnabledSetting
@@ -1155,6 +1172,9 @@ public class MachineLearningPlugin extends Plugin
                 restDeleteConversationAction,
                 restMLUpdateConnectorAction,
                 restMLCreateMemoryContainerAction,
+                restMLCreateSkillAction,
+                restMLGetSkillAction,
+                restMLUpdateSkillAction,
                 restMLCreateSessionAction,
                 restMLUpdateMemoryContainerAction,
                 restMLGetMemoryContainerAction,

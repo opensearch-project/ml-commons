@@ -1019,6 +1019,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
             tmpParameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
         }
 
+        if (tmpParameters.containsKey("system_prompt._agent_skills")) {
+            tmpParameters
+                .put(
+                    SYSTEM_PROMPT_FIELD,
+                    tmpParameters.get(SYSTEM_PROMPT_FIELD) + "\n\n" + tmpParameters.get("system_prompt._agent_skills")
+                );
+        }
+
         return tmpParameters;
     }
 

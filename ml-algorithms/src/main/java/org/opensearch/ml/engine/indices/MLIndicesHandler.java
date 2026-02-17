@@ -149,6 +149,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }
 
+    public void initMLSkillsIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.SKILLS, listener);
+    }
+
     public void initMemoryContainerIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.MEMORY_CONTAINER, listener);
     }

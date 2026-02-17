@@ -9,9 +9,7 @@ import static org.opensearch.ml.common.CommonValue.*;
 import static org.opensearch.ml.common.utils.StringUtils.PLAIN_NUMBER_GSON;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -27,9 +25,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -217,15 +212,11 @@ public class SearchIndexTool implements Tool {
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();
                 if (returnFullResponse) {
-                    List<ModelTensors> outputs = new ArrayList<>();
-                    List<ModelTensor> tensors = new ArrayList<>();
-                    tensors.add(ModelTensor.builder().name(name).dataAsMap(convertSearchResponseToMap(r)).build());
-                    outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
-                    ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+                    Map<String, Object> searchResponseMap = convertSearchResponseToMap(r);
                     if (outputParser != null) {
-                        listener.onResponse((T) outputParser.parse(output));
+                        listener.onResponse((T) outputParser.parse(searchResponseMap));
                     } else {
-                        listener.onResponse((T) output);
+                        listener.onResponse((T) searchResponseMap);
                     }
                     return;
                 }

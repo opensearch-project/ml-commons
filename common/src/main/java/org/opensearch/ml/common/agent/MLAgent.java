@@ -55,6 +55,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONTEXT_MANAGEMENT_NAME_FIELD = "context_management_name";
     public static final String CONTEXT_MANAGEMENT_FIELD = "context_management";
+    public static final String SKILLS_FIELD = "skills";
     private static final String LLM_INTERFACE_FIELD = "_llm_interface";
     private static final String TAG_VALUE_UNKNOWN = "unknown";
     private static final String TAG_MEMORY_TYPE = "memory_type";
@@ -80,6 +81,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private String contextManagementName;
     private ContextManagementTemplate contextManagement;
     private String tenantId;
+    private List<String> skills;
 
     @Builder(toBuilder = true)
     public MLAgent(
@@ -97,7 +99,8 @@ public class MLAgent implements ToXContentObject, Writeable {
         Boolean isHidden,
         String contextManagementName,
         ContextManagementTemplate contextManagement,
-        String tenantId
+        String tenantId,
+        List<String> skills
     ) {
         this.name = name;
         this.type = type;
@@ -115,6 +118,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.contextManagementName = contextManagementName;
         this.contextManagement = contextManagement;
         this.tenantId = tenantId;
+        this.skills = skills;
         validate();
     }
 
@@ -150,7 +154,8 @@ public class MLAgent implements ToXContentObject, Writeable {
             isHidden,
             contextManagementName,
             contextManagement,
-            tenantId
+            tenantId,
+            null
         );
     }
 
@@ -243,6 +248,13 @@ public class MLAgent implements ToXContentObject, Writeable {
             }
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        if (input.readBoolean()) {
+            int skillsSize = input.readInt();
+            this.skills = new ArrayList<>(skillsSize);
+            for (int i = 0; i < skillsSize; i++) {
+                this.skills.add(input.readString());
+            }
+        }
         validate();
     }
 
@@ -302,6 +314,15 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
+        }
+        if (skills != null && !skills.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeInt(skills.size());
+            for (String skillId : skills) {
+                out.writeString(skillId);
+            }
+        } else {
+            out.writeBoolean(false);
         }
     }
 
@@ -364,6 +385,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (skills != null && !skills.isEmpty()) {
+            builder.field(SKILLS_FIELD, skills);
+        }
         builder.endObject();
         return builder;
     }
@@ -392,6 +416,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String contextManagementName = null;
         ContextManagementTemplate contextManagement = null;
         String tenantId = null;
+        List<String> skills = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -449,6 +474,13 @@ public class MLAgent implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case SKILLS_FIELD:
+                    skills = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        skills.add(parser.text());
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -472,6 +504,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             .contextManagementName(contextManagementName)
             .contextManagement(contextManagement)
             .tenantId(tenantId)
+            .skills(skills)
             .build();
     }
 

@@ -33,6 +33,8 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_SKILLS_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_SKILLS_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING_PATH;
 
@@ -49,6 +51,7 @@ public enum MLIndex {
     CONFIG(ML_CONFIG_INDEX, false, ML_CONFIG_INDEX_MAPPING_PATH),
     CONTROLLER(ML_CONTROLLER_INDEX, false, ML_CONTROLLER_INDEX_MAPPING_PATH),
     AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING_PATH),
+    SKILLS(ML_SKILLS_INDEX, false, ML_SKILLS_INDEX_MAPPING_PATH),
     MEMORY_META(ML_MEMORY_META_INDEX, false, ML_MEMORY_META_INDEX_MAPPING_PATH),
     MEMORY_MESSAGE(ML_MEMORY_MESSAGE_INDEX, false, ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH),
     MEMORY_CONTAINER(ML_MEMORY_CONTAINER_INDEX, false, ML_MEMORY_CONTAINER_INDEX_MAPPING_PATH),

@@ -60,6 +60,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManager;
 import org.opensearch.ml.common.contextmanager.ContextManagerHookProvider;
@@ -908,7 +909,239 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             processContextManagement(mlAgent, hookRegistry, inputDataSet);
         }
 
-        MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent, hookRegistry);
+        // Load skills if agent has any configured
+        if (mlAgent.getSkills() != null && !mlAgent.getSkills().isEmpty()) {
+            loadSkillsAndExecute(
+                inputDataSet,
+                tenantId,
+                mlTask,
+                isAsync,
+                memoryId,
+                mlAgent,
+                outputs,
+                modelTensors,
+                listener,
+                memory,
+                channel,
+                hookRegistry
+            );
+        } else {
+            executeAgentWithSkills(
+                inputDataSet,
+                tenantId,
+                mlTask,
+                isAsync,
+                memoryId,
+                mlAgent,
+                outputs,
+                modelTensors,
+                listener,
+                memory,
+                channel,
+                hookRegistry,
+                null,
+                null
+            );
+        }
+    }
+
+    /**
+     * Load skills metadata (name + description) for progressive disclosure.
+     * Following the Agent Skills spec: load only name and description initially,
+     * then LLM can request full instructions when needed.
+     */
+    private void loadSkillsAndExecute(
+        RemoteInferenceInputDataSet inputDataSet,
+        String tenantId,
+        MLTask mlTask,
+        boolean isAsync,
+        String memoryId,
+        MLAgent mlAgent,
+        List<ModelTensors> outputs,
+        List<ModelTensor> modelTensors,
+        ActionListener<Output> listener,
+        Memory memory,
+        TransportChannel channel,
+        HookRegistry hookRegistry
+    ) {
+        List<String> skillNames = mlAgent.getSkills();
+        log.info("Loading {} skill metadata for agent: {}", skillNames.size(), mlAgent.getName());
+
+        // Use multi-get to fetch all skills at once
+        // Skill names are used as document IDs in the skills index
+        String skillsIndex = ".plugins-ml-skills";
+
+        // Check if skills index exists
+        if (!MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), skillsIndex)) {
+            log.warn("Skills index does not exist, proceeding without skills");
+            executeAgentWithSkills(
+                inputDataSet,
+                tenantId,
+                mlTask,
+                isAsync,
+                memoryId,
+                mlAgent,
+                outputs,
+                modelTensors,
+                listener,
+                memory,
+                channel,
+                hookRegistry,
+                null,
+                null
+            );
+            return;
+        }
+
+        // Fetch all skills using multi-get
+        // Note: Skill names are used as document IDs, so we can fetch directly by name
+        org.opensearch.action.get.MultiGetRequest multiGetRequest = new org.opensearch.action.get.MultiGetRequest();
+        for (String skillName : skillNames) {
+            multiGetRequest.add(new org.opensearch.action.get.MultiGetRequest.Item(skillsIndex, skillName));
+        }
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.multiGet(multiGetRequest, ActionListener.wrap(multiGetResponse -> {
+                context.restore();
+
+                // Phase 1: Progressive Disclosure - Load only name + description
+                StringBuilder skillDiscovery = new StringBuilder();
+                Map<String, Map<String, Object>> skillsMap = new HashMap<>();
+                int loadedSkills = 0;
+
+                for (org.opensearch.action.get.MultiGetItemResponse itemResponse : multiGetResponse.getResponses()) {
+                    if (!itemResponse.isFailed() && itemResponse.getResponse().isExists()) {
+                        try {
+                            Map<String, Object> sourceMap = itemResponse.getResponse().getSourceAsMap();
+                            String skillId = itemResponse.getId();
+                            String name = (String) sourceMap.get("name");
+                            String description = (String) sourceMap.get("description");
+
+                            if (name != null && description != null) {
+                                if (loadedSkills == 0) {
+                                    skillDiscovery.append("\n\n# Available Skills\n\n");
+                                    skillDiscovery
+                                        .append(
+                                            "You have access to the following skills. When you need to use a skill, request it by name:\n\n"
+                                        );
+                                }
+
+                                skillDiscovery.append("- **").append(name).append("**: ").append(description).append("\n");
+
+                                // Store full skill data for later activation
+                                skillsMap.put(name, sourceMap);
+                                loadedSkills++;
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to parse skill document: {}", itemResponse.getId(), e);
+                        }
+                    } else {
+                        log.warn("Skill not found or failed to load: {}", itemResponse.getId());
+                    }
+                }
+
+                if (loadedSkills > 0) {
+                    skillDiscovery.append("\n");
+                    skillDiscovery
+                        .append("To use a skill, mention it in your response. The skill instructions will be loaded automatically.\n");
+                    log.info("Successfully loaded {} skill metadata for agent: {}", loadedSkills, mlAgent.getName());
+                } else {
+                    log.warn("No skills were loaded for agent: {}", mlAgent.getName());
+                }
+
+                executeAgentWithSkills(
+                    inputDataSet,
+                    tenantId,
+                    mlTask,
+                    isAsync,
+                    memoryId,
+                    mlAgent,
+                    outputs,
+                    modelTensors,
+                    listener,
+                    memory,
+                    channel,
+                    hookRegistry,
+                    loadedSkills > 0 ? skillDiscovery.toString() : null,
+                    skillsMap
+                );
+            }, e -> {
+                log.error("Failed to load skills for agent: {}", mlAgent.getName(), e);
+                // Continue without skills rather than failing the entire request
+                executeAgentWithSkills(
+                    inputDataSet,
+                    tenantId,
+                    mlTask,
+                    isAsync,
+                    memoryId,
+                    mlAgent,
+                    outputs,
+                    modelTensors,
+                    listener,
+                    memory,
+                    channel,
+                    hookRegistry,
+                    null,
+                    null
+                );
+            }));
+        }
+    }
+
+    /**
+     * Execute the agent with optional skill discovery metadata.
+     * Implements progressive disclosure: only name + description are loaded initially.
+     * Full skill instructions can be loaded on-demand when LLM requests them via Skill_Tool.
+     */
+    private void executeAgentWithSkills(
+        RemoteInferenceInputDataSet inputDataSet,
+        String tenantId,
+        MLTask mlTask,
+        boolean isAsync,
+        String memoryId,
+        MLAgent mlAgent,
+        List<ModelTensors> outputs,
+        List<ModelTensor> modelTensors,
+        ActionListener<Output> listener,
+        Memory memory,
+        TransportChannel channel,
+        HookRegistry hookRegistry,
+        String skillDiscovery,
+        Map<String, Map<String, Object>> skillsMap
+    ) {
+        // Phase 1: Add Skill_Tool to agent's tools for on-demand skill loading
+        // This implements progressive disclosure via function calling
+        final MLAgent finalAgent;
+        if (skillsMap != null && !skillsMap.isEmpty()) {
+
+            MLToolSpec skillToolSpec = MLToolSpec.builder().type("SkillTool").name("Skill_Tool").build();
+
+            // Add Skill_Tool to agent's tools (at the beginning for priority)
+            List<MLToolSpec> tools = new ArrayList<>();
+            tools.add(skillToolSpec);
+            if (mlAgent.getTools() != null) {
+                tools.addAll(mlAgent.getTools());
+            }
+
+            // Create new agent with Skill_Tool
+            finalAgent = mlAgent.toBuilder().tools(tools).build();
+
+            // Store skills map in parameters for SkillTool factory
+            Gson gson = new Gson();
+            inputDataSet.getParameters().put("_skills_map", gson.toJson(skillsMap));
+            inputDataSet
+                .getParameters()
+                .put(
+                    "system_prompt._agent_skills",
+                    "\n\n## Tool Selection Priority:\nWhen Skill_Tool is available, ALWAYS check if any skill matches the user's request before using other tools. If a matching skill exists, invoke Skill_Tool first to load the relevant expertise."
+                );
+
+            log.info("Added Skill_Tool with {} skills for agent: {}", skillsMap.size(), finalAgent.getName());
+        } else {
+            finalAgent = mlAgent;
+        }
+
+        MLAgentRunner mlAgentRunner = getAgentRunner(finalAgent, hookRegistry);
         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
 
         // If async is true, index ML task and return the taskID. Also add memoryID to
@@ -945,7 +1178,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
                 inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
                 try {
-                    mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                    mlAgentRunner.run(finalAgent, inputDataSet.getParameters(), agentActionListener, channel);
                 } catch (Exception e) {
                     log.error("Failed to run agent", e);
                     agentActionListener.onFailure(e);
@@ -959,12 +1192,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener,
                 outputs,
                 modelTensors,
-                mlAgent.getType(),
+                finalAgent.getType(),
                 parentInteractionId,
                 memory
             );
             try {
-                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                mlAgentRunner.run(finalAgent, inputDataSet.getParameters(), agentActionListener, channel);
             } catch (Exception e) {
                 log.error("Failed to run agent", e);
                 agentActionListener.onFailure(e);

@@ -1,0 +1,71 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "name": {
+      "type": "keyword"
+    },
+    "description": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 1024
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "enabled": true
+    },
+    "allowed_tools": {
+      "type": "keyword"
+    },
+    "instructions": {
+      "type": "text"
+    },
+    "assets": {
+      "type": "nested",
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "content": {
+          "type": "binary"
+        },
+        "content_type": {
+          "type": "keyword"
+        }
+      }
+    },
+    "tenant_id": {
+      "type": "keyword"
+    },
+    "backend_roles": {
+      "type": "keyword"
+    },
+    "owner": {
+      "type": "nested",
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "backend_roles": {
+          "type": "keyword"
+        }
+      }
+    },
+    "access": {
+      "type": "keyword"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    }
+  }
+}
