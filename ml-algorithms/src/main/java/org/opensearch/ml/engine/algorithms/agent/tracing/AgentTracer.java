@@ -472,6 +472,7 @@ public final class AgentTracer {
                 first = false;
                 json.append("{\"traceId\":\"").append(span.getTraceId()).append("\"");
                 json.append(",\"spanId\":\"").append(span.getSpanId()).append("\"");
+                json.append(",\"parentSpanId\":\"").append(span.getParentSpanId()).append("\"");
                 json.append(",\"name\":\"").append(escapeJson(span.getName())).append("\"");
                 json.append(",\"kind\":").append(span.getKind().ordinal() + 1);
                 json.append(",\"startTimeUnixNano\":").append(span.getStartEpochNanos());
@@ -601,7 +602,6 @@ public final class AgentTracer {
         return tracer
             .spanBuilder(SpanNames.AGENT_RUN)
             .setSpanKind(SpanKind.SERVER)
-            .setNoParent()
             .setAttribute(AGENT_TYPE, agentType)
             .setAttribute(CONVERSATION_ID, sessionId != null ? sessionId : "")
             .setAttribute(REQUEST_ID, runId != null ? runId : "")
@@ -666,7 +666,7 @@ public final class AgentTracer {
     /**
      * Start a step execution span (for PER agent).
      */
-    public static Span startStepSpan(Span parent, int stepNumber, String stepDescription) {
+    public static Span startStepSpan(Span parent, int stepNumber, String stepDescription, String runId) {
         if (!isEnabled())
             return Span.getInvalid();
 
@@ -674,7 +674,8 @@ public final class AgentTracer {
             .spanBuilder(SpanNames.STEP_EXECUTE)
             .setSpanKind(SpanKind.INTERNAL)
             .setAttribute(STEP_NUMBER, (long) stepNumber)
-            .setAttribute(STEP_DESCRIPTION, truncate(stepDescription, 500));
+            .setAttribute(STEP_DESCRIPTION, truncate(stepDescription, 500))
+            .setAttribute(REQUEST_ID, runId != null ? runId : "");
 
         if (parent != null && parent.getSpanContext().isValid()) {
             builder.setParent(Context.current().with(parent));
