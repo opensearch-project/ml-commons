@@ -78,7 +78,7 @@ dependencies {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
     // needed by aws-encryption-sdk-java
-    implementation "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    compileOnly "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
     compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
