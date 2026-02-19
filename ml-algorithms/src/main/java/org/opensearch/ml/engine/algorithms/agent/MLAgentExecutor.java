@@ -653,6 +653,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      */
     private void processContextManagement(MLAgent mlAgent, HookRegistry hookRegistry, RemoteInferenceInputDataSet inputDataSet) {
         try {
+            // Check if context management was already processed (by MLExecuteTaskRunner for runtime overrides)
+            String contextManagementProcessed = inputDataSet.getParameters().get(CONTEXT_MANAGEMENT_PROCESSED);
+            if ("true".equals(contextManagementProcessed)) {
+                log.info("Context management already processed by MLExecuteTaskRunner, skipping agent's stored config");
+                return;
+            }
+
             // Check if context_management is already specified in runtime parameters
             String runtimeContextManagement = inputDataSet.getParameters().get(CONTEXT_MANAGEMENT_NAME_FIELD);
             if (runtimeContextManagement != null && !runtimeContextManagement.trim().isEmpty()) {
