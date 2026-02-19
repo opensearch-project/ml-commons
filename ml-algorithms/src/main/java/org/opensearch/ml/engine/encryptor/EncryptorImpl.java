@@ -130,7 +130,7 @@ public class EncryptorImpl implements Encryptor {
 
     // Package-private constructor for testing with custom TTL
     EncryptorImpl(String tenantId, String masterKey, long cacheTtl, TimeUnit timeUnit) {
-      this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
+        this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
         this.tenantMasterKeys = CacheBuilder
             .newBuilder()
             .expireAfterWrite(cacheTtl, timeUnit)
@@ -156,26 +156,42 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public void encrypt(String plainText, String tenantId, ActionListener<String> listener) {
+        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
-            final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-            JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
-            final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
-                .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
-            listener.onResponse(Base64.getEncoder().encodeToString(encryptResult.getResult()));
+            encryptText(plainText, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
         }, listener::onFailure);
-        String masterKey = getOrInitMasterKey(tenantId);
+        String masterKey = getOrInitMasterKey(effectiveTenantId, initListener);
+        if (masterKey != null) {
+            encryptText(plainText, masterKey, listener);
+        }
+    }
+
+    private void encryptText(String plainText, String masterKey, ActionListener<String> listener) {
+        final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
+        JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
+        final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
+            .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
+        listener.onResponse(Base64.getEncoder().encodeToString(encryptResult.getResult()));
     }
 
     @Override
     public void decrypt(String encryptedText, String tenantId, ActionListener<String> listener) {
+        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
-            final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-            JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
-            final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
-                .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
-            listener.onResponse(new String(decryptedResult.getResult()));
+            decryptText(encryptedText, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
         }, listener::onFailure);
-        String masterKey = getOrInitMasterKey(tenantId);
+        String masterKey = getOrInitMasterKey(effectiveTenantId, initListener);
+        if (masterKey != null) {
+            decryptText(encryptedText, masterKey, listener);
+        }
+    }
+
+    private void decryptText(String encryptedText, String masterKey, ActionListener<String> listener) {
+        final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
+        JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
+        final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
+            .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
+        listener.onResponse(new String(decryptedResult.getResult()));
     }
 
     @Override
@@ -190,38 +206,19 @@ public class EncryptorImpl implements Encryptor {
         return JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
     }
 
-    private String getOrInitMasterKey(String tenantId) {
-        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
-        String masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
+    private String getOrInitMasterKey(String tenantId, ActionListener<Boolean> listener) {
+        String masterKey = tenantMasterKeys.getIfPresent(tenantId);
         if (masterKey != null) {
             return masterKey;
         }
 
-        // Double-checked locking to prevent duplicate index writes under high concurrency
-        synchronized (lock) {
-            masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
-            if (masterKey == null) {
-                initMasterKey(tenantId);
-                masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
-                if (masterKey == null) {
-                    throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
-                }
-            }
-        }
-        return masterKey;
-    }
-
-    private void initMasterKey(String tenantId) {
-        if (tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) != null) {
-            return;
-        }
-
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.computeIfAbsent(tenantId, k -> new ArrayList<>());
         synchronized (waitingListeners) {
-            if (tenantMasterKeys.containsKey(tenantId)) {
+            masterKey = tenantMasterKeys.getIfPresent(tenantId);
+            if (masterKey != null) {
                 log.debug("Master key generation is handled by other thread for tenant {}", tenantId);
                 listener.onResponse(true);
-                return;
+                return masterKey;
             }
             boolean isFirstThread = waitingListeners.isEmpty();
             waitingListeners.add(listener);
@@ -231,13 +228,14 @@ public class EncryptorImpl implements Encryptor {
                         "Master key generation for tenant {} already initiated by another thread - request queued until completion",
                         tenantId
                     );
-                return;
+                return null;
             }
         }
 
         log.info("Generating master key for tenant : {}", tenantId);
         String masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
         mlIndicesHandler.initMLConfigIndex(createInitMLConfigIndexListener(tenantId, masterKeyId));
+        return null;
     }
 
     private void handleSuccess(String tenantId, String masterKey) {
@@ -264,9 +262,6 @@ public class EncryptorImpl implements Encryptor {
                 waitingListeners.forEach(listener -> listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR)));
             }
             waitingListeners.clear();
-        }
-        if (tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) == null) {
-            throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
         }
     }
 

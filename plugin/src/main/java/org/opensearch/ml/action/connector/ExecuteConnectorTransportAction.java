@@ -118,9 +118,9 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
     ) {
         String connectorTenantId = connector.getTenantId();
         if (decryptWithEncryptor) {
-            connector.decrypt(action, (credential, tenantId) -> encryptor.decrypt(credential, tenantId), connectorTenantId);
+            connector.decrypt(action, (credential, tenantId, decryptListener) -> encryptor.decrypt(credential, tenantId, decryptListener), connectorTenantId);
         } else {
-            connector.decrypt(action, (credential, tenantId) -> credential, connectorTenantId);
+            connector.decrypt(action, (credential, tenantId, decryptListener) -> {}, connectorTenantId);
         }
         try {
             RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader

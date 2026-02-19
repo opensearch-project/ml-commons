@@ -1217,7 +1217,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             connector
                 .decrypt(
                     ConnectorAction.ActionType.EXECUTE.name(),
-                    (cred, tenant) -> cred,  // No-op function - credentials are already plaintext
+                    (cred, tenant, listener) -> {},  // No-op function - credentials are already plaintext
                     tenantId
                 );
 

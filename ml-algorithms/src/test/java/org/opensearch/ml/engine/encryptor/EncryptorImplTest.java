@@ -24,8 +24,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -1323,58 +1323,49 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
+        AtomicReference<Throwable> encryption1Failure = new AtomicReference<>();
+        ActionListener<String> encryption1Listener = ActionListener.wrap(encrypted1 -> {
+            try {
+                Assert.assertNotNull(encrypted1);
+
+                // Verify key is cached
+                String cachedKey1 = encryptor.getMasterKey(TENANT_ID);
+                Assert.assertNotNull(cachedKey1);
+
+                AtomicReference<Throwable> encryption2Failure = new AtomicReference<>();
+                ActionListener<String> encryption2Listener = ActionListener.wrap(encrypted2 -> {
+                    try {
+                        Assert.assertNotNull(encrypted2);
+                    } catch (Throwable t) {
+                        encryption2Failure.set(t);
+                    }
+                }, error -> { encryption2Failure.set(new MLException(error)); });
+                CountDownLatch encryption2Latch = new CountDownLatch(1);
+                LatchedActionListener<String> latchedEncryption2Listener = new LatchedActionListener<>(
+                    encryption2Listener,
+                    encryption2Latch
+                );
+
+                // Second encryption should use cached key (no additional DDB call)
+                encryptor.encrypt("test", TENANT_ID, latchedEncryption2Listener);
+                Assert.assertTrue("Second encryption failed", encryption2Latch.await(LATCH_WAIT_TIME, SECONDS));
+                if (encryption2Failure.get() != null)
+                    throw new AssertionError("Second encryption failed", encryption2Failure.get());
+            } catch (Throwable t) {
+                encryption1Failure.set(t);
+            }
+        }, error -> { encryption1Failure.set(new MLException(error)); });
+        CountDownLatch encryptionLatch = new CountDownLatch(1);
+        LatchedActionListener<String> latchedEncryptionListener = new LatchedActionListener<>(encryption1Listener, encryptionLatch);
+
         // First encryption caches the key - should call DDB
-        String encrypted1 = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted1);
-
-        // Verify key is cached
-        String cachedKey1 = encryptor.getMasterKey(TENANT_ID);
-        Assert.assertNotNull(cachedKey1);
-
-        // Second encryption should use cached key (no additional DDB call)
-        String encrypted2 = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted2);
+        encryptor.encrypt("test", TENANT_ID, latchedEncryptionListener);
+        Assert.assertTrue("First encryption failed", encryptionLatch.await(LATCH_WAIT_TIME, SECONDS));
+        if (encryption1Failure.get() != null)
+            throw new AssertionError("First encryption failed", encryption1Failure.get());
 
         // Verify DDB (client.get) was called only once, not twice
         verify(client, times(1)).get(any(), any());
-    }
-
-    @Test
-    public void testCacheExpiryConfiguration() throws Exception {
-        // This test verifies that the cache is configured with TTL and reuses cached keys
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
-            actionListener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLConfigIndex(any());
-
-        GetResponse response = prepareMLConfigResponse(TENANT_ID);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-
-        // Initially no key should be cached
-        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-
-        // First encryption fetches from DDB and caches
-        String encrypted1 = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted1);
-        Assert.assertNotNull(encryptor.getMasterKey(TENANT_ID));
-
-        // Second encryption uses cache, not DDB
-        String encrypted2 = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted2);
-
-        // Verify DDB was called only once (first time), not on second encryption
-        verify(client, times(1)).get(any(), any());
-
-        // Note: In production, this key would expire after 5 minutes and be re-fetched from DDB
-        // The actual expiry behavior is tested in testStaleMasterKeyScenarioWithCacheExpiry
     }
 
     @Test
@@ -1411,24 +1402,52 @@ public class EncryptorImplTest {
         // Create encryptor with 1-second TTL for testing
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler, 1, TimeUnit.SECONDS);
 
+        AtomicReference<Throwable> encryption1Failure = new AtomicReference<>();
+        ActionListener<String> encryption1Listener = ActionListener.wrap(encrypted1 -> {
+            try {
+                Assert.assertNotNull(encrypted1);
+                String cachedKey = encryptor.getMasterKey(TENANT_ID);
+                Assert.assertEquals(oldMasterKey, cachedKey);
+
+                // Wait for cache to expire (1 second + buffer)
+                Thread.sleep(1500);
+
+                // T4: After expiry, key should be null in cache
+                Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+
+                AtomicReference<Throwable> encryption2Failure = new AtomicReference<>();
+                ActionListener<String> encryption2Listener = ActionListener.wrap(encrypted2 -> {
+                    try {
+                        Assert.assertNotNull(encrypted2);
+                        String newCachedKey = encryptor.getMasterKey(TENANT_ID);
+                        Assert.assertEquals(newMasterKey, newCachedKey);
+                        Assert.assertNotEquals(oldMasterKey, newCachedKey);
+                    } catch (Throwable t) {
+                        encryption2Failure.set(t);
+                    }
+                }, error -> { encryption2Failure.set(new MLException(error)); });
+                CountDownLatch encryption2Latch = new CountDownLatch(1);
+                LatchedActionListener<String> latchedEncryption2Listener = new LatchedActionListener<>(
+                    encryption2Listener,
+                    encryption2Latch
+                );
+
+                // T5: Next encryption should fetch the NEW key from DDB (simulating domain recreation)
+                encryptor.encrypt("test", TENANT_ID, latchedEncryption2Listener);
+                Assert.assertTrue("Second encryption failed", encryption2Latch.await(LATCH_WAIT_TIME, SECONDS));
+                if (encryption2Failure.get() != null)
+                    throw new AssertionError("Second encryption failed", encryption2Failure.get());
+            } catch (Throwable t) {
+                encryption1Failure.set(t);
+            }
+        }, error -> { encryption1Failure.set(new MLException(error)); });
+        CountDownLatch encryptionLatch = new CountDownLatch(1);
+        LatchedActionListener<String> latchedEncryptionListener = new LatchedActionListener<>(encryption1Listener, encryptionLatch);
         // T1: First encryption with old key
-        String encrypted1 = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted1);
-        String cachedKey = encryptor.getMasterKey(TENANT_ID);
-        Assert.assertEquals(oldMasterKey, cachedKey);
-
-        // Wait for cache to expire (1 second + buffer)
-        Thread.sleep(1500);
-
-        // T4: After expiry, key should be null in cache
-        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-
-        // T5: Next encryption should fetch the NEW key from DDB (simulating domain recreation)
-        String encrypted2 = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted2);
-        String newCachedKey = encryptor.getMasterKey(TENANT_ID);
-        Assert.assertEquals(newMasterKey, newCachedKey);
-        Assert.assertNotEquals(oldMasterKey, newCachedKey);
+        encryptor.encrypt("test", TENANT_ID, latchedEncryptionListener);
+        Assert.assertTrue("First encryption failed", encryptionLatch.await(LATCH_WAIT_TIME, SECONDS));
+        if (encryption1Failure.get() != null)
+            throw new AssertionError("First encryption failed", encryption1Failure.get());
 
         // Verify DDB was called twice: once for old key, once for new key after expiry
         verify(client, times(2)).get(any(), any());
@@ -1462,19 +1481,47 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
+        AtomicReference<Throwable> encryption1Failure = new AtomicReference<>();
+        ActionListener<String> encryption1Listener = ActionListener.wrap(encrypted1 -> {
+            try {
+                Assert.assertNotNull(encrypted1);
+                Assert.assertNotNull(encryptor.getMasterKey(tenant1));
+                AtomicReference<Throwable> encryption2Failure = new AtomicReference<>();
+                ActionListener<String> encryption2Listener = ActionListener.wrap(encrypted2 -> {
+                    try {
+                        Assert.assertNotNull(encrypted2);
+                        Assert.assertNotNull(encryptor.getMasterKey(tenant2));
+
+                        // Both keys should be cached independently
+                        Assert.assertNotNull(encryptor.getMasterKey(tenant1));
+                        Assert.assertNotNull(encryptor.getMasterKey(tenant2));
+                    } catch (Throwable t) {
+                        encryption2Failure.set(t);
+                    }
+                }, error -> { encryption2Failure.set(new MLException(error)); });
+                CountDownLatch encryption2Latch = new CountDownLatch(1);
+                LatchedActionListener<String> latchedEncryption2Listener = new LatchedActionListener<>(
+                    encryption2Listener,
+                    encryption2Latch
+                );
+
+                // Encrypt for tenant2
+                encryptor.encrypt("test2", tenant2, latchedEncryption2Listener);
+                Assert.assertTrue("Second tenant encryption failed", encryption2Latch.await(LATCH_WAIT_TIME, SECONDS));
+                if (encryption2Failure.get() != null)
+                    throw new AssertionError("Second tenant encryption failed", encryption2Failure.get());
+            } catch (Throwable t) {
+                encryption1Failure.set(t);
+            }
+        }, error -> { encryption1Failure.set(new MLException(error)); });
+        CountDownLatch encryptionLatch = new CountDownLatch(1);
+        LatchedActionListener<String> latchedEncryptionListener = new LatchedActionListener<>(encryption1Listener, encryptionLatch);
+
         // Encrypt for tenant1
-        String encrypted1 = encryptor.encrypt("test1", tenant1);
-        Assert.assertNotNull(encrypted1);
-        Assert.assertNotNull(encryptor.getMasterKey(tenant1));
-
-        // Encrypt for tenant2
-        String encrypted2 = encryptor.encrypt("test2", tenant2);
-        Assert.assertNotNull(encrypted2);
-        Assert.assertNotNull(encryptor.getMasterKey(tenant2));
-
-        // Both keys should be cached independently
-        Assert.assertNotNull(encryptor.getMasterKey(tenant1));
-        Assert.assertNotNull(encryptor.getMasterKey(tenant2));
+        encryptor.encrypt("test1", tenant1, latchedEncryptionListener);
+        Assert.assertTrue("First tenant encryption failed", encryptionLatch.await(LATCH_WAIT_TIME, SECONDS));
+        if (encryption1Failure.get() != null)
+            throw new AssertionError("First tenant encryption failed", encryption1Failure.get());
     }
 
     @Test

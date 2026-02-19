@@ -39,8 +39,8 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -156,7 +156,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
 
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
@@ -212,7 +212,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
@@ -256,7 +256,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap
                     .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
                 Connector connector = AwsConnector
@@ -273,7 +273,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                 AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
                 Settings settings = Settings.builder().build();
                 threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
+                executor.setClient(client);
                 when(client.threadPool()).thenReturn(threadPool);
                 when(threadPool.getThreadContext()).thenReturn(threadContext);
 
@@ -313,7 +313,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap
                     .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
                 Connector connector = AwsConnector
@@ -378,7 +378,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap
                     .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
                 Connector connector = AwsConnector
@@ -440,7 +440,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap
                     .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
                 Connector connector = AwsConnector
@@ -504,7 +504,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
@@ -555,7 +555,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
 
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap
                     .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
                 Connector connector = AwsConnector
@@ -603,7 +603,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
@@ -652,7 +652,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
@@ -697,7 +697,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
@@ -741,7 +741,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
@@ -786,11 +786,20 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
         ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
             ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted1);
+                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
                 Map<String, String> parameters = ImmutableMap
                     .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
                 // execute with retry disabled
-                ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null);
+                ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(
+                    10,
+                    10,
+                    10,
+                    1,
+                    1,
+                    0,
+                    RetryBackoffPolicy.CONSTANT,
+                    null
+                );
                 Connector connector = AwsConnector
                     .awsConnectorBuilder()
                     .name("test connector")
@@ -806,7 +815,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                 Settings settings = Settings.builder().build();
                 threadContext = new ThreadContext(settings);
                 ExecutorService executorService = mock(ExecutorService.class);
-                when(executor.getClient()).thenReturn(client);
+                executor.setClient(client);
                 when(client.threadPool()).thenReturn(threadPool);
                 when(threadPool.getThreadContext()).thenReturn(threadContext);
                 when(threadPool.executor(any())).thenReturn(executorService);
@@ -824,7 +833,16 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                 Mockito.verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
                 // execute with retry enabled
-                ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT);
+                ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(
+                    10,
+                    10,
+                    10,
+                    1,
+                    1,
+                    1,
+                    RetryBackoffPolicy.CONSTANT,
+                    null
+                );
                 Connector connector2 = AwsConnector
                     .awsConnectorBuilder()
                     .name("test connector")
