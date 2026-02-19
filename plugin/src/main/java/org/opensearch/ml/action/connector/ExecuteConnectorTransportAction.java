@@ -118,7 +118,12 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
     ) {
         String connectorTenantId = connector.getTenantId();
         if (decryptWithEncryptor) {
-            connector.decrypt(action, (credential, tenantId, decryptListener) -> encryptor.decrypt(credential, tenantId, decryptListener), connectorTenantId);
+            connector
+                .decrypt(
+                    action,
+                    (credential, tenantId, decryptListener) -> encryptor.decrypt(credential, tenantId, decryptListener),
+                    connectorTenantId
+                );
         } else {
             connector.decrypt(action, (credential, tenantId, decryptListener) -> {}, connectorTenantId);
         }
