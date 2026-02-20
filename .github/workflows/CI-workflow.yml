@@ -83,9 +83,9 @@ jobs:
                                export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
                                echo "::add-mask::$OPENAI_KEY" &&
                                echo "::add-mask::$COHERE_KEY" &&
-                               echo "build and run tests" && ./gradlew build -x spotlessJava &&
-                               echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
-                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava'
+                               echo "build and run tests" && ./gradlew build -Pcrypto.standard=FIPS-140-3 -x spotlessJava &&
+                               echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -Pcrypto.standard=FIPS-140-3 -x spotlessJava &&
+                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -Pcrypto.standard=FIPS-140-3 -x spotlessJava'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
@@ -189,10 +189,10 @@ jobs:
           if [ $security -gt 0 ]
           then
             echo "Security plugin is available"
-            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=${{ steps.genpass.outputs.password }} -x spotlessJava
+            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=${{ steps.genpass.outputs.password }} -Pcrypto.standard=FIPS-140-3 -x spotlessJava
           else
             echo "Security plugin is NOT available"
-            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -x spotlessJava
+            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Pcrypto.standard=FIPS-140-3 -x spotlessJava
           fi
 
       - name: Upload Coverage Report
@@ -235,10 +235,10 @@ jobs:
           export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
           echo "::add-mask::$OPENAI_KEY"
           echo "::add-mask::$COHERE_KEY"
-          ./gradlew.bat build -x spotlessJava
+          ./gradlew.bat build -Pcrypto.standard=FIPS-140-3 -x spotlessJava
       - name: Publish to Maven Local
         run: |
-          ./gradlew publishToMavenLocal -x spotlessJava
+          ./gradlew publishToMavenLocal -Pcrypto.standard=FIPS-140-3 -x spotlessJava
 #      - name: Multi Nodes Integration Testing
 #        shell: bash
 #        run: |

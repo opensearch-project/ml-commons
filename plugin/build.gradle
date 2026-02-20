@@ -5,6 +5,7 @@
 
 
 import org.opensearch.gradle.testclusters.OpenSearchCluster
+import org.opensearch.gradle.info.FipsBuildParams
 
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
@@ -690,6 +691,13 @@ configurations.all {
     exclude group: "org.jetbrains", module: "annotations"
     exclude group: "com.google.guava", module: "failureaccess"
     exclude group: "com.google.errorprone", module: "error_prone_annotations"
+    
+    // When building with -Pcrypto.standard=FIPS-140-3, bcFips jars are provided by OpenSearch
+    // This prevents jar hell when the plugin is installed
+    if (FipsBuildParams.isInFipsMode()) {
+        exclude group: 'org.bouncycastle', module: 'bc-fips'
+    }
+    
     resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'

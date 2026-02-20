@@ -44,4 +44,4 @@ jobs:
 
       - name: publish snapshots to maven
         run: |
-          ./gradlew publishPluginZipPublicationToSnapshotsRepository publishShadowPublicationToSnapshotsRepository
+          ./gradlew publishPluginZipPublicationToSnapshotsRepository publishShadowPublicationToSnapshotsRepository -Pcrypto.standard=FIPS-140-3
