@@ -182,11 +182,4 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
             return dataAsMap;
         }
     }
-
-    @Override
-    public String formatAGUIToolCalls(String toolCallsJson) {
-        throw new UnsupportedOperationException(
-            "AG-UI is not yet supported with Gemini generateContent; please use a different LLM interface such as bedrock/converse/claude or openai/v1/chat/completions."
-        );
-    }
 }

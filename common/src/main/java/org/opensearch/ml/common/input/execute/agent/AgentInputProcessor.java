@@ -129,18 +129,110 @@ public class AgentInputProcessor {
                 throw new IllegalArgumentException("Message role cannot be null or empty");
             }
 
-            if (message.getContent() == null || message.getContent().isEmpty()) {
-                throw new IllegalArgumentException("Message content cannot be null or empty");
-            }
+            String role = message.getRole().toLowerCase();
+            switch (role) {
+                case "user":
+                case "system":
+                    // User and system messages must have content
+                    if (message.getContent() == null || message.getContent().isEmpty()) {
+                        throw new IllegalArgumentException(role + " message must have content");
+                    }
+                    validateContentBlocks(message.getContent());
+                    break;
 
-            // Validate each content block in the message
+                case "assistant":
+                    // Assistant messages must have either content or tool calls
+                    validateAssistantMessage(message);
+                    break;
+
+                case "tool":
+                    // Tool messages must have tool call ID and content
+                    validateToolMessage(message);
+                    break;
+
+                default:
+                    // Other roles must have content
+                    if (message.getContent() == null || message.getContent().isEmpty()) {
+                        throw new IllegalArgumentException("Message with role '" + role + "' must have content");
+                    }
+                    validateContentBlocks(message.getContent());
+                    break;
+            }
+        }
+
+        // Validate that the last message is from user or tool
+        Message lastMessage = messages.getLast();
+        if (!"user".equalsIgnoreCase(lastMessage.getRole()) && !"tool".equalsIgnoreCase(lastMessage.getRole())) {
+            throw new IllegalArgumentException("Last message must be from role 'user' or 'tool'");
+        }
+    }
+
+    /**
+     * Validates an assistant message.
+     * Assistant messages must have either content or tool calls (or both).
+     */
+    private static void validateAssistantMessage(Message message) {
+        boolean hasContent = message.getContent() != null && !message.getContent().isEmpty();
+        boolean hasToolCalls = message.getToolCalls() != null && !message.getToolCalls().isEmpty();
+
+        if (!hasContent && !hasToolCalls) {
+            throw new IllegalArgumentException("Assistant message must have either content or tool calls");
+        }
+
+        if (hasContent) {
             validateContentBlocks(message.getContent());
         }
 
-        // Validate that the last message is from user
-        Message lastMessage = messages.getLast();
-        if (!lastMessage.getRole().equalsIgnoreCase("user")) {
-            throw new IllegalArgumentException("Last message must be from role 'user'");
+        if (hasToolCalls) {
+            validateToolCalls(message.getToolCalls());
+        }
+    }
+
+    /**
+     * Validates a tool result message.
+     * Tool messages must have a tool call ID and content.
+     */
+    private static void validateToolMessage(Message message) {
+        if (message.getToolCallId() == null || message.getToolCallId().trim().isEmpty()) {
+            throw new IllegalArgumentException("Tool message must have toolCallId");
+        }
+
+        if (message.getContent() == null || message.getContent().isEmpty()) {
+            throw new IllegalArgumentException("Tool message must have content");
+        }
+
+        validateContentBlocks(message.getContent());
+    }
+
+    /**
+     * Validates tool calls in an assistant message.
+     */
+    private static void validateToolCalls(List<ToolCall> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return;
+        }
+
+        for (ToolCall toolCall : toolCalls) {
+            if (toolCall.getId() == null || toolCall.getId().trim().isEmpty()) {
+                throw new IllegalArgumentException("Tool call must have an id");
+            }
+
+            if (toolCall.getType() == null || toolCall.getType().trim().isEmpty()) {
+                throw new IllegalArgumentException("Tool call must have a type");
+            }
+
+            if (toolCall.getFunction() == null) {
+                throw new IllegalArgumentException("Tool call must have a function");
+            }
+
+            ToolCall.ToolFunction function = toolCall.getFunction();
+            if (function.getName() == null || function.getName().trim().isEmpty()) {
+                throw new IllegalArgumentException("Tool call function must have a name");
+            }
+
+            if (function.getArguments() == null) {
+                throw new IllegalArgumentException("Tool call function must have arguments");
+            }
         }
     }
 

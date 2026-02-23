@@ -21,10 +21,12 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.DocumentContent;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
+import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -256,8 +258,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     /**
      * Builds messages array using templates for Bedrock Converse API.
-     * Converts messages to conversation history format, excluding the last user message
-     * which becomes the current input.
+     * Converts messages to conversation history format, handling tool calls and results.
      */
     private String buildMessagesArray(List<Message> messages, MLAgentType type) {
         if (messages == null || messages.isEmpty()) {
@@ -266,21 +267,112 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
         StringBuilder messagesArray = new StringBuilder();
         boolean first = true;
-        for (Message message : messages) {
+
+        for (int i = 0; i < messages.size(); i++) {
+            Message message = messages.get(i);
+
+            // Build content array based on message type
+            StringBuilder contentArray = new StringBuilder();
+
+            // Tool result messages: merge consecutive tool messages
+            if ("tool".equalsIgnoreCase(message.getRole())) {
+                int j = i;
+                while (j < messages.size() && "tool".equalsIgnoreCase(messages.get(j).getRole())) {
+                    if (contentArray.length() > 0) {
+                        contentArray.append(",");
+                    }
+                    contentArray.append(buildToolResultBlock(messages.get(j)));
+                    j++;
+                }
+                // Skip the messages we just processed
+                i = j - 1;
+            }
+            // Assistant messages with tool calls: convert to Bedrock toolUse blocks
+            else if ("assistant".equalsIgnoreCase(message.getRole())
+                && message.getToolCalls() != null
+                && !message.getToolCalls().isEmpty()) {
+                // Include content if present
+                if (message.getContent() != null && !message.getContent().isEmpty()) {
+                    contentArray.append(buildContentArrayFromBlocks(message.getContent(), type));
+                }
+
+                // Add tool use blocks
+                for (ToolCall toolCall : message.getToolCalls()) {
+                    if (contentArray.length() > 0) {
+                        contentArray.append(",");
+                    }
+                    contentArray.append(buildToolUseBlock(toolCall));
+                }
+            }
+            // Regular messages: build from content blocks
+            else {
+                if (message.getContent() != null && !message.getContent().isEmpty()) {
+                    contentArray.append(buildContentArrayFromBlocks(message.getContent(), type));
+                }
+            }
+
             if (!first) {
                 messagesArray.append(",");
             }
             first = false;
 
-            String contentArray = buildContentArrayFromBlocks(message.getContent(), type);
+            // Convert "tool" role to "user" for Bedrock compatibility
+            String role = "tool".equalsIgnoreCase(message.getRole()) ? "user" : message.getRole();
+
             Map<String, Object> msgParams = new HashMap<>();
-            msgParams.put("msg_role", message.getRole());
-            msgParams.put("msg_content_array", contentArray);
+            msgParams.put("msg_role", role);
+            msgParams.put("msg_content_array", contentArray.toString());
             StringSubstitutor msgSubstitutor = new StringSubstitutor(msgParams, "${parameters.", "}");
             messagesArray.append(msgSubstitutor.replace(MESSAGE_TEMPLATE));
         }
 
         return messagesArray.toString();
+    }
+
+    /**
+     * Builds a Bedrock toolUse content block from a ToolCall.
+     */
+    private String buildToolUseBlock(ToolCall toolCall) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tool_use_id", toolCall.getId());
+        params.put("tool_name", toolCall.getFunction().getName());
+
+        // Handle empty or null arguments - default to empty object
+        String arguments = toolCall.getFunction().getArguments();
+        if (arguments == null || arguments.trim().isEmpty()) {
+            arguments = "{}";
+        }
+        params.put("tool_input", arguments);
+
+        String template =
+            "{\"toolUse\":{\"toolUseId\":\"${parameters.tool_use_id}\",\"name\":\"${parameters.tool_name}\",\"input\":${parameters.tool_input}}}";
+        StringSubstitutor substitutor = new StringSubstitutor(params, "${parameters.", "}");
+        return substitutor.replace(template);
+    }
+
+    /**
+     * Builds a Bedrock toolResult content block from a Message with toolCallId.
+     */
+    private String buildToolResultBlock(Message message) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tool_call_id", message.getToolCallId());
+
+        // Extract text content from content blocks
+        String contentText = "";
+        if (message.getContent() != null && !message.getContent().isEmpty()) {
+            for (ContentBlock block : message.getContent()) {
+                if (block.getType() == ContentType.TEXT) {
+                    contentText = StringEscapeUtils.escapeJson(block.getText());
+                    break;
+                }
+            }
+        }
+        params.put("content_text", contentText);
+
+        String template =
+            "{\"toolResult\":{\"toolUseId\":\"${parameters.tool_call_id}\",\"content\":[{\"text\":\"${parameters.content_text}\"}]}}";
+        StringSubstitutor substitutor = new StringSubstitutor(params, "${parameters.", "}");
+        return substitutor.replace(template);
     }
 
     /**

@@ -114,7 +114,7 @@ public class RemoteConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
     }
 

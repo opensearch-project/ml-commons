@@ -770,6 +770,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         // TODO: support multiple tool calls at the same time so that multiple
                         // LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
+                        nextStepListener.onResponse(outputResponseAfterHook);
                     } else {
                         // Emit POST_TOOL hook event for non-function calling path
                         List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
@@ -782,8 +783,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                     INTERACTIONS_PREFIX
                                 )
                             );
+                        nextStepListener.onResponse(processedOutput);
                     }
-                    nextStepListener.onResponse(r);
+
                 }, e -> {
                     interactions
                         .add(
