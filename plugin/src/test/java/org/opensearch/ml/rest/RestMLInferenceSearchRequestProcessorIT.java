@@ -101,9 +101,7 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
         + "        \"content-type\": \"application/json\",\n"
         + "        \"x-amz-content-sha256\": \"required\"\n"
         + "      },\n"
-        + "      \"request_body\": \"{ \\\"inputText\\\": \\\"${parameters.input}\\\" }\",\n"
-        + "      \"pre_process_function\": \"connector.pre_process.bedrock.embedding\",\n"
-        + "      \"post_process_function\": \"connector.post_process.bedrock.embedding\"\n"
+        + "      \"request_body\": \"{ \\\"inputText\\\": \\\"${parameters.input}\\\" }\"\n"
         + "    }\n"
         + "  ]\n"
         + "}";
@@ -343,7 +341,7 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
             + "            \"model_id\": \""
             + this.bedrockEmbeddingModelId
             + "\",\n"
-            + "        \"query_template\": \"{\\\"query\\\":{\\\"range\\\":{\\\"diary_embedding_size\\\":{\\\"lte\\\":${modelPrediction}}}}}\",\n"
+            + "        \"query_template\": \"{\\\"query\\\":{\\\"range\\\":{\\\"diary_embedding_size_int\\\":{\\\"lte\\\":${modelPrediction}}}}}\",\n"
             + "        \"input_map\": [\n"
             + "          {\n"
             + "            \"input\": \"query.term.diary_embedding_size.value\"\n"
