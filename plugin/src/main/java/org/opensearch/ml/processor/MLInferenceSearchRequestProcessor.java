@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
@@ -383,8 +382,24 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     }
                     valuesMap.put(newQueryField, modelOutputValue);
                 }
-                StringSubstitutor sub = new StringSubstitutor(valuesMap);
-                return sub.replace(queryTemplate);
+                // Use manual substitution to preserve numeric types in JSON templates.
+                // StringSubstitutor calls toString() on values, which renders Double as "1536.0"
+                // (invalid for OpenSearch integer fields). We format Numbers correctly for JSON.
+                String result = queryTemplate;
+                for (Map.Entry<String, Object> entry : valuesMap.entrySet()) {
+                    String placeholder = "${" + entry.getKey() + "}";
+                    if (entry.getValue() instanceof Number) {
+                        Number num = (Number) entry.getValue();
+                        // Render whole-number Doubles without decimal point (e.g. 1536.0 -> 1536)
+                        String replacement = (num instanceof Double && num.doubleValue() == Math.floor(num.doubleValue()))
+                            ? String.valueOf(num.longValue())
+                            : String.valueOf(num);
+                        result = result.replace(placeholder, replacement);
+                    } else {
+                        result = result.replace(placeholder, String.valueOf(entry.getValue()));
+                    }
+                }
+                return result;
             }
         };
     }
