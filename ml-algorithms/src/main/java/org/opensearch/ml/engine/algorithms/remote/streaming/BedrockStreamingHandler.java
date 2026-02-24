@@ -63,6 +63,7 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockDeltaEvent;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockStartEvent;
+import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamMetadataEvent;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamOutput;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
@@ -71,6 +72,7 @@ import software.amazon.awssdk.services.bedrockruntime.model.ImageBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ImageSource;
 import software.amazon.awssdk.services.bedrockruntime.model.Message;
 import software.amazon.awssdk.services.bedrockruntime.model.SystemContentBlock;
+import software.amazon.awssdk.services.bedrockruntime.model.TokenUsage;
 import software.amazon.awssdk.services.bedrockruntime.model.Tool;
 import software.amazon.awssdk.services.bedrockruntime.model.ToolConfiguration;
 import software.amazon.awssdk.services.bedrockruntime.model.ToolInputSchema;
@@ -93,7 +95,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         STREAMING_CONTENT,
         TOOL_CALL_DETECTED,
         ACCUMULATING_TOOL_INPUT,
+        TOOL_READY_AWAITING_METADATA,
         WAITING_FOR_TOOL_RESULT,
+        MESSAGE_STOP_RECEIVED,
         COMPLETED
     }
 
@@ -129,6 +133,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             StringBuilder toolInputAccumulator = new StringBuilder();
             AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
 
+            // Store token usage from metadata event (request-scoped)
+            AtomicReference<Map<String, Object>> streamTokenUsage = new AtomicReference<>();
+
             // Build Bedrock client
             BedrockRuntimeAsyncClient bedrockClient = buildBedrockRuntimeAsyncClient();
 
@@ -155,13 +162,27 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     listener.onFailure(new MLException(REMOTE_SERVICE_ERROR + error.getMessage(), error));
                 }
             }).onComplete(() -> {
-                if (currentState.get() != StreamState.WAITING_FOR_TOOL_RESULT) {
-                    sendCompletionResponse(isStreamClosed, listener);
+                // onComplete() fires after ALL events including metadata
+                if (currentState.get() == StreamState.TOOL_READY_AWAITING_METADATA) {
+                    // Tool response ready, now send it with captured token usage
+                    currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
+                    log.debug("Sending tool response after metadata capture");
+                    listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId, streamTokenUsage));
+                } else if (currentState.get() != StreamState.WAITING_FOR_TOOL_RESULT) {
+                    sendCompletionResponseWithUsage(isStreamClosed, listener, streamTokenUsage);
                 } else {
                     log.debug("Tool execution in progress - keeping stream open");
                 }
             }).subscriber(event -> {
                 log.debug("BEDROCK_RAW_EVENT: Type={}, Event={}", event.sdkEventType(), event);
+
+                // Handle metadata events separately (always last event, contains token usage)
+                if (event.sdkEventType() == ConverseStreamOutput.EventType.METADATA) {
+                    handleMetadataEvent(event, streamTokenUsage);
+                    return;
+                }
+
+                // Handle content/tool events via state machine
                 handleStreamEvent(
                     event,
                     listener,
@@ -302,6 +323,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         sendContentResponse(content, false, listener);
                     }
                 } else if (isStreamComplete(event)) {
+                    // messageStop received - set state but don't close yet (metadata coming next)
+                    currentState.set(StreamState.MESSAGE_STOP_RECEIVED);
+
                     if (isAGUIAgent && textMessageStarted) {
                         parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
                         BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
@@ -311,12 +335,15 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
                         String runId = parameters.get(AGUI_PARAM_RUN_ID);
                         BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                        sendAGUIEvent(runFinishedEvent, true, listener);
-                        log.debug("BedrockStreamingHandler: Added RUN_FINISHED event - ReAct loop completed");
+                        // Send with is_last=false — don't close the stream yet.
+                        // The metadata event (with token usage) arrives AFTER messageStop.
+                        // onComplete() will send the real completion with token usage.
+                        sendAGUIEvent(runFinishedEvent, false, listener);
+                        log.debug("BedrockStreamingHandler: Added RUN_FINISHED event - waiting for metadata before completing");
                     }
 
-                    currentState.set(StreamState.COMPLETED);
-                    sendCompletionResponse(isStreamClosed, listener);
+                    // Don't send completion yet - wait for metadata event then .onComplete() will handle it
+                    log.debug("messageStop received, waiting for metadata event");
                 }
                 break;
 
@@ -366,13 +393,24 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}'", toolName.get());
                     }
 
-                    currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
-                    listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId));
+                    // Don't send tool response yet - wait for metadata event
+                    currentState.set(StreamState.TOOL_READY_AWAITING_METADATA);
+                    log.debug("Tool input complete, waiting for metadata before sending response");
                 }
+                break;
+
+            case TOOL_READY_AWAITING_METADATA:
+                // Waiting for metadata event, then onComplete() will send tool response
+                log.debug("In TOOL_READY_AWAITING_METADATA state, waiting for metadata");
                 break;
 
             case WAITING_FOR_TOOL_RESULT:
                 log.debug("Waiting for tool result - keeping stream open");
+                break;
+
+            case MESSAGE_STOP_RECEIVED:
+                // Waiting for metadata event, then onComplete() will send completion
+                log.debug("In MESSAGE_STOP_RECEIVED state, waiting for metadata");
                 break;
 
             case COMPLETED:
@@ -427,14 +465,18 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private MLTaskResponse createToolUseResponse(
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
-        AtomicReference<String> toolUseId
+        AtomicReference<String> toolUseId,
+        AtomicReference<Map<String, Object>> streamTokenUsage
     ) {
         // Validate inputs
         if (toolName == null || toolInput == null || toolUseId == null) {
             throw new IllegalArgumentException("Tool references cannot be null");
         }
-        Map<String, Object> wrappedResponse = Map
-            .of(
+
+        // Build response structure (use HashMap to conditionally add usage)
+        Map<String, Object> wrappedResponse = new HashMap<>();
+        wrappedResponse
+            .put(
                 "output",
                 Map
                     .of(
@@ -451,10 +493,14 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                                             )
                                     )
                             )
-                    ),
-                "stopReason",
-                "tool_use"
+                    )
             );
+        wrappedResponse.put("stopReason", "tool_use");
+
+        // Include token usage from metadata event (onComplete always fires after metadata)
+        if (streamTokenUsage != null && streamTokenUsage.get() != null) {
+            wrappedResponse.put("usage", streamTokenUsage.get());
+        }
 
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
@@ -736,5 +782,112 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         builder.streamProcessingMode("async");
 
         return builder.build();
+    }
+
+    /**
+     * Handles metadata events from Bedrock stream.
+     * Metadata is always the last event and contains token usage.
+     */
+    private void handleMetadataEvent(ConverseStreamOutput event, AtomicReference<Map<String, Object>> streamTokenUsage) {
+        if (event.sdkEventType() != ConverseStreamOutput.EventType.METADATA) {
+            return;
+        }
+
+        try {
+            ConverseStreamMetadataEvent metadataEvent = (ConverseStreamMetadataEvent) event;
+
+            if (metadataEvent.usage() != null) {
+                TokenUsage usage = metadataEvent.usage();
+
+                // Store in request-scoped field in format expected by BedrockConverseFunctionCalling.extractTokenUsage()
+                Map<String, Object> usageMap = new HashMap<>();
+                usageMap.put("inputTokens", usage.inputTokens());
+                usageMap.put("outputTokens", usage.outputTokens());
+                usageMap.put("totalTokens", usage.totalTokens());
+
+                // Include cache tokens if available
+                if (usage.cacheReadInputTokens() != null) {
+                    usageMap.put("cacheReadInputTokens", usage.cacheReadInputTokens());
+                }
+                if (usage.cacheWriteInputTokens() != null) {
+                    usageMap.put("cacheWriteInputTokens", usage.cacheWriteInputTokens());
+                }
+
+                streamTokenUsage.set(Map.copyOf(usageMap));
+
+                log
+                    .debug(
+                        "Captured token usage: input={}, output={}, total={}, cacheRead={}, cacheWrite={}",
+                        usage.inputTokens(),
+                        usage.outputTokens(),
+                        usage.totalTokens(),
+                        usage.cacheReadInputTokens(),
+                        usage.cacheWriteInputTokens()
+                    );
+            }
+
+        } catch (Exception e) {
+            log.warn("[TOKEN_TRACKING] Failed to extract token usage from metadata event", e);
+            // Don't propagate - usage tracking is best-effort
+        }
+    }
+
+    /**
+     * Sends completion response with token usage included.
+     * Called from .onComplete() after all events (including metadata) have been processed.
+     */
+    private void sendCompletionResponseWithUsage(
+        AtomicBoolean isStreamClosed,
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener,
+        AtomicReference<Map<String, Object>> streamTokenUsage
+    ) {
+        if (isStreamClosed.compareAndSet(false, true)) {
+            boolean isAgentStream = actionListener.hasAgentListener();
+
+            Map<String, Object> completionData = new HashMap<>();
+            completionData.put("content", "");
+            // For agent streams: is_last=false — StreamingWrapper.sendCompletionChunk sends the real is_last=true
+            // after token usage and memory save.
+            // For non-agent streams (plain predict): is_last=true — no agent runner upstream to close the stream,
+            // so we must close it here.
+            completionData.put("is_last", !isAgentStream);
+            completionData.put("streaming_complete", true);
+
+            // Include token usage if available
+            if (streamTokenUsage != null && streamTokenUsage.get() != null) {
+                completionData.put("usage", streamTokenUsage.get());
+                // Store on parameters map so agent runner/StreamingWrapper can access final turn usage
+                if (parameters != null) {
+                    Map<String, Object> usage = streamTokenUsage.get();
+                    parameters.put("stream_input_tokens", String.valueOf(usage.getOrDefault("inputTokens", "0")));
+                    parameters.put("stream_output_tokens", String.valueOf(usage.getOrDefault("outputTokens", "0")));
+                    parameters.put("stream_total_tokens", String.valueOf(usage.getOrDefault("totalTokens", "0")));
+                }
+                log.debug("Including token usage in completion response");
+            } else {
+                log.warn("[TOKEN_TRACKING] Metadata event not received, completion sent without token usage");
+            }
+
+            List<ModelTensor> tensors = new ArrayList<>();
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(completionData).build());
+
+            ModelTensorOutput output = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(tensors).build()))
+                .build();
+
+            MLTaskResponse response = new MLTaskResponse(output);
+
+            if (isAgentStream) {
+                // Agent path: notify agent listener so agent runner's whenComplete fires
+                // (for token tracking + sendFinalAnswer). Don't close stream here —
+                // StreamingWrapper.sendFinalResponse handles closure after async operations.
+                actionListener.onResponse(response);
+            } else {
+                // Non-agent path: no upstream runner to close the stream, so send with
+                // isLastBatch=true which triggers channel.completeStream().
+                actionListener.onStreamResponse(response, true);
+            }
+        }
     }
 }

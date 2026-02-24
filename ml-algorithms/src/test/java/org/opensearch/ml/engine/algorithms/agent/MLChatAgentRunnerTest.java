@@ -169,6 +169,7 @@ public class MLChatAgentRunnerTest {
             return null;
         }).when(conversationIndexMemory).update(any(), any(), any());
 
+        // Pass null for sdkClient in tests - the null check in runReAct will skip model resolution
         mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(Mockito.anyMap())).thenReturn(secondTool);
@@ -1495,7 +1496,7 @@ public class MLChatAgentRunnerTest {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         ActionListener<String> listener = Mockito.mock(ActionListener.class);
 
-        mlChatAgentRunner.generateLLMSummary(null, llmSpec, "tenant", "question", new HashMap<>(), listener);
+        mlChatAgentRunner.generateLLMSummary(null, llmSpec, "tenant", "question", new HashMap<>(), null, null, listener);
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }

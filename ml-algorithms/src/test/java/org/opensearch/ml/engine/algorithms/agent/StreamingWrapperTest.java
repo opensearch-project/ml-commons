@@ -32,6 +32,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -187,9 +188,85 @@ public class StreamingWrapperTest {
 
     @Test
     public void testSendFinalResponseStreaming() {
-        streamingWrapper.sendFinalResponse("session1", listener, "parent1", true, null, null, "answer");
+        streamingWrapper.sendFinalResponse("session1", listener, "parent1", true, null, null, "answer", null, "tenant1");
 
         verify(listener).onResponse("Streaming completed");
+    }
+
+    @Test
+    public void testSendFinalResponseStreaming_withTokenUsage() throws Exception {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        streamingWrapper.sendFinalResponse("session1", listener, "parent1", true, null, null, "answer", tokenTracker, "tenant1");
+
+        // Verify two batches sent: token usage chunk + completion chunk
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(channel, org.mockito.Mockito.atLeast(2)).sendResponseBatch(responseCaptor.capture());
+
+        // First batch should be the token usage
+        MLTaskResponse tokenResponse = responseCaptor.getAllValues().get(0);
+        ModelTensorOutput tokenOutput = (ModelTensorOutput) tokenResponse.getOutput();
+        List<ModelTensor> tokenTensors = tokenOutput.getMlModelOutputs().get(0).getMlModelTensors();
+
+        // Should contain memory_id, parent_interaction_id, and token_usage tensor with structured data
+        boolean foundTokenUsage = false;
+        for (ModelTensor tensor : tokenTensors) {
+            if (AgentTokenTracker.TOKEN_USAGE.equals(tensor.getName()) && tensor.getDataAsMap() != null) {
+                foundTokenUsage = true;
+                Map<String, ?> dataMap = tensor.getDataAsMap();
+                assertTrue("Token usage should contain per_model_usage", dataMap.containsKey(AgentTokenTracker.PER_MODEL_USAGE));
+            }
+        }
+        assertTrue("Token usage chunk should be sent in streaming mode", foundTokenUsage);
+
+        verify(listener).onResponse("Streaming completed");
+    }
+
+    @Test
+    public void testSendFinalResponseNonStreaming_withTokenUsage() {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        nonStreamingWrapper
+            .sendFinalResponse(
+                "session1",
+                listener,
+                "parent1",
+                false,
+                new ArrayList<>(),
+                new HashMap<>(),
+                "answer",
+                tokenTracker,
+                "tenant1"
+            );
+
+        // Non-streaming path calls returnFinalResponse which calls listener.onResponse with ModelTensorOutput
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(listener).onResponse(responseCaptor.capture());
+
+        ModelTensorOutput output = (ModelTensorOutput) responseCaptor.getValue();
+        // Should contain token_usage tensor
+        boolean foundTokenUsage = false;
+        for (ModelTensors modelTensors : output.getMlModelOutputs()) {
+            for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
+                if (AgentTokenTracker.TOKEN_USAGE.equals(tensor.getName())) {
+                    foundTokenUsage = true;
+                    assertNotNull(tensor.getDataAsMap());
+                }
+            }
+        }
+        assertTrue("Token usage tensor should be included in non-streaming response", foundTokenUsage);
     }
 
     @Test

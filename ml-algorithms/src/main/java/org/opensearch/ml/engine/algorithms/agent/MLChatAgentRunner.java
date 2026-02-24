@@ -75,6 +75,7 @@ import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -390,297 +391,374 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         Map<String, Tool> backendTools
     ) {
-        Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
-        String prompt = constructLLMPrompt(tools, tmpParameters);
-        tmpParameters.put(PROMPT, prompt);
-        final String finalPrompt = prompt;
+        String llmModelId = llm.getModelId();
 
-        String question = tmpParameters.get(MLAgentExecutor.QUESTION);
-        String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
-        boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
-        boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
+        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(metadata -> {
+            final String modelUrl = metadata[0];
+            final String modelName = metadata[1];
+            Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
+            String prompt = constructLLMPrompt(tools, tmpParameters);
+            tmpParameters.put(PROMPT, prompt);
+            final String finalPrompt = prompt;
 
-        // Trace number
-        AtomicInteger traceNumber = new AtomicInteger(0);
+            String question = tmpParameters.get(MLAgentExecutor.QUESTION);
+            String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
+            boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
+            boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
 
-        AtomicReference<StepListener<MLTaskResponse>> lastLlmListener = new AtomicReference<>();
-        AtomicReference<String> lastThought = new AtomicReference<>();
-        AtomicReference<String> lastAction = new AtomicReference<>();
-        AtomicReference<String> lastActionInput = new AtomicReference<>();
-        AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
-        AtomicReference<String> lastToolCallId = new AtomicReference<>();
-        Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        Map<String, String> lastToolParams = new ConcurrentHashMap<>();
+            // Trace number
+            AtomicInteger traceNumber = new AtomicInteger(0);
 
-        StepListener firstListener = new StepListener<MLTaskResponse>();
-        lastLlmListener.set(firstListener);
-        StepListener<?> lastStepListener = firstListener;
+            // Token usage tracker
+            AgentTokenTracker tokenTracker = new AgentTokenTracker();
+            // Set model metadata for token tracking
+            tokenTracker.setModelMetadata(llm.getModelId(), modelUrl, modelName);
 
-        StringBuilder scratchpadBuilder = new StringBuilder();
-        final List<String> interactions = new CopyOnWriteArrayList<>();
+            AtomicReference<StepListener<MLTaskResponse>> lastLlmListener = new AtomicReference<>();
+            AtomicReference<String> lastThought = new AtomicReference<>();
+            AtomicReference<String> lastAction = new AtomicReference<>();
+            AtomicReference<String> lastActionInput = new AtomicReference<>();
+            AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
+            AtomicReference<String> lastToolCallId = new AtomicReference<>();
+            Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+            Map<String, String> lastToolParams = new ConcurrentHashMap<>();
 
-        StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
-        AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
-        tmpParameters.put(PROMPT, newPrompt.get());
-        List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
-        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
-        for (int i = 0; i < maxIterations; i++) {
-            int finalI = i;
-            StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
+            StepListener firstListener = new StepListener<MLTaskResponse>();
+            lastLlmListener.set(firstListener);
+            StepListener<?> lastStepListener = firstListener;
 
-            lastStepListener.whenComplete(output -> {
-                StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
-                if (finalI % 2 == 0) {
-                    MLTaskResponse llmResponse = (MLTaskResponse) output;
-                    ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
+            StringBuilder scratchpadBuilder = new StringBuilder();
+            final List<String> interactions = new CopyOnWriteArrayList<>();
 
-                    List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
-                    Map<String, String> modelOutput = parseLLMOutput(
-                        parameters,
-                        tmpModelTensorOutput,
-                        llmResponsePatterns,
-                        tools.keySet(),
-                        interactions,
-                        functionCalling
-                    );
+            StringSubstitutor tmpSubstitutor = new StringSubstitutor(
+                Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                "${parameters.",
+                "}"
+            );
+            AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
+            tmpParameters.put(PROMPT, newPrompt.get());
+            List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
+            int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
+            for (int i = 0; i < maxIterations; i++) {
+                int finalI = i;
+                StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
 
-                    streamingWrapper.fixInteractionRole(interactions);
-                    String thought = String.valueOf(modelOutput.get(THOUGHT));
-                    String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
-                    String action = String.valueOf(modelOutput.get(ACTION));
-                    String actionInput = String.valueOf(modelOutput.get(ACTION_INPUT));
-                    String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
-                    String finalAnswer = modelOutput.get(FINAL_ANSWER);
+                lastStepListener.whenComplete(output -> {
+                    StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
+                    if (finalI % 2 == 0) {
+                        MLTaskResponse llmResponse = (MLTaskResponse) output;
+                        ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
 
-                    if (finalAnswer != null) {
-                        finalAnswer = finalAnswer.trim();
-                        sendFinalAnswer(
-                            sessionId,
-                            listener,
-                            question,
-                            parentInteractionId,
-                            verbose,
-                            traceDisabled,
-                            traceTensors,
-                            memory,
-                            traceNumber,
-                            additionalInfo,
-                            finalAnswer
-                        );
-                        cleanUpResource(tools);
-                        return;
-                    }
+                        // Extract token usage
+                        if (functionCalling != null) {
+                            try {
+                                Map<String, ?> dataAsMap = tmpModelTensorOutput
+                                    .getMlModelOutputs()
+                                    .get(0)
+                                    .getMlModelTensors()
+                                    .get(0)
+                                    .getDataAsMap();
 
-                    sessionMsgAnswerBuilder.append(thought);
-                    lastThought.set(thought);
-                    lastAction.set(action);
-                    lastActionInput.set(actionInput);
-                    lastToolSelectionResponse.set(thoughtResponse);
-                    lastToolCallId.set(toolCallId);
+                                // Use FunctionCalling interface to extract tokens (each impl knows its format)
+                                TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
 
-                    traceTensors
-                        .add(
-                            ModelTensors
-                                .builder()
-                                .mlModelTensors(List.of(ModelTensor.builder().name("response").result(thoughtResponse).build()))
-                                .build()
-                        );
-
-                    saveTraceData(
-                        memory,
-                        memory != null ? memory.getType() : null,
-                        question,
-                        thoughtResponse,
-                        sessionId,
-                        traceDisabled,
-                        parentInteractionId,
-                        traceNumber,
-                        "LLM"
-                    );
-
-                    if (nextStepListener == null) {
-                        handleMaxIterationsReached(
-                            sessionId,
-                            listener,
-                            question,
-                            parentInteractionId,
-                            verbose,
-                            traceDisabled,
-                            traceTensors,
-                            memory,
-                            traceNumber,
-                            additionalInfo,
-                            lastThought,
-                            maxIterations,
-                            tools,
-                            llm,
-                            tenantId,
-                            tmpParameters
-                        );
-                        return;
-                    }
-
-                    if (tools.containsKey(action)) {
-                        // Check if this is a backend tool - if it is, execute it normally in the ReAct loop
-                        // If it's NOT a backend tool, it must be a frontend tool, so break out of the loop
-                        boolean isBackendTool = backendTools != null && backendTools.containsKey(action);
-
-                        log.info("AG-UI: Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
-
-                        if (!isBackendTool) {
-                            // For frontend tool use, we close the response stream and wait for frontend tool result
-                            if (streamingWrapper != null) {
-                                streamingWrapper.sendRunFinishedAndCloseStream(sessionId, parentInteractionId);
-                            }
-                        } else {
-                            // Handle backend tool normally
-                            Map<String, String> toolParams = constructToolParams(
-                                tools,
-                                toolSpecMap,
-                                question,
-                                lastActionInput,
-                                action,
-                                actionInput
-                            );
-                            toolParams.put(TENANT_ID_FIELD, tenantId);
-                            lastToolParams.clear();
-                            toolParams.forEach((key, value) -> {
-                                // For the case like tenant id is null
-                                if (key != null && value != null) {
-                                    lastToolParams.put(key, value);
+                                if (usage != null) {
+                                    tokenTracker.recordTurn(llm.getModelId(), usage);
                                 }
-                            });
-                            runTool(
-                                tools,
-                                toolSpecMap,
-                                tmpParameters,
-                                (ActionListener<Object>) nextStepListener,
-                                action,
-                                actionInput,
-                                toolParams,
-                                interactions,
-                                toolCallId,
-                                functionCalling,
-                                hookRegistry
-                            );
+                            } catch (Exception e) {
+                                log.debug("Failed to extract token usage", e);
+                            }
                         }
 
-                    } else {
-                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
-                        StringSubstitutor substitutor = new StringSubstitutor(
-                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
-                            "${parameters.",
-                            "}"
+                        // Check if this is a streaming completion marker (text already streamed to client).
+                        // The streaming handler sets streaming_complete=true (NOT is_last=true) to avoid
+                        // prematurely closing the HTTP response — StreamingWrapper sends the real is_last=true.
+                        Map<String, ?> firstTensorData = tmpModelTensorOutput
+                            .getMlModelOutputs()
+                            .get(0)
+                            .getMlModelTensors()
+                            .get(0)
+                            .getDataAsMap();
+                        if (firstTensorData != null
+                            && Boolean.TRUE.equals(firstTensorData.get("streaming_complete"))
+                            && "".equals(firstTensorData.get("content"))) {
+                            sendFinalAnswer(
+                                sessionId,
+                                listener,
+                                question,
+                                parentInteractionId,
+                                verbose,
+                                traceDisabled,
+                                traceTensors,
+                                memory,
+                                traceNumber,
+                                additionalInfo,
+                                "(streamed)", // text was already streamed to client
+                                tokenTracker,
+                                tenantId
+                            );
+                            cleanUpResource(tools);
+                            return;
+                        }
+
+                        List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
+                        Map<String, String> modelOutput = parseLLMOutput(
+                            parameters,
+                            tmpModelTensorOutput,
+                            llmResponsePatterns,
+                            tools.keySet(),
+                            interactions,
+                            functionCalling
                         );
+
+                        streamingWrapper.fixInteractionRole(interactions);
+                        String thought = String.valueOf(modelOutput.get(THOUGHT));
+                        String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
+                        String action = String.valueOf(modelOutput.get(ACTION));
+                        String actionInput = String.valueOf(modelOutput.get(ACTION_INPUT));
+                        String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
+                        String finalAnswer = modelOutput.get(FINAL_ANSWER);
+
+                        if (finalAnswer != null) {
+                            finalAnswer = finalAnswer.trim();
+                            sendFinalAnswer(
+                                sessionId,
+                                listener,
+                                question,
+                                parentInteractionId,
+                                verbose,
+                                traceDisabled,
+                                traceTensors,
+                                memory,
+                                traceNumber,
+                                additionalInfo,
+                                finalAnswer,
+                                tokenTracker,
+                                tenantId
+                            );
+                            cleanUpResource(tools);
+                            return;
+                        }
+
+                        sessionMsgAnswerBuilder.append(thought);
+                        lastThought.set(thought);
+                        lastAction.set(action);
+                        lastActionInput.set(actionInput);
+                        lastToolSelectionResponse.set(thoughtResponse);
+                        lastToolCallId.set(toolCallId);
+
+                        traceTensors
+                            .add(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(List.of(ModelTensor.builder().name("response").result(thoughtResponse).build()))
+                                    .build()
+                            );
+
+                        saveTraceData(
+                            memory,
+                            memory != null ? memory.getType() : null,
+                            question,
+                            thoughtResponse,
+                            sessionId,
+                            traceDisabled,
+                            parentInteractionId,
+                            traceNumber,
+                            "LLM"
+                        );
+
+                        if (nextStepListener == null) {
+                            handleMaxIterationsReached(
+                                sessionId,
+                                listener,
+                                question,
+                                parentInteractionId,
+                                verbose,
+                                traceDisabled,
+                                traceTensors,
+                                memory,
+                                traceNumber,
+                                additionalInfo,
+                                lastThought,
+                                maxIterations,
+                                tools,
+                                llm,
+                                tenantId,
+                                tmpParameters,
+                                tokenTracker,
+                                functionCalling
+                            );
+                            return;
+                        }
+
+                        if (tools.containsKey(action)) {
+                            // Check if this is a backend tool - if it is, execute it normally in the ReAct loop
+                            // If it's NOT a backend tool, it must be a frontend tool, so break out of the loop
+                            boolean isBackendTool = backendTools != null && backendTools.containsKey(action);
+
+                            log.info("AG-UI: Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
+
+                            if (!isBackendTool) {
+                                // For frontend tool use, we close the response stream and wait for frontend tool result
+                                if (streamingWrapper != null) {
+                                    streamingWrapper.sendRunFinishedAndCloseStream(sessionId, parentInteractionId);
+                                }
+                            } else {
+                                // Handle backend tool normally
+                                Map<String, String> toolParams = constructToolParams(
+                                    tools,
+                                    toolSpecMap,
+                                    question,
+                                    lastActionInput,
+                                    action,
+                                    actionInput
+                                );
+                                toolParams.put(TENANT_ID_FIELD, tenantId);
+                                lastToolParams.clear();
+                                toolParams.forEach((key, value) -> {
+                                    // For the case like tenant id is null
+                                    if (key != null && value != null) {
+                                        lastToolParams.put(key, value);
+                                    }
+                                });
+                                runTool(
+                                    tools,
+                                    toolSpecMap,
+                                    tmpParameters,
+                                    (ActionListener<Object>) nextStepListener,
+                                    action,
+                                    actionInput,
+                                    toolParams,
+                                    interactions,
+                                    toolCallId,
+                                    functionCalling,
+                                    hookRegistry
+                                );
+                            }
+
+                        } else {
+                            String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                            StringSubstitutor substitutor = new StringSubstitutor(
+                                Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                                "${parameters.",
+                                "}"
+                            );
+                            newPrompt.set(substitutor.replace(finalPrompt));
+                            tmpParameters.put(PROMPT, newPrompt.get());
+                            ((ActionListener<Object>) nextStepListener).onResponse(res);
+                        }
+                    } else {
+                        // filteredOutput is the POST Tool output
+                        Object filteredOutput = filterToolOutput(lastToolParams, output);
+                        addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
+
+                        String toolResponse = constructToolResponse(
+                            tmpParameters,
+                            lastAction,
+                            lastActionInput,
+                            lastToolSelectionResponse,
+                            filteredOutput
+                        );
+                        scratchpadBuilder.append(toolResponse).append("\n\n");
+
+                        // Record tool result for summary
+                        String outputSummary = outputToOutputString(filteredOutput);
+
+                        // Save trace with processed output
+                        saveTraceData(
+                            memory,
+                            "ReAct",
+                            lastActionInput.get(),
+                            outputToOutputString(filteredOutput),
+                            sessionId,
+                            traceDisabled,
+                            parentInteractionId,
+                            traceNumber,
+                            lastAction.get()
+                        );
+
+                        StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
                         newPrompt.set(substitutor.replace(finalPrompt));
                         tmpParameters.put(PROMPT, newPrompt.get());
-                        ((ActionListener<Object>) nextStepListener).onResponse(res);
-                    }
-                } else {
-                    // filteredOutput is the POST Tool output
-                    Object filteredOutput = filterToolOutput(lastToolParams, output);
-                    addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
-
-                    String toolResponse = constructToolResponse(
-                        tmpParameters,
-                        lastAction,
-                        lastActionInput,
-                        lastToolSelectionResponse,
-                        filteredOutput
-                    );
-                    scratchpadBuilder.append(toolResponse).append("\n\n");
-
-                    // Record tool result for summary
-                    String outputSummary = outputToOutputString(filteredOutput);
-
-                    // Save trace with processed output
-                    saveTraceData(
-                        memory,
-                        "ReAct",
-                        lastActionInput.get(),
-                        outputToOutputString(filteredOutput),
-                        sessionId,
-                        traceDisabled,
-                        parentInteractionId,
-                        traceNumber,
-                        lastAction.get()
-                    );
-
-                    StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
-                    newPrompt.set(substitutor.replace(finalPrompt));
-                    tmpParameters.put(PROMPT, newPrompt.get());
-                    if (!interactions.isEmpty()) {
-                        String interactionsStr = String.join(", ", interactions);
-                        // Set the interactions parameter - this will be processed by context management
-                        tmpParameters.put(INTERACTIONS, ", " + interactionsStr);
-                    }
-
-                    sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
-
-                    String toolOutputString = outputToOutputString(filteredOutput);
-
-                    if (streamingWrapper != null) {
-                        if (isAGUIAgent(parameters)) {
-                            streamingWrapper.sendBackendToolResult(lastToolCallId.get(), toolOutputString, sessionId, parentInteractionId);
-                        } else {
-                            streamingWrapper.sendToolResponse(toolOutputString, sessionId, parentInteractionId);
+                        if (!interactions.isEmpty()) {
+                            String interactionsStr = String.join(", ", interactions);
+                            // Set the interactions parameter - this will be processed by context management
+                            tmpParameters.put(INTERACTIONS, ", " + interactionsStr);
                         }
-                    }
 
-                    traceTensors
-                        .add(
-                            ModelTensors
-                                .builder()
-                                .mlModelTensors(
-                                    Collections
-                                        .singletonList(
-                                            ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build()
-                                        )
-                                )
-                                .build()
-                        );
+                        sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
 
-                    if (finalI == maxIterations - 1) {
-                        handleMaxIterationsReached(
-                            sessionId,
-                            listener,
-                            question,
-                            parentInteractionId,
-                            verbose,
-                            traceDisabled,
-                            traceTensors,
-                            memory,
-                            traceNumber,
-                            additionalInfo,
-                            lastThought,
-                            maxIterations,
-                            tools,
-                            llm,
-                            tenantId,
-                            tmpParameters
-                        );
-                        return;
+                        String toolOutputString = outputToOutputString(filteredOutput);
+
+                        if (streamingWrapper != null) {
+                            if (isAGUIAgent(parameters)) {
+                                streamingWrapper
+                                    .sendBackendToolResult(lastToolCallId.get(), toolOutputString, sessionId, parentInteractionId);
+                            } else {
+                                streamingWrapper.sendToolResponse(toolOutputString, sessionId, parentInteractionId);
+                            }
+                        }
+
+                        traceTensors
+                            .add(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(
+                                        Collections
+                                            .singletonList(
+                                                ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build()
+                                            )
+                                    )
+                                    .build()
+                            );
+
+                        if (finalI == maxIterations - 1) {
+                            handleMaxIterationsReached(
+                                sessionId,
+                                listener,
+                                question,
+                                parentInteractionId,
+                                verbose,
+                                traceDisabled,
+                                traceTensors,
+                                memory,
+                                traceNumber,
+                                additionalInfo,
+                                lastThought,
+                                maxIterations,
+                                tools,
+                                llm,
+                                tenantId,
+                                tmpParameters,
+                                tokenTracker,
+                                functionCalling
+                            );
+                            return;
+                        }
+                        // Emit PRE_LLM hook event
+                        processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
+                        ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+                        streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                     }
-                    // Emit PRE_LLM hook event
-                    processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
-                    ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
-                    streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
+                }, e -> {
+                    log.error("Failed to run chat agent", e);
+                    listener.onFailure(e);
+                });
+                if (nextStepListener != null) {
+                    lastStepListener = nextStepListener;
                 }
-            }, e -> {
-                log.error("Failed to run chat agent", e);
-                listener.onFailure(e);
-            });
-            if (nextStepListener != null) {
-                lastStepListener = nextStepListener;
             }
-        }
 
-        // Emit PRE_LLM hook event for initial LLM call
-        tmpParameters.put("_llm_model_id", llm.getModelId());
-        processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
-        ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
-        streamingWrapper.executeRequest(request, firstListener);
+            // Emit PRE_LLM hook event for initial LLM call
+            tmpParameters.put("_llm_model_id", llm.getModelId());
+            processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
+            ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+            streamingWrapper.executeRequest(request, firstListener);
 
+        }, e -> {
+            log.error("Failed to resolve model metadata", e);
+            listener.onFailure(e);
+        }));
     }
 
     private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {
@@ -892,11 +970,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Memory memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
-        String finalAnswer
+        String finalAnswer,
+        AgentTokenTracker tokenTracker,
+        String tenantId
     ) {
-        // Send completion chunk for streaming
-        streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
-
         if (memory != null) {
             String copyOfFinalAnswer = finalAnswer;
             ActionListener saveTraceListener = ActionListener.wrap(r -> {
@@ -905,22 +982,35 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         parentInteractionId,
                         Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
                         ActionListener.wrap(res -> {
-                            returnFinalResponse(
-                                sessionId,
-                                listener,
-                                parentInteractionId,
-                                verbose,
-                                cotModelTensors,
-                                additionalInfo,
-                                copyOfFinalAnswer
-                            );
+                            streamingWrapper
+                                .sendFinalResponse(
+                                    sessionId,
+                                    listener,
+                                    parentInteractionId,
+                                    verbose,
+                                    cotModelTensors,
+                                    additionalInfo,
+                                    copyOfFinalAnswer,
+                                    tokenTracker,
+                                    tenantId
+                                );
                         }, e -> { listener.onFailure(e); })
                     );
             }, e -> { listener.onFailure(e); });
             saveMessage(memory, question, finalAnswer, sessionId, parentInteractionId, traceNumber, true, traceDisabled, saveTraceListener);
         } else {
             streamingWrapper
-                .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+                .sendFinalResponse(
+                    sessionId,
+                    listener,
+                    parentInteractionId,
+                    verbose,
+                    cotModelTensors,
+                    additionalInfo,
+                    finalAnswer,
+                    tokenTracker,
+                    tenantId
+                );
         }
     }
 
@@ -1029,7 +1119,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         List<ModelTensors> cotModelTensors, // AtomicBoolean getFinalAnswer,
         Map<String, Object> additionalInfo,
-        String finalAnswer2
+        String finalAnswer2,
+        AgentTokenTracker tokenTracker,
+        String tenantId
     ) {
         cotModelTensors
             .add(
@@ -1047,11 +1139,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .build()
                 )
         );
-        if (verbose) {
-            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
-        } else {
-            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
-        }
+
+        List<ModelTensors> responseTensors = verbose ? cotModelTensors : finalModelTensors;
+
+        AgentUtils.addTokenUsageTensor(responseTensors, tokenTracker, tenantId);
+
+        listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(responseTensors).build());
     }
 
     private void handleMaxIterationsReached(
@@ -1070,7 +1163,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool> tools,
         LLMSpec llmSpec,
         String tenantId,
-        Map<String, String> parameters
+        Map<String, String> parameters,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
     ) {
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             sendTraditionalMaxIterationsResponse(
@@ -1085,7 +1180,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 traceNumber,
                 additionalInfo,
                 response,
-                tools
+                tools,
+                tokenTracker,
+                tenantId
             );
         }, listener::onFailure);
 
@@ -1095,6 +1192,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
             tenantId,
             question,
             parameters,
+            tokenTracker,
+            functionCalling,
             ActionListener
                 .wrap(
                     summary -> responseListener
@@ -1125,7 +1224,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         String response,
-        Map<String, Tool> tools
+        Map<String, Tool> tools,
+        AgentTokenTracker tokenTracker,
+        String tenantId
     ) {
         sendFinalAnswer(
             sessionId,
@@ -1138,7 +1239,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
             memory,
             traceNumber,
             additionalInfo,
-            response
+            response,
+            tokenTracker,
+            tenantId
         );
         cleanUpResource(tools);
     }
@@ -1149,6 +1252,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String tenantId,
         String question,
         Map<String, String> parameter,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling,
         ActionListener<String> listener
     ) {
         if (stepsSummary == null || stepsSummary.isEmpty()) {
@@ -1196,6 +1301,27 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tenantId
             );
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
+                // Extract token usage from summary generation LLM call
+                if (tokenTracker != null && functionCalling != null && response != null) {
+                    try {
+                        ModelTensorOutput tmpOutput = (ModelTensorOutput) response.getOutput();
+                        if (tmpOutput != null && tmpOutput.getMlModelOutputs() != null && !tmpOutput.getMlModelOutputs().isEmpty()) {
+                            Map<String, ?> dataAsMap = tmpOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+
+                            if (dataAsMap != null) {
+                                // Extract token usage using FunctionCalling
+                                TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
+
+                                if (usage != null) {
+                                    tokenTracker.recordTurn(llmSpec.getModelId(), usage);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.debug("Failed to extract token usage from summary generation", e);
+                    }
+                }
+
                 String summary = extractSummaryFromResponse(response, summaryParams);
                 if (summary == null || summary.trim().isEmpty()) {
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));

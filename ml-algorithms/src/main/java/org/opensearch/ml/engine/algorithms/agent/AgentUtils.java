@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENDPOINT_FIELD;
@@ -80,6 +81,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -89,6 +91,7 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
@@ -140,6 +143,7 @@ public class AgentUtils {
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
     public static final String TOOL_CALLS_TOOL_INPUT = "tool_calls.tool_input";
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
+    public static final String TOKEN_USAGE_PATH = "token_usage_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
     private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
@@ -1277,6 +1281,236 @@ public class AgentUtils {
             return agentType == MLAgentType.AG_UI;
         } catch (IllegalArgumentException e) {
             return false;
+        }
+    }
+
+    public static void getModel(
+        String modelId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        ActionListener<MLModel> listener
+    ) {
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_MODEL_INDEX)
+            .id(modelId)
+            .tenantId(tenantId)
+            .build();
+
+        try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                log.debug("Completed Get Model Request, id:{}", modelId);
+                ctx.restore();
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                        log.error("Failed to get model index", cause);
+                        listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                    } else {
+                        log.error("Failed to get ML model {}", modelId, cause);
+                        listener.onFailure(cause);
+                    }
+                } else {
+                    try {
+                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        if (gr != null && gr.isExists()) {
+                            try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, gr.getSourceAsBytesRef())) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                MLModel mlModel = MLModel.parse(parser, null);
+                                listener.onResponse(mlModel);
+                            } catch (Exception e) {
+                                log.error("Failed to parse model:{}", modelId);
+                                listener.onFailure(e);
+                            }
+                        } else {
+                            listener.onFailure(new OpenSearchStatusException("Failed to find model:" + modelId, RestStatus.NOT_FOUND));
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Extracts a Long value from a map, handling both Number and String types
+     *
+     * @param map the map to extract from
+     * @param fieldName the field name
+     * @return Long value or null if extraction fails
+     */
+    public static Long getLongValue(Map<String, Object> map, String fieldName) {
+        Object value = map.get(fieldName);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Long.parseLong((String) value);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the model endpoint URL from an MLModel.
+     * If the model has an inline connector, uses it directly.
+     * If the model has a connector ID, fetches the connector first.
+     * Then resolves the endpoint URL using connector parameters.
+     *
+     * @param mlModel the MLModel to resolve URL from
+     * @param tenantId the tenant ID
+     * @param sdkClient the SDK client for async operations
+     * @param client the OpenSearch client for thread context
+     * @param listener the action listener to handle the resolved URL
+     */
+    public static void resolveModelUrl(
+        MLModel mlModel,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        ActionListener<String> listener
+    ) {
+        // Check if model has inline connector
+        if (mlModel.getConnector() != null) {
+            try {
+                String url = extractUrlFromConnector(mlModel.getConnector());
+                listener.onResponse(url);
+            } catch (Exception e) {
+                log.debug("Failed to resolve URL from inline connector", e);
+                listener.onFailure(e);
+            }
+            return;
+        }
+
+        // Check if model has connector ID
+        if (mlModel.getConnectorId() != null) {
+            getConnector(mlModel.getConnectorId(), tenantId, sdkClient, client, ActionListener.wrap(connector -> {
+                try {
+                    String url = extractUrlFromConnector(connector);
+                    listener.onResponse(url);
+                } catch (Exception e) {
+                    log.debug("Failed to resolve URL from connector ID", e);
+                    listener.onFailure(e);
+                }
+            }, listener::onFailure));
+            return;
+        }
+
+        // No connector available
+        listener.onFailure(new IllegalStateException("Model has neither connector nor connector ID"));
+    }
+
+    /**
+     * Extracts the endpoint URL from a connector using its parameters.
+     *
+     * @param connector the connector to extract URL from
+     * @return the resolved endpoint URL
+     */
+    private static String extractUrlFromConnector(Connector connector) {
+        if (connector == null) {
+            throw new IllegalArgumentException("Connector cannot be null");
+        }
+
+        Map<String, String> parameters = connector.getParameters();
+        if (parameters == null) {
+            parameters = Map.of();
+        }
+
+        // Get the predict endpoint URL
+        String endpoint = connector.getActionEndpoint("predict", parameters);
+        if (endpoint == null || endpoint.isEmpty()) {
+            throw new IllegalStateException("Connector has no predict endpoint");
+        }
+
+        return endpoint;
+    }
+
+    /**
+     * Resolves model metadata (name and URL) for token tracking.
+     * Combines getModel + resolveModelUrl into a single call that never fails —
+     * always returns best-effort data with fallbacks.
+     *
+     * @param modelId the model ID
+     * @param tenantId the tenant ID
+     * @param sdkClient the SDK client (may be null)
+     * @param client the OpenSearch client
+     * @param xContentRegistry the content registry for parsing
+     * @param listener receives String[]{url, name} — never called with onFailure
+     */
+    public static void getModelMetadata(
+        String modelId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        ActionListener<String[]> listener
+    ) {
+        // Primarily for test compatibility — sdkClient may be null in unit tests.
+        // TODO: Update tests to mock this
+        if (sdkClient == null) {
+            listener.onResponse(new String[] { modelId, modelId });
+            return;
+        }
+
+        getModel(modelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(mlModel -> {
+            String modelName = mlModel.getName();
+            resolveModelUrl(
+                mlModel,
+                tenantId,
+                sdkClient,
+                client,
+                ActionListener.wrap(url -> { listener.onResponse(new String[] { url, modelName }); }, e -> {
+                    log.debug("Failed to resolve model URL, using model ID as fallback", e);
+                    listener.onResponse(new String[] { modelId, modelName });
+                })
+            );
+        }, e -> {
+            log.debug("Failed to fetch model for URL resolution, using model ID as fallback", e);
+            listener.onResponse(new String[] { modelId, modelId });
+        }));
+    }
+
+    /**
+     * Adds a token usage tensor to the response and logs per-model usage.
+     * Shared utility used by both MLChatAgentRunner and MLPlanExecuteAndReflectAgentRunner.
+     *
+     * @param modelTensors the response tensor list to add to
+     * @param tokenTracker the token tracker (may be null)
+     * @param tenantId the tenant ID for logging (may be null)
+     */
+    @SuppressWarnings("unchecked")
+    public static void addTokenUsageTensor(List<ModelTensors> modelTensors, AgentTokenTracker tokenTracker, String tenantId) {
+        if (tokenTracker == null || !tokenTracker.hasUsage()) {
+            return;
+        }
+
+        Map<String, Object> tokenUsageMap = tokenTracker.toOutputMap();
+        modelTensors
+            .add(
+                ModelTensors
+                    .builder()
+                    .mlModelTensors(List.of(ModelTensor.builder().name(AgentTokenTracker.TOKEN_USAGE).dataAsMap(tokenUsageMap).build()))
+                    .build()
+            );
+
+        // Log structured token usage for each model
+        Object perModelObj = tokenUsageMap.get(AgentTokenTracker.PER_MODEL_USAGE);
+        if (perModelObj instanceof List) {
+            List<Map<String, Object>> perModelUsage = (List<Map<String, Object>>) perModelObj;
+            long eventTime = System.currentTimeMillis();
+            for (Map<String, Object> modelUsage : perModelUsage) {
+                Map<String, Object> logEntry = new java.util.LinkedHashMap<>();
+                logEntry.put("tenantId", tenantId);
+                logEntry.put("model_usage", modelUsage);
+                logEntry.put("eventTime", eventTime);
+                log.info("{}", StringUtils.toJson(logEntry));
+            }
         }
     }
 }
