@@ -543,6 +543,12 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
 
     }
 
+    /**
+     * Tests the successful rewriting of a term query to a geometry query based on the model output
+     * and the provided query template, where the model output is a list of coordinates.
+     *
+     * @throws Exception if an error occurs during the test
+     */
     public void testExecute_rewriteListFromTermQueryToGeometryQuerySuccess() throws Exception {
         String queryTemplate = "{\n"
             + "  \"query\": {\n"
