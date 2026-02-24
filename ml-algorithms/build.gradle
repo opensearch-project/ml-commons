@@ -4,6 +4,7 @@
  */
 
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.opensearch.gradle.info.FipsBuildParams
 
 plugins {
     id 'java'
@@ -78,7 +79,12 @@ dependencies {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
     // needed by aws-encryption-sdk-java
-    implementation "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    // When building with -Pcrypto.standard=FIPS-140-3, bcFips jars are provided by OpenSearch
+    if (FipsBuildParams.isInFipsMode()) {
+        compileOnly "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    } else {
+        implementation "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    }
     compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
