@@ -480,8 +480,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         sessionTerm.put("namespace." + SESSION_ID_FIELD, conversationId);
         must.add(Map.of("term", sessionTerm));
 
-        // Must not have trace_number (exclude traces)
-        mustNot.add(Map.of("exists", Map.of("field", "structured_data_blob.trace_number")));
+        // Must not be trace (exclude traces)
+        mustNot.add(Map.of("term", Map.of("metadata.type", "trace")));
 
         bool.put("must", must);
         bool.put("must_not", mustNot);

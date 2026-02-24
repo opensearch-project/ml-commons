@@ -28,16 +28,16 @@ import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
 
-public class GeminiGenerateContentModelProviderTest {
+public class GeminiV1BetaGenerateContentModelProviderTest {
 
-    private GeminiGenerateContentModelProvider provider;
+    private GeminiV1BetaGenerateContentModelProvider provider;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
-        provider = new GeminiGenerateContentModelProvider();
+        provider = new GeminiV1BetaGenerateContentModelProvider();
     }
 
     @Test

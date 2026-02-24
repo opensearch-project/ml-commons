@@ -28,7 +28,7 @@ public class FunctionCallingFactory {
             case LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1:
                 return new BedrockConverseDeepseekR1FunctionCalling();
             case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
-                return new GeminiGenerateContentFunctionCalling();
+                return new GeminiV1BetaGenerateContentFunctionCalling();
             default:
                 throw new IllegalArgumentException("Invalid _llm_interface");
         }

@@ -159,4 +159,78 @@ public class BedrockStreamingHandlerTest {
         assertNull(result.trace());
         assertEquals("async", result.streamProcessingModeAsString());
     }
+
+    @Test
+    public void testBuildConverseStreamRequest_withImageContent() throws Exception {
+        String payloadJson = """
+            {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "text": "Describe this image"
+                    },
+                    {
+                      "image": {
+                        "format": "png",
+                        "source": {
+                          "bytes": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("model", "anthropic.claude-v2");
+
+        ConverseStreamRequest request = handler.buildConverseStreamRequest(payloadJson, parameters);
+
+        assertNotNull(request);
+        assertNotNull(request.messages());
+        assertEquals(1, request.messages().size());
+
+        // Verify message has both text and image content
+        assertEquals(2, request.messages().get(0).content().size());
+        assertNotNull(request.messages().get(0).content().get(0).text());
+        assertNotNull(request.messages().get(0).content().get(1).image());
+    }
+
+    @Test
+    public void testBuildConverseStreamRequest_withImageContentMultipleFormats() throws Exception {
+        String payloadJson = """
+            {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "image": {
+                        "format": "jpeg",
+                        "source": {
+                          "bytes": "base64ImageData"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("model", "anthropic.claude-v2");
+
+        ConverseStreamRequest request = handler.buildConverseStreamRequest(payloadJson, parameters);
+
+        assertNotNull(request);
+        assertNotNull(request.messages());
+        assertEquals(1, request.messages().size());
+        assertNotNull(request.messages().get(0).content().get(0).image());
+        assertEquals("jpeg", request.messages().get(0).content().get(0).image().format().toString());
+    }
 }

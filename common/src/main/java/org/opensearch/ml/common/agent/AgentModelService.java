@@ -72,10 +72,7 @@ public class AgentModelService {
         }
 
         // Validate that the provider type is supported
-        try {
-            ModelProviderType.from(modelSpec.getModelProvider());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Unsupported model provider: " + modelSpec.getModelProvider());
-        }
+        // Will Re-throw the original exception from ModelProviderType
+        ModelProviderType.from(modelSpec.getModelProvider());
     }
 }

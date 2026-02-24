@@ -261,10 +261,10 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         }
 
         // Build search query for working memory by session_id, filtering only final messages (not traces)
-        // Match ConversationIndexMemory pattern: exclude entries with trace_number
+        // Match ConversationIndexMemory pattern: exclude entries tagged as trace
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
         boolQuery.must(QueryBuilders.termQuery("namespace." + SESSION_ID_FIELD, conversationId));
-        boolQuery.mustNot(QueryBuilders.existsQuery("structured_data_blob.trace_number")); // Exclude traces
+        boolQuery.mustNot(QueryBuilders.termQuery("metadata.type", "trace")); // Exclude traces
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(boolQuery);

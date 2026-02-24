@@ -117,9 +117,4 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
 
         return messages;
     }
-
-    @Override
-    public String formatAGUIToolCalls(String toolCallsJson) {
-        return "{\"role\":\"assistant\",\"tool_calls\":" + toolCallsJson + "}";
-    }
 }

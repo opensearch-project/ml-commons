@@ -5,6 +5,7 @@
 
 
 import org.opensearch.gradle.testclusters.OpenSearchCluster
+import org.opensearch.gradle.info.FipsBuildParams
 
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
@@ -198,6 +199,13 @@ def _numNodes = findProperty('numNodes') as Integer ?: 1
 test {
     include '**/*Tests.class'
     systemProperty 'tests.security.manager', 'false'
+    // In FIPS mode, bc-fips is excluded from the plugin bundle to avoid jar hell with OpenSearch core.
+    // Unit tests don't run inside OpenSearch, so we add bc-fips directly to the test classpath.
+    if (FipsBuildParams.isInFipsMode()) {
+        classpath += configurations.detachedConfiguration(
+            dependencies.create("org.bouncycastle:bc-fips:2.1.2")
+        )
+    }
 }
 
 def opensearch_tmp_dir = rootProject.file('build/private/opensearch_tmp').absoluteFile
@@ -690,6 +698,13 @@ configurations.all {
     exclude group: "org.jetbrains", module: "annotations"
     exclude group: "com.google.guava", module: "failureaccess"
     exclude group: "com.google.errorprone", module: "error_prone_annotations"
+    
+    // When building with -Pcrypto.standard=FIPS-140-3, bcFips jars are provided by OpenSearch
+    // This prevents jar hell when the plugin is installed
+    if (FipsBuildParams.isInFipsMode()) {
+        exclude group: 'org.bouncycastle', module: 'bc-fips'
+    }
+    
     resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'

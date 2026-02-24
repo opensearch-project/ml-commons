@@ -118,11 +118,4 @@ public class BedrockConverseDeepseekR1FunctionCalling implements FunctionCalling
 
         return List.of(toolMessage);
     }
-
-    @Override
-    public String formatAGUIToolCalls(String toolCallsJson) {
-        throw new UnsupportedOperationException(
-            "AG-UI is not yet supported with Deepseek R1, please use a different LLM interface such as bedrock/converse/claude or openai/v1/chat/completions."
-        );
-    }
 }

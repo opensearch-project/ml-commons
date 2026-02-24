@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -39,6 +40,8 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_MODIFIED_FIELD = "last_modified";
     public static final String CREATED_BY_FIELD = "created_by";
+
+    private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[a-z0-9_-]{1,49}$");
 
     /**
      * Unique name for the context management template
@@ -235,9 +238,20 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
      * Validate the template configuration
      */
     public boolean isValid() {
-        if (name == null || name.trim().isEmpty()) {
-            return false;
-        }
+        return isValidName() && isValidHooksAndConfigs();
+    }
+
+    /**
+     * Validate only the template name
+     */
+    public boolean isValidName() {
+        return name != null && VALID_NAME_PATTERN.matcher(name).matches();
+    }
+
+    /**
+     * Validate hooks and context manager configurations
+     */
+    private boolean isValidHooksAndConfigs() {
 
         // Allow null hooks (no context management) but not empty hooks map (misconfiguration)
         if (hooks != null) {
