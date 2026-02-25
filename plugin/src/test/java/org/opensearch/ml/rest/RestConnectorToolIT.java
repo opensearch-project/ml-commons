@@ -117,7 +117,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
             + "        \"connector_id\": \""
             + bedrockClaudeConnectorIdForPredict
             + "\",\n"
-            + "        \"connector_action\": \"predict\"\n"
+            + "        \"connector_action\": \"EXECUTE\"\n"
             + "      }\n"
             + "    }\n"
             + "  ]\n"

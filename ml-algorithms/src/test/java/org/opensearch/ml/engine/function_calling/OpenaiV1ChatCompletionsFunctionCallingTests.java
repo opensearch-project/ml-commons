@@ -89,4 +89,37 @@ public class OpenaiV1ChatCompletionsFunctionCallingTests {
         Assert.assertEquals("test_tool_call_id", message.getToolCallId());
         Assert.assertEquals("test result for openai v1", message.getContent());
     }
+
+    @Test
+    public void supplyParallelToolCalls() {
+        // Test parallel tool calls with unique tool_call_id values
+        List<LLMMessage> messages = functionCalling
+            .supply(
+                Arrays
+                    .asList(
+                        ImmutableMap.of(TOOL_CALL_ID, "tooluse_1", TOOL_RESULT, ImmutableMap.of("text", "result from tool 1")),
+                        ImmutableMap.of(TOOL_CALL_ID, "tooluse_2", TOOL_RESULT, ImmutableMap.of("text", "result from tool 2"))
+                    )
+            );
+
+        Assert.assertEquals(2, messages.size());
+
+        // Verify first message has correct tool_call_id
+        OpenaiMessage message1 = (OpenaiMessage) messages.get(0);
+        Assert.assertEquals("tool", message1.getRole());
+        Assert.assertEquals("tooluse_1", message1.getToolCallId());
+        Assert.assertEquals("result from tool 1", message1.getContent());
+
+        // Verify second message has correct tool_call_id (not duplicate of first)
+        OpenaiMessage message2 = (OpenaiMessage) messages.get(1);
+        Assert.assertEquals("tool", message2.getRole());
+        Assert.assertEquals("tooluse_2", message2.getToolCallId());
+        Assert.assertEquals("result from tool 2", message2.getContent());
+
+        // Verify they are different objects
+        Assert.assertNotSame("Messages should be different objects", message1, message2);
+
+        // Verify tool_call_ids are unique
+        Assert.assertNotEquals("tool_call_id values should be unique", message1.getToolCallId(), message2.getToolCallId());
+    }
 }

@@ -2,10 +2,10 @@ name: Build and Test ml-commons
 # This workflow is triggered on pull requests and push to any branches
 on:
   push:
-    branches-ignore:
-      - 'backport/**'
-      - 'create-pull-request/**'
-      - 'dependabot/**'
+    branches:
+      - 'main'
+      - '[0-9]+.[0-9]+'
+      - '[0-9]+.x'
   pull_request_target:
     types: [opened, synchronize, reopened]
 
@@ -68,17 +68,11 @@ jobs:
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
+
       - name: Checkout MLCommons
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
-# https://github.com/actions/runner-images/issues/2840#issuecomment-790492173
-      - name: Remove unnecessary files Linux
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          rm -rf /usr/share/dotnet
-          rm -rf "$AGENT_TOOLSDIRECTORY"
           
       - name: Build and Run Tests
         id: step-build-test-linux
@@ -89,9 +83,9 @@ jobs:
                                export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
                                echo "::add-mask::$OPENAI_KEY" &&
                                echo "::add-mask::$COHERE_KEY" &&
-                               echo "build and run tests" && ./gradlew build -x spotlessJava &&
-                               echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
-                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava'
+                               echo "build and run tests" && ./gradlew build "-Pcrypto.standard=FIPS-140-3" -x spotlessJava &&
+                               echo "Publish to Maven Local" && ./gradlew publishToMavenLocal "-Pcrypto.standard=FIPS-140-3" -x spotlessJava &&
+                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 "-Pcrypto.standard=FIPS-140-3" -x spotlessJava'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
@@ -195,10 +189,10 @@ jobs:
           if [ $security -gt 0 ]
           then
             echo "Security plugin is available"
-            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=${{ steps.genpass.outputs.password }} -x spotlessJava
+            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=${{ steps.genpass.outputs.password }} "-Pcrypto.standard=FIPS-140-3" -x spotlessJava
           else
             echo "Security plugin is NOT available"
-            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -x spotlessJava
+            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" "-Pcrypto.standard=FIPS-140-3" -x spotlessJava
           fi
 
       - name: Upload Coverage Report
@@ -241,10 +235,10 @@ jobs:
           export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
           echo "::add-mask::$OPENAI_KEY"
           echo "::add-mask::$COHERE_KEY"
-          ./gradlew.bat build -x spotlessJava
+          ./gradlew.bat build "-Pcrypto.standard=FIPS-140-3" -x spotlessJava
       - name: Publish to Maven Local
         run: |
-          ./gradlew publishToMavenLocal -x spotlessJava
+          ./gradlew publishToMavenLocal "-Pcrypto.standard=FIPS-140-3" -x spotlessJava
 #      - name: Multi Nodes Integration Testing
 #        shell: bash
 #        run: |

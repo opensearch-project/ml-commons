@@ -15,6 +15,9 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_REGION;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.TestHelper.getAnomalyLocalizationRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteToolRestRequest;
@@ -33,9 +36,12 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
@@ -53,6 +59,7 @@ import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.RemoteTransportException;
@@ -116,7 +123,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequest() throws IOException {
         RestRequest request = getLocalSampleCalculatorRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -125,7 +132,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequestMCorr() throws IOException {
         RestRequest request = getMetricsCorrelationRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -134,7 +141,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequestAgent() throws IOException {
         RestRequest request = getExecuteAgentRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -143,7 +150,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequestTool() throws IOException {
         RestRequest request = getExecuteToolRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -235,6 +242,30 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
         when(mlFeatureEnabledSetting.isToolExecuteEnabled()).thenReturn(false);
         assertThrows(IllegalStateException.class, () -> restMLExecuteAction.handleRequest(request, channel, client));
+    }
+
+    public void testPrepareRequestAgentWithStandardizedInput_disabled() {
+        RestRequest request = getExecuteAgentWithStandardizedInputRestRequest();
+
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(false);
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> restMLExecuteAction.handleRequest(request, channel, client)
+        );
+        assertTrue(exception.getMessage().contains("Standardized input cannot be used"));
+        assertTrue(exception.getMessage().contains("unified agent API"));
+    }
+
+    public void testPrepareRequestAgentWithStandardizedInput_enabled() throws Exception {
+        RestRequest request = getExecuteAgentWithStandardizedInputRestRequest();
+
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(true);
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
     }
 
     public void testPrepareRequestClientException() throws Exception {
@@ -493,5 +524,85 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         String expectedError =
             "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\",\"type\":\"IllegalArgumentException\"},\"status\":400}";
         assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    private RestRequest getExecuteAgentWithStandardizedInputRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test_agent_id");
+        final String requestContent = "{\"input\":\"What is the weather today?\"}}";
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
+    }
+
+    public void testAgentExecutionWithMcpHeaders_FeatureDisabled() throws IOException {
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(false);
+        
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withParams(params)
+            .withHeaders(headers)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> restMLExecuteAction.getRequest(request, client)
+        );
+        assertTrue(exception.getMessage().contains("MCP header passthrough is not enabled"));
+        assertTrue(exception.getMessage().contains("plugins.ml_commons.mcp_header_passthrough_enabled"));
+    }
+
+    public void testAgentExecutionWithMcpHeaders_FeatureEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+        
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withParams(params)
+            .withHeaders(headers)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
+
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
+
+        // Verify request was created successfully
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
+
+        // Verify headers were put into ThreadContext
+        assertEquals("test-key", client.threadPool().getThreadContext().getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader(MCP_HEADER_AWS_REGION));
+    }
+
+    public void testAgentExecutionWithoutMcpHeaders() throws IOException {
+        // No MCP headers, feature flag state shouldn't matter
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(false);
+        
+        RestRequest request = getExecuteAgentRestRequest();
+
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
+
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
     }
 }

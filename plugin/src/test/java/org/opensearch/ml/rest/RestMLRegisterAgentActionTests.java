@@ -122,10 +122,42 @@ public class RestMLRegisterAgentActionTests extends OpenSearchTestCase {
         restMLRegisterAgentAction.handleRequest(request, channel, client);
     }
 
+    public void testRegisterAgentWithModelWhenUnifiedAgentApiDisabled() throws Exception {
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(false);
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unified agent API is not enabled. To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled");
+        RestRequest request = getRestRequestWithModel();
+        restMLRegisterAgentAction.handleRequest(request, channel, client);
+    }
+
+    public void testRegisterAgentWithModelWhenUnifiedAgentApiEnabled() throws Exception {
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(true);
+        RestRequest request = getRestRequestWithModel();
+        restMLRegisterAgentAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLRegisterAgentRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentRequest.class);
+        verify(client, times(1)).execute(eq(MLRegisterAgentAction.INSTANCE), argumentCaptor.capture(), any());
+        MLAgent mlAgent = argumentCaptor.getValue().getMlAgent();
+        assertEquals("testAgentWithModel", mlAgent.getName());
+        assertNotNull(mlAgent.getModel());
+    }
+
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> agentData = Map
             .of("name", "testAgentName", "description", "This is a test agent description", "type", "FLOW");
+        String requestContent = new Gson().toJson(agentData);
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/agents/_register")
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+    }
+
+    private RestRequest getRestRequestWithModel() {
+        RestRequest.Method method = RestRequest.Method.POST;
+        final Map<String, Object> modelData = Map.of("model_provider", "bedrock", "model_id", "anthropic.claude-v2");
+        final Map<String, Object> agentData = Map
+            .of("name", "testAgentWithModel", "description", "Agent with model", "type", "CONVERSATIONAL", "model", modelData);
         String requestContent = new Gson().toJson(agentData);
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)

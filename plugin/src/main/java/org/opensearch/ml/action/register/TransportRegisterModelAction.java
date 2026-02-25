@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALL
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.updateRegisterModelInputModelInterfaceFieldsByConnector;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_MODEL_URL;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -23,6 +24,7 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -33,6 +35,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
@@ -165,9 +168,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             return;
         }
         if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
-        if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
+        if (registerModelInput.getUrl() != null && !isModelUrlAllowed && !isMetricsCorrelation(registerModelInput)) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
@@ -197,6 +200,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         } else {
             checkUserAccess(registerModelInput, listener, false);
         }
+    }
+
+    private boolean isMetricsCorrelation(MLRegisterModelInput registerModelInput) {
+        return registerModelInput.getFunctionName() == FunctionName.METRICS_CORRELATION
+            && registerModelInput.getUrl().equals(MCORR_MODEL_URL);
     }
 
     private void checkUserAccess(

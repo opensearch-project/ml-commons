@@ -98,7 +98,7 @@ public class MLIndicesHandler {
      * pre-populated. If this is incorrect, it will result in unwanted early returns without checking the clusterService.
      */
     public static boolean doesMultiTenantIndexExist(ClusterService clusterService, boolean isMultiTenancyEnabled, String indexName) {
-        return isMultiTenancyEnabled || clusterService.state().metadata().hasIndex(indexName);
+        return (indexName.startsWith(".") && isMultiTenancyEnabled) || clusterService.state().metadata().hasIndex(indexName);
     }
 
     public void initModelGroupIndexIfAbsent(ActionListener<Boolean> listener) {
@@ -459,7 +459,7 @@ public class MLIndicesHandler {
 
     /**
      * Check if we should update index based on schema version.
-     * 
+     *
      * @param indexName  index name
      * @param newVersion new index mapping version
      * @param listener   action listener, if should update index, will pass true to

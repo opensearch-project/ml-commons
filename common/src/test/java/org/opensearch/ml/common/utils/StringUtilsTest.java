@@ -13,6 +13,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
@@ -35,6 +37,7 @@ import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.TypeAdapter;
@@ -78,6 +81,95 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void isJsonOrNdjson_NullInput() {
+        assertFalse(StringUtils.isJsonOrNdjson(null));
+    }
+
+    @Test
+    public void isJsonOrNdjson_BlankInput() {
+        assertFalse(StringUtils.isJsonOrNdjson(""));
+        assertFalse(StringUtils.isJsonOrNdjson("   "));
+        assertFalse(StringUtils.isJsonOrNdjson("\n"));
+        assertFalse(StringUtils.isJsonOrNdjson("\t"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidJson() {
+        // Valid JSON objects should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": 123}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2, 3]"));
+        assertTrue(StringUtils.isJsonOrNdjson("[\"a\", \"b\"]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value\", \"key2\": 123}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidNdjson() {
+        // Valid NDJSON (newline-delimited JSON) should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"index\": {}}\n{\"field\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2, 3]\n[4, 5, 6]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2}\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidNdjsonWithCarriageReturn() {
+        // NDJSON with \r\n line endings should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\r\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\r\n{\"b\": 2}\r\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_NdjsonWithEmptyLines() {
+        // NDJSON with empty lines should return true (empty lines are ignored)
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n  \n{\"b\": 2}"));
+        assertTrue(StringUtils.isJsonOrNdjson("\n{\"key\": \"value\"}\n"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": \"value\"}\n\n"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_InvalidJson() {
+        // Invalid JSON should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{"));
+        assertFalse(StringUtils.isJsonOrNdjson("["));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key\": \"value}"));
+        assertFalse(StringUtils.isJsonOrNdjson("[1, \"a]"));
+        assertFalse(StringUtils.isJsonOrNdjson("not json"));
+        assertFalse(StringUtils.isJsonOrNdjson("123abc"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_InvalidNdjson() {
+        // NDJSON with at least one invalid line should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\ninvalid json"));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n{\"key2\": \"value2}\n{\"key3\": \"value3\"}"));
+        assertFalse(StringUtils.isJsonOrNdjson("invalid\n{\"key\": \"value\"}"));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_MixedValidInvalidLines() {
+        // Mix of valid and invalid JSON lines should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{\"valid\": true}\n{invalid}\n{\"also_valid\": true}"));
+        assertFalse(StringUtils.isJsonOrNdjson("[1, 2, 3]\nplain text\n[4, 5, 6]"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_OpenSearchBulkFormat() {
+        // OpenSearch bulk API format (action/metadata line followed by document)
+        assertTrue(StringUtils.isJsonOrNdjson("{\"index\": {\"_index\": \"test\"}}\n{\"field\": \"value\"}"));
+        assertTrue(
+            StringUtils
+                .isJsonOrNdjson(
+                    "{\"index\": {\"_index\": \"test\", \"_id\": \"1\"}}\n{\"field1\": \"value1\"}\n{\"index\": {\"_index\": \"test\", \"_id\": \"2\"}}\n{\"field2\": \"value2\"}"
+                )
+        );
+    }
+
+    @Test
     public void toUTF8() {
         String rawString = "\uD83D\uDE00\uD83D\uDE0D\uD83D\uDE1C";
         String utf8 = StringUtils.toUTF8(rawString);
@@ -101,7 +193,7 @@ public class StringUtilsTest {
         assertEquals("nested_value", nestedMap.get("nested_key"));
         List list = (List) nestedMap.get("nested_array");
         assertEquals(2, list.size());
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -111,7 +203,7 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -121,7 +213,7 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
         assertTrue(list.get(2) instanceof List);
         assertTrue(list.get(3) instanceof Map);
@@ -1224,5 +1316,104 @@ public class StringUtilsTest {
 
         assertTrue(m.get("fPrim").isJsonPrimitive());
         assertEquals(1.0f, m.get("fPrim").getAsFloat(), 1e-9f);
+    }
+
+    @Test
+    public void testProcessTextDoc_ExceptionMessageEscaping() {
+        // Test the problematic exception message from the error
+        String problematicMessage = "Invalid payload: { \"system\": [{\"text\": \"You are a precise...\"}], \"messages\": [...] }\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(problematicMessage);
+
+        // Verify that problematic characters are escaped
+        assertFalse(
+            "Escaped message should not contain unescaped newlines",
+            escapedMessage.contains("\n") && !escapedMessage.contains("\\n")
+        );
+        assertFalse(
+            "Escaped message should not contain unescaped quotes",
+            escapedMessage.contains("\"") && !escapedMessage.contains("\\\"")
+        );
+    }
+
+    @Test
+    public void testProcessTextDoc_GsonParsingErrorMessageEscaping() {
+        // Test the specific Gson error message pattern
+        String gsonError = "Expected BEGIN_ARRAY but was STRING at line 1 column 1 path $\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(gsonError);
+
+        // The escaped message should be safe for JSON inclusion
+        assertTrue("Escaped message should be safe for JSON", !escapedMessage.contains("\n") || escapedMessage.contains("\\n"));
+    }
+
+    @Test
+    public void testProcessTextDoc_NormalMessagePassthrough() {
+        // Test that normal messages without special characters pass through unchanged
+        String normalMessage = "Tool execution failed with normal error";
+
+        String escapedMessage = StringUtils.processTextDoc(normalMessage);
+
+        // Normal messages should be handled properly
+        assertTrue("Normal messages should be handled properly", escapedMessage.length() > 0);
+    }
+
+    @Test
+    public void testFromJson_NullInput() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> StringUtils.fromJson(null, "response"));
+        assertEquals("JSON string cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testFromJson_ExceedsMaxSize() {
+        // Create a mock MLFeatureEnabledSetting with a small limit for testing
+        MLFeatureEnabledSetting mockSetting = mock(MLFeatureEnabledSetting.class);
+        when(mockSetting.getMaxJsonSize()).thenReturn(100);
+
+        StringUtils.setMLFeatureEnabledSetting(mockSetting);
+
+        try {
+            // Create a JSON string larger than the limit (100 bytes)
+            StringBuilder largeJson = new StringBuilder("{\"data\":\"");
+            for (int i = 0; i < 200; i++) {
+                largeJson.append("a");
+            }
+            largeJson.append("\"}");
+
+            IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> StringUtils.fromJson(largeJson.toString(), "response")
+            );
+            assertTrue(exception.getMessage().contains("JSON string size exceeds maximum allowed size"));
+        } finally {
+            StringUtils.setMLFeatureEnabledSetting(null);
+        }
+    }
+
+    @Test
+    public void testFromJson_DuplicateKeys() {
+        // JSON with duplicate keys should be rejected due to STRICT_DUPLICATE_DETECTION
+        String jsonWithDuplicateKeys = "{\"user\": \"test\", \"role\": \"admin\", \"user\": \"malicious\"}";
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.fromJson(jsonWithDuplicateKeys, "response")
+        );
+        assertTrue(exception.getMessage().contains("Invalid JSON format"));
+        assertTrue(exception.getCause() instanceof com.fasterxml.jackson.core.JsonParseException);
+    }
+
+    @Test
+    public void testFromJson_DuplicateKeysNested() {
+        // Test duplicate keys in nested objects
+        String jsonWithNestedDuplicates = "{\"config\": {\"timeout\": 30, \"retries\": 3, \"timeout\": 60}}";
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.fromJson(jsonWithNestedDuplicates, "response")
+        );
+        assertTrue(exception.getMessage().contains("Invalid JSON format"));
     }
 }

@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -66,7 +68,7 @@ public class RestMLCreateConnectorAction extends BaseRestHandler implements Rest
     @VisibleForTesting
     MLCreateConnectorRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
         if (!request.hasContent()) {
             throw new IOException("Create Connector request has empty body");

@@ -88,7 +88,7 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
             return;
         }
 
-        memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
+        memoryContainerHelper.getMemoryContainer(memoryContainerId, tenantId, ActionListener.wrap(container -> {
             if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
                 actionListener
                     .onFailure(

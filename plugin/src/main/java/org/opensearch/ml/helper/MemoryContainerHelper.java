@@ -105,6 +105,7 @@ public class MemoryContainerHelper {
      * @param listener action listener for the result
      */
     public void getMemoryContainer(String memoryContainerId, String tenantId, ActionListener<MLMemoryContainer> listener) {
+        log.debug("Fetching memory container with ID: {} for tenant: {}", memoryContainerId, tenantId);
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest.Builder requestBuilder = GetDataObjectRequest
             .builder()

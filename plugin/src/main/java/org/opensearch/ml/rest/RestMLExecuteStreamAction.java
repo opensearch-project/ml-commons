@@ -9,12 +9,19 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
+import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.ByteArrayOutputStream;
@@ -25,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -36,6 +44,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.support.XContentHttpChunk;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.rest.RestStatus;
@@ -47,6 +56,10 @@ import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunErrorEvent;
+import org.opensearch.ml.common.agui.RunStartedEvent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
@@ -58,6 +71,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
@@ -65,13 +79,15 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.StreamTransportResponseHandler;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.transport.stream.StreamTransportResponse;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
@@ -131,6 +147,16 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+
+        // Check MCP header passthrough feature flag
+        if (hasMcpHeaders(request) && !mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()) {
+            throw new IllegalArgumentException(
+                "MCP header passthrough is not enabled. To enable, please update the setting: "
+                    + "plugins.ml_commons.mcp_header_passthrough_enabled"
+            );
+        }
+        putMcpRequestHeaders(request, client);
+
         if (!mlFeatureEnabledSetting.isStreamEnabled()) {
             throw new IllegalStateException(STREAM_DISABLED_ERR_MSG);
         }
@@ -146,6 +172,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         }
 
         final StreamingRestChannelConsumer consumer = (channel) -> {
+
+            Supplier<ThreadContext.StoredContext> supplier = client.threadPool().getThreadContext().newRestorableContext(true);
+
             Map<String, List<String>> headers = Map
                 .of(
                     "Content-Type",
@@ -158,9 +187,22 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             channel.prepareResponse(RestStatus.OK, headers);
 
             Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
-                try {
+                try (ThreadContext.StoredContext context = supplier.get()) {
+
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
+                    boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
+
+                    // Send RUN_STARTED event immediately for AG-UI agents (ReAct cycle begins)
+                    if (isAGUI) {
+                        String threadId = extractThreadId(mlExecuteTaskRequest);
+                        String runId = extractRunId(mlExecuteTaskRequest);
+
+                        BaseEvent runStartedEvent = new RunStartedEvent(threadId, runId);
+                        HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
+                        channel.sendChunk(startChunk);
+                        log.debug("AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", threadId, runId);
+                    }
 
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
                     StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
@@ -170,7 +212,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                 MLTaskResponse response = streamResponse.nextResponse();
 
                                 if (response != null) {
-                                    HttpChunk responseChunk = convertToHttpChunk(response);
+                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI);
                                     channel.sendChunk(responseChunk);
 
                                     // Recursively handle the next response
@@ -196,7 +238,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
                         @Override
                         public String executor() {
-                            return ThreadPool.Names.SAME;
+                            return STREAM_EXECUTE_THREAD_POOL;
                         }
 
                         @Override
@@ -302,7 +344,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     /**
      * Creates a MLExecuteTaskRequest from a RestRequest
      *
+     * @param agentId Agent ID
      * @param request RestRequest
+     * @param content Request content
      * @return MLExecuteTaskRequest
      */
     @VisibleForTesting
@@ -319,61 +363,128 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         }
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         FunctionName functionName = FunctionName.AGENT;
-        Input input = MLInput.parse(parser, functionName.name());
-        AgentMLInput agentInput = (AgentMLInput) input;
-        agentInput.setAgentId(agentId);
-        agentInput.setTenantId(tenantId);
-        agentInput.setIsAsync(async);
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
-        inputDataSet.getParameters().put("stream", String.valueOf(true));
+
+        // Check if this is AG-UI input format
+        String requestBodyJson = content.utf8ToString();
+        Input input;
+        if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
+            if (!mlFeatureEnabledSetting.isAGUIEnabled()) {
+                throw new IllegalStateException(ML_COMMONS_AG_UI_DISABLED_MESSAGE);
+            }
+            log.debug("AG-UI: Detected AG-UI input format for streaming agent: {}", agentId);
+            input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
+        } else {
+            input = MLInput.parse(parser, functionName.name());
+            AgentMLInput agentInput = (AgentMLInput) input;
+            agentInput.setAgentId(agentId);
+            agentInput.setTenantId(tenantId);
+            agentInput.setIsAsync(async);
+        }
+
+        if (((AgentMLInput) input).getInputDataset() instanceof RemoteInferenceInputDataSet inputDataSet) {
+            if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+                if (inputDataSet.getParameters() != null) {
+                    String memoryConfig = inputDataSet.getParameters().get(MEMORY_CONFIGURATION_FIELD);
+                    if (!Strings.isNullOrEmpty(memoryConfig)) {
+                        throw new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+                    }
+                }
+            }
+            inputDataSet.getParameters().put("stream", String.valueOf(true));
+        } else {
+            throw new IllegalArgumentException("Expected RemoteInferenceInputDataSet for agent execution");
+        }
         return new MLExecuteTaskRequest(functionName, input);
     }
 
-    private HttpChunk convertToHttpChunk(MLTaskResponse response) throws IOException {
-        String sseData;
+    private boolean isAGUIAgent(MLExecuteTaskRequest request) {
+        if (request.getInput() instanceof AgentMLInput agentInput) {
+            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+
+            // Check if this request came from AG-UI by looking for AG-UI specific parameters
+            return inputDataSet.getParameters().containsKey(AGUI_PARAM_THREAD_ID)
+                || inputDataSet.getParameters().containsKey(AGUI_PARAM_RUN_ID);
+        }
+        return false;
+    }
+
+    private String extractThreadId(MLExecuteTaskRequest request) {
+        if (request.getInput() instanceof AgentMLInput) {
+            AgentMLInput agentInput = (AgentMLInput) request.getInput();
+            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+            String threadId = inputDataSet.getParameters().get(AGUI_PARAM_THREAD_ID);
+            return threadId != null ? threadId : "thread_" + System.currentTimeMillis();
+        }
+        return "thread_" + System.currentTimeMillis();
+    }
+
+    private String extractRunId(MLExecuteTaskRequest request) {
+        if (request.getInput() instanceof AgentMLInput) {
+            AgentMLInput agentInput = (AgentMLInput) request.getInput();
+            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+            String runId = inputDataSet.getParameters().get(AGUI_PARAM_RUN_ID);
+            return runId != null ? runId : "run_" + System.currentTimeMillis();
+        }
+        return "run_" + System.currentTimeMillis();
+    }
+
+    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent) throws IOException {
+        String memoryId = "";
+        String parentInteractionId = "";
+        String content = "";
         boolean isLast = false;
 
         try {
             Map<String, ?> dataMap = extractDataMap(response);
 
             if (dataMap.containsKey("error")) {
-                // Error response
-                String errorMessage = (String) dataMap.get("error");
-                sseData = String.format("data: {\"error\": \"%s\"}\n\n", errorMessage.replace("\"", "\\\"").replace("\n", "\\n"));
+                // Error response - handle errors
+                content = (String) dataMap.get("error");
                 isLast = true;
             } else {
                 // TODO: refactor to handle other types of agents
                 // Regular response - extract values and build proper structure
-                String memoryId = extractTensorResult(response, "memory_id");
-                String parentInteractionId = extractTensorResult(response, "parent_interaction_id");
-                String content = dataMap.containsKey("content") ? (String) dataMap.get("content") : "";
-                isLast = dataMap.containsKey("is_last") ? Boolean.TRUE.equals(dataMap.get("is_last")) : false;
-                boolean finalIsLast = isLast;
-
-                List<ModelTensor> orderedTensors = List
-                    .of(
-                        ModelTensor.builder().name("memory_id").result(memoryId).build(),
-                        ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
-                        ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
-                            {
-                                put("content", content);
-                                put("is_last", finalIsLast);
-                            }
-                        }).build()
-                    );
-
-                ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
-                ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-
-                XContentBuilder builder = XContentFactory.jsonBuilder();
-                tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                sseData = "data: " + builder.toString() + "\n\n";
+                memoryId = extractTensorResult(response, "memory_id");
+                parentInteractionId = extractTensorResult(response, "parent_interaction_id");
+                content = dataMap.containsKey("content") ? (String) dataMap.get("content") : "";
+                isLast = dataMap.containsKey("is_last") && Boolean.TRUE.equals(dataMap.get("is_last"));
             }
         } catch (Exception e) {
             log.error("Failed to process response", e);
-            sseData = "data: {\"error\": \"Processing failed\"}\n\n";
+            content = "Processing failed";
             isLast = true;
         }
+
+        String finalContent = content;
+        boolean finalIsLast = isLast;
+
+        // If this is an AG-UI agent, convert to AG-UI event format
+        if (isAGUIAgent) {
+            return convertToAGUIEvent(content, isLast);
+        }
+
+        // Create ordered tensors
+        List<ModelTensor> orderedTensors = List
+            .of(
+                ModelTensor.builder().name("memory_id").result(memoryId).build(),
+                ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
+                ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
+                    {
+                        put("content", finalContent);
+                        put("is_last", finalIsLast);
+                    }
+                }).build()
+            );
+
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
+
+        ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonData = builder.toString();
+
+        String sseData = "data: " + jsonData + "\n\n";
         return createHttpChunk(sseData, isLast);
     }
 
@@ -405,6 +516,46 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }
         }
         return Map.of();
+    }
+
+    private HttpChunk convertToAGUIEvent(String content, boolean isLast) {
+        log
+            .debug(
+                "RestMLExecuteStreamAction: convertToAGUIEvent() called - contentLength={}, isLast={}",
+                content != null ? content.length() : "null",
+                isLast
+            );
+
+        StringBuilder sseResponse = new StringBuilder();
+
+        if (content != null && !content.isEmpty()) {
+            log.debug("RestMLExecuteStreamAction: Processing content: '{}'", content);
+
+            try {
+                if (StringUtils.isJson(content)) {
+                    JsonElement element = JsonParser.parseString(content);
+                    sseResponse.append("data: ").append(element).append("\n\n");
+                    log.debug("RestMLExecuteStreamAction: Processing json element: '{}'", element);
+                } else {
+                    // catch unexpected content chunks such as Bedrock error
+                    log.warn("Unexpected content received - not valid JSON: {}", content);
+                    BaseEvent runErrorEvent = new RunErrorEvent("Unexpected chunk: " + content, null);
+                    sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
+                    isLast = true;
+                }
+            } catch (Exception e) {
+                log.error("Failed to process AG-UI events chunk content {}", content, e);
+                BaseEvent runErrorEvent = new RunErrorEvent("Unexpected error: " + e.getMessage(), null);
+                sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
+                isLast = true;
+            }
+        } else {
+            log.warn("Received null or empty AG-UI content chunk");
+        }
+
+        String finalSse = sseResponse.toString();
+        log.debug("RestMLExecuteStreamAction: Returning chunk - length={}", finalSse.length());
+        return createHttpChunk(finalSse, isLast);
     }
 
     @VisibleForTesting

@@ -30,6 +30,7 @@ public class ConnectorClientConfigTest {
             .retryTimeoutSeconds(456)
             .maxRetryTimes(789)
             .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .skipSslVerification(true)
             .build();
 
         BytesStreamOutput output = new BytesStreamOutput();
@@ -90,6 +91,7 @@ public class ConnectorClientConfigTest {
             .retryTimeoutSeconds(456)
             .maxRetryTimes(789)
             .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .skipSslVerification(true)
             .build();
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -97,14 +99,14 @@ public class ConnectorClientConfigTest {
         String content = TestHelper.xContentBuilderToString(builder);
 
         String expectedJson = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
-            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\"}";
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true}";
         Assert.assertEquals(expectedJson, content);
     }
 
     @Test
     public void parse() throws IOException {
         String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
-            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\"}";
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -123,6 +125,7 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(456), config.getRetryTimeoutSeconds());
         Assert.assertEquals(Integer.valueOf(789), config.getMaxRetryTimes());
         Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
+        Assert.assertEquals(Boolean.TRUE, config.getSkipSslVerification());
     }
 
     @Test
@@ -140,6 +143,24 @@ public class ConnectorClientConfigTest {
 
         Exception exception = Assert.assertThrows(IllegalArgumentException.class, () -> ConnectorClientConfig.parse(parser));
         Assert.assertEquals("Unsupported retry backoff policy", exception.getMessage());
+    }
+
+    @Test
+    public void parse_whenMalformedSkipSslVerification_thenFail() throws IOException {
+        String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":\"abc\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+
+        Exception exception = Assert.assertThrows(IllegalArgumentException.class, () -> ConnectorClientConfig.parse(parser));
+        Assert
+            .assertTrue("Exception message should mention invalid boolean value", exception.getMessage().contains("Failed to parse value"));
     }
 
     @Test
@@ -166,5 +187,6 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(30), config.getRetryTimeoutSeconds());
         Assert.assertEquals(Integer.valueOf(0), config.getMaxRetryTimes());
         Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
+        Assert.assertEquals(Boolean.FALSE, config.getSkipSslVerification());
     }
 }

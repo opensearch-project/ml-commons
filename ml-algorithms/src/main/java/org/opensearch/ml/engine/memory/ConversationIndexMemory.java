@@ -5,30 +5,20 @@
 
 package org.opensearch.ml.engine.memory;
 
-import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
 
 import java.util.Map;
 
-import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.ml.common.spi.memory.Memory;
-import org.opensearch.ml.common.spi.memory.Message;
+import org.opensearch.ml.common.MLMemoryType;
+import org.opensearch.ml.common.memory.Memory;
+import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
-import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.search.sort.SortOrder;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -36,8 +26,8 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Getter
-public class ConversationIndexMemory implements Memory {
-    public static final String TYPE = "conversation_index";
+public class ConversationIndexMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
+    public static final String TYPE = MLMemoryType.CONVERSATION_INDEX.name();
     public static final String CONVERSATION_ID = "conversation_id";
     public static final String FINAL_ANSWER = "final_answer";
     public static final String CREATED_TIME = "created_time";
@@ -75,28 +65,11 @@ public class ConversationIndexMemory implements Memory {
     }
 
     @Override
-    public void save(String id, Message message) {
-        this.save(id, message, ActionListener.wrap(r -> { log.info("saved message into {} memory, session id: {}", TYPE, id); }, e -> {
-            log.error("Failed to save message to memory", e);
-        }));
+    public String getId() {
+        return this.conversationId;
     }
 
     @Override
-    public void save(String id, Message message, ActionListener listener) {
-        mlIndicesHandler.initMemoryMessageIndex(ActionListener.wrap(created -> {
-            if (created) {
-                IndexRequest indexRequest = new IndexRequest(memoryMessageIndexName).setRefreshPolicy(IMMEDIATE);
-                ConversationIndexMessage conversationIndexMessage = (ConversationIndexMessage) message;
-                XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
-                conversationIndexMessage.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                indexRequest.source(builder);
-                client.index(indexRequest, listener);
-            } else {
-                listener.onFailure(new RuntimeException("Failed to create memory message index"));
-            }
-        }, e -> { listener.onFailure(new RuntimeException("Failed to create memory message index", e)); }));
-    }
-
     public void save(Message message, String parentId, Integer traceNum, String action) {
         this.save(message, parentId, traceNum, action, ActionListener.<CreateInteractionResponse>wrap(r -> {
             log
@@ -110,39 +83,21 @@ public class ConversationIndexMemory implements Memory {
         }, e -> { log.error("Failed to save interaction", e); }));
     }
 
-    public void save(Message message, String parentId, Integer traceNum, String action, ActionListener listener) {
+    @Override
+    public void save(
+        Message message,
+        String parentId,
+        Integer traceNum,
+        String action,
+        ActionListener<CreateInteractionResponse> listener
+    ) {
         ConversationIndexMessage msg = (ConversationIndexMessage) message;
         memoryManager
             .createInteraction(conversationId, msg.getQuestion(), null, msg.getResponse(), action, null, parentId, traceNum, listener);
     }
 
     @Override
-    public void getMessages(String id, ActionListener listener) {
-        SearchRequest searchRequest = new SearchRequest();
-        searchRequest.indices(memoryMessageIndexName);
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        sourceBuilder.size(10000);
-        QueryBuilder sessionIdQueryBuilder = new TermQueryBuilder(CONVERSATION_ID, id);
-
-        BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-        boolQueryBuilder.must(sessionIdQueryBuilder);
-
-        if (retrieveFinalAnswer) {
-            QueryBuilder finalAnswerQueryBuilder = new TermQueryBuilder(FINAL_ANSWER, true);
-            boolQueryBuilder.must(finalAnswerQueryBuilder);
-        }
-
-        sourceBuilder.query(boolQueryBuilder);
-        sourceBuilder.sort(CREATED_TIME, SortOrder.ASC);
-        searchRequest.source(sourceBuilder);
-        client.search(searchRequest, listener);
-    }
-
-    public void getMessages(ActionListener listener) {
-        memoryManager.getFinalInteractions(conversationId, LAST_N_INTERACTIONS, listener);
-    }
-
-    public void getMessages(ActionListener listener, int size) {
+    public void getMessages(int size, ActionListener listener) {
         memoryManager.getFinalInteractions(conversationId, size, listener);
     }
 
@@ -152,12 +107,13 @@ public class ConversationIndexMemory implements Memory {
     }
 
     @Override
-    public void remove(String id) {
-        throw new RuntimeException("remove method is not supported in ConversationIndexMemory");
-    }
-
     public void update(String messageId, Map<String, Object> updateContent, ActionListener<UpdateResponse> updateListener) {
         getMemoryManager().updateInteraction(messageId, updateContent, updateListener);
+    }
+
+    @Override
+    public void deleteInteractionAndTrace(String interactionId, ActionListener<Boolean> listener) {
+        memoryManager.deleteInteractionAndTrace(interactionId, listener);
     }
 
     public static class Factory implements Memory.Factory<ConversationIndexMemory> {
@@ -186,7 +142,7 @@ public class ConversationIndexMemory implements Memory {
             create(name, memoryId, appType, listener);
         }
 
-        public void create(String name, String memoryId, String appType, ActionListener<ConversationIndexMemory> listener) {
+        private void create(String name, String memoryId, String appType, ActionListener<ConversationIndexMemory> listener) {
             if (Strings.isEmpty(memoryId)) {
                 memoryManager.createConversation(name, appType, ActionListener.<CreateConversationResponse>wrap(r -> {
                     create(r.getId(), listener);
@@ -200,7 +156,7 @@ public class ConversationIndexMemory implements Memory {
             }
         }
 
-        public void create(String memoryId, ActionListener<ConversationIndexMemory> listener) {
+        private void create(String memoryId, ActionListener<ConversationIndexMemory> listener) {
             listener
                 .onResponse(
                     new ConversationIndexMemory(

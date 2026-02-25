@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.settings;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -34,6 +35,7 @@ public class MLFeatureEnabledSettingTests {
                 .of(
                     MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
                     MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED,
                     MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
                     MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
@@ -47,8 +49,12 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
+                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
+                    MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -73,7 +79,9 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.mcp_connector_enabled", true)
             .put("plugins.ml_commons.agentic_search_enabled", true)
             .put("plugins.ml_commons.agentic_memory_enabled", true)
+            .put("plugins.ml_commons.remote_agentic_memory_enabled", true)
             .put("plugins.ml_commons.stream_enabled", true)
+            .put("plugins.ml_commons.unified_agent_api_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -92,7 +100,9 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isStaticMetricCollectionEnabled());
         assertTrue(setting.isMcpConnectorEnabled());
         assertTrue(setting.isAgenticMemoryEnabled());
+        assertTrue(setting.isRemoteAgenticMemoryEnabled());
         assertTrue(setting.isStreamEnabled());
+        assertTrue(setting.isUnifiedAgentApiEnabled());
     }
 
     @Test
@@ -114,7 +124,9 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.mcp_connector_enabled", false)
             .put("plugins.ml_commons.agentic_search_enabled", false)
             .put("plugins.ml_commons.agentic_memory_enabled", false)
+            .put("plugins.ml_commons.remote_agentic_memory_enabled", false)
             .put("plugins.ml_commons.stream_enabled", false)
+            .put("plugins.ml_commons.unified_agent_api_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -133,7 +145,9 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isStaticMetricCollectionEnabled());
         assertFalse(setting.isMcpConnectorEnabled());
         assertFalse(setting.isAgenticMemoryEnabled());
+        assertFalse(setting.isRemoteAgenticMemoryEnabled());
         assertFalse(setting.isStreamEnabled());
+        assertFalse(setting.isUnifiedAgentApiEnabled());
     }
 
     @Test
@@ -156,6 +170,30 @@ public class MLFeatureEnabledSettingTests {
 
         // Should be disabled by default
         assertTrue(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testRemoteAgenticMemoryDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isRemoteAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testRemoteAgenticMemoryCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_agentic_memory_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isRemoteAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testRemoteAgenticMemoryCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_agentic_memory_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isRemoteAgenticMemoryEnabled());
     }
 
     @Test
@@ -187,5 +225,87 @@ public class MLFeatureEnabledSettingTests {
 
         verify(mockListener).onStaticMetricCollectionEnabledChanged(true);
         assertTrue(setting.isStaticMetricCollectionEnabled());
+    }
+
+    @Test
+    public void testMaxJsonSizeDefaultValue() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Default value should be 100MB
+        assertEquals(100_000_000, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMaxJsonSizeCustomValue() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", 50_000_000).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertEquals(50_000_000, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMaxJsonSizeUnlimited() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", -1).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // -1 means unlimited
+        assertEquals(-1, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMaxJsonSizeDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", 100_000_000).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertEquals(100_000_000, setting.getMaxJsonSize());
+
+        // Update the setting dynamically
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.max_json_size", 75_000_000).build());
+
+        assertEquals(75_000_000, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to enable
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build());
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to disable again
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build());
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
     }
 }

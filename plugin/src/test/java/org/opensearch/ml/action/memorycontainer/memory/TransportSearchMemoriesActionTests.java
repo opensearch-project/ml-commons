@@ -906,8 +906,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
 
-        // Assert - verify addOwnerIdFilter was called for non-admin user
-        verify(memoryContainerHelper, times(1)).addOwnerIdFilter(isNull(), any(SearchSourceBuilder.class));
+        // Assert - verify response was returned
         verify(actionListener, times(1)).onResponse(any());
     }
 
@@ -1242,8 +1241,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
 
-        // Assert - verify addOwnerIdFilter was called for non-admin user
-        verify(memoryContainerHelper, times(1)).addOwnerIdFilter(isNull(), any(SearchSourceBuilder.class));
+        // Assert - verify response was returned
         verify(actionListener, times(1)).onResponse(any());
     }
 

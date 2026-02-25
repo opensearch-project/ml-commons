@@ -51,7 +51,7 @@ public class IndexInsightConfigTests {
 
         StreamInput input = output.bytes().streamInput();
         Boolean isEnable = input.readBoolean();
-        String tenantId = input.readString();
+        String tenantId = input.readOptionalString();
 
         assertEquals(original.getIsEnable(), isEnable);
         assertEquals(original.getTenantId(), tenantId);

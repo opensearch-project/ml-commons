@@ -34,12 +34,14 @@ public class MLGetMemoryRequest extends ActionRequest {
     String memoryContainerId;
     MemoryType memoryType;
     String memoryId;
+    String tenantId;
 
     @Builder
-    public MLGetMemoryRequest(String memoryContainerId, MemoryType memoryType, String memoryId) {
+    public MLGetMemoryRequest(String memoryContainerId, MemoryType memoryType, String memoryId, String tenantId) {
         this.memoryContainerId = memoryContainerId;
         this.memoryType = memoryType;
         this.memoryId = memoryId;
+        this.tenantId = tenantId;
     }
 
     public MLGetMemoryRequest(StreamInput in) throws IOException {
@@ -47,6 +49,7 @@ public class MLGetMemoryRequest extends ActionRequest {
         this.memoryContainerId = in.readString();
         this.memoryType = in.readEnum(MemoryType.class);
         this.memoryId = in.readString();
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -55,6 +58,7 @@ public class MLGetMemoryRequest extends ActionRequest {
         out.writeString(this.memoryContainerId);
         out.writeEnum(this.memoryType);
         out.writeString(this.memoryId);
+        out.writeOptionalString(this.tenantId);
     }
 
     @Override

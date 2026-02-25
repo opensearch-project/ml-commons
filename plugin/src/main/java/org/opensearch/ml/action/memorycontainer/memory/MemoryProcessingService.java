@@ -78,6 +78,7 @@ public class MemoryProcessingService {
     }
 
     public void runMemoryStrategy(
+        String tenantId,
         MemoryStrategy strategy,
         List<MessageInput> messages,
         MemoryConfiguration memoryConfig,
@@ -85,7 +86,7 @@ public class MemoryProcessingService {
     ) {
         MemoryStrategyType type = strategy.getType();
         if (type == MemoryStrategyType.SEMANTIC || type == MemoryStrategyType.USER_PREFERENCE || type == MemoryStrategyType.SUMMARY) {
-            extractFactsFromConversation(messages, strategy, memoryConfig, listener);
+            extractFactsFromConversation(tenantId, messages, strategy, memoryConfig, listener);
         } else {
             log.error("Unsupported memory strategy type: {}", type);
             listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + type));
@@ -93,6 +94,7 @@ public class MemoryProcessingService {
     }
 
     public void extractFactsFromConversation(
+        String tenantId,
         List<MessageInput> messages,
         MemoryStrategy strategy,
         MemoryConfiguration memoryConfig,
@@ -168,7 +170,12 @@ public class MemoryProcessingService {
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(stringParameters).build())
             .build();
 
-        MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
+        MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId(llmModelId)
+            .mlInput(mlInput)
+            .tenantId(tenantId)
+            .build();
 
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
             try {
@@ -203,6 +210,7 @@ public class MemoryProcessingService {
     }
 
     public void makeMemoryDecisions(
+        String tenantId,
         List<String> extractedFacts,
         List<FactSearchResult> allSearchResults,
         MemoryStrategy strategy,
@@ -262,7 +270,12 @@ public class MemoryProcessingService {
             RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(stringParameters).build();
             MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
 
-            MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
+            MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
+                .builder()
+                .modelId(llmModelId)
+                .mlInput(mlInput)
+                .tenantId(tenantId)
+                .build();
 
             String llmResultPath = memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
 
@@ -434,7 +447,12 @@ public class MemoryProcessingService {
         }
     }
 
-    public void summarizeMessages(MemoryConfiguration configuration, List<MessageInput> messages, ActionListener<String> listener) {
+    public void summarizeMessages(
+        String tenantId,
+        MemoryConfiguration configuration,
+        List<MessageInput> messages,
+        ActionListener<String> listener
+    ) {
         if (messages == null || messages.isEmpty()) {
             listener.onResponse("");
         } else {
@@ -461,6 +479,7 @@ public class MemoryProcessingService {
                     .builder()
                     .modelId(configuration.getLlmId())
                     .mlInput(mlInput)
+                    .tenantId(tenantId)
                     .build();
 
                 client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {

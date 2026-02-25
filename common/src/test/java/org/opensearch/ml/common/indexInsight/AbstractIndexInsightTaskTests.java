@@ -8,6 +8,7 @@ package org.opensearch.ml.common.indexInsight;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.lucene.search.TotalHits;
@@ -36,6 +38,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.Configuration;
 import org.opensearch.ml.common.MLConfig;
@@ -47,6 +50,7 @@ import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
@@ -151,8 +155,15 @@ public class AbstractIndexInsightTaskTests {
         mockUpdateSuccess(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.saveFailedStatus("", new RuntimeException("test error"), listener);
+        ArgumentCaptor<PutDataObjectRequest> captor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
 
-        verify(sdkClient).putDataObjectAsync(any());
+        verify(sdkClient).putDataObjectAsync(captor.capture());
+
+        PutDataObjectRequest req = captor.getValue();
+        ToXContent indexInsight = req.dataObject();
+        assertTrue(indexInsight instanceof IndexInsight);
+        assertFalse(Objects.isNull(((IndexInsight) indexInsight).getLastUpdatedTime()));
+
     }
 
     @Test

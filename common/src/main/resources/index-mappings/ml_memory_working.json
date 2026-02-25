@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 1
+    "schema_version": 2
   },
   "properties": {
     "owner_id": {
@@ -35,6 +35,10 @@
     "structured_data": {
       "type": "flat_object"
     },
+    "structured_data_blob": {
+      "type": "object",
+      "enabled": false
+    },
     "namespace": {
       "type": "flat_object"
     },
@@ -49,6 +53,9 @@
     },
     "parameters": {
       "type": "flat_object"
+    },
+    "infer": {
+      "type": "boolean"
     },
     "created_time": {
       "type": "date",

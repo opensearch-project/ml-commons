@@ -5,9 +5,12 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.returnFinalResponse;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +19,9 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.LLMSpec;
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.ToolCallResultEvent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -34,12 +40,14 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class StreamingWrapper {
     private final TransportChannel channel;
-    private final boolean isStreaming;
+    private boolean isStreaming;
     private Client client;
+    private final Map<String, String> parameters;
 
-    public StreamingWrapper(TransportChannel channel, org.opensearch.transport.client.Client client) {
+    public StreamingWrapper(TransportChannel channel, Client client, Map<String, String> parameters) {
         this.channel = channel;
         this.client = client;
+        this.parameters = parameters;
         this.isStreaming = (channel != null);
     }
 
@@ -119,6 +127,47 @@ public class StreamingWrapper {
             } catch (Exception e) {
                 log.error("Failed to send tool response chunk", e);
             }
+        }
+    }
+
+    public void sendBackendToolResult(String toolCallId, String toolResult, String sessionId, String parentInteractionId) {
+        try {
+            BaseEvent toolCallResultEvent = new ToolCallResultEvent("msg_" + System.nanoTime(), toolCallId, toolResult);
+            MLTaskResponse toolChunk = createStreamChunk(toolCallResultEvent.toJsonString(), sessionId, parentInteractionId, false);
+            channel.sendResponseBatch(toolChunk);
+        } catch (Exception e) {
+            log.error("Failed to send backend tool AGUI events for toolCallId '{}': {}", toolCallId, e.getMessage());
+            sendToolResponse(toolResult, sessionId, parentInteractionId);
+        }
+    }
+
+    public void sendRunFinishedAndCloseStream(String sessionId, String parentInteractionId) {
+        try {
+            String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+            String runId = parameters.get(AGUI_PARAM_RUN_ID);
+
+            // Ensure non-null values to avoid NPE in RunFinishedEvent.writeTo()
+            if (threadId == null) {
+                log.warn("AG-UI threadId is null, using generated value. This may cause frontend errors.");
+                threadId = "thread_" + System.nanoTime();
+            }
+            if (runId == null) {
+                log.warn("AG-UI runId is null, using generated value. This may cause frontend errors.");
+                runId = "run_" + System.nanoTime();
+            }
+
+            BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+            List<ModelTensor> modelTensors = new ArrayList<>();
+            Map<String, Object> dataMap = Map.of("content", runFinishedEvent.toJsonString(), "is_last", true);
+
+            modelTensors.add(ModelTensor.builder().name("response").dataAsMap(dataMap).build());
+            ModelTensorOutput output = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(modelTensors).build()))
+                .build();
+            channel.sendResponseBatch(new MLTaskResponse(output));
+        } catch (Exception e) {
+            log.error("Failed to send run finished event and close stream", e);
         }
     }
 
