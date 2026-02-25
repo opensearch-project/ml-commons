@@ -203,17 +203,21 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     @Override
-    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
-        run(mlAgent, params, listener, channel, null);
+    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel, Memory memory) {
+        runWithMemory(mlAgent, params, listener, channel, memory);
     }
 
     @Override
-    public void run(
+    public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener, TransportChannel channel) {
+        runWithMemory(mlAgent, inputParams, listener, channel, null);
+    }
+
+    private void runWithMemory(
         MLAgent mlAgent,
         Map<String, String> inputParams,
         ActionListener<Object> listener,
         TransportChannel channel,
-        Memory executorMemory
+        Memory callerMemory
     ) {
         Map<String, String> params = new HashMap<>();
         if (mlAgent.getParameters() != null) {
@@ -237,7 +241,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Unified interface: executor already handled memory setup and skipped parent interaction.
         boolean usesUnifiedInterface = Boolean.parseBoolean(params.getOrDefault(MLAgentExecutor.USES_UNIFIED_INTERFACE, "false"));
         if (usesUnifiedInterface) {
-            runAgent(mlAgent, params, listener, executorMemory, functionCalling);
+            runAgent(mlAgent, params, listener, callerMemory, functionCalling);
             return;
         }
 
@@ -281,9 +285,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0
+
+            AgentContextUtil.ensureLlmModelId(mlAgent, params);
+
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
+                // Emit POST_MEMORY hook to allow context managers to modify retrieved history
+                List<Interaction> processedHistory = processPostMemoryHook(params, r, memory, hookRegistry);
+
                 List<ConversationIndexMessage> messageList = new ArrayList<>();
-                for (Interaction next : r) {
+                for (Interaction next : processedHistory) {
                     String question = next.getInput();
                     String response = next.getResponse();
                     // As we store the conversation with empty response first and then update when
@@ -375,6 +385,28 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             }
         }
+    }
+
+    /**
+     * Process POST_MEMORY hook and return the (potentially modified) list of interactions.
+     * Context managers like SlidingWindowManager or SummarizationManager can modify
+     * the retrieved chat history before it is formatted into the prompt.
+     */
+    private List<Interaction> processPostMemoryHook(
+        Map<String, String> params,
+        List<Interaction> retrievedHistory,
+        Memory memory,
+        HookRegistry hookRegistry
+    ) {
+        if (hookRegistry != null && !retrievedHistory.isEmpty()) {
+            ContextManagerContext contextAfterEvent = AgentContextUtil.emitPostMemoryHook(params, retrievedHistory, null, hookRegistry);
+
+            List<Interaction> updatedHistory = contextAfterEvent.getChatHistory();
+            if (updatedHistory != null && !updatedHistory.equals(retrievedHistory)) {
+                return updatedHistory;
+            }
+        }
+        return retrievedHistory;
     }
 
     private void runAgent(

@@ -190,7 +190,7 @@ public class MLAgentRegistrationValidator {
     ) {
         // Define valid hook names
         java.util.Set<String> validHookNames = java.util.Set
-            .of("PRE_TOOL", "POST_TOOL", "PRE_LLM", "POST_LLM", "PRE_EXECUTION", "POST_EXECUTION");
+            .of("PRE_TOOL", "POST_TOOL", "PRE_LLM", "POST_LLM", "PRE_EXECUTION", "POST_EXECUTION", "POST_MEMORY");
 
         for (java.util.Map.Entry<String, java.util.List<org.opensearch.ml.common.contextmanager.ContextManagerConfig>> entry : hooks
             .entrySet()) {
