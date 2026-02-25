@@ -1298,7 +1298,14 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         public final String traceIdField;
         public final String spanIdField;
 
-        public PatternInfo(String pattern, List<String> sampleIndices, String type, String timeField, String traceIdField, String spanIdField) {
+        public PatternInfo(
+            String pattern,
+            List<String> sampleIndices,
+            String type,
+            String timeField,
+            String traceIdField,
+            String spanIdField
+        ) {
             this.pattern = pattern;
             this.sampleIndices = sampleIndices;
             this.type = type;

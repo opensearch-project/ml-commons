@@ -923,11 +923,7 @@ public class IndexCorrelationTaskTests {
             </index_type_analysis>
             """;
 
-        IndexCorrelationTask.PatternInfo info = task.parseTypeDetectionResponse(
-            llmResponse,
-            "logs-otel-*",
-            List.of("logs-otel-000001")
-        );
+        IndexCorrelationTask.PatternInfo info = task.parseTypeDetectionResponse(llmResponse, "logs-otel-*", List.of("logs-otel-000001"));
 
         assertNotNull(info);
         assertEquals("logs-otel-*", info.pattern);
@@ -966,14 +962,7 @@ public class IndexCorrelationTaskTests {
             null
         );
 
-        Map<String, Object> tuple = task.buildCorrelationTupleFromSource(
-            tracePattern,
-            "TRACE",
-            logPattern,
-            "LOG",
-            metricPattern,
-            "METRIC"
-        );
+        Map<String, Object> tuple = task.buildCorrelationTupleFromSource(tracePattern, "TRACE", logPattern, "LOG", metricPattern, "METRIC");
 
         assertNotNull(tuple);
         assertTrue(tuple.containsKey("logs"));
@@ -997,43 +986,16 @@ public class IndexCorrelationTaskTests {
             "spanID"
         );
 
-        List<IndexCorrelationTask.PatternInfo> logPatterns = List.of(
-            new IndexCorrelationTask.PatternInfo(
-                "logs-otel-*",
-                List.of("logs-otel-000001"),
-                "LOG",
-                "timestamp",
-                "traceId",
-                "spanId"
-            ),
-            new IndexCorrelationTask.PatternInfo(
-                "logs-app-*",
-                List.of("logs-app-000001"),
-                "LOG",
-                "time",
-                "trace_id",
-                "span_id"
-            )
-        );
+        List<IndexCorrelationTask.PatternInfo> logPatterns = List
+            .of(
+                new IndexCorrelationTask.PatternInfo("logs-otel-*", List.of("logs-otel-000001"), "LOG", "timestamp", "traceId", "spanId"),
+                new IndexCorrelationTask.PatternInfo("logs-app-*", List.of("logs-app-000001"), "LOG", "time", "trace_id", "span_id")
+            );
 
-        List<IndexCorrelationTask.PatternInfo> metricPatterns = List.of(
-            new IndexCorrelationTask.PatternInfo(
-                "ss4o_metrics-*",
-                List.of("ss4o_metrics-2025.12.19"),
-                "METRIC",
-                "time",
-                null,
-                null
-            )
-        );
+        List<IndexCorrelationTask.PatternInfo> metricPatterns = List
+            .of(new IndexCorrelationTask.PatternInfo("ss4o_metrics-*", List.of("ss4o_metrics-2025.12.19"), "METRIC", "time", null, null));
 
-        String prompt = task.buildCorrelationMatchingPromptForSource(
-            sourcePattern,
-            "LOG",
-            logPatterns,
-            "METRIC",
-            metricPatterns
-        );
+        String prompt = task.buildCorrelationMatchingPromptForSource(sourcePattern, "LOG", logPatterns, "METRIC", metricPatterns);
 
         assertNotNull(prompt);
         assertTrue(prompt.contains("jaeger-span-*"));
@@ -1064,48 +1026,28 @@ public class IndexCorrelationTaskTests {
             "spanID"
         );
 
-        List<IndexCorrelationTask.PatternInfo> logPatterns = List.of(
-            new IndexCorrelationTask.PatternInfo(
-                "logs-otel-*",
-                List.of("logs-otel-000001"),
-                "LOG",
-                "timestamp",
-                "traceId",
-                "spanId"
-            ),
-            new IndexCorrelationTask.PatternInfo(
-                "logs-app-*",
-                List.of("logs-app-000001"),
-                "LOG",
-                "time",
-                "trace_id",
-                "span_id"
-            )
-        );
+        List<IndexCorrelationTask.PatternInfo> logPatterns = List
+            .of(
+                new IndexCorrelationTask.PatternInfo("logs-otel-*", List.of("logs-otel-000001"), "LOG", "timestamp", "traceId", "spanId"),
+                new IndexCorrelationTask.PatternInfo("logs-app-*", List.of("logs-app-000001"), "LOG", "time", "trace_id", "span_id")
+            );
 
-        List<IndexCorrelationTask.PatternInfo> metricPatterns = List.of(
-            new IndexCorrelationTask.PatternInfo(
-                "ss4o_metrics-*",
-                List.of("ss4o_metrics-2025.12.19"),
-                "METRIC",
-                "time",
-                null,
-                null
-            )
-        );
+        List<IndexCorrelationTask.PatternInfo> metricPatterns = List
+            .of(new IndexCorrelationTask.PatternInfo("ss4o_metrics-*", List.of("ss4o_metrics-2025.12.19"), "METRIC", "time", null, null));
 
         ActionListener<Map<String, Object>> testListener = mock(ActionListener.class);
 
-        task.parseCorrelationMatchingResponseForSource(
-            llmResponse,
-            sourcePattern,
-            "TRACE",
-            "LOG",
-            logPatterns,
-            "METRIC",
-            metricPatterns,
-            testListener
-        );
+        task
+            .parseCorrelationMatchingResponseForSource(
+                llmResponse,
+                sourcePattern,
+                "TRACE",
+                "LOG",
+                logPatterns,
+                "METRIC",
+                metricPatterns,
+                testListener
+            );
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(testListener, timeout(1000)).onResponse(captor.capture());
