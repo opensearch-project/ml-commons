@@ -36,11 +36,16 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     private String bedrockClaudeConnectorId;
     private String bedrockClaudeConnectorIdForPredict;
 
+    private static boolean settingsInitialized = false;
+
     @Before
     public void setUp() throws Exception {
         super.setUp();
-        disableClusterConnectorAccessControl();
-        Thread.sleep(20000);
+        if (!settingsInitialized) {
+            disableClusterConnectorAccessControl();
+            Thread.sleep(20000);
+            settingsInitialized = true;
+        }
         this.bedrockClaudeConnectorId = createBedrockClaudeConnector("execute");
         this.bedrockClaudeConnectorIdForPredict = createBedrockClaudeConnector("predict");
     }

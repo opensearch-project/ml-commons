@@ -108,10 +108,15 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         + "  ]\n"
         + "}";
 
+    private static boolean settingsInitialized = false;
+
     @Before
     public void setup() throws IOException, InterruptedException {
-        RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        Thread.sleep(20000);
+        if (!settingsInitialized) {
+            RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+            Thread.sleep(20000);
+            settingsInitialized = true;
+        }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
         this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);

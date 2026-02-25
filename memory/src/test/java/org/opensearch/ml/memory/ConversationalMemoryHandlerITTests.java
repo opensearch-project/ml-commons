@@ -46,7 +46,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
-@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST, numDataNodes = 2)
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
 public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase {
 
     private Client client;

@@ -147,10 +147,15 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
      * register two remote models and create an index and document before tests
      * @throws Exception
      */
+    private static boolean settingsInitialized = false;
+
     @Before
     public void setup() throws Exception {
-        RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        Thread.sleep(20000);
+        if (!settingsInitialized) {
+            RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+            Thread.sleep(20000);
+            settingsInitialized = true;
+        }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
         this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);

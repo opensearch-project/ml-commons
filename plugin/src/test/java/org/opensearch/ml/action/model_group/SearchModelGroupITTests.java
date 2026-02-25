@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.model_group;
 
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -22,16 +21,16 @@ import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
+@OpenSearchIntegTestCase.SuiteScopeTestCase
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1, supportsDedicatedMasters = false)
 public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private String modelGroupId;
+    private static String modelGroupId;
 
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
+    @Override
+    protected void setupSuiteScopeCluster() throws Exception {
         registerModelGroup();
     }
 
@@ -46,7 +45,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         MLRegisterModelGroupResponse response = client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
-        this.modelGroupId = response.getModelGroupId();
+        modelGroupId = response.getModelGroupId();
     }
 
     @Test
