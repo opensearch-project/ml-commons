@@ -11,22 +11,16 @@ import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.*;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -42,19 +36,12 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
-import org.opensearch.ml.common.agent.LLMSpec;
-import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.agent.MLAgentModelSpec;
-import org.opensearch.ml.common.agent.MLMemorySpec;
-import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.agent.*;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.input.execute.agent.AgentInput;
-import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.input.execute.agent.ContentBlock;
-import org.opensearch.ml.common.input.execute.agent.ContentType;
-import org.opensearch.ml.common.input.execute.agent.InputType;
-import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.input.execute.agent.*;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -65,7 +52,10 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
+import org.opensearch.remote.metadata.client.UpdateDataObjectResponse;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.RemoteTransportException;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
@@ -1370,5 +1360,39 @@ public class MLAgentExecutorTest {
 
         // Verify save was called and failure was handled
         Mockito.verify(memory, Mockito.times(1)).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    // ==================== Tests for createAsyncTaskUpdater ====================
+
+    @Test
+    public void test_CreateAsyncTaskUpdater_UsesRootCauseMessage() {
+        MLTask mlTask = MLTask.builder().taskId("test-task-id").functionName(FunctionName.AGENT).taskType(MLTaskType.EXECUTION).build();
+
+        RuntimeException rootCause = new RuntimeException("root cause message");
+        RemoteTransportException remoteEx = new RemoteTransportException("Remote Transport Exception", rootCause);
+
+        UpdateDataObjectResponse sdkResponse = Mockito.mock(UpdateDataObjectResponse.class);
+        Mockito.when(sdkResponse.updateResponse()).thenReturn(Mockito.mock(UpdateResponse.class));
+        Mockito
+            .when(sdkClient.updateDataObjectAsync(Mockito.any(UpdateDataObjectRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(sdkResponse));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(2);
+            updateListener.onResponse(Mockito.mock(UpdateResponse.class));
+            return null;
+        }).when(memory).update(Mockito.anyString(), Mockito.any(), Mockito.any());
+
+        ActionListener<Object> asyncListener = mlAgentExecutor
+            .createAsyncTaskUpdater(mlTask, null, new ArrayList<>(), new ArrayList<>(), "parent-interaction-id", memory);
+
+        asyncListener.onFailure(remoteEx);
+
+        ArgumentCaptor<Map> updateContentCaptor = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(memory).update(Mockito.eq("parent-interaction-id"), updateContentCaptor.capture(), Mockito.any());
+
+        String failureMessage = (String) updateContentCaptor.getValue().get(MLTask.RESPONSE_FIELD);
+        Assert.assertTrue(failureMessage.contains("root cause message"));
+        Assert.assertFalse(failureMessage.contains("Remote Transport Exception"));
     }
 }

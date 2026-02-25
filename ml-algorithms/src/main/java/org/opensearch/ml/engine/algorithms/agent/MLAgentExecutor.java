@@ -7,34 +7,21 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
-import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
-import static org.opensearch.ml.common.MLTask.STATE_FIELD;
-import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.*;
+import static org.opensearch.ml.common.MLTask.*;
 import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.*;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
@@ -52,12 +39,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLAgentType;
-import org.opensearch.ml.common.MLMemoryType;
-import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.*;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
@@ -66,13 +48,7 @@ import org.opensearch.ml.common.contextmanager.ContextManagerHookProvider;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.input.execute.agent.AgentInput;
-import org.opensearch.ml.common.input.execute.agent.AgentInputProcessor;
-import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.input.execute.agent.ContentBlock;
-import org.opensearch.ml.common.input.execute.agent.ContentType;
-import org.opensearch.ml.common.input.execute.agent.InputType;
-import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.input.execute.agent.*;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.model.ModelProviderFactory;
@@ -995,7 +971,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         });
     }
 
-    private ActionListener<Object> createAsyncTaskUpdater(
+    @VisibleForTesting
+    ActionListener<Object> createAsyncTaskUpdater(
         MLTask mlTask,
         String tenantId,
         List<ModelTensors> outputs,
@@ -1031,7 +1008,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     )
             );
         }, ex -> {
-            agentResponse.put(ERROR_MESSAGE, ex.getMessage());
+            Throwable rootCause = ExceptionsHelper.unwrapCause(ex);
+            String errorMessage = rootCause != null ? rootCause.getMessage() : ex.getMessage();
+            agentResponse.put(ERROR_MESSAGE, errorMessage);
 
             updatedTask.put(RESPONSE_FIELD, agentResponse);
             updatedTask.put(STATE_FIELD, MLTaskState.FAILED);
@@ -1050,7 +1029,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     )
             );
 
-            updateInteractionWithFailure(parentInteractionId, memory, ex.getMessage());
+            updateInteractionWithFailure(parentInteractionId, memory, errorMessage);
         });
     }
 
