@@ -279,4 +279,21 @@ public class IndexInsightTestHelper {
         when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
     }
 
+    /**
+     * Mock empty search result for pattern matching
+     * This is used when no existing pattern matches the source index
+     */
+    public static void mockSearchEmpty(SdkClient sdkClient) {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        SearchHit[] emptyHits = new SearchHit[0];
+        SearchHits searchHits = new SearchHits(emptyHits, null, 0, null, null, null);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+
+        SearchDataObjectResponse sdkResponse = mock(SearchDataObjectResponse.class);
+        when(sdkResponse.searchResponse()).thenReturn(searchResponse);
+
+        CompletableFuture<SearchDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(future);
+    }
+
 }

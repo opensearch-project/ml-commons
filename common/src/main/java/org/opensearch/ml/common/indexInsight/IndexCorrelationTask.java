@@ -25,6 +25,7 @@ import org.opensearch.action.admin.cluster.state.ClusterStateRequest;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.cluster.metadata.MappingMetadata;
+import org.opensearch.common.regex.Regex;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -298,50 +299,6 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             j--;
         }
         return matched;
-    }
-
-    /**
-     * Compute the length of the Longest Common Subsequence (LCS) between two strings
-     * Uses dynamic programming with space optimization
-     *
-     * Time Complexity: O(m * n)
-     * Space Complexity: O(min(m, n))
-     */
-    private int longestCommonSubsequence(String s1, String s2) {
-        if (s1.isEmpty() || s2.isEmpty()) {
-            return 0;
-        }
-
-        // Ensure s1 is the shorter string for space optimization
-        if (s1.length() > s2.length()) {
-            String temp = s1;
-            s1 = s2;
-            s2 = temp;
-        }
-
-        int m = s1.length();
-        int n = s2.length();
-
-        // Use two rows instead of full 2D array for space optimization
-        int[] prev = new int[m + 1];
-        int[] curr = new int[m + 1];
-
-        // Fill the DP table
-        for (int j = 1; j <= n; j++) {
-            for (int i = 1; i <= m; i++) {
-                if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
-                    curr[i] = prev[i - 1] + 1;
-                } else {
-                    curr[i] = Math.max(curr[i - 1], prev[i]);
-                }
-            }
-            // Swap rows
-            int[] temp = prev;
-            prev = curr;
-            curr = temp;
-        }
-
-        return prev[m];
     }
 
     /**
@@ -741,11 +698,47 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             String traceIdField = (String) analysis.get("trace_id_field");
             String spanIdField = (String) analysis.get("span_id_field");
 
-            return new PatternInfo(pattern, indices, type, timeField, traceIdField, spanIdField);
+            // Normalize type to prevent null/format mismatches
+            String normalizedType = normalizeIndexType(type);
+
+            return new PatternInfo(pattern, indices, normalizedType, timeField, traceIdField, spanIdField);
 
         } catch (Exception e) {
             log.warn("Failed to parse type detection response for pattern: {}", pattern, e);
             return new PatternInfo(pattern, indices, "UNKNOWN", null, null, null);
+        }
+    }
+
+    /**
+     * Normalize index type string to standard format (LOG, TRACE, METRIC, or UNKNOWN)
+     * Handles null, empty, lowercase, and unrecognized values
+     */
+    private String normalizeIndexType(String type) {
+        if (type == null || type.trim().isEmpty()) {
+            log.debug("Type is null or empty, defaulting to UNKNOWN");
+            return "UNKNOWN";
+        }
+
+        // Convert to uppercase and trim whitespace
+        String normalized = type.trim().toUpperCase();
+
+        // Validate against known types
+        switch (normalized) {
+            case "LOG":
+            case "LOGS":
+                return "LOG";
+            case "TRACE":
+            case "TRACES":
+            case "TRACING":
+                return "TRACE";
+            case "METRIC":
+            case "METRICS":
+                return "METRIC";
+            case "UNKNOWN":
+                return "UNKNOWN";
+            default:
+                log.warn("Unrecognized index type '{}', defaulting to UNKNOWN", type);
+                return "UNKNOWN";
         }
     }
 
@@ -758,12 +751,41 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         // Step 1: Find which pattern the source index belongs to
         PatternInfo sourcePatternInfo = findSourceIndexPattern();
         if (sourcePatternInfo == null) {
-            log.error("Source index {} does not match any detected pattern", sourceIndex);
-            listener.onFailure(new IllegalStateException("Source index does not match any detected pattern"));
+            // Source index not found in detected patterns - return empty result
+            log.warn("Source index {} does not match any detected pattern, returning empty correlation", sourceIndex);
+            result.put("source_index", sourceIndex);
+            result.put("source_pattern", null);
+            result.put("source_type", null);
+            result.put("total_indices_scanned", allIndices.size());
+            result.put("total_patterns_detected", detectedPatterns.size());
+
+            // Build all_patterns list
+            List<Map<String, Object>> allPatternsList = new ArrayList<>();
+            for (PatternInfo info : detectedPatterns.values()) {
+                Map<String, Object> patternMap = new HashMap<>();
+                patternMap.put("pattern", info.pattern);
+                patternMap.put("type", info.type);
+                patternMap.put("sample_indices", info.sampleIndices);
+                patternMap.put("time_field", info.timeField);
+                patternMap.put("trace_id_field", info.traceIdField);
+                patternMap.put("span_id_field", info.spanIdField);
+                allPatternsList.add(patternMap);
+            }
+            result.put("all_patterns", allPatternsList);
+
+            // Return empty correlation tuple
+            Map<String, Object> emptyTuple = new HashMap<>();
+            emptyTuple.put("logs", null);
+            emptyTuple.put("trace", null);
+            emptyTuple.put("metrics", null);
+            result.put("correlation_tuple", emptyTuple);
+
+            listener.onResponse(result);
             return;
         }
 
-        String sourceType = sourcePatternInfo.type;
+        // Normalize sourceType to ensure it's valid before use
+        String sourceType = normalizeIndexType(sourcePatternInfo.type);
         log.info("Source index {} belongs to pattern {} of type {}", sourceIndex, sourcePatternInfo.pattern, sourceType);
 
         // Step 2: Determine which other two types we need to find
@@ -835,7 +857,9 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
      */
     private PatternInfo findSourceIndexPattern() {
         for (PatternInfo info : detectedPatterns.values()) {
-            if (info.sampleIndices.contains(sourceIndex)) {
+            if (info.sampleIndices.contains(sourceIndex)
+                || sourceIndex.equals(info.pattern)
+                || Regex.simpleMatch(info.pattern, sourceIndex)) {
                 return info;
             }
         }
@@ -905,6 +929,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             traceInfo.put("sample_index", tracePattern.sampleIndices.isEmpty() ? null : tracePattern.sampleIndices.get(0));
             traceInfo.put("time_field", tracePattern.timeField);
             traceInfo.put("trace_id_field", tracePattern.traceIdField);
+            traceInfo.put("span_id_field", tracePattern.spanIdField);
             tuple.put("trace", traceInfo);
         } else {
             tuple.put("trace", null);
