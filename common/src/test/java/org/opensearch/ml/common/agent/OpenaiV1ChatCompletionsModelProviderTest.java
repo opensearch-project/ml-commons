@@ -17,8 +17,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLAgentType;
-import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
@@ -29,16 +29,16 @@ import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
 
-public class BedrockConverseModelProviderTest {
+public class OpenaiV1ChatCompletionsModelProviderTest {
 
-    private BedrockConverseModelProvider provider;
+    private OpenaiV1ChatCompletionsModelProvider provider;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
-        provider = new BedrockConverseModelProvider();
+        provider = new OpenaiV1ChatCompletionsModelProvider();
     }
 
     @Test
@@ -47,92 +47,98 @@ public class BedrockConverseModelProviderTest {
         String result = provider.getLLMInterface();
 
         // Assert
-        assertEquals("bedrock/converse/claude", result);
+        assertEquals("openai/v1/chat/completions", result);
     }
 
     @Test
     public void testCreateConnector_WithFullParameters() {
         // Arrange
-        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        String modelId = "gpt-4o";
         Map<String, String> credential = new HashMap<>();
-        credential.put("access_key", "test_access_key");
-        credential.put("secret_key", "test_secret_key");
+        credential.put("openai_api_key", "test_api_key");
 
         Map<String, String> modelParameters = new HashMap<>();
-        modelParameters.put("region", "us-west-2");
+        modelParameters.put("temperature", "0.7");
 
         // Act
         Connector connector = provider.createConnector(modelId, credential, modelParameters);
 
         // Assert
         assertNotNull(connector);
-        assertTrue(connector instanceof AwsConnector);
-        AwsConnector awsConnector = (AwsConnector) connector;
-        assertEquals("Auto-generated Bedrock Converse connector for Agent", awsConnector.getName());
-        assertEquals("Auto-generated connector for Bedrock Converse API", awsConnector.getDescription());
-        assertEquals("aws_sigv4", awsConnector.getProtocol());
-        assertEquals("us-west-2", awsConnector.getParameters().get("region"));
-        assertEquals("bedrock", awsConnector.getParameters().get("service_name"));
-        assertEquals(modelId, awsConnector.getParameters().get("model"));
-        assertNotNull(awsConnector.getActions());
-        assertEquals(1, awsConnector.getActions().size());
+        assertTrue(connector instanceof HttpConnector);
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertEquals("Auto-generated OpenAI connector for Agent", httpConnector.getName());
+        assertEquals("Auto-generated connector for OpenAI Chat Completions API", httpConnector.getDescription());
+        assertEquals("http", httpConnector.getProtocol());
+        assertEquals(modelId, httpConnector.getParameters().get("model"));
+        assertEquals("0.7", httpConnector.getParameters().get("temperature"));
+        assertNotNull(httpConnector.getActions());
+        assertEquals(1, httpConnector.getActions().size());
     }
 
     @Test
-    public void testCreateConnector_WithDefaultRegion() {
+    public void testCreateConnector_WithDefaultParameters() {
         // Arrange
-        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        String modelId = "gpt-4o";
         Map<String, String> credential = new HashMap<>();
-        credential.put("access_key", "test_key");
-        credential.put("secret_key", "test_secret");
+        credential.put("openai_api_key", "test_key");
 
         // Act
         Connector connector = provider.createConnector(modelId, credential, null);
 
         // Assert
         assertNotNull(connector);
-        assertTrue(connector instanceof AwsConnector);
-        AwsConnector awsConnector = (AwsConnector) connector;
-        assertEquals("us-east-1", awsConnector.getParameters().get("region"));
+        assertTrue(connector instanceof HttpConnector);
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertEquals(modelId, httpConnector.getParameters().get("model"));
     }
 
     @Test
     public void testCreateConnector_WithNullCredential() {
         // Arrange
-        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        String modelId = "gpt-4o";
         Map<String, String> modelParameters = new HashMap<>();
-        modelParameters.put("region", "eu-west-1");
 
-        // Arrange & Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
         // Act
-        provider.createConnector(modelId, null, modelParameters);
+        Connector connector = provider.createConnector(modelId, null, modelParameters);
+
+        // Assert
+        assertNotNull(connector);
+        assertTrue(connector instanceof HttpConnector);
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertNotNull(httpConnector.getCredential());
     }
 
     @Test
     public void testCreateConnector_WithEmptyCredential() {
         // Arrange
-        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        String modelId = "gpt-4o";
         Map<String, String> credential = new HashMap<>();
         Map<String, String> modelParameters = new HashMap<>();
-        modelParameters.put("region", "ap-southeast-1");
-
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
 
         // Act
-        provider.createConnector(modelId, credential, modelParameters);
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        assertNotNull(connector);
+        assertTrue(connector instanceof HttpConnector);
     }
 
     @Test
     public void testCreateModelInput() {
         // Arrange
-        String modelName = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        String modelName = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
+        Connector connector = provider.createConnector(modelName, credential, null);
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
-        provider.createConnector(modelName, new HashMap<>(), new HashMap<>());
+        // Act
+        var modelInput = provider.createModelInput(modelName, connector, null);
+
+        // Assert
+        assertNotNull(modelInput);
+        assertEquals("Auto-generated model for " + modelName, modelInput.getModelName());
+        assertEquals(connector, modelInput.getConnector());
     }
 
     @Test
@@ -148,7 +154,7 @@ public class BedrockConverseModelProviderTest {
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
         assertTrue(body.contains("\"role\":\"user\""));
-        assertTrue(body.contains("\"text\":\"Hello, how are you?\""));
+        assertTrue(body.contains("\"content\":\"Hello, how are you?\""));
     }
 
     @Test
@@ -198,6 +204,7 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(result);
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
+        assertTrue(body.contains("\"type\":\"text\""));
         assertTrue(body.contains("\"text\":\"Hello world\""));
     }
 
@@ -218,19 +225,19 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(result);
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
-        assertTrue(body.contains("\"image\""));
-        assertTrue(body.contains("\"format\":\"png\""));
-        assertTrue(body.contains("\"bytes\""));
+        assertTrue(body.contains("\"type\":\"image_url\""));
+        assertTrue(body.contains("\"image_url\""));
+        assertTrue(body.contains("data:image/png;base64,"));
         assertTrue(body.contains("base64encodeddata"));
     }
 
     @Test
-    public void testMapContentBlocks_ImageWithS3URL() {
+    public void testMapContentBlocks_ImageWithURL() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
         ContentBlock imageBlock = new ContentBlock();
         imageBlock.setType(ContentType.IMAGE);
-        ImageContent image = new ImageContent(SourceType.URL, "jpeg", "s3://bucket/image.jpg");
+        ImageContent image = new ImageContent(SourceType.URL, "jpeg", "https://example.com/image.jpg");
         imageBlock.setImage(image);
         blocks.add(imageBlock);
 
@@ -241,26 +248,47 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(result);
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
-        assertTrue(body.contains("s3Location"));
-        assertTrue(body.contains("s3:") && body.contains("bucket") && body.contains("image.jpg"));
+        assertTrue(body.contains("\"type\":\"image_url\""));
+        assertTrue(body.contains("\"image_url\""));
+        // URL is escaped in JSON, so check for parts that would be present
+        assertTrue(body.contains("example.com") || body.contains("image.jpg"));
     }
 
     @Test
-    public void testMapContentBlocks_ImageWithInvalidURL() {
+    public void testMapContentBlocks_VideoWithBase64() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        ContentBlock imageBlock = new ContentBlock();
-        imageBlock.setType(ContentType.IMAGE);
-        ImageContent image = new ImageContent(SourceType.URL, "jpeg", "https://example.com/image.jpg");
-        imageBlock.setImage(image);
-        blocks.add(imageBlock);
+        ContentBlock videoBlock = new ContentBlock();
+        videoBlock.setType(ContentType.VIDEO);
+        VideoContent video = new VideoContent(SourceType.BASE64, "mp4", "base64videodata");
+        videoBlock.setVideo(video);
+        blocks.add(videoBlock);
 
         // Act & Assert
         try {
             provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
-            fail("Should throw IllegalArgumentException for non-S3 URL");
+            fail("Should throw IllegalArgumentException for VIDEO content type");
         } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("URL-based content must use S3 URIs"));
+            assertTrue(e.getMessage().contains("Video content is not supported"));
+        }
+    }
+
+    @Test
+    public void testMapContentBlocks_VideoWithURL() {
+        // Arrange
+        List<ContentBlock> blocks = new ArrayList<>();
+        ContentBlock videoBlock = new ContentBlock();
+        videoBlock.setType(ContentType.VIDEO);
+        VideoContent video = new VideoContent(SourceType.URL, "mp4", "https://example.com/video.mp4");
+        videoBlock.setVideo(video);
+        blocks.add(videoBlock);
+
+        // Act & Assert
+        try {
+            provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
+            fail("Should throw IllegalArgumentException for VIDEO content type");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Video content is not supported"));
         }
     }
 
@@ -274,38 +302,32 @@ public class BedrockConverseModelProviderTest {
         docBlock.setDocument(doc);
         blocks.add(docBlock);
 
-        // Act
-        Map<String, String> result = provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.containsKey("body"));
-        String body = result.get("body");
-        assertTrue(body.contains("\"document\""));
-        assertTrue(body.contains("\"format\":\"pdf\""));
-        assertTrue(body.contains("\"bytes\""));
+        // Act & Assert
+        try {
+            provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
+            fail("Should throw IllegalArgumentException for DOCUMENT content type");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Document content is not supported"));
+        }
     }
 
     @Test
-    public void testMapContentBlocks_VideoWithBase64() {
+    public void testMapContentBlocks_DocumentWithURL() {
         // Arrange
         List<ContentBlock> blocks = new ArrayList<>();
-        ContentBlock videoBlock = new ContentBlock();
-        videoBlock.setType(ContentType.VIDEO);
-        VideoContent video = new VideoContent(SourceType.BASE64, "mp4", "base64videodata");
-        videoBlock.setVideo(video);
-        blocks.add(videoBlock);
+        ContentBlock docBlock = new ContentBlock();
+        docBlock.setType(ContentType.DOCUMENT);
+        DocumentContent doc = new DocumentContent(SourceType.URL, "pdf", "https://example.com/doc.pdf");
+        docBlock.setDocument(doc);
+        blocks.add(docBlock);
 
-        // Act
-        Map<String, String> result = provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.containsKey("body"));
-        String body = result.get("body");
-        assertTrue(body.contains("\"video\""));
-        assertTrue(body.contains("\"format\":\"mp4\""));
-        assertTrue(body.contains("\"bytes\""));
+        // Act & Assert
+        try {
+            provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
+            fail("Should throw IllegalArgumentException for DOCUMENT content type");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Document content is not supported"));
+        }
     }
 
     @Test
@@ -332,7 +354,7 @@ public class BedrockConverseModelProviderTest {
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
         assertTrue(body.contains("\"text\":\"Describe this image:\""));
-        assertTrue(body.contains("\"image\""));
+        assertTrue(body.contains("\"type\":\"image_url\""));
     }
 
     @Test
@@ -380,6 +402,7 @@ public class BedrockConverseModelProviderTest {
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
         assertTrue(body.contains("\"role\":\"user\""));
+        assertTrue(body.contains("\"type\":\"text\""));
         assertTrue(body.contains("\"text\":\"Hello\""));
     }
 
@@ -465,121 +488,62 @@ public class BedrockConverseModelProviderTest {
     @Test
     public void testCreateConnector_VerifyRetryConfiguration() {
         // Arrange
-        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        String modelId = "gpt-4o";
         Map<String, String> credential = new HashMap<>();
-        credential.put("access_key", "test_key");
-        credential.put("secret_key", "test_secret");
+        credential.put("openai_api_key", "test_key");
 
         // Act
         Connector connector = provider.createConnector(modelId, credential, null);
 
         // Assert
-        assertTrue(connector instanceof AwsConnector);
-        AwsConnector awsConnector = (AwsConnector) connector;
-        assertNotNull(awsConnector.getConnectorClientConfig());
-        assertEquals(Integer.valueOf(3), awsConnector.getConnectorClientConfig().getMaxRetryTimes());
+        assertTrue(connector instanceof HttpConnector);
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertNotNull(httpConnector.getConnectorClientConfig());
+        assertEquals(Integer.valueOf(3), httpConnector.getConnectorClientConfig().getMaxRetryTimes());
     }
 
     @Test
-    public void testMapContentBlocks_VideoWithS3URL() {
+    public void testCreateConnector_VerifyHeaders() {
         // Arrange
-        List<ContentBlock> blocks = new ArrayList<>();
-        ContentBlock videoBlock = new ContentBlock();
-        videoBlock.setType(ContentType.VIDEO);
-        VideoContent video = new VideoContent(SourceType.URL, "mp4", "s3://bucket/video.mp4");
-        videoBlock.setVideo(video);
-        blocks.add(videoBlock);
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
 
         // Act
-        Map<String, String> result = provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
+        Connector connector = provider.createConnector(modelId, credential, null);
 
         // Assert
-        assertNotNull(result);
-        assertTrue(result.containsKey("body"));
-        String body = result.get("body");
-        assertTrue(body.contains("s3Location"));
-        assertTrue(body.contains("s3:") && body.contains("bucket") && body.contains("video.mp4"));
+        assertTrue(connector instanceof HttpConnector);
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertNotNull(httpConnector.getActions());
+        assertEquals(1, httpConnector.getActions().size());
+        var action = httpConnector.getActions().get(0);
+        assertNotNull(action.getHeaders());
+        assertTrue(action.getHeaders().containsKey("Content-Type"));
+        assertEquals("application/json", action.getHeaders().get("Content-Type"));
+        assertTrue(action.getHeaders().containsKey("Authorization"));
+        assertTrue(action.getHeaders().get("Authorization").contains("${credential.openai_api_key}"));
     }
 
     @Test
-    public void testMapContentBlocks_DocumentWithS3URL() {
+    public void testCreateConnector_VerifyURL() {
         // Arrange
-        List<ContentBlock> blocks = new ArrayList<>();
-        ContentBlock docBlock = new ContentBlock();
-        docBlock.setType(ContentType.DOCUMENT);
-        DocumentContent doc = new DocumentContent(SourceType.URL, "pdf", "s3://bucket/document.pdf");
-        docBlock.setDocument(doc);
-        blocks.add(docBlock);
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
 
         // Act
-        Map<String, String> result = provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
+        Connector connector = provider.createConnector(modelId, credential, null);
 
         // Assert
-        assertNotNull(result);
-        assertTrue(result.containsKey("body"));
-        String body = result.get("body");
-        assertTrue(body.contains("s3Location"));
-        assertTrue(body.contains("s3:") && body.contains("bucket") && body.contains("document.pdf"));
+        assertTrue(connector instanceof HttpConnector);
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertNotNull(httpConnector.getActions());
+        assertEquals(1, httpConnector.getActions().size());
+        var action = httpConnector.getActions().get(0);
+        assertEquals("https://api.openai.com/v1/chat/completions", action.getUrl());
+        assertEquals("POST", action.getMethod());
     }
-
-    @Test
-    public void testMapContentBlocks_VideoWithInvalidURL() {
-        // Arrange
-        List<ContentBlock> blocks = new ArrayList<>();
-        ContentBlock videoBlock = new ContentBlock();
-        videoBlock.setType(ContentType.VIDEO);
-        VideoContent video = new VideoContent(SourceType.URL, "mp4", "https://example.com/video.mp4");
-        videoBlock.setVideo(video);
-        blocks.add(videoBlock);
-
-        // Act & Assert
-        try {
-            provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
-            fail("Should throw IllegalArgumentException for non-S3 URL");
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("URL-based content must use S3 URIs"));
-        }
-    }
-
-    @Test
-    public void testMapContentBlocks_DocumentWithInvalidURL() {
-        // Arrange
-        List<ContentBlock> blocks = new ArrayList<>();
-        ContentBlock docBlock = new ContentBlock();
-        docBlock.setType(ContentType.DOCUMENT);
-        DocumentContent doc = new DocumentContent(SourceType.URL, "pdf", "http://example.com/doc.pdf");
-        docBlock.setDocument(doc);
-        blocks.add(docBlock);
-
-        // Act & Assert
-        try {
-            provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
-            fail("Should throw IllegalArgumentException for non-S3 URL");
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("URL-based content must use S3 URIs"));
-        }
-    }
-
-    @Test
-    public void testMapContentBlocks_ImageWithNullURL() {
-        // Arrange
-        List<ContentBlock> blocks = new ArrayList<>();
-        ContentBlock imageBlock = new ContentBlock();
-        imageBlock.setType(ContentType.IMAGE);
-        ImageContent image = new ImageContent(SourceType.URL, "jpeg", null);
-        imageBlock.setImage(image);
-        blocks.add(imageBlock);
-
-        // Act & Assert
-        try {
-            provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
-            fail("Should throw IllegalArgumentException for null URL");
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("URL-based content must use S3 URIs"));
-        }
-    }
-
-    // Tests for mapAgentInput method
 
     @Test
     public void testMapAgentInput_TextInput() {
@@ -596,7 +560,7 @@ public class BedrockConverseModelProviderTest {
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
         assertTrue(body.contains("\"role\":\"user\""));
-        assertTrue(body.contains("\"text\":\"Hello, how are you?\""));
+        assertTrue(body.contains("\"content\":\"Hello, how are you?\""));
     }
 
     @Test
@@ -703,8 +667,8 @@ public class BedrockConverseModelProviderTest {
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
         assertTrue(body.contains("\"text\":\"Describe this image:\""));
-        assertTrue(body.contains("\"image\""));
-        assertTrue(body.contains("\"format\":\"png\""));
+        assertTrue(body.contains("\"type\":\"image_url\""));
+        assertTrue(body.contains("data:image/png;base64,"));
     }
 
     @Test
@@ -780,15 +744,13 @@ public class BedrockConverseModelProviderTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(blocks);
 
-        // Act
-        Map<String, String> result = provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.containsKey("body"));
-        String body = result.get("body");
-        assertTrue(body.contains("\"video\""));
-        assertTrue(body.contains("\"format\":\"mp4\""));
+        // Act & Assert
+        try {
+            provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+            fail("Should throw IllegalArgumentException for VIDEO content type");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Video content is not supported"));
+        }
     }
 
     @Test
@@ -804,15 +766,13 @@ public class BedrockConverseModelProviderTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(blocks);
 
-        // Act
-        Map<String, String> result = provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.containsKey("body"));
-        String body = result.get("body");
-        assertTrue(body.contains("\"document\""));
-        assertTrue(body.contains("\"format\":\"pdf\""));
+        // Act & Assert
+        try {
+            provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+            fail("Should throw IllegalArgumentException for DOCUMENT content type");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Document content is not supported"));
+        }
     }
 
     @Test
@@ -844,32 +804,47 @@ public class BedrockConverseModelProviderTest {
     }
 
     @Test
-    public void testMapMessages_WithAssistantToolCalls() {
+    public void testMapContentBlocks_ImageWithDifferentFormats() {
+        // Test different image formats
+        String[] formats = { "png", "jpeg", "jpg", "gif", "webp" };
+        for (String format : formats) {
+            // Arrange
+            List<ContentBlock> blocks = new ArrayList<>();
+            ContentBlock imageBlock = new ContentBlock();
+            imageBlock.setType(ContentType.IMAGE);
+            ImageContent image = new ImageContent(SourceType.BASE64, format, "base64data");
+            imageBlock.setImage(image);
+            blocks.add(imageBlock);
+
+            // Act
+            Map<String, String> result = provider.mapContentBlocks(blocks, MLAgentType.CONVERSATIONAL);
+
+            // Assert
+            assertNotNull(result);
+            String body = result.get("body");
+            assertTrue("Format " + format + " should be supported", body.contains("data:image/" + format + ";base64,"));
+        }
+    }
+
+    @Test
+    public void testMapMessages_WithImageContent() {
         // Arrange
         List<Message> messages = new ArrayList<>();
 
-        // User message
-        List<ContentBlock> userContent = new ArrayList<>();
-        ContentBlock userBlock = new ContentBlock();
-        userBlock.setType(ContentType.TEXT);
-        userBlock.setText("What's the weather?");
-        userContent.add(userBlock);
-        messages.add(new Message("user", userContent));
+        List<ContentBlock> content = new ArrayList<>();
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("What's in this image?");
+        content.add(textBlock);
 
-        // Assistant message with tool calls
-        List<ContentBlock> assistantContent = new ArrayList<>();
-        ContentBlock assistantBlock = new ContentBlock();
-        assistantBlock.setType(ContentType.TEXT);
-        assistantBlock.setText("Let me check the weather");
-        assistantContent.add(assistantBlock);
+        ContentBlock imageBlock = new ContentBlock();
+        imageBlock.setType(ContentType.IMAGE);
+        ImageContent image = new ImageContent(SourceType.BASE64, "png", "imagedata");
+        imageBlock.setImage(image);
+        content.add(imageBlock);
 
-        Message assistantMsg = new Message("assistant", assistantContent);
-        List<ToolCall> toolCalls = new ArrayList<>();
-        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"NYC\"}");
-        ToolCall toolCall = new ToolCall("call-123", "function", function);
-        toolCalls.add(toolCall);
-        assistantMsg.setToolCalls(toolCalls);
-        messages.add(assistantMsg);
+        Message message = new Message("user", content);
+        messages.add(message);
 
         // Act
         Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
@@ -878,13 +853,59 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(result);
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
-        assertTrue(body.contains("toolUse"));
-        assertTrue(body.contains("call-123"));
-        assertTrue(body.contains("get_weather"));
+        assertTrue(body.contains("\"role\":\"user\""));
+        assertTrue(body.contains("\"text\":\"What's in this image?\""));
+        assertTrue(body.contains("\"type\":\"image_url\""));
     }
 
     @Test
-    public void testMapMessages_WithToolResultMessages() {
+    public void testMapMessages_WithToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        // User message
+        List<ContentBlock> userContent = new ArrayList<>();
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What's the weather in Seattle?");
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        // Assistant message with tool call
+        List<ContentBlock> assistantContent = new ArrayList<>();
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("Let me check the weather for you.");
+        assistantContent.add(assistantBlock);
+
+        Message assistantMessage = new Message("assistant", assistantContent);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"Seattle, WA\"}");
+        ToolCall toolCall = new ToolCall("call_123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMessage.setToolCalls(toolCalls);
+        messages.add(assistantMessage);
+
+        // Act
+        Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.containsKey("body"));
+        String body = result.get("body");
+        assertTrue(body.contains("\"role\":\"user\""));
+        assertTrue(body.contains("\"role\":\"assistant\""));
+        assertTrue(body.contains("\"tool_calls\""));
+        assertTrue(body.contains("\"id\":\"call_123\""));
+        assertTrue(body.contains("\"type\":\"function\""));
+        assertTrue(body.contains("\"name\":\"get_weather\""));
+        assertTrue(body.contains("\"arguments\""));
+        assertTrue(body.contains("location"));
+        assertTrue(body.contains("Seattle"));
+    }
+
+    @Test
+    public void testMapMessages_WithToolResult() {
         // Arrange
         List<Message> messages = new ArrayList<>();
 
@@ -895,17 +916,32 @@ public class BedrockConverseModelProviderTest {
         userBlock.setText("What's the weather?");
         userContent.add(userBlock);
         messages.add(new Message("user", userContent));
+
+        // Assistant message with tool call
+        List<ContentBlock> assistantContent = new ArrayList<>();
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("Checking weather...");
+        assistantContent.add(assistantBlock);
+
+        Message assistantMessage = new Message("assistant", assistantContent);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"Seattle\"}");
+        ToolCall toolCall = new ToolCall("call_123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMessage.setToolCalls(toolCalls);
+        messages.add(assistantMessage);
 
         // Tool result message
         List<ContentBlock> toolContent = new ArrayList<>();
         ContentBlock toolBlock = new ContentBlock();
         toolBlock.setType(ContentType.TEXT);
-        toolBlock.setText("72F and sunny");
+        toolBlock.setText("{\"temperature\":\"65F\",\"condition\":\"sunny\"}");
         toolContent.add(toolBlock);
 
-        Message toolMsg = new Message("tool", toolContent);
-        toolMsg.setToolCallId("call-123");
-        messages.add(toolMsg);
+        Message toolMessage = new Message("tool", toolContent);
+        toolMessage.setToolCallId("call_123");
+        messages.add(toolMessage);
 
         // Act
         Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
@@ -914,79 +950,37 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(result);
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
-        assertTrue(body.contains("toolResult"));
-        assertTrue(body.contains("call-123"));
-        assertTrue(body.contains("72F and sunny"));
-        // Tool role should be converted to user
-        assertTrue(body.contains("\"role\":\"user\""));
+        assertTrue(body.contains("\"role\":\"tool\""));
+        assertTrue(body.contains("\"tool_call_id\":\"call_123\""));
+        assertTrue(body.contains("temperature"));
+        assertTrue(body.contains("65F"));
     }
 
     @Test
-    public void testMapMessages_WithMultipleConsecutiveToolResults() {
+    public void testMapMessages_WithMultipleToolCalls() {
         // Arrange
         List<Message> messages = new ArrayList<>();
 
-        // User message
-        List<ContentBlock> userContent = new ArrayList<>();
-        ContentBlock userBlock = new ContentBlock();
-        userBlock.setType(ContentType.TEXT);
-        userBlock.setText("Get weather and time");
-        userContent.add(userBlock);
-        messages.add(new Message("user", userContent));
-
-        // First tool result
-        List<ContentBlock> tool1Content = new ArrayList<>();
-        ContentBlock tool1Block = new ContentBlock();
-        tool1Block.setType(ContentType.TEXT);
-        tool1Block.setText("72F and sunny");
-        tool1Content.add(tool1Block);
-        Message toolMsg1 = new Message("tool", tool1Content);
-        toolMsg1.setToolCallId("call-1");
-        messages.add(toolMsg1);
-
-        // Second tool result
-        List<ContentBlock> tool2Content = new ArrayList<>();
-        ContentBlock tool2Block = new ContentBlock();
-        tool2Block.setType(ContentType.TEXT);
-        tool2Block.setText("3:00 PM");
-        tool2Content.add(tool2Block);
-        Message toolMsg2 = new Message("tool", tool2Content);
-        toolMsg2.setToolCallId("call-2");
-        messages.add(toolMsg2);
-
-        // Act
-        Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.containsKey("body"));
-        String body = result.get("body");
-        // Both tool results should be in the same user message
-        assertTrue(body.contains("call-1"));
-        assertTrue(body.contains("call-2"));
-        assertTrue(body.contains("72F and sunny"));
-        assertTrue(body.contains("3:00 PM"));
-    }
-
-    @Test
-    public void testMapMessages_WithAssistantToolCallsAndContent() {
-        // Arrange
-        List<Message> messages = new ArrayList<>();
-
-        // Assistant message with both content and tool calls
+        // Assistant message with multiple tool calls
         List<ContentBlock> assistantContent = new ArrayList<>();
         ContentBlock assistantBlock = new ContentBlock();
         assistantBlock.setType(ContentType.TEXT);
-        assistantBlock.setText("I'll check that for you");
+        assistantBlock.setText("Let me check both locations.");
         assistantContent.add(assistantBlock);
 
-        Message assistantMsg = new Message("assistant", assistantContent);
+        Message assistantMessage = new Message("assistant", assistantContent);
         List<ToolCall> toolCalls = new ArrayList<>();
-        ToolCall.ToolFunction function = new ToolCall.ToolFunction("search", "{}");
-        ToolCall toolCall = new ToolCall("call-456", "function", function);
-        toolCalls.add(toolCall);
-        assistantMsg.setToolCalls(toolCalls);
-        messages.add(assistantMsg);
+
+        ToolCall.ToolFunction function1 = new ToolCall.ToolFunction("get_weather", "{\"location\":\"Seattle\"}");
+        ToolCall toolCall1 = new ToolCall("call_123", "function", function1);
+        toolCalls.add(toolCall1);
+
+        ToolCall.ToolFunction function2 = new ToolCall.ToolFunction("get_weather", "{\"location\":\"Portland\"}");
+        ToolCall toolCall2 = new ToolCall("call_456", "function", function2);
+        toolCalls.add(toolCall2);
+
+        assistantMessage.setToolCalls(toolCalls);
+        messages.add(assistantMessage);
 
         // Act
         Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
@@ -995,9 +989,116 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(result);
         assertTrue(result.containsKey("body"));
         String body = result.get("body");
-        // Should contain both text content and toolUse
-        assertTrue(body.contains("I'll check that for you"));
-        assertTrue(body.contains("toolUse"));
-        assertTrue(body.contains("search"));
+        assertTrue(body.contains("\"tool_calls\""));
+        assertTrue(body.contains("\"id\":\"call_123\""));
+        assertTrue(body.contains("\"id\":\"call_456\""));
+        assertTrue(body.contains("Seattle"));
+        assertTrue(body.contains("Portland"));
+    }
+
+    @Test
+    public void testMapMessages_WithToolCallsAndResults() {
+        // Arrange - Complete conversation with tool usage
+        List<Message> messages = new ArrayList<>();
+
+        // 1. User asks question
+        List<ContentBlock> userContent = new ArrayList<>();
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What's the weather in Seattle?");
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        // 2. Assistant decides to use tool
+        List<ContentBlock> assistantContent1 = new ArrayList<>();
+        ContentBlock assistantBlock1 = new ContentBlock();
+        assistantBlock1.setType(ContentType.TEXT);
+        assistantBlock1.setText("Let me check the weather for you.");
+        assistantContent1.add(assistantBlock1);
+
+        Message assistantMessage1 = new Message("assistant", assistantContent1);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"Seattle, WA\"}");
+        ToolCall toolCall = new ToolCall("call_123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMessage1.setToolCalls(toolCalls);
+        messages.add(assistantMessage1);
+
+        // 3. Tool result
+        List<ContentBlock> toolContent = new ArrayList<>();
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("{\"temperature\":\"65F\",\"condition\":\"partly cloudy\"}");
+        toolContent.add(toolBlock);
+
+        Message toolMessage = new Message("tool", toolContent);
+        toolMessage.setToolCallId("call_123");
+        messages.add(toolMessage);
+
+        // 4. Assistant provides final answer
+        List<ContentBlock> assistantContent2 = new ArrayList<>();
+        ContentBlock assistantBlock2 = new ContentBlock();
+        assistantBlock2.setType(ContentType.TEXT);
+        assistantBlock2.setText("The weather in Seattle is 65F and partly cloudy.");
+        assistantContent2.add(assistantBlock2);
+        messages.add(new Message("assistant", assistantContent2));
+
+        // Act
+        Map<String, String> result = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.containsKey("body"));
+        String body = result.get("body");
+
+        // Verify all messages are present
+        assertTrue(body.contains("What's the weather in Seattle?"));
+        assertTrue(body.contains("Let me check the weather for you."));
+        assertTrue(body.contains("\"tool_calls\""));
+        assertTrue(body.contains("\"id\":\"call_123\""));
+        assertTrue(body.contains("\"role\":\"tool\""));
+        assertTrue(body.contains("\"tool_call_id\":\"call_123\""));
+        assertTrue(body.contains("The weather in Seattle is 65F and partly cloudy."));
+    }
+
+    @Test
+    public void testMapAgentInput_WithToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+
+        List<ContentBlock> userContent = new ArrayList<>();
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What's the weather?");
+        userContent.add(userBlock);
+        messages.add(new Message("user", userContent));
+
+        List<ContentBlock> assistantContent = new ArrayList<>();
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("Checking...");
+        assistantContent.add(assistantBlock);
+
+        Message assistantMessage = new Message("assistant", assistantContent);
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"Seattle\"}");
+        ToolCall toolCall = new ToolCall("call_123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMessage.setToolCalls(toolCalls);
+        messages.add(assistantMessage);
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(messages);
+
+        // Act
+        Map<String, String> result = provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.containsKey("body"));
+        String body = result.get("body");
+        assertTrue(body.contains("\"tool_calls\""));
+        assertTrue(body.contains("\"id\":\"call_123\""));
+        assertTrue(body.contains("\"name\":\"get_weather\""));
     }
 }

@@ -36,6 +36,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String RETRY_TIMEOUT_SECONDS_FIELD = "retry_timeout_seconds";
     public static final String MAX_RETRY_TIMES_FIELD = "max_retry_times";
     public static final String RETRY_BACKOFF_POLICY_FIELD = "retry_backoff_policy";
+    public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
     public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
@@ -44,6 +45,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
     public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
+    public static final Boolean SKIP_SSL_VERIFICATION_DEFAULT_VALUE = Boolean.FALSE;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
@@ -52,6 +54,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     private Integer retryTimeoutSeconds;
     private Integer maxRetryTimes;
     private RetryBackoffPolicy retryBackoffPolicy;
+    private Boolean skipSslVerification;
 
     @Builder(toBuilder = true)
     public ConnectorClientConfig(
@@ -61,7 +64,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer retryBackoffMillis,
         Integer retryTimeoutSeconds,
         Integer maxRetryTimes,
-        RetryBackoffPolicy retryBackoffPolicy
+        RetryBackoffPolicy retryBackoffPolicy,
+        Boolean skipSslVerification
     ) {
         this.maxConnections = maxConnections;
         this.connectionTimeout = connectionTimeout;
@@ -70,6 +74,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.retryTimeoutSeconds = retryTimeoutSeconds;
         this.maxRetryTimes = maxRetryTimes;
         this.retryBackoffPolicy = retryBackoffPolicy;
+        this.skipSslVerification = skipSslVerification;
     }
 
     public ConnectorClientConfig(StreamInput input) throws IOException {
@@ -84,6 +89,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             if (input.readBoolean()) {
                 this.retryBackoffPolicy = RetryBackoffPolicy.from(input.readString());
             }
+            this.skipSslVerification = input.readOptionalBoolean();
         }
     }
 
@@ -95,6 +101,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.retryTimeoutSeconds = RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE;
         this.maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         this.retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
+        this.skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
     }
 
     @Override
@@ -113,6 +120,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
+            out.writeOptionalBoolean(skipSslVerification);
         }
     }
 
@@ -140,6 +148,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         if (retryBackoffPolicy != null) {
             builder.field(RETRY_BACKOFF_POLICY_FIELD, retryBackoffPolicy.name().toLowerCase(Locale.ROOT));
         }
+        if (skipSslVerification != null) {
+            builder.field(SKIP_SSL_VERIFICATION_FIELD, skipSslVerification);
+        }
         return builder.endObject();
     }
 
@@ -156,6 +167,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer retryTimeoutSeconds = RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE;
         Integer maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         RetryBackoffPolicy retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
+        Boolean skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -184,6 +196,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 case RETRY_BACKOFF_POLICY_FIELD:
                     retryBackoffPolicy = RetryBackoffPolicy.from(parser.text());
                     break;
+                case SKIP_SSL_VERIFICATION_FIELD:
+                    skipSslVerification = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -198,6 +213,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             .retryTimeoutSeconds(retryTimeoutSeconds)
             .maxRetryTimes(maxRetryTimes)
             .retryBackoffPolicy(retryBackoffPolicy)
+            .skipSslVerification(skipSslVerification)
             .build();
     }
 }

@@ -160,7 +160,60 @@ public class AgentInput implements Writeable {
         Message message = new Message();
         message.setRole(role);
         message.setContent(content);
+
+        // Read optional tool-related fields
+        boolean hasToolCalls = in.readBoolean();
+        if (hasToolCalls) {
+            message.setToolCalls(readToolCallsList(in));
+        }
+
+        boolean hasToolCallId = in.readBoolean();
+        if (hasToolCallId) {
+            message.setToolCallId(in.readString());
+        }
+
         return message;
+    }
+
+    /**
+     * Reads a list of ToolCalls from stream input.
+     */
+    private List<ToolCall> readToolCallsList(StreamInput in) throws IOException {
+        int size = in.readInt();
+        List<ToolCall> toolCalls = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            ToolCall toolCall = readToolCall(in);
+            toolCalls.add(toolCall);
+        }
+        return toolCalls;
+    }
+
+    /**
+     * Reads a single ToolCall from stream input.
+     */
+    private ToolCall readToolCall(StreamInput in) throws IOException {
+        String id = in.readString();
+        String type = in.readString();
+        ToolCall.ToolFunction function = readToolFunction(in);
+
+        ToolCall toolCall = new ToolCall();
+        toolCall.setId(id);
+        toolCall.setType(type);
+        toolCall.setFunction(function);
+        return toolCall;
+    }
+
+    /**
+     * Reads a ToolFunction from stream input.
+     */
+    private ToolCall.ToolFunction readToolFunction(StreamInput in) throws IOException {
+        String name = in.readString();
+        String arguments = in.readString();
+
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction();
+        function.setName(name);
+        function.setArguments(arguments);
+        return function;
     }
 
     /**
@@ -258,6 +311,14 @@ public class AgentInput implements Writeable {
                     // Parse content array for messages
                     itemMap.put("content", parseContentArray(parser));
                     break;
+                case "toolCalls":
+                    // Parse tool calls array for assistant messages
+                    itemMap.put("toolCalls", parseToolCallsArray(parser));
+                    break;
+                case "toolCallId":
+                    // Parse tool call ID for tool result messages
+                    itemMap.put("toolCallId", parser.text());
+                    break;
                 case "type":
                     // This indicates it's a ContentBlock
                     itemMap.put("type", parser.text());
@@ -311,6 +372,95 @@ public class AgentInput implements Writeable {
         }
 
         return contentBlocks;
+    }
+
+    /**
+     * Parses tool calls array for assistant messages.
+     */
+    private List<ToolCall> parseToolCallsArray(XContentParser parser) throws IOException {
+        List<ToolCall> toolCalls = new ArrayList<>();
+
+        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+
+        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+
+            ToolCall toolCall = parseToolCallFromXContent(parser);
+            toolCalls.add(toolCall);
+        }
+
+        return toolCalls;
+    }
+
+    /**
+     * Parses a single tool call from XContent.
+     */
+    private ToolCall parseToolCallFromXContent(XContentParser parser) throws IOException {
+        String id = null;
+        String type = null;
+        ToolCall.ToolFunction function = null;
+
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case "id":
+                    id = parser.text();
+                    break;
+                case "type":
+                    type = parser.text();
+                    break;
+                case "function":
+                    function = parseToolFunctionFromXContent(parser);
+                    break;
+                default:
+                    // Skip unknown fields
+                    parser.skipChildren();
+                    break;
+            }
+        }
+
+        if (id == null || function == null) {
+            throw new IllegalArgumentException("ToolCall must have 'id' and 'function' fields");
+        }
+
+        // Default to "function" if type not provided
+        return new ToolCall(id, type != null ? type : "function", function);
+    }
+
+    /**
+     * Parses a tool function from XContent.
+     */
+    private ToolCall.ToolFunction parseToolFunctionFromXContent(XContentParser parser) throws IOException {
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+
+        String name = null;
+        String arguments = null;
+
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case "name":
+                    name = parser.text();
+                    break;
+                case "arguments":
+                    arguments = parser.text();
+                    break;
+                default:
+                    // Skip unknown fields
+                    parser.skipChildren();
+                    break;
+            }
+        }
+
+        if (name == null || arguments == null) {
+            throw new IllegalArgumentException("ToolFunction must have 'name' and 'arguments' fields");
+        }
+
+        return new ToolCall.ToolFunction(name, arguments);
     }
 
     /**
@@ -377,6 +527,16 @@ public class AgentInput implements Writeable {
         Message message = new Message();
         message.setRole(role);
         message.setContent(content);
+
+        // Set optional tool-related fields
+        if (itemMap.containsKey("toolCalls")) {
+            message.setToolCalls((List<ToolCall>) itemMap.get("toolCalls"));
+        }
+
+        if (itemMap.containsKey("toolCallId")) {
+            message.setToolCallId((String) itemMap.get("toolCallId"));
+        }
+
         return message;
     }
 
@@ -626,6 +786,46 @@ public class AgentInput implements Writeable {
     private void writeMessage(StreamOutput out, Message message) throws IOException {
         out.writeString(message.getRole());
         writeContentBlocksList(out, message.getContent());
+
+        // Write optional tool-related fields
+        boolean hasToolCalls = message.getToolCalls() != null && !message.getToolCalls().isEmpty();
+        out.writeBoolean(hasToolCalls);
+        if (hasToolCalls) {
+            writeToolCallsList(out, message.getToolCalls());
+        }
+
+        boolean hasToolCallId = message.getToolCallId() != null;
+        out.writeBoolean(hasToolCallId);
+        if (hasToolCallId) {
+            out.writeString(message.getToolCallId());
+        }
+    }
+
+    /**
+     * Writes a list of ToolCalls to stream output.
+     */
+    private void writeToolCallsList(StreamOutput out, List<ToolCall> toolCalls) throws IOException {
+        out.writeInt(toolCalls.size());
+        for (ToolCall toolCall : toolCalls) {
+            writeToolCall(out, toolCall);
+        }
+    }
+
+    /**
+     * Writes a single ToolCall to stream output.
+     */
+    private void writeToolCall(StreamOutput out, ToolCall toolCall) throws IOException {
+        out.writeString(toolCall.getId());
+        out.writeString(toolCall.getType());
+        writeToolFunction(out, toolCall.getFunction());
+    }
+
+    /**
+     * Writes a ToolFunction to stream output.
+     */
+    private void writeToolFunction(StreamOutput out, ToolCall.ToolFunction function) throws IOException {
+        out.writeString(function.getName());
+        out.writeString(function.getArguments());
     }
 
     /**

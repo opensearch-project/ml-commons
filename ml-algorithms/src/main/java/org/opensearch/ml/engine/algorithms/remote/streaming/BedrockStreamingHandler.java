@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +55,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
@@ -65,6 +67,8 @@ import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamOutput
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
 import software.amazon.awssdk.services.bedrockruntime.model.GuardrailStreamConfiguration;
+import software.amazon.awssdk.services.bedrockruntime.model.ImageBlock;
+import software.amazon.awssdk.services.bedrockruntime.model.ImageSource;
 import software.amazon.awssdk.services.bedrockruntime.model.Message;
 import software.amazon.awssdk.services.bedrockruntime.model.SystemContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.Tool;
@@ -590,12 +594,40 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         if (item.has("text")) {
             blocks.add(ContentBlock.builder().text(item.get("text").asText()).build());
         }
+        if (item.has("image")) {
+            ContentBlock imageBlock = buildImageBlock(item.get("image"));
+            if (imageBlock != null) {
+                blocks.add(imageBlock);
+            }
+        }
         if (item.has("toolResult")) {
             blocks.add(buildToolResultBlock(item.get("toolResult")));
         }
         if (item.has("toolUse")) {
             blocks.add(buildToolUseBlock(item.get("toolUse")));
         }
+    }
+
+    private ContentBlock buildImageBlock(JsonNode image) {
+        String format = image.has("format") ? image.get("format").asText() : "png";
+        JsonNode source = image.get("source");
+
+        if (source != null && source.has("bytes")) {
+            String base64Data = source.get("bytes").asText();
+
+            return ContentBlock
+                .builder()
+                .image(
+                    ImageBlock
+                        .builder()
+                        .format(format)
+                        .source(ImageSource.builder().bytes(SdkBytes.fromByteArray(Base64.getDecoder().decode(base64Data))).build())
+                        .build()
+                )
+                .build();
+        }
+
+        return null;
     }
 
     private ContentBlock buildToolResultBlock(JsonNode toolResult) {

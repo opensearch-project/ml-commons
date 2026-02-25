@@ -8,6 +8,8 @@ package org.opensearch.ml.common.agent;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -29,7 +31,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.utils.ToolUtils;
 
 /**
- * Model provider for Google Gemini generateContent API.
+ * Model provider for Google Gemini generateContent API (v1beta).
  *
  * This provider uses template-based parameter substitution with StringSubstitutor
  * to create the request body. Different input types (text, content blocks, messages)
@@ -48,7 +50,7 @@ import org.opensearch.ml.common.utils.ToolUtils;
  * All parameters consistently use the ${parameters.} prefix for uniformity.
  */
 // todo: refactor the processing so providers have to only provide the constants
-public class GeminiGenerateContentModelProvider extends ModelProvider {
+public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY_TEMPLATE =
         "{\"systemInstruction\":{\"parts\":[{\"text\":\"${parameters.system_prompt:-You are a helpful assistant.}\"}]},"
@@ -209,23 +211,13 @@ public class GeminiGenerateContentModelProvider extends ModelProvider {
                     break;
                 case IMAGE:
                     ImageContent image = block.getImage();
+                    Map<String, Object> imageParams = new HashMap<>();
+                    imageParams.put("image_format", image.getFormat());
+                    imageParams.put("image_data", StringEscapeUtils.escapeJson(image.getData()));
                     // Map SourceType to Gemini API source type
-                    if (image.getType() == SourceType.BASE64) {
-                        Map<String, Object> imageParams = new HashMap<>();
-                        imageParams.put("image_format", image.getFormat());
-                        imageParams.put("image_data", StringEscapeUtils.escapeJson(image.getData()));
-                        StringSubstitutor imageSubstitutor = new StringSubstitutor(imageParams, "${parameters.", "}");
-                        contentArray.append(imageSubstitutor.replace(IMAGE_CONTENT_TEMPLATE));
-                    } else {
-                        // For fileData (URL), use different template
-                        Map<String, Object> fileParams = new HashMap<>();
-                        fileParams.put("image_format", image.getFormat());
-                        fileParams.put("image_data", StringEscapeUtils.escapeJson(image.getData()));
-                        StringSubstitutor fileSubstitutor = new StringSubstitutor(fileParams, "${parameters.", "}");
-                        String fileDataTemplate =
-                            "{\"fileData\":{\"mimeType\":\"image/${parameters.image_format}\",\"fileUri\":\"${parameters.image_data}\"}}";
-                        contentArray.append(fileSubstitutor.replace(fileDataTemplate));
-                    }
+                    String imageTemplate = mapImageSourceTypeToGemini(image.getType());
+                    StringSubstitutor imageSubstitutor = new StringSubstitutor(imageParams, "${parameters.", "}");
+                    contentArray.append(imageSubstitutor.replace(imageTemplate));
                     break;
                 case DOCUMENT:
                     DocumentContent document = block.getDocument();
@@ -280,6 +272,29 @@ public class GeminiGenerateContentModelProvider extends ModelProvider {
         }
 
         return messagesArray.toString();
+    }
+
+    /**
+     * Maps SourceType to Gemini generateContent API image format.
+     * Returns the appropriate template based on the source type.
+     *
+     * @param sourceType the source type from image content
+     * @return the corresponding Gemini API template string
+     * @throws IllegalArgumentException if sourceType is null or unsupported
+     */
+    private String mapImageSourceTypeToGemini(SourceType sourceType) {
+        if (sourceType == null) {
+            String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
+            throw new IllegalArgumentException("Image source type is required. Supported types: " + supportedTypes);
+        }
+        return switch (sourceType) {
+            case BASE64 -> IMAGE_CONTENT_TEMPLATE;
+            case URL -> "{\"fileData\":{\"mimeType\":\"image/${parameters.image_format}\",\"fileUri\":\"${parameters.image_data}\"}}";
+            default -> {
+                String supportedTypes = Stream.of(SourceType.values()).map(SourceType::name).collect(Collectors.joining(", "));
+                throw new IllegalArgumentException("Unsupported image source type. Supported types: " + supportedTypes);
+            }
+        };
     }
 
 }

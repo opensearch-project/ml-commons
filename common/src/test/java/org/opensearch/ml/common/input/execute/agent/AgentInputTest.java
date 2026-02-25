@@ -568,4 +568,286 @@ public class AgentInputTest {
         assertEquals("user", deserializedMessages.get(0).getRole());
         assertEquals("assistant", deserializedMessages.get(1).getRole());
     }
+
+    @Test
+    public void testMessage_WithToolCalls() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+        Message assistantMessage = new Message();
+        assistantMessage.setRole("assistant");
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Let me check the weather for you");
+        List<ContentBlock> content = new ArrayList<>();
+        content.add(textBlock);
+        assistantMessage.setContent(content);
+
+        // Add tool calls
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"NYC\"}");
+        ToolCall toolCall = new ToolCall("call-123", "function", function);
+        toolCalls.add(toolCall);
+        assistantMessage.setToolCalls(toolCalls);
+
+        messages.add(assistantMessage);
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Assert
+        assertEquals(InputType.MESSAGES, agentInput.getInputType());
+        @SuppressWarnings("unchecked")
+        List<Message> resultMessages = (List<Message>) agentInput.getInput();
+        assertEquals(1, resultMessages.size());
+        assertNotNull(resultMessages.get(0).getToolCalls());
+        assertEquals(1, resultMessages.get(0).getToolCalls().size());
+        assertEquals("call-123", resultMessages.get(0).getToolCalls().get(0).getId());
+        assertEquals("get_weather", resultMessages.get(0).getToolCalls().get(0).getFunction().getName());
+    }
+
+    @Test
+    public void testMessage_WithToolCallId() {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+        Message toolMessage = new Message();
+        toolMessage.setRole("tool");
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("72F and sunny");
+        List<ContentBlock> content = new ArrayList<>();
+        content.add(textBlock);
+        toolMessage.setContent(content);
+        toolMessage.setToolCallId("call-123");
+
+        messages.add(toolMessage);
+        AgentInput agentInput = new AgentInput(messages);
+
+        // Assert
+        assertEquals(InputType.MESSAGES, agentInput.getInputType());
+        @SuppressWarnings("unchecked")
+        List<Message> resultMessages = (List<Message>) agentInput.getInput();
+        assertEquals(1, resultMessages.size());
+        assertEquals("tool", resultMessages.get(0).getRole());
+        assertEquals("call-123", resultMessages.get(0).getToolCallId());
+    }
+
+    @Test
+    public void testWriteToAndReadFrom_MessageWithToolCalls() throws IOException {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+        Message assistantMessage = new Message();
+        assistantMessage.setRole("assistant");
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("I'll help you with that");
+        List<ContentBlock> content = new ArrayList<>();
+        content.add(textBlock);
+        assistantMessage.setContent(content);
+
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function1 = new ToolCall.ToolFunction("search", "{\"query\":\"test\"}");
+        ToolCall toolCall1 = new ToolCall("call-1", "function", function1);
+        ToolCall.ToolFunction function2 = new ToolCall.ToolFunction("calculator", "{\"expression\":\"2+2\"}");
+        ToolCall toolCall2 = new ToolCall("call-2", "function", function2);
+        toolCalls.add(toolCall1);
+        toolCalls.add(toolCall2);
+        assistantMessage.setToolCalls(toolCalls);
+
+        messages.add(assistantMessage);
+        AgentInput originalInput = new AgentInput(messages);
+
+        // Act - Write to stream
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalInput.writeTo(output);
+
+        // Read from stream
+        StreamInput input = output.bytes().streamInput();
+        AgentInput deserializedInput = new AgentInput(input);
+
+        // Assert
+        assertEquals(InputType.MESSAGES, deserializedInput.getInputType());
+        @SuppressWarnings("unchecked")
+        List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
+        assertEquals(1, deserializedMessages.size());
+        assertEquals("assistant", deserializedMessages.get(0).getRole());
+        assertNotNull(deserializedMessages.get(0).getToolCalls());
+        assertEquals(2, deserializedMessages.get(0).getToolCalls().size());
+        assertEquals("call-1", deserializedMessages.get(0).getToolCalls().get(0).getId());
+        assertEquals("search", deserializedMessages.get(0).getToolCalls().get(0).getFunction().getName());
+        assertEquals("call-2", deserializedMessages.get(0).getToolCalls().get(1).getId());
+        assertEquals("calculator", deserializedMessages.get(0).getToolCalls().get(1).getFunction().getName());
+    }
+
+    @Test
+    public void testWriteToAndReadFrom_MessageWithToolCallId() throws IOException {
+        // Arrange
+        List<Message> messages = new ArrayList<>();
+        Message toolMessage = new Message();
+        toolMessage.setRole("tool");
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Result from tool execution");
+        List<ContentBlock> content = new ArrayList<>();
+        content.add(textBlock);
+        toolMessage.setContent(content);
+        toolMessage.setToolCallId("call-456");
+
+        messages.add(toolMessage);
+        AgentInput originalInput = new AgentInput(messages);
+
+        // Act - Write to stream
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalInput.writeTo(output);
+
+        // Read from stream
+        StreamInput input = output.bytes().streamInput();
+        AgentInput deserializedInput = new AgentInput(input);
+
+        // Assert
+        assertEquals(InputType.MESSAGES, deserializedInput.getInputType());
+        @SuppressWarnings("unchecked")
+        List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
+        assertEquals(1, deserializedMessages.size());
+        assertEquals("tool", deserializedMessages.get(0).getRole());
+        assertEquals("call-456", deserializedMessages.get(0).getToolCallId());
+        assertEquals("Result from tool execution", deserializedMessages.get(0).getContent().get(0).getText());
+    }
+
+    @Test
+    public void testXContentParser_MessageWithToolCalls() throws IOException {
+        // Arrange
+        String jsonStr = """
+            [{
+              "role": "assistant",
+              "content": [{"type": "text", "text": "Let me help"}],
+              "toolCalls": [{
+                "id": "call-789",
+                "type": "function",
+                "function": {
+                  "name": "get_info",
+                  "arguments": "{\\"param\\":\\"value\\"}"
+                }
+              }]
+            }]
+            """;
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+        parser.nextToken();
+
+        // Act
+        AgentInput agentInput = new AgentInput(parser);
+
+        // Assert
+        assertEquals(InputType.MESSAGES, agentInput.getInputType());
+        @SuppressWarnings("unchecked")
+        List<Message> messages = (List<Message>) agentInput.getInput();
+        assertEquals(1, messages.size());
+        assertEquals("assistant", messages.get(0).getRole());
+        assertNotNull(messages.get(0).getToolCalls());
+        assertEquals(1, messages.get(0).getToolCalls().size());
+        assertEquals("call-789", messages.get(0).getToolCalls().get(0).getId());
+        assertEquals("get_info", messages.get(0).getToolCalls().get(0).getFunction().getName());
+    }
+
+    @Test
+    public void testXContentParser_MessageWithToolCallId() throws IOException {
+        // Arrange
+        String jsonStr = """
+            [{
+              "role": "tool",
+              "content": [{"type": "text", "text": "Tool result"}],
+              "toolCallId": "call-999"
+            }]
+            """;
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+        parser.nextToken();
+
+        // Act
+        AgentInput agentInput = new AgentInput(parser);
+
+        // Assert
+        assertEquals(InputType.MESSAGES, agentInput.getInputType());
+        @SuppressWarnings("unchecked")
+        List<Message> messages = (List<Message>) agentInput.getInput();
+        assertEquals(1, messages.size());
+        assertEquals("tool", messages.get(0).getRole());
+        assertEquals("call-999", messages.get(0).getToolCallId());
+    }
+
+    @Test
+    public void testCompleteToolCallFlow() throws IOException {
+        // Arrange - Full conversation with tool calls
+        List<Message> messages = new ArrayList<>();
+
+        // User message
+        ContentBlock userBlock = new ContentBlock();
+        userBlock.setType(ContentType.TEXT);
+        userBlock.setText("What's the weather in NYC?");
+        messages.add(new Message("user", List.of(userBlock)));
+
+        // Assistant message with tool call
+        Message assistantWithToolCall = new Message();
+        assistantWithToolCall.setRole("assistant");
+        ContentBlock assistantBlock = new ContentBlock();
+        assistantBlock.setType(ContentType.TEXT);
+        assistantBlock.setText("Let me check the weather");
+        assistantWithToolCall.setContent(List.of(assistantBlock));
+        List<ToolCall> toolCalls = new ArrayList<>();
+        ToolCall.ToolFunction function = new ToolCall.ToolFunction("get_weather", "{\"location\":\"NYC\"}");
+        toolCalls.add(new ToolCall("call-123", "function", function));
+        assistantWithToolCall.setToolCalls(toolCalls);
+        messages.add(assistantWithToolCall);
+
+        // Tool result message
+        Message toolResult = new Message();
+        toolResult.setRole("tool");
+        ContentBlock toolBlock = new ContentBlock();
+        toolBlock.setType(ContentType.TEXT);
+        toolBlock.setText("72F and sunny");
+        toolResult.setContent(List.of(toolBlock));
+        toolResult.setToolCallId("call-123");
+        messages.add(toolResult);
+
+        // Final assistant message
+        ContentBlock finalBlock = new ContentBlock();
+        finalBlock.setType(ContentType.TEXT);
+        finalBlock.setText("It's 72F and sunny in NYC!");
+        messages.add(new Message("assistant", List.of(finalBlock)));
+
+        AgentInput originalInput = new AgentInput(messages);
+
+        // Act - Write to stream
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalInput.writeTo(output);
+
+        // Read from stream
+        StreamInput input = output.bytes().streamInput();
+        AgentInput deserializedInput = new AgentInput(input);
+
+        // Assert
+        @SuppressWarnings("unchecked")
+        List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
+        assertEquals(4, deserializedMessages.size());
+
+        // Verify user message
+        assertEquals("user", deserializedMessages.get(0).getRole());
+
+        // Verify assistant with tool call
+        assertEquals("assistant", deserializedMessages.get(1).getRole());
+        assertNotNull(deserializedMessages.get(1).getToolCalls());
+        assertEquals(1, deserializedMessages.get(1).getToolCalls().size());
+        assertEquals("call-123", deserializedMessages.get(1).getToolCalls().get(0).getId());
+
+        // Verify tool result
+        assertEquals("tool", deserializedMessages.get(2).getRole());
+        assertEquals("call-123", deserializedMessages.get(2).getToolCallId());
+
+        // Verify final assistant message
+        assertEquals("assistant", deserializedMessages.get(3).getRole());
+    }
 }

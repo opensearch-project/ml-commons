@@ -12,6 +12,8 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
@@ -42,6 +44,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.support.XContentHttpChunk;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.rest.RestStatus;
@@ -378,8 +381,19 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             agentInput.setIsAsync(async);
         }
 
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) input).getInputDataset();
-        inputDataSet.getParameters().put("stream", String.valueOf(true));
+        if (((AgentMLInput) input).getInputDataset() instanceof RemoteInferenceInputDataSet inputDataSet) {
+            if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+                if (inputDataSet.getParameters() != null) {
+                    String memoryConfig = inputDataSet.getParameters().get(MEMORY_CONFIGURATION_FIELD);
+                    if (!Strings.isNullOrEmpty(memoryConfig)) {
+                        throw new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+                    }
+                }
+            }
+            inputDataSet.getParameters().put("stream", String.valueOf(true));
+        } else {
+            throw new IllegalArgumentException("Expected RemoteInferenceInputDataSet for agent execution");
+        }
         return new MLExecuteTaskRequest(functionName, input);
     }
 

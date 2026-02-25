@@ -92,7 +92,16 @@ public class MLCreateConnectorInputTests {
             preProcessFunction,
             postProcessFunction
         );
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(
+            20,
+            10000,
+            10000,
+            10,
+            10,
+            -1,
+            RetryBackoffPolicy.CONSTANT,
+            null
+        );
 
         mlCreateConnectorInput = MLCreateConnectorInput
             .builder()

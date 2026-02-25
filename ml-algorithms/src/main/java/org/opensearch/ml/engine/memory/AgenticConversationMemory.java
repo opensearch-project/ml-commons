@@ -20,6 +20,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -56,7 +57,7 @@ import lombok.extern.log4j.Log4j2;
 @Getter
 public class AgenticConversationMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
 
-    public static final String TYPE = "agentic_conversation";
+    public static final String TYPE = MLMemoryType.AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
 
@@ -260,10 +261,10 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         }
 
         // Build search query for working memory by session_id, filtering only final messages (not traces)
-        // Match ConversationIndexMemory pattern: exclude entries with trace_number
+        // Match ConversationIndexMemory pattern: exclude entries tagged as trace
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
         boolQuery.must(QueryBuilders.termQuery("namespace." + SESSION_ID_FIELD, conversationId));
-        boolQuery.mustNot(QueryBuilders.existsQuery("structured_data_blob.trace_number")); // Exclude traces
+        boolQuery.mustNot(QueryBuilders.termQuery("metadata.type", "trace")); // Exclude traces
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(boolQuery);

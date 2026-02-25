@@ -7,10 +7,15 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import java.net.http.HttpRequest;
 
+import org.apache.logging.log4j.Logger;
+import org.opensearch.action.support.ThreadedActionListener;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -32,7 +37,7 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
 
     /**
      * Gets MCP request headers from ThreadContext and adds them to the HTTP request builder.
-     * 
+     *
      * @param builder HttpRequest.Builder to add headers to
      */
     protected void getMcpRequestHeaders(HttpRequest.Builder builder) {
@@ -57,5 +62,20 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
                 log.debug("Get MCP header: {}", headerName);
             }
         }
+    }
+
+    /**
+     * Creates a ThreadedActionListener to offload response processing from Netty I/O thread to ML thread pool.
+     * This prevents blocking I/O threads during long-running cases like PER agent.
+     *
+     * @param logger Logger instance for the specific executor
+     * @param actionListener The original action listener to wrap
+     * @return ThreadedActionListener wrapped around the original listener
+     */
+    protected ThreadedActionListener<Tuple<Integer, ModelTensors>> createThreadedListener(
+        Logger logger,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        return new ThreadedActionListener<>(logger, getClient().threadPool(), "opensearch_ml_predict_remote", actionListener, false);
     }
 }
