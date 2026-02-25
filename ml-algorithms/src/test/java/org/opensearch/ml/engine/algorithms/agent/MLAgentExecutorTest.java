@@ -754,7 +754,8 @@ public class MLAgentExecutorTest {
         Map<String, String> params = new HashMap<>();
         AtomicBoolean continuationCalled = new AtomicBoolean(false);
 
-        mlAgentExecutor.performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true));
+        mlAgentExecutor
+            .performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true), null);
 
         assertTrue("Continuation should be called", continuationCalled.get());
         // NEXT_STRUCTURED_MESSAGE_ID no longer set — memory auto-resolves IDs
@@ -790,7 +791,8 @@ public class MLAgentExecutorTest {
         Map<String, String> params = new HashMap<>();
         AtomicBoolean continuationCalled = new AtomicBoolean(false);
 
-        mlAgentExecutor.performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true));
+        mlAgentExecutor
+            .performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true), null);
 
         assertTrue("Continuation should be called", continuationCalled.get());
         // NEXT_STRUCTURED_MESSAGE_ID no longer set — memory auto-resolves IDs
@@ -831,7 +833,8 @@ public class MLAgentExecutorTest {
         params.put(MLAgentExecutor.MESSAGE_HISTORY_LIMIT, "2");
         AtomicBoolean continuationCalled = new AtomicBoolean(false);
 
-        mlAgentExecutor.performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true));
+        mlAgentExecutor
+            .performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true), null);
 
         assertTrue("Continuation should be called", continuationCalled.get());
         // nextStructuredMessageId = 5 (history size) + 1 (input) = 6
@@ -863,7 +866,8 @@ public class MLAgentExecutorTest {
                 params,
                 agent,
                 listener,
-                () -> Assert.fail("Continuation should not be called on failure")
+                () -> Assert.fail("Continuation should not be called on failure"),
+                null
             );
 
         verify(listener).onFailure(any(RuntimeException.class));
@@ -901,7 +905,8 @@ public class MLAgentExecutorTest {
                 params,
                 agent,
                 listener,
-                () -> Assert.fail("Continuation should not be called on failure")
+                () -> Assert.fail("Continuation should not be called on failure"),
+                null
             );
 
         verify(listener).onFailure(any(RuntimeException.class));
@@ -940,7 +945,8 @@ public class MLAgentExecutorTest {
         params.put("context", "[{\"description\":\"location\",\"value\":\"SF\"}]");
         AtomicBoolean continuationCalled = new AtomicBoolean(false);
 
-        mlAgentExecutor.performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true));
+        mlAgentExecutor
+            .performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true), null);
 
         assertTrue("Continuation should be called", continuationCalled.get());
         // NEXT_STRUCTURED_MESSAGE_ID no longer set — memory auto-resolves IDs
@@ -985,7 +991,8 @@ public class MLAgentExecutorTest {
         Map<String, String> params = new HashMap<>();
         AtomicBoolean continuationCalled = new AtomicBoolean(false);
 
-        mlAgentExecutor.performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true));
+        mlAgentExecutor
+            .performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true), null);
 
         assertTrue("Continuation should be called", continuationCalled.get());
         // NEXT_STRUCTURED_MESSAGE_ID no longer set — memory auto-resolves IDs
@@ -1034,7 +1041,8 @@ public class MLAgentExecutorTest {
         Map<String, String> params = new HashMap<>();
         AtomicBoolean continuationCalled = new AtomicBoolean(false);
 
-        mlAgentExecutor.performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true));
+        mlAgentExecutor
+            .performInitialMemoryOperations(memory, inputMessages, params, agent, listener, () -> continuationCalled.set(true), null);
 
         assertTrue("Continuation should be called", continuationCalled.get());
         // NEXT_STRUCTURED_MESSAGE_ID no longer set — memory auto-resolves IDs

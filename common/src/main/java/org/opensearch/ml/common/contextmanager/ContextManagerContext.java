@@ -12,6 +12,9 @@ import java.util.Map;
 
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.input.execute.agent.ToolCall;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -62,6 +65,12 @@ public class ContextManagerContext {
     private List<String> toolInteractions = new ArrayList<>();
 
     /**
+     * The structured chat history as a list of Messages (for unified interface agents)
+     */
+    @Builder.Default
+    private List<Message> structuredChatHistory = new ArrayList<>();
+
+    /**
      * Additional parameters for context processing
      */
     @Builder.Default
@@ -77,21 +86,49 @@ public class ContextManagerContext {
 
         // Estimate tokens for system prompt
         if (systemPrompt != null) {
-            tokenCount += estimateTokens(systemPrompt);
+            int systemTokens = estimateTokens(systemPrompt);
+            tokenCount += systemTokens;
         }
 
         // Estimate tokens for user prompt
         if (userPrompt != null) {
-            tokenCount += estimateTokens(userPrompt);
+            int userTokens = estimateTokens(userPrompt);
+            tokenCount += userTokens;
         }
 
-        // Estimate tokens for chat history
-        for (Interaction interaction : chatHistory) {
-            if (interaction.getInput() != null) {
-                tokenCount += estimateTokens(interaction.getInput());
+        // Estimate tokens for chat history — use structured history when in structured mode,
+        // otherwise use legacy history. Avoids double-counting if both are populated.
+        if (isStructuredMode()) {
+            for (Message message : structuredChatHistory) {
+                if (message.getContent() != null) {
+                    for (ContentBlock block : message.getContent()) {
+                        if (block.getText() != null) {
+                            tokenCount += estimateTokens(block.getText());
+                        }
+                    }
+                }
+                // Count tool-call metadata (function names + JSON arguments)
+                if (message.getToolCalls() != null) {
+                    for (ToolCall toolCall : message.getToolCalls()) {
+                        if (toolCall.getFunction() != null) {
+                            if (toolCall.getFunction().getName() != null) {
+                                tokenCount += estimateTokens(toolCall.getFunction().getName());
+                            }
+                            if (toolCall.getFunction().getArguments() != null) {
+                                tokenCount += estimateTokens(toolCall.getFunction().getArguments());
+                            }
+                        }
+                    }
+                }
             }
-            if (interaction.getResponse() != null) {
-                tokenCount += estimateTokens(interaction.getResponse());
+        } else {
+            for (Interaction interaction : chatHistory) {
+                if (interaction.getInput() != null) {
+                    tokenCount += estimateTokens(interaction.getInput());
+                }
+                if (interaction.getResponse() != null) {
+                    tokenCount += estimateTokens(interaction.getResponse());
+                }
             }
         }
 
@@ -105,10 +142,50 @@ public class ContextManagerContext {
 
     /**
      * Get the message count in chat history.
+     * Returns structured message count when in structured mode.
      * @return number of messages in chat history
      */
     public int getMessageCount() {
+        if (isStructuredMode()) {
+            return getStructuredMessageCount();
+        }
         return chatHistory.size();
+    }
+
+    /**
+     * Get the number of structured messages.
+     * @return number of structured messages
+     */
+    public int getStructuredMessageCount() {
+        return structuredChatHistory != null ? structuredChatHistory.size() : 0;
+    }
+
+    /**
+     * Add a message to the structured chat history.
+     * @param message the message to add
+     */
+    public void addStructuredMessage(Message message) {
+        if (structuredChatHistory == null) {
+            structuredChatHistory = new ArrayList<>();
+        }
+        structuredChatHistory.add(message);
+    }
+
+    /**
+     * Clear the structured chat history.
+     */
+    public void clearStructuredChatHistory() {
+        if (structuredChatHistory != null) {
+            structuredChatHistory.clear();
+        }
+    }
+
+    /**
+     * Check if this context is operating in structured mode.
+     * @return true if structured chat history is populated
+     */
+    public boolean isStructuredMode() {
+        return structuredChatHistory != null && !structuredChatHistory.isEmpty();
     }
 
     /**

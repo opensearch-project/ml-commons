@@ -348,6 +348,7 @@ public class MLRegisterAgentRequestTest {
         allValidHooks.put("PRE_LLM", Arrays.asList(new ContextManagerConfig("SummarizationManager", null, null)));
         allValidHooks.put("PRE_TOOL", Arrays.asList(new ContextManagerConfig("MemoryManager", null, null)));
         allValidHooks.put("POST_LLM", Arrays.asList(new ContextManagerConfig("ConversationManager", null, null)));
+        allValidHooks.put("POST_MEMORY", Arrays.asList(new ContextManagerConfig("SummarizationManager", null, null)));
 
         ContextManagementTemplate contextManagement = ContextManagementTemplate
             .builder()

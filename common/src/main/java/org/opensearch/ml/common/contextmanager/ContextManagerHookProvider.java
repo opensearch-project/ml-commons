@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.opensearch.ml.common.hooks.HookProvider;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.hooks.PostMemoryEvent;
+import org.opensearch.ml.common.hooks.PostStructuredMemoryEvent;
 import org.opensearch.ml.common.hooks.PostToolEvent;
 import org.opensearch.ml.common.hooks.PreLLMEvent;
 
@@ -62,6 +63,7 @@ public class ContextManagerHookProvider implements HookProvider {
         registry.addCallback(PreLLMEvent.class, this::handlePreLLM);
         registry.addCallback(PostToolEvent.class, this::handlePostTool);
         registry.addCallback(PostMemoryEvent.class, this::handlePostMemory);
+        registry.addCallback(PostStructuredMemoryEvent.class, this::handlePostStructuredMemory);
 
         log.info("Registered context manager hooks for {} managers", contextManagers.size());
     }
@@ -90,6 +92,16 @@ public class ContextManagerHookProvider implements HookProvider {
      */
     private void handlePostMemory(PostMemoryEvent event) {
         log.debug("Handling PostMemory event");
+        executeManagersForHook("POST_MEMORY", event.getContext());
+    }
+
+    /**
+     * Handle PostStructuredMemory hook events.
+     * Routes to the same POST_MEMORY hook so existing context manager configurations apply.
+     * @param event The PostStructuredMemory event
+     */
+    private void handlePostStructuredMemory(PostStructuredMemoryEvent event) {
+        log.debug("Handling PostStructuredMemory event");
         executeManagersForHook("POST_MEMORY", event.getContext());
     }
 
