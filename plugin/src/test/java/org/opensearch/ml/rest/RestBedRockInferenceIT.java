@@ -29,15 +29,15 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
 
-    private static boolean settingsInitialized = false;
+    private static boolean initialSleepDone = false;
 
     @SneakyThrows
     @Before
     public void setup() throws IOException, InterruptedException {
-        if (!settingsInitialized) {
-            RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+        RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+        if (!initialSleepDone) {
             Thread.sleep(20000);
-            settingsInitialized = true;
+            initialSleepDone = true;
         }
     }
 

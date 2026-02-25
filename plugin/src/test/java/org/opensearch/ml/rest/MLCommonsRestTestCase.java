@@ -144,14 +144,8 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
     }
 
-    private static boolean baseSettingsInitialized = false;
-
     @Before
     public void setupSettings() throws IOException {
-        if (baseSettingsInitialized) {
-            return;
-        }
-
         Response response = TestHelper
             .makeRequest(
                 client(),
@@ -195,8 +189,6 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         response = TestHelper
             .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
         assertEquals(200, response.getStatusLine().getStatusCode());
-
-        baseSettingsInitialized = true;
     }
 
     @Override

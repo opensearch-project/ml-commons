@@ -203,14 +203,14 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
      *
      * @throws Exception if any error occurs during the setup
      */
-    private static boolean settingsInitialized = false;
+    private static boolean initialSleepDone = false;
 
     @Before
     public void setup() throws Exception {
-        if (!settingsInitialized) {
-            RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+        RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+        if (!initialSleepDone) {
             Thread.sleep(20000);
-            settingsInitialized = true;
+            initialSleepDone = true;
         }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
         this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);

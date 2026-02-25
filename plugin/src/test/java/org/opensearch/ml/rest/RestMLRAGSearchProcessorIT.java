@@ -543,19 +543,19 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     private static final String ML_RAG_REMOTE_MODEL_GROUP = "rag_remote_model_group";
 
-    private static boolean settingsInitialized = false;
+    private static boolean initialSleepDone = false;
 
     // "client" gets initialized by the test framework at the instance level
     // so we perform this per test case, not via @BeforeClass.
     @Before
     public void init() throws Exception {
 
-        if (!settingsInitialized) {
-            RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+        RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+        if (!initialSleepDone) {
             // TODO Do we really need to wait this long? This adds 20s to every test case run.
             // Can we instead check the cluster state and move on?
             Thread.sleep(20000);
-            settingsInitialized = true;
+            initialSleepDone = true;
         }
 
         Response response = TestHelper
