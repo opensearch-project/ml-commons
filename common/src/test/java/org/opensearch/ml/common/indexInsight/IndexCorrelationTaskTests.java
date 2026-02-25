@@ -864,4 +864,255 @@ public class IndexCorrelationTaskTests {
         properties.put("data", Map.of("type", "text"));
         return Map.of("properties", properties);
     }
+
+    // ========== Direct method tests for 100% coverage ==========
+
+    @Test
+    public void testExtractXmlContent() {
+        String xmlText = """
+            Some text before
+            <correlation_selection>
+            {
+              "selected_log_pattern": "logs-otel-*",
+              "reasoning": "Both use OTEL"
+            }
+            </correlation_selection>
+            Some text after
+            """;
+
+        String extracted = task.extractXmlContent(xmlText, "correlation_selection");
+        assertNotNull(extracted);
+        assertTrue(extracted.contains("logs-otel-*"));
+        assertTrue(extracted.contains("reasoning"));
+    }
+
+    @Test
+    public void testExtractXmlContent_NoTag() {
+        String xmlText = "No tags here";
+        String extracted = task.extractXmlContent(xmlText, "correlation_selection");
+        assertEquals(null, extracted);
+    }
+
+    @Test
+    public void testNormalizeIndexType() {
+        assertEquals("LOG", task.normalizeIndexType("log"));
+        assertEquals("LOG", task.normalizeIndexType("LOG"));
+        assertEquals("LOG", task.normalizeIndexType("logs"));
+        assertEquals("TRACE", task.normalizeIndexType("trace"));
+        assertEquals("TRACE", task.normalizeIndexType("TRACE"));
+        assertEquals("METRIC", task.normalizeIndexType("metric"));
+        assertEquals("METRIC", task.normalizeIndexType("METRIC"));
+        assertEquals("METRIC", task.normalizeIndexType("metrics"));
+        assertEquals("UNKNOWN", task.normalizeIndexType("unknown"));
+        assertEquals("UNKNOWN", task.normalizeIndexType(null));
+        assertEquals("UNKNOWN", task.normalizeIndexType(""));
+    }
+
+    @Test
+    public void testParseTypeDetectionResponse() {
+        String llmResponse = """
+            <index_type_analysis>
+            {
+              "type": "LOG",
+              "confidence": "high",
+              "reasoning": "Contains log fields",
+              "time_field": "timestamp",
+              "trace_id_field": "traceId",
+              "span_id_field": "spanId"
+            }
+            </index_type_analysis>
+            """;
+
+        IndexCorrelationTask.PatternInfo info = task.parseTypeDetectionResponse(
+            llmResponse,
+            "logs-otel-*",
+            List.of("logs-otel-000001")
+        );
+
+        assertNotNull(info);
+        assertEquals("logs-otel-*", info.pattern);
+        assertEquals("LOG", info.type);
+        assertEquals("timestamp", info.timeField);
+        assertEquals("traceId", info.traceIdField);
+        assertEquals("spanId", info.spanIdField);
+    }
+
+    @Test
+    public void testBuildCorrelationTupleFromSource() {
+        IndexCorrelationTask.PatternInfo logPattern = new IndexCorrelationTask.PatternInfo(
+            "logs-otel-*",
+            List.of("logs-otel-000001"),
+            "LOG",
+            "timestamp",
+            "traceId",
+            "spanId"
+        );
+
+        IndexCorrelationTask.PatternInfo tracePattern = new IndexCorrelationTask.PatternInfo(
+            "jaeger-span-*",
+            List.of("jaeger-span-2025-12-19"),
+            "TRACE",
+            "startTime",
+            "traceID",
+            "spanID"
+        );
+
+        IndexCorrelationTask.PatternInfo metricPattern = new IndexCorrelationTask.PatternInfo(
+            "ss4o_metrics-*",
+            List.of("ss4o_metrics-2025.12.19"),
+            "METRIC",
+            "time",
+            null,
+            null
+        );
+
+        Map<String, Object> tuple = task.buildCorrelationTupleFromSource(
+            tracePattern,
+            "TRACE",
+            logPattern,
+            "LOG",
+            metricPattern,
+            "METRIC"
+        );
+
+        assertNotNull(tuple);
+        assertTrue(tuple.containsKey("logs"));
+        assertTrue(tuple.containsKey("trace"));
+        assertTrue(tuple.containsKey("metrics"));
+
+        Map<String, String> logs = (Map<String, String>) tuple.get("logs");
+        assertNotNull(logs);
+        assertEquals("logs-otel-*", logs.get("pattern"));
+        assertEquals("LOG", logs.get("type"));
+    }
+
+    @Test
+    public void testBuildCorrelationMatchingPromptForSource() {
+        IndexCorrelationTask.PatternInfo sourcePattern = new IndexCorrelationTask.PatternInfo(
+            "jaeger-span-*",
+            List.of("jaeger-span-2025-12-19"),
+            "TRACE",
+            "startTime",
+            "traceID",
+            "spanID"
+        );
+
+        List<IndexCorrelationTask.PatternInfo> logPatterns = List.of(
+            new IndexCorrelationTask.PatternInfo(
+                "logs-otel-*",
+                List.of("logs-otel-000001"),
+                "LOG",
+                "timestamp",
+                "traceId",
+                "spanId"
+            ),
+            new IndexCorrelationTask.PatternInfo(
+                "logs-app-*",
+                List.of("logs-app-000001"),
+                "LOG",
+                "time",
+                "trace_id",
+                "span_id"
+            )
+        );
+
+        List<IndexCorrelationTask.PatternInfo> metricPatterns = List.of(
+            new IndexCorrelationTask.PatternInfo(
+                "ss4o_metrics-*",
+                List.of("ss4o_metrics-2025.12.19"),
+                "METRIC",
+                "time",
+                null,
+                null
+            )
+        );
+
+        String prompt = task.buildCorrelationMatchingPromptForSource(
+            sourcePattern,
+            "LOG",
+            logPatterns,
+            "METRIC",
+            metricPatterns
+        );
+
+        assertNotNull(prompt);
+        assertTrue(prompt.contains("jaeger-span-*"));
+        assertTrue(prompt.contains("logs-otel-*"));
+        assertTrue(prompt.contains("logs-app-*"));
+        assertTrue(prompt.contains("ss4o_metrics-*"));
+        assertTrue(prompt.contains("correlation_selection"));
+    }
+
+    @Test
+    public void testParseCorrelationMatchingResponseForSource() {
+        String llmResponse = """
+            <correlation_selection>
+            {
+              "selected_log_pattern": "logs-otel-*",
+              "selected_metric_pattern": "ss4o_metrics-*",
+              "reasoning": "Both patterns use OTEL naming"
+            }
+            </correlation_selection>
+            """;
+
+        IndexCorrelationTask.PatternInfo sourcePattern = new IndexCorrelationTask.PatternInfo(
+            "jaeger-span-*",
+            List.of("jaeger-span-2025-12-19"),
+            "TRACE",
+            "startTime",
+            "traceID",
+            "spanID"
+        );
+
+        List<IndexCorrelationTask.PatternInfo> logPatterns = List.of(
+            new IndexCorrelationTask.PatternInfo(
+                "logs-otel-*",
+                List.of("logs-otel-000001"),
+                "LOG",
+                "timestamp",
+                "traceId",
+                "spanId"
+            ),
+            new IndexCorrelationTask.PatternInfo(
+                "logs-app-*",
+                List.of("logs-app-000001"),
+                "LOG",
+                "time",
+                "trace_id",
+                "span_id"
+            )
+        );
+
+        List<IndexCorrelationTask.PatternInfo> metricPatterns = List.of(
+            new IndexCorrelationTask.PatternInfo(
+                "ss4o_metrics-*",
+                List.of("ss4o_metrics-2025.12.19"),
+                "METRIC",
+                "time",
+                null,
+                null
+            )
+        );
+
+        ActionListener<Map<String, Object>> testListener = mock(ActionListener.class);
+
+        task.parseCorrelationMatchingResponseForSource(
+            llmResponse,
+            sourcePattern,
+            "TRACE",
+            "LOG",
+            logPatterns,
+            "METRIC",
+            metricPatterns,
+            testListener
+        );
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(testListener, timeout(1000)).onResponse(captor.capture());
+
+        Map<String, Object> result = captor.getValue();
+        assertNotNull(result);
+        assertTrue(result.containsKey("logs"));
+        assertTrue(result.containsKey("metrics"));
+    }
 }

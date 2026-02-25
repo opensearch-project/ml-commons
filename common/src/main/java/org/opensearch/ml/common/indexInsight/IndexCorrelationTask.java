@@ -639,7 +639,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Detect pattern type using LLM
      */
-    private void detectPatternType(
+    public void detectPatternType(
         String pattern,
         List<String> sampleIndices,
         Set<String> fields,
@@ -686,7 +686,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Parse LLM type detection response
      */
-    private PatternInfo parseTypeDetectionResponse(String response, String pattern, List<String> indices) {
+    public PatternInfo parseTypeDetectionResponse(String response, String pattern, List<String> indices) {
         try {
             String json = response.split("<index_type_analysis>", 2)[1].split("</index_type_analysis>", 2)[0].trim();
 
@@ -713,7 +713,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
      * Normalize index type string to standard format (LOG, TRACE, METRIC, or UNKNOWN)
      * Handles null, empty, lowercase, and unrecognized values
      */
-    private String normalizeIndexType(String type) {
+    public String normalizeIndexType(String type) {
         if (type == null || type.trim().isEmpty()) {
             log.debug("Type is null or empty, defaulting to UNKNOWN");
             return "UNKNOWN";
@@ -885,7 +885,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Build correlation tuple from source pattern and other patterns
      */
-    private Map<String, Object> buildCorrelationTupleFromSource(
+    public Map<String, Object> buildCorrelationTupleFromSource(
         PatternInfo sourcePattern,
         String sourceType,
         PatternInfo firstTypePattern,
@@ -1000,7 +1000,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Build LLM prompt for correlation matching based on source pattern
      */
-    private String buildCorrelationMatchingPromptForSource(
+    public String buildCorrelationMatchingPromptForSource(
         PatternInfo sourcePattern,
         String firstType,
         List<PatternInfo> firstTypePatterns,
@@ -1085,7 +1085,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Parse LLM response for correlation matching based on source
      */
-    private void parseCorrelationMatchingResponseForSource(
+    public void parseCorrelationMatchingResponseForSource(
         String llmResponse,
         PatternInfo sourcePattern,
         String sourceType,
@@ -1141,7 +1141,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
      * Extract content from XML tags
      * E.g., extract "content" from "<tag>content</tag>"
      */
-    private String extractXmlContent(String text, String tagName) {
+    public String extractXmlContent(String text, String tagName) {
         String openTag = "<" + tagName + ">";
         String closeTag = "</" + tagName + ">";
 
@@ -1253,7 +1253,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     /**
      * Save pattern detection result to cache
      */
-    private void savePatternToCache(PatternInfo patternInfo, String tenantId, ActionListener<Boolean> listener) {
+    public void savePatternToCache(PatternInfo patternInfo, String tenantId, ActionListener<Boolean> listener) {
         try {
             Map<String, Object> cacheData = new HashMap<>();
             cacheData.put("pattern", patternInfo.pattern);
@@ -1290,15 +1290,15 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     }
 
     // Helper classes
-    private static class PatternInfo {
-        final String pattern;
-        final List<String> sampleIndices;
-        final String type;              // LOG, TRACE, METRIC, UNKNOWN
-        final String timeField;
-        final String traceIdField;
-        final String spanIdField;
+    public static class PatternInfo {
+        public final String pattern;
+        public final List<String> sampleIndices;
+        public final String type;              // LOG, TRACE, METRIC, UNKNOWN
+        public final String timeField;
+        public final String traceIdField;
+        public final String spanIdField;
 
-        PatternInfo(String pattern, List<String> sampleIndices, String type, String timeField, String traceIdField, String spanIdField) {
+        public PatternInfo(String pattern, List<String> sampleIndices, String type, String timeField, String traceIdField, String spanIdField) {
             this.pattern = pattern;
             this.sampleIndices = sampleIndices;
             this.type = type;
