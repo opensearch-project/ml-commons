@@ -594,8 +594,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithOpenAI() throws Exception {
-        // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         Response response = createConnector(OPENAI_CONNECTOR_BLUEPRINT);
@@ -648,8 +648,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithOpenAIWithImage() throws Exception {
-        // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         Response response = createConnector(OPENAI_4o_CONNECTOR_BLUEPRINT);
@@ -969,8 +969,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     public void testBM25WithOpenAIWithConversation() throws Exception {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            System.out.println("Skipping testBM25WithOpenAIWithConversation because OPENAI_KEY is null");
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
+            System.out.println("Skipping testBM25WithOpenAIWithConversation because OPENAI_KEY is null or api.openai.com is unreachable");
             return;
         }
         System.out.println("Running testBM25WithOpenAIWithConversation");
@@ -1029,8 +1029,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     public void testBM25WithOpenAIWithConversationAndImage() throws Exception {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            System.out.println("Skipping testBM25WithOpenAIWithConversationAndImage because OPENAI_KEY is null");
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
+            System.out
+                .println("Skipping testBM25WithOpenAIWithConversationAndImage because OPENAI_KEY is null or api.openai.com is unreachable");
             return;
         }
         System.out.println("Running testBM25WithOpenAIWithConversationAndImage");
