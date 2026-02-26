@@ -35,7 +35,7 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
     public void setup() throws Exception {
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
         if (!initialSleepDone) {
-            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", 10);
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
             initialSleepDone = true;
         }
     }

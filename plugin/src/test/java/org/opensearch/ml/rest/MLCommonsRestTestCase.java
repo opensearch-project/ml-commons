@@ -866,22 +866,22 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     /**
-     * Polls _cluster/settings until the given setting key appears in persistent settings.
+     * Polls _cluster/settings until the given setting key has the expected value in persistent settings.
      * Replaces arbitrary Thread.sleep() with active verification of setting propagation.
      */
     @SuppressWarnings("unchecked")
-    protected static void waitForClusterSettingPropagation(String settingKey, int timeoutSeconds) throws Exception {
+    protected static void waitForClusterSettingPropagation(String settingKey, String expectedValue, int timeoutSeconds) throws Exception {
         long deadline = System.currentTimeMillis() + timeoutSeconds * 1000L;
         while (System.currentTimeMillis() < deadline) {
             Response response = TestHelper.makeRequest(client(), "GET", "_cluster/settings?flat_settings=true", null, "", null);
             Map<String, Object> settings = parseResponseToMap(response);
             Map<String, Object> persistent = (Map<String, Object>) settings.get("persistent");
-            if (persistent != null && persistent.containsKey(settingKey)) {
+            if (persistent != null && expectedValue.equals(String.valueOf(persistent.get(settingKey)))) {
                 return;
             }
             Thread.sleep(500);
         }
-        fail("Cluster setting '" + settingKey + "' not propagated within " + timeoutSeconds + " seconds");
+        fail("Cluster setting '" + settingKey + "' did not reach value '" + expectedValue + "' within " + timeoutSeconds + " seconds");
     }
 
     public Map getModelProfile(String modelId, Consumer verifyFunction) throws IOException {

@@ -43,7 +43,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         super.setUp();
         disableClusterConnectorAccessControl();
         if (!initialSleepDone) {
-            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", 10);
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
             initialSleepDone = true;
         }
         this.bedrockClaudeConnectorId = createBedrockClaudeConnector("execute");

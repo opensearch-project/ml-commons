@@ -115,7 +115,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
     public void setup() throws Exception {
         disableClusterConnectorAccessControl();
         if (!initialSleepDone) {
-            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", 10);
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
             initialSleepDone = true;
         }
         createStopWordsIndex();
