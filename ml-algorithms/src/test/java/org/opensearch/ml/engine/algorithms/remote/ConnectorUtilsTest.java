@@ -1064,7 +1064,8 @@ public class ConnectorUtilsTest {
     public void buildSdkRequest_NovaModelCleansJson() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getActionEndpoint("predict", parameters))
             .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
@@ -1072,7 +1073,7 @@ public class ConnectorUtilsTest {
             "{\"singleEmbeddingParams\":{\"text\":{\"value\":\"hello\"},\"video\":{\"source\":{\"bytes\":null}},\"audio\":{\"source\":{\"bytes\":null}}}}";
 
         SdkHttpFullRequest request = ConnectorUtils
-            .buildSdkRequest("predict", connector, Map.of(), payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
+            .buildSdkRequest("predict", connector, parameters, payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
 
         // Verify request was created successfully
         assertNotNull(request);
