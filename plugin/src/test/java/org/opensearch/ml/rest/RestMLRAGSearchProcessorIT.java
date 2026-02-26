@@ -552,9 +552,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
         if (!initialSleepDone) {
-            // TODO Do we really need to wait this long? This adds 20s to every test case run.
-            // Can we instead check the cluster state and move on?
-            Thread.sleep(20000);
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", 10);
             initialSleepDone = true;
         }
 

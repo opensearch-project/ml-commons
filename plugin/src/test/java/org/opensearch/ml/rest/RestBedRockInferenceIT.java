@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -33,10 +32,10 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
 
     @SneakyThrows
     @Before
-    public void setup() throws IOException, InterruptedException {
+    public void setup() throws Exception {
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
         if (!initialSleepDone) {
-            Thread.sleep(20000);
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", 10);
             initialSleepDone = true;
         }
     }
