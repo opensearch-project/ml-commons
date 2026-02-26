@@ -1139,7 +1139,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
 
     /**
      * Extract content from XML tags
-     * E.g., extract "content" from "<tag>content</tag>"
+     * E.g., extract "content"
      */
     public String extractXmlContent(String text, String tagName) {
         String openTag = "<" + tagName + ">";
