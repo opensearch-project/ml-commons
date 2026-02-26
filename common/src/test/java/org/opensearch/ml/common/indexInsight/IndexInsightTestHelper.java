@@ -280,6 +280,21 @@ public class IndexInsightTestHelper {
     }
 
     /**
+     * Mock cache miss (document not found)
+     */
+    public static void mockPatternCacheError(SdkClient sdkClient) {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+
+        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+        when(sdkResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+
+        when(sdkClient.getDataObjectAsync(any())).thenThrow(new IllegalStateException("mock error"));
+    }
+
+    /**
      * Mock empty search result for pattern matching
      * This is used when no existing pattern matches the source index
      */

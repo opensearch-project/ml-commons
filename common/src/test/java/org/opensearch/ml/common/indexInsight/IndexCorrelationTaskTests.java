@@ -175,9 +175,48 @@ public class IndexCorrelationTaskTests {
     }
 
     @Test
+    public void testRunTask_SinglePatternCacheError() {
+        mockClusterState(List.of("logs-otel-v1-000001", "logs-otel-v1-000002"));
+        // mockGetFailToGet(sdkClient, "");
+        mockPatternCacheError(sdkClient);
+        mockMLConfigSuccess(client);
+        mockUpdateSuccess(sdkClient);
+
+        // Mock LLM response for type detection
+        String llmResponse = """
+            <index_type_analysis>
+            {
+              "type": "LOG",
+              "confidence": "high",
+              "reasoning": "Contains log fields",
+              "time_field": "time",
+              "trace_id_field": "traceId",
+              "span_id_field": "spanId"
+            }
+            </index_type_analysis>
+            """;
+        mockMLExecuteSuccess(client, llmResponse);
+
+        // Mock mapping
+        mockMappingForIndex("logs-otel-v1-000001", buildLogMapping());
+        setupMappingMock();
+
+        // Mock search for sample documents
+        mockSearchForSampleDocuments(client);
+
+        task.runTask("tenant-id", listener);
+
+        ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
+        verify(listener, timeout(5000)).onResponse(captor.capture());
+
+        IndexInsight result = captor.getValue();
+        assertEquals(IndexInsightTaskStatus.COMPLETED, result.getStatus());
+    }
+
+    @Test
     public void testRunTask_SinglePatternCacheHit() {
         mockClusterState(List.of("logs-otel-v1-000001", "logs-otel-v1-000002"));
-        //mockGetFailToGet(sdkClient, "");
+        // mockGetFailToGet(sdkClient, "");
         mockPatternCacheHit(sdkClient, "logs-otel-v1-00000*", "logs", 0);
         mockMLConfigSuccess(client);
         mockUpdateSuccess(sdkClient);
@@ -214,9 +253,9 @@ public class IndexCorrelationTaskTests {
     }
 
     @Test
-    public void testRunTask_MultiplePatterns() throws Exception {
+    public void testRunTask_MultiplePatternsCacheHit() throws Exception {
         mockClusterState(List.of("logs-otel-v1-000001", "logs-otel-v1-000002", "jaeger-span-2025-12-19", "jaeger-span-2025-12-20"));
-        //mockGetFailToGet(sdkClient, "");
+        // mockGetFailToGet(sdkClient, "");
         mockPatternCacheHit(sdkClient, "logs-otel-v1-00000*", "logs", 0);
         mockPatternCacheHit(sdkClient, "jaeger-span-2025-12-*", "trace", 0);
         mockMLConfigSuccess(client);
@@ -247,7 +286,7 @@ public class IndexCorrelationTaskTests {
     }
 
     @Test
-    public void testRunTask_MultiplePatternsCacheHit() throws Exception {
+    public void testRunTask_MultiplePatterns() throws Exception {
         mockClusterState(List.of("logs-otel-v1-000001", "logs-otel-v1-000002", "jaeger-span-2025-12-19", "jaeger-span-2025-12-20"));
         mockGetFailToGet(sdkClient, "");
         mockMLConfigSuccess(client);

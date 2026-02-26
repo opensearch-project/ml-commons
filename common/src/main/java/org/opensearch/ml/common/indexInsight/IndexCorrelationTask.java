@@ -1241,12 +1241,12 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                 log.info("Cache hit for pattern: {}", pattern);
                 listener.onResponse(patternInfo);
             } catch (Exception e) {
-                log.warn("Failed to parse cached pattern info for: {}", pattern, e);
+                log.error("Failed to parse cached pattern info for: {}", pattern, e);
                 listener.onResponse(null);
             }
         }, e -> {
-            log.warn("Failed to query cache for pattern: {}", pattern, e);
-            listener.onResponse(null);
+            log.error("Failed to query cache for pattern: {}", pattern, e);
+            listener.onFailure(e);
         }));
     }
 
