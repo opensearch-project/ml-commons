@@ -971,6 +971,9 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 String state = getTaskState(taskId);
                 if (targetState.name().equals(state)) {
                     taskDone.set(true);
+                } else if (MLTaskState.FAILED.name().equals(state) || MLTaskState.CANCELLED.name().equals(state)) {
+                    // Task reached a terminal failure state — stop waiting immediately
+                    taskDone.set(true);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -1017,5 +1020,22 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         Response response = TestHelper
             .makeRequest(client, "GET", "/" + indexName + "/" + "_search?search_pipeline=" + pipelineName, null, formattedQuery, null);
         return parseResponseToMap(response);
+    }
+
+    /**
+     * Checks whether a remote hostname is reachable via DNS resolution.
+     * Use this to skip tests that require external services when the CI
+     * environment has no network access to that host.
+     *
+     * @param hostname the hostname to check (e.g. "api.openai.com")
+     * @return true if the hostname resolves successfully, false otherwise
+     */
+    public static boolean isServiceReachable(String hostname) {
+        try {
+            java.net.InetAddress.getByName(hostname);
+            return true;
+        } catch (java.net.UnknownHostException e) {
+            return false;
+        }
     }
 }

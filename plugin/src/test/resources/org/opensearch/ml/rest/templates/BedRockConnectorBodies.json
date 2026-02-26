@@ -4,6 +4,9 @@
     "description": "The connector to bedrock Titan embedding model",
     "version": 1,
     "protocol": "aws_sigv4",
+    "client_config": {
+      "max_connection": 200
+    },
     "parameters": {
       "region": "%s",
       "service_name": "bedrock",
@@ -34,6 +37,9 @@
     "description": "The connector to bedrock Titan embedding model",
     "version": 1,
     "protocol": "aws_sigv4",
+    "client_config": {
+      "max_connection": 200
+    },
     "parameters": {
       "region": "%s",
       "service_name": "bedrock",

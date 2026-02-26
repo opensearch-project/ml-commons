@@ -160,7 +160,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         createPipelineProcessor(createPipelineRequestBody, "diary_embedding_pipeline");
         createIndex(index_name, createIndexRequestBody);
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         uploadDocument(index_name, "1", uploadDocumentRequestBody);
@@ -245,7 +245,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         String index_name = "book_index";
         createPipelineProcessor(createPipelineRequestBody, "embedding_pipeline");
         createIndex(index_name, createIndexRequestBody);
-        if (OPENAI_KEY == null) {
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         uploadDocument(index_name, "1", uploadDocumentRequestBody);

@@ -22,7 +22,7 @@ import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1, supportsDedicatedMasters = false)
 public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
