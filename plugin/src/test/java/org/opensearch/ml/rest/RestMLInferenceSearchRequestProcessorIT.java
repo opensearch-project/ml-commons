@@ -157,14 +157,14 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
             initialSleepDone = true;
         }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
-        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
+        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, false);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
-        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
+        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, false);
         String bedrockMultiModalEmbeddingModelName = "bedrock multi modal embedding model " + randomAlphaOfLength(5);
         this.bedrockMultiModalEmbeddingModelId = registerRemoteModel(
             bedrockMultiModalEmbeddingModelConnectorEntity,
             bedrockMultiModalEmbeddingModelName,
-            true
+            false
         );
 
         String index_name = "daily_index";

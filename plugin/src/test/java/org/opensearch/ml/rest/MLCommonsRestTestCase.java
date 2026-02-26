@@ -998,7 +998,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 throw new RuntimeException(e);
             }
             return taskDone.get();
-        }, CUSTOM_MODEL_TIMEOUT, TimeUnit.SECONDS);
+        }, CUSTOM_MODEL_TIMEOUT, TimeUnit.MILLISECONDS);
         assertTrue(String.format(Locale.ROOT, "Task Id %s could not get to %s state", taskId, targetState.name()), taskDone.get());
     }
 
