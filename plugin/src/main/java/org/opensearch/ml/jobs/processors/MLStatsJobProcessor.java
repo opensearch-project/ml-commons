@@ -164,7 +164,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                                     );
                             }
 
-                            return;
+                            continue;
                         }
 
                         Tags modelTags = model.getTags();
