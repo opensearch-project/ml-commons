@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.core.action.ActionListener;
@@ -173,7 +174,7 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
             return;
         }
 
-        // Filter to text-only Q&A messages — skip tool calls, tool results, and non-text content
+        // Filter to text-only Q&A messages — skip tool calls, tool results, and strip non-text content
         List<Message> filteredMessages = new ArrayList<>();
         for (Message message : messages) {
             if (message == null)
@@ -185,12 +186,20 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
             if ("assistant".equalsIgnoreCase(role) && message.getToolCalls() != null && !message.getToolCalls().isEmpty())
                 continue;
 
+            // Strip non-text content blocks (e.g. images), keep only text
             if (message.getContent() != null) {
-                boolean hasNonText = message.getContent().stream().anyMatch(block -> block.getType() != ContentType.TEXT);
-                if (hasNonText)
+                List<ContentBlock> textBlocks = message
+                    .getContent()
+                    .stream()
+                    .filter(block -> block.getType() == ContentType.TEXT)
+                    .collect(Collectors.toList());
+                if (textBlocks.isEmpty())
                     continue;
+                Message textOnly = new Message(message.getRole(), textBlocks);
+                filteredMessages.add(textOnly);
+            } else {
+                filteredMessages.add(message);
             }
-            filteredMessages.add(message);
         }
 
         if (filteredMessages.isEmpty()) {
