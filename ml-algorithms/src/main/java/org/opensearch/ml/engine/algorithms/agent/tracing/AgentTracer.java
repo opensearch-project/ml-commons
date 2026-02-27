@@ -605,6 +605,7 @@ public final class AgentTracer {
             .setAttribute(AGENT_TYPE, agentType)
             .setAttribute(CONVERSATION_ID, sessionId != null ? sessionId : "")
             .setAttribute(REQUEST_ID, runId != null ? runId : "")
+            .setNoParent()
             .startSpan();
     }
 
