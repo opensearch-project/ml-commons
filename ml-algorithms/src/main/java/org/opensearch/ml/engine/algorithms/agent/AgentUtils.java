@@ -144,6 +144,7 @@ public class AgentUtils {
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
     public static final String LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT = "gemini/v1beta/generatecontent";
+    public static final String LLM_INTERFACE_BEDROCK_INVOKE_CLAUDE = "bedrock/invoke/claude";
 
     public static final String TOOL_CALLS_PATH = "tool_calls_path";
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
