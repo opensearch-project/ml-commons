@@ -328,7 +328,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Start OpenTelemetry agent span for tracing
         // Use runId (from AG-UI) for gen_ai.request.id so frontend can query traces
         String runId = params.get(AGUI_PARAM_RUN_ID);
-        Span agentSpan = AgentTracer.startAgentSpan("ChatAgent", sessionId, runId);
+
+        // Check if this is called from PER agent with parent span context
+        Span agentSpan;
+        if (params.containsKey("traceparent")) {
+            log.info("[ChatAgent-Tracing] Found traceparent field: {}", params.get("traceparent"));
+            // Extract parent span context and create child span with same span name as parent step
+            agentSpan = extractParentSpanAndCreateChild(params, sessionId, runId);
+        } else {
+            log.info("[ChatAgent-Tracing] No traceparent field found, creating new root span. Available keys: {}", params.keySet());
+            // Create new root span
+            agentSpan = AgentTracer.startAgentSpan("ChatAgent", sessionId, runId);
+        }
+
         Scope agentScope = AgentTracer.makeCurrent(agentSpan);
         log
             .info(
@@ -422,6 +434,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<Span> currentLlmSpan = new AtomicReference<>();
         AtomicReference<Span> currentToolSpan = new AtomicReference<>();
         AtomicInteger llmIteration = new AtomicInteger(0);
+        AtomicReference<Map<String, Integer>> lastExtractedTokens = new AtomicReference<>(new HashMap<>());
 
         StepListener firstListener = new StepListener<MLTaskResponse>();
         lastLlmListener.set(firstListener);
@@ -445,7 +458,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     // End current LLM span when we receive response
                     Span llmSpan = currentLlmSpan.get();
                     if (llmSpan != null) {
-                        AgentTracer.endSpan(llmSpan, true, null);
+                        // Extract tokens from LLM response
+                        MLTaskResponse llmResponse = (MLTaskResponse) output;
+                        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
+                        Map<String, Integer> extractedTokens = AgentTracer.extractTokensFromModelOutput(modelTensorOutput, tmpParameters);
+                        lastExtractedTokens.set(extractedTokens);
+                        AgentTracer.endSpan(llmSpan, true, null, extractedTokens);
                         currentLlmSpan.set(null);
                     }
 
@@ -478,7 +496,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 "[ChatAgent-Tracing] Final answer received, ending agent span: spanId={}",
                                 agentSpan.getSpanContext().getSpanId()
                             );
-                        AgentTracer.endSpan(agentSpan, true, finalAnswer);
+                        AgentTracer.endSpan(agentSpan, true, finalAnswer, lastExtractedTokens.get());
                         if (agentScope != null) {
                             agentScope.close();
                         }
@@ -572,7 +590,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                     action,
                                     agentSpan.getSpanContext().getSpanId()
                                 );
-                            AgentTracer.endSpan(agentSpan, true, "frontend_tool_call:" + action);
+                            AgentTracer.endSpan(agentSpan, true, "frontend_tool_call:" + action, lastExtractedTokens.get());
                             if (agentScope != null) {
                                 agentScope.close();
                             }
@@ -632,7 +650,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     // End tool span when tool result is received
                     Span toolSpan = currentToolSpan.get();
                     if (toolSpan != null) {
-                        AgentTracer.endSpan(toolSpan, true, null);
+                        AgentTracer.endToolSpan(toolSpan, true, null);
                         currentToolSpan.set(null);
                     }
 
@@ -1616,4 +1634,47 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
+    /**
+     * Extract parent span context from parameters and create child span
+     */
+    private Span extractParentSpanAndCreateChild(Map<String, String> params, String sessionId, String runId) {
+        try {
+            AgentTracer.TraceParent traceParent = AgentTracer.TraceParent.parse(params.get("traceparent"));
+            log.info("[ChatAgent-Tracing] Attempting to extract parent span context from traceparent: {}", params.get("traceparent"));
+
+            if (traceParent != null) {
+                String traceId = traceParent.getTraceId();
+                String parentSpanId = traceParent.getSpanId();
+
+                log.info("[ChatAgent-Tracing] Parsed traceparent - traceId: {}, parentSpanId: {}", traceId, parentSpanId);
+
+                io.opentelemetry.api.trace.SpanContext parentSpanContext = io.opentelemetry.api.trace.SpanContext
+                    .createFromRemoteParent(
+                        traceId,
+                        parentSpanId,
+                        io.opentelemetry.api.trace.TraceFlags.getSampled(),
+                        io.opentelemetry.api.trace.TraceState.getDefault()
+                    );
+
+                Span childSpan = AgentTracer
+                    .getTracer()
+                    .spanBuilder("agent.run")
+                    .setSpanKind(io.opentelemetry.api.trace.SpanKind.SERVER)
+                    .setAttribute("gen_ai.agent.type", "ChatAgent")
+                    .setAttribute("gen_ai.conversation.id", sessionId != null ? sessionId : "")
+                    .setAttribute("gen_ai.request.id", runId != null ? runId : "")
+                    .setParent(io.opentelemetry.context.Context.current().with(io.opentelemetry.api.trace.Span.wrap(parentSpanContext)))
+                    .startSpan();
+
+                log.info("[ChatAgent-Tracing] Created child span with trace ID: {}", childSpan.getSpanContext().getTraceId());
+                return childSpan;
+            }
+
+            log.warn("[ChatAgent-Tracing] Invalid traceparent format, creating new root span");
+            return AgentTracer.startAgentSpan("ChatAgent", sessionId, runId);
+        } catch (Exception e) {
+            log.warn("Failed to extract parent span context, creating new root span", e);
+            return AgentTracer.startAgentSpan("ChatAgent", sessionId, runId);
+        }
+    }
 }

@@ -314,7 +314,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // Use runId (from AG-UI) for gen_ai.request.id so frontend can query traces
         String runId = allParams.get(AGUI_PARAM_RUN_ID);
         String memoryId = allParams.get(MEMORY_ID_FIELD);
-        Span agentSpan = AgentTracer.startAgentSpan("PlanExecuteReflectAgent", memoryId, runId);
+        Span agentSpan = AgentTracer.startAgentSpan("PlanExecuteReflectAgent", memoryId, memoryId);
         Scope agentScope = AgentTracer.makeCurrent(agentSpan);
 
         if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
@@ -450,11 +450,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
         String parentInteractionId = allParams.get(MLAgentExecutor.PARENT_INTERACTION_ID);
-        String runId = allParams.get(AGUI_PARAM_RUN_ID);
+        String memoryId = allParams.get(MEMORY_ID_FIELD);
 
         if (stepsExecuted >= maxSteps) {
             // End agent span when max steps reached
-            AgentTracer.endSpan(agentSpan, true, "Max steps reached");
+            AgentTracer.endSpan(agentSpan, true, "Max steps reached", null);
             if (agentScope != null) {
                 agentScope.close();
             }
@@ -463,7 +463,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         // Start LLM span for planning call
-        Span llmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet(), runId);
+        Span llmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet(), memoryId);
         currentLlmSpan.set(llmSpan);
         MLPredictionTaskRequest request;
         // Planner agent doesn't use INTERACTIONS for now, reusing the INTERACTIONS to pass over
@@ -509,24 +509,25 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             null,
             tenantId
         );
-
         StepListener<MLTaskResponse> planListener = new StepListener<>();
 
         planListener.whenComplete(llmOutput -> {
+            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
+            Map<String, Integer> extractedTokens = AgentTracer.extractTokensFromModelOutput(modelTensorOutput, allParams);
+
             // End LLM span when response received
             Span completedLlmSpan = currentLlmSpan.get();
             if (completedLlmSpan != null) {
-                AgentTracer.endSpan(completedLlmSpan, true, null);
+                AgentTracer.endSpan(completedLlmSpan, true, null, extractedTokens);
                 currentLlmSpan.set(null);
             }
 
-            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
             Map<String, Object> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = (String) parseLLMOutput.get(RESULT_FIELD);
                 // End agent span successfully with final result
-                AgentTracer.endSpan(agentSpan, true, finalResult);
+                AgentTracer.endSpan(agentSpan, true, finalResult, extractedTokens);
                 if (agentScope != null) {
                     agentScope.close();
                 }
@@ -546,18 +547,21 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 String stepToExecute = steps.getFirst();
 
                 // Start step span for step execution
-                Span stepSpan = AgentTracer.startStepSpan(agentSpan, stepsExecuted + 1, stepToExecute);
+                Span stepSpan = AgentTracer.startStepSpan(agentSpan, stepsExecuted + 1, stepToExecute, memoryId);
                 currentStepSpan.set(stepSpan);
                 String reActAgentId = allParams.get(EXECUTOR_AGENT_ID_FIELD);
                 Map<String, String> reactParams = new HashMap<>();
                 reactParams.put(QUESTION_FIELD, stepToExecute);
                 if (allParams.containsKey(EXECUTOR_AGENT_MEMORY_ID_FIELD)) {
                     reactParams.put(MEMORY_ID_FIELD, allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD));
+                } else {
+                    reactParams.put(MEMORY_ID_FIELD, memoryId);
                 }
 
                 reactParams.put(SYSTEM_PROMPT_FIELD, allParams.getOrDefault(EXECUTOR_SYSTEM_PROMPT_FIELD, DEFAULT_EXECUTOR_SYSTEM_PROMPT));
                 reactParams.put(LLM_RESPONSE_FILTER, allParams.get(LLM_RESPONSE_FILTER));
                 reactParams.put(MAX_ITERATION, allParams.getOrDefault(EXECUTOR_MAX_ITERATIONS_FIELD, DEFAULT_REACT_MAX_ITERATIONS));
+                reactParams.put(AGUI_PARAM_RUN_ID, memoryId);
                 reactParams
                     .put(
                         MLAgentExecutor.MESSAGE_HISTORY_LIMIT,
@@ -569,6 +573,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 if (allParams.containsKey(MEMORY_CONFIGURATION_FIELD)) {
                     reactParams.put(MEMORY_CONFIGURATION_FIELD, allParams.get(MEMORY_CONFIGURATION_FIELD));
                 }
+
+                // Inject parent SpanContext using
+                Map<String, String> spanContextMap = new HashMap<>();
+                AgentTracer.injectSpanContext(stepSpan, spanContextMap);
+                reactParams.putAll(spanContextMap);
+                AgentLoggingContext
+                    .info(log, getThreadContext(), "[AGENT_TRACE] PER Agent - Injected parent SpanContext: {}", spanContextMap);
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
@@ -684,7 +695,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     // End step span after step execution completes
                     Span completedStepSpan = currentStepSpan.get();
                     if (completedStepSpan != null) {
-                        AgentTracer.endSpan(completedStepSpan, true, results.get(STEP_RESULT_FIELD));
+                        AgentTracer.endSpan(completedStepSpan, true, results.get(STEP_RESULT_FIELD), extractedTokens);
                         currentStepSpan.set(null);
                     }
 

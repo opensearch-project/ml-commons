@@ -24,6 +24,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_REGION;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_DIRECT_EXPORT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_ENDPOINT;
@@ -706,6 +707,11 @@ public class MachineLearningPlugin extends Plugin
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
+
+        // Use direct OpenSearch export for testing
+        if (ML_COMMONS_AGENT_TRACING_DIRECT_EXPORT.get(settings)) {
+            AgentTracer.initializeDirectExport(client, "otel-v1-apm-span");
+        }
 
         // Initialize AgentTracer for OpenTelemetry tracing if OSIS endpoint is configured
         String osisEndpoint = ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT.get(settings);
@@ -1439,11 +1445,12 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
-                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT,
-                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY,
-                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY,
-                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN,
-                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_REGION
+                ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT,
+                ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY,
+                ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY,
+                ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN,
+                ML_COMMONS_AGENT_TRACING_AWS_REGION,
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_DIRECT_EXPORT
             );
         return settings;
     }

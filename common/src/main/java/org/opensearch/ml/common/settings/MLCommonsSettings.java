@@ -518,4 +518,7 @@ public final class MLCommonsSettings {
 
     public static final Setting<String> ML_COMMONS_AGENT_TRACING_AWS_REGION = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_region", "", Setting.Property.NodeScope, Setting.Property.Final);
+
+    public static final Setting<Boolean> ML_COMMONS_AGENT_TRACING_DIRECT_EXPORT = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agent_tracing.direct_export", false, Setting.Property.NodeScope, Setting.Property.Final);
 }
