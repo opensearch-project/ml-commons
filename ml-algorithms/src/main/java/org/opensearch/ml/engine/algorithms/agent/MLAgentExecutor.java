@@ -890,7 +890,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(
                     mlTask,
-                    tenantId,
+                    mlAgent.getType(),
+                    mlAgent.getName(),
+                    tenantId != null ? tenantId : "",
                     outputs,
                     modelTensors,
                     parentInteractionId,
@@ -926,6 +928,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 outputs,
                 modelTensors,
                 mlAgent.getType(),
+                mlAgent.getName(),
+                tenantId != null ? tenantId : "",
                 parentInteractionId,
                 memory
             );
@@ -957,13 +961,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String agentType,
+        String agentId,
+        String tenantId,
         String parentInteractionId,
         Memory memory
     ) {
         long startTime = System.currentTimeMillis();
         return ActionListener.wrap(output -> {
             long latencyMs = System.currentTimeMillis() - startTime;
-            log.info("Agent execution completed successfully. agentType={}, latencyMs={}", agentType, latencyMs);
+            log.info("Agent execution completed successfully. agentType={}, agentId={}, tenantId={}, latencyMs={}", agentType, agentId, tenantId, latencyMs);
             if (output != null) {
                 processOutput(output, modelTensors);
                 listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
@@ -972,7 +978,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             }
         }, ex -> {
             long latencyMs = System.currentTimeMillis() - startTime;
-            log.error("Failed to run {} agent. latencyMs={}", agentType, latencyMs, ex);
+            // CENTRAL AGENT FAILURE LOG - All agent execution failures flow through here
+            log.error("Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, error={}", agentType, agentId, tenantId, latencyMs, ex.getMessage(), ex);
             updateInteractionWithFailure(parentInteractionId, memory, ex.getMessage());
             listener.onFailure(ex);
         });
@@ -980,6 +987,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     private ActionListener<Object> createAsyncTaskUpdater(
         MLTask mlTask,
+        String agentType,
+        String agentId,
         String tenantId,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
@@ -993,7 +1002,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
         return ActionListener.wrap(output -> {
             long latencyMs = System.currentTimeMillis() - startTime;
-            log.info("Async agent execution completed successfully. taskId={}, latencyMs={}", taskId, latencyMs);
+            log.info("Async agent execution completed successfully. agentType={}, agentId={}, tenantId={}, taskId={}, latencyMs={}", agentType, agentId, tenantId, taskId, latencyMs);
             if (output != null) {
                 processOutput(output, modelTensors);
                 agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
@@ -1018,7 +1027,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             );
         }, ex -> {
             long latencyMs = System.currentTimeMillis() - startTime;
-            log.error("Async agent execution failed. taskId={}, latencyMs={}", taskId, latencyMs, ex);
+            // CENTRAL AGENT FAILURE LOG - All async agent execution failures flow through here
+            log.error("Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, error={}", agentType, agentId, tenantId, latencyMs, ex.getMessage(), ex);
             agentResponse.put(ERROR_MESSAGE, ex.getMessage());
 
             updatedTask.put(RESPONSE_FIELD, agentResponse);

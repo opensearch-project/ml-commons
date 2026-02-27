@@ -63,6 +63,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
@@ -871,7 +872,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
             } catch (Exception e) {
                 String agentId = tmpParameters.getOrDefault("agent_id", "unknown");
                 String tenantIdLog = tmpParameters.getOrDefault(TENANT_ID_FIELD, "");
-                log.error("Failed to run tool {}. agentId={}, tenantId={}", action, agentId, tenantIdLog, e);
+                String statusCode = extractStatusCode(e);
+                log.error("Failed to run tool {}. agentId={}, tenantId={}, statusCode={}", action, agentId, tenantIdLog, statusCode, e);
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
@@ -1580,6 +1582,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } catch (Exception e) {
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Extracts HTTP status code from exception if available.
+     * Returns "unknown" for exceptions that don't have status codes.
+     */
+    private static String extractStatusCode(Exception e) {
+        if (e instanceof OpenSearchException) {
+            return String.valueOf(((OpenSearchException) e).status().getStatus());
+        }
+        return "unknown";
     }
 
 }
