@@ -88,6 +88,11 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     private List<String> allIndices;
     private Map<String, PatternInfo> detectedPatterns;
 
+    public final double OVERLAP_THRESHOLD = 0.85;
+    public final int SAMPLE_DOCS_LIMIT = 5;
+    public final int MAX_FIELDS_DISPLAY = 30;
+    public final String COMPLETE_STATUS = "COMPLETED";
+
     public IndexCorrelationTask(String sourceIndex, Client client, SdkClient sdkClient) {
         super(MLIndexInsightType.INDEX_CORRELATION, sourceIndex, client, sdkClient);
         this.detectedPatterns = new HashMap<>();
@@ -175,7 +180,6 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         }
 
         // High threshold (80%) after masking digits - ensures very similar patterns
-        final double OVERLAP_THRESHOLD = 0.85;
 
         List<IndexGroup> groups = new ArrayList<>();
 
@@ -477,7 +481,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                             ActionListener
                                 .wrap(
                                     success -> {}, // Ignore success
-                                    e -> log.warn("Cache save failed for pattern: {}", pattern, e)
+                                    e -> log.error("Cache save failed for pattern: {}", pattern, e)
                                 )
                         );
 
@@ -489,7 +493,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
                     }));
 
                 }, e -> {
-                    log.warn("Failed to get sample documents for index: {}, proceeding with empty list", sampleIndex, e);
+                    log.error("Failed to get sample documents for index: {}, proceeding with empty list", sampleIndex, e);
                     // Proceed with empty sample documents list
                     detectPatternType(
                         pattern,
@@ -648,8 +652,8 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         ActionListener<PatternInfo> listener
     ) {
         getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
-            String indicesStr = sampleIndices.stream().limit(5).collect(Collectors.joining(", "));
-            String fieldsStr = fields.stream().limit(20).collect(Collectors.joining(", "));
+            String indicesStr = sampleIndices.stream().limit(SAMPLE_DOCS_LIMIT).collect(Collectors.joining(", "));
+            String fieldsStr = fields.stream().limit(MAX_FIELDS_DISPLAY).collect(Collectors.joining(", "));
 
             // Format sample documents as JSON string
             String sampleDocsStr;
@@ -1169,7 +1173,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
      * Find all patterns by type (used for intelligent matching)
      */
     private List<PatternInfo> findPatternsByType(String type) {
-        return detectedPatterns.values().stream().filter(p -> type.equals(p.type)).collect(java.util.stream.Collectors.toList());
+        return detectedPatterns.values().stream().filter(p -> type.equals(p.type)).collect(Collectors.toList());
     }
 
     /**
@@ -1205,7 +1209,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
             Long lastUpdateTime = (Long) source.get(IndexInsight.LAST_UPDATE_FIELD);
 
             // Check if completed and not expired
-            if (!"COMPLETED".equals(status)) {
+            if (!COMPLETE_STATUS.equals(status)) {
                 listener.onResponse(null);
                 return;
             }
