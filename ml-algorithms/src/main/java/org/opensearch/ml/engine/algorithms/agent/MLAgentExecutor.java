@@ -978,8 +978,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             }
         }, ex -> {
             long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
             // CENTRAL AGENT FAILURE LOG - All agent execution failures flow through here
-            log.error("Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, error={}", agentType, agentId, tenantId, latencyMs, ex.getMessage(), ex);
+            log.error("Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}, error={}", agentType, agentId, tenantId, latencyMs, statusCode, ex.getMessage(), ex);
             updateInteractionWithFailure(parentInteractionId, memory, ex.getMessage());
             listener.onFailure(ex);
         });
@@ -1027,8 +1028,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             );
         }, ex -> {
             long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
             // CENTRAL AGENT FAILURE LOG - All async agent execution failures flow through here
-            log.error("Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, error={}", agentType, agentId, tenantId, latencyMs, ex.getMessage(), ex);
+            log.error("Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}, error={}", agentType, agentId, tenantId, latencyMs, statusCode, ex.getMessage(), ex);
             agentResponse.put(ERROR_MESSAGE, ex.getMessage());
 
             updatedTask.put(RESPONSE_FIELD, agentResponse);
@@ -1309,6 +1311,21 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     boolean supportsStructuredMessages(MLAgent mlAgent) {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
         return agentType == MLAgentType.CONVERSATIONAL || agentType == MLAgentType.AG_UI;
+    }
+
+    /**
+     * Extracts HTTP status code from exception if available.
+     * Returns the status code as a string if the exception is an OpenSearchException,
+     * otherwise returns "unknown".
+     *
+     * @param e the exception to extract status code from
+     * @return status code as string or "unknown"
+     */
+    private static String extractStatusCode(Exception e) {
+        if (e instanceof OpenSearchException) {
+            return String.valueOf(((OpenSearchException) e).status().getStatus());
+        }
+        return "unknown";
     }
 
 }
