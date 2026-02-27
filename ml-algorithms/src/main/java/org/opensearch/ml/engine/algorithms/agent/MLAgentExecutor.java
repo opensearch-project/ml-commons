@@ -258,6 +258,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
                                             .getInputDataset();
                                         Map<String, String> requestParameters = inputDataSet.getParameters();
+                                        
+                                        // Add agentId to parameters for logging in agent runners
+                                        inputDataSet.getParameters().put("agent_id", agentId);
 
                                         mlAgent = applyMemoryContainerOverride(mlAgent, inputDataSet, agentId);
                                         final MLAgent finalMlAgent = mlAgent;

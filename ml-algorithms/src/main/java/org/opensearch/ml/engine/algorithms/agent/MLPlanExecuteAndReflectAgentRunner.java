@@ -357,7 +357,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                String agentId = allParams.getOrDefault("agent_id", mlAgent.getName() != null ? mlAgent.getName() : "unknown");
+                String tenantIdLog = allParams.getOrDefault(TENANT_ID_FIELD, "");
+                log.error("Failed to get chat history. agentId={}, tenantId={}", agentId, tenantIdLog, e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
@@ -620,12 +622,16 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         finalListener
                     );
                 }, e -> {
-                    log.error("Failed to execute ReAct agent", e);
+                    String agentId = allParams.getOrDefault("agent_id", "unknown");
+                    String tenantIdLog = allParams.getOrDefault(TENANT_ID_FIELD, "");
+                    log.error("Failed to execute ReAct agent. agentId={}, tenantId={}", agentId, tenantIdLog, e);
                     finalListener.onFailure(e);
                 }));
             }
         }, e -> {
-            log.error("Failed to run deep research agent", e);
+            String agentId = allParams.getOrDefault("agent_id", "unknown");
+            String tenantIdLog = allParams.getOrDefault(TENANT_ID_FIELD, "");
+            log.error("Failed to run deep research agent. agentId={}, tenantId={}", agentId, tenantIdLog, e);
             finalListener.onFailure(e);
         });
 

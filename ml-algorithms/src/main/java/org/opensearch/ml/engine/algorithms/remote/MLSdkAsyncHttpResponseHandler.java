@@ -100,7 +100,10 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     @Override
     public void onError(Throwable error) {
-        log.error("Received error from remote service: {}", error.getMessage(), error);
+        String tenantId = parameters != null ? parameters.getOrDefault("tenant_id", "") : "";
+        String modelId = connector.getName() != null ? connector.getName() : "unknown";
+        log.error("Received error from remote service. modelId={}, tenantId={}, statusCode={}", 
+            modelId, tenantId, statusCode, error);
         RestStatus status = (statusCode == null) ? RestStatus.INTERNAL_SERVER_ERROR : RestStatus.fromCode(statusCode);
         String errorMessage = "Error communicating with remote model: " + error.getMessage();
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
@@ -172,19 +175,25 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         String body = responseBody.toString();
         log.debug("Received response from remote service: {}", body);
         if (exceptionHolder.get() != null) {
-            log.error("Remote server returned exception with status code: {} and body: {}", statusCode, body);
+            String tenantId = parameters != null ? parameters.getOrDefault("tenant_id", "") : "";
+            String modelId = connector.getName() != null ? connector.getName() : "unknown";
+            log.error("Remote server returned exception. modelId={}, tenantId={}, statusCode={}, body={}", 
+                modelId, tenantId, statusCode, body);
             actionListener.onFailure(exceptionHolder.get());
             return;
         }
 
         // Handle error status codes (4xx, 5xx)
         if (statusCode == null || statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
+            String tenantId = parameters != null ? parameters.getOrDefault("tenant_id", "") : "";
+            String modelId = connector.getName() != null ? connector.getName() : "unknown";
             RestStatus status = (statusCode != null) ? RestStatus.fromCode(statusCode) : RestStatus.INTERNAL_SERVER_ERROR;
             String errorMsg = Strings.isBlank(body)
                 ? String.format("Remote service returned error status %d with empty body", statusCode)
                 : REMOTE_SERVICE_ERROR + body;
 
-            log.error("Remote service returned error: {} with status: {}", errorMsg, status);
+            log.error("Remote service returned error. modelId={}, tenantId={}, statusCode={}, error={}", 
+                modelId, tenantId, statusCode, errorMsg);
             actionListener.onFailure(new OpenSearchStatusException(errorMsg, status));
             return;
         }
