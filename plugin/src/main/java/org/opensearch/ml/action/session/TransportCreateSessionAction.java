@@ -12,6 +12,7 @@ import java.time.Instant;
 
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -23,6 +24,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MLMemorySession;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -125,6 +127,7 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
         String sessionId = input.getSessionId();
         if (sessionId != null && !sessionId.isBlank()) {
             indexRequest.id(sessionId);
+            indexRequest.opType(DocWriteRequest.OpType.CREATE); // no-op if session already exists
         }
         try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
             session.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -134,8 +137,14 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
                 MLCreateSessionResponse response = MLCreateSessionResponse.builder().sessionId(r.getId()).status("created").build();
                 actionListener.onResponse(response);
             }, e -> {
-                log.error("Failed to create session in container {}", input.getMemoryContainerId(), e);
-                actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                if (e instanceof VersionConflictEngineException) {
+                    // Session already exists — return the existing session ID
+                    MLCreateSessionResponse response = MLCreateSessionResponse.builder().sessionId(sessionId).status("exists").build();
+                    actionListener.onResponse(response);
+                } else {
+                    log.error("Failed to create session in container {}", input.getMemoryContainerId(), e);
+                    actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                }
             }));
         } catch (IOException e) {
             log.error("Failed to build XContent for session in container {}", input.getMemoryContainerId(), e);
