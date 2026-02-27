@@ -865,7 +865,7 @@ public class AgentUtils {
 
                     if (connector instanceof McpConnector) {
                         McpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                                .initInstance(connector.getProtocol(), connector, Connector.class);
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
                         connectorExecutor.setClient(client);
                         mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                         toolListener.onResponse(mcpToolSpecs);
@@ -873,7 +873,7 @@ public class AgentUtils {
                     }
                     if (connector instanceof McpStreamableHttpConnector) {
                         McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                                .initInstance(connector.getProtocol(), connector, Connector.class);
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
                         connectorExecutor.setClient(client);
                         mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                         toolListener.onResponse(mcpToolSpecs);
@@ -883,8 +883,8 @@ public class AgentUtils {
                     toolListener.onResponse(Collections.emptyList());
                 }, e -> {
                     log.error("Failed to decrypt credentials in connector", e);
-                        toolListener.onFailure(e);
-                    });
+                    toolListener.onFailure(e);
+                });
                 connector.decrypt("", encryptor::decrypt, tenantId, decryptSuccessfulListener);
             } catch (Exception e) {
                 log.error("Failed to get tools from connector: " + connectorId, e);

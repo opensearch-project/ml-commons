@@ -53,8 +53,8 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.engine.helper.MLTestHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.engine.helper.MLTestHelper;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -848,7 +848,7 @@ public class EncryptorImplTest {
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         // First encryption caches the key - should call DDB
-        String encrypted1 = encryptor.encrypt("test", TENANT_ID);
+        String encrypted1 = MLTestHelper.encryptCredentials(List.of("test"), TENANT_ID, encryptor);
         Assert.assertNotNull(encrypted1);
 
         // Verify key is cached
@@ -856,7 +856,7 @@ public class EncryptorImplTest {
         Assert.assertNotNull(cachedKey1);
 
         // Second encryption should use cached key (no additional DDB call)
-        String encrypted2 = encryptor.encrypt("test", TENANT_ID);
+        String encrypted2 = MLTestHelper.encryptCredentials(List.of("test"), TENANT_ID, encryptor);
         Assert.assertNotNull(encrypted2);
 
         // Verify DDB (client.get) was called only once, not twice
@@ -886,12 +886,12 @@ public class EncryptorImplTest {
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
 
         // First encryption fetches from DDB and caches
-        String encrypted1 = encryptor.encrypt("test", TENANT_ID);
+        String encrypted1 = MLTestHelper.encryptCredentials(List.of("test"), TENANT_ID, encryptor);
         Assert.assertNotNull(encrypted1);
         Assert.assertNotNull(encryptor.getMasterKey(TENANT_ID));
 
         // Second encryption uses cache, not DDB
-        String encrypted2 = encryptor.encrypt("test", TENANT_ID);
+        String encrypted2 = MLTestHelper.encryptCredentials(List.of("test"), TENANT_ID, encryptor);
         Assert.assertNotNull(encrypted2);
 
         // Verify DDB was called only once (first time), not on second encryption
@@ -936,7 +936,7 @@ public class EncryptorImplTest {
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler, 1, TimeUnit.SECONDS);
 
         // T1: First encryption with old key
-        String encrypted1 = encryptor.encrypt("test", TENANT_ID);
+        String encrypted1 = MLTestHelper.encryptCredentials(List.of("test"), TENANT_ID, encryptor);
         Assert.assertNotNull(encrypted1);
         String cachedKey = encryptor.getMasterKey(TENANT_ID);
         Assert.assertEquals(oldMasterKey, cachedKey);
@@ -948,7 +948,7 @@ public class EncryptorImplTest {
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
 
         // T5: Next encryption should fetch the NEW key from DDB (simulating domain recreation)
-        String encrypted2 = encryptor.encrypt("test", TENANT_ID);
+        String encrypted2 = MLTestHelper.encryptCredentials(List.of("test"), TENANT_ID, encryptor);
         Assert.assertNotNull(encrypted2);
         String newCachedKey = encryptor.getMasterKey(TENANT_ID);
         Assert.assertEquals(newMasterKey, newCachedKey);
@@ -987,12 +987,12 @@ public class EncryptorImplTest {
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         // Encrypt for tenant1
-        String encrypted1 = encryptor.encrypt("test1", tenant1);
+        String encrypted1 = MLTestHelper.encryptCredentials(List.of("test1"), tenant1, encryptor);
         Assert.assertNotNull(encrypted1);
         Assert.assertNotNull(encryptor.getMasterKey(tenant1));
 
         // Encrypt for tenant2
-        String encrypted2 = encryptor.encrypt("test2", tenant2);
+        String encrypted2 = MLTestHelper.encryptCredentials(List.of("test2"), tenant2, encryptor);
         Assert.assertNotNull(encrypted2);
         Assert.assertNotNull(encryptor.getMasterKey(tenant2));
 

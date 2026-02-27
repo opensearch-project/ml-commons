@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import javax.crypto.spec.SecretKeySpec;
 
@@ -158,7 +158,7 @@ public class EncryptorImpl implements Encryptor {
                 listener.onFailure(new OpenSearchStatusException(MASTER_KEY_NOT_READY_ERROR, RestStatus.INTERNAL_SERVER_ERROR));
             } else {
                 final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-                JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
+                JceMasterKey jceMasterKey = createJceMasterKey(r);
                 List<String> encryptedResults = new ArrayList<>();
                 for (String plainText : plainTexts) {
                     final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
@@ -185,7 +185,7 @@ public class EncryptorImpl implements Encryptor {
                 listener.onFailure(new OpenSearchStatusException(MASTER_KEY_NOT_READY_ERROR, RestStatus.INTERNAL_SERVER_ERROR));
             } else {
                 final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-                JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
+                JceMasterKey jceMasterKey = createJceMasterKey(r);
                 List<String> decryptedTextList = new ArrayList<>();
                 for (String decryptText : decryptTexts) {
                     final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
@@ -218,7 +218,7 @@ public class EncryptorImpl implements Encryptor {
     }
 
     private void initMasterKey(String tenantId, ActionListener<String> listener) {
-        String masterKey = tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
+        String masterKey = tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
         if (masterKey != null && !Strings.isNullOrEmpty(masterKey)) {
             log.debug("Fetched master key from cache, tenantId is: {}", tenantId);
             listener.onResponse(masterKey);
@@ -458,8 +458,7 @@ public class EncryptorImpl implements Encryptor {
                     listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
                 }
             } else {
-                exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
-                latch.countDown();
+                listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
             }
         }
     }
