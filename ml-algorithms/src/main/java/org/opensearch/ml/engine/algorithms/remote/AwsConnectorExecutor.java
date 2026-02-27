@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_NOVA;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static software.amazon.awssdk.http.SdkHttpMethod.DELETE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
@@ -194,6 +195,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     private void validateLLMInterface(String llmInterface) {
         switch (llmInterface) {
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
+            case LLM_INTERFACE_BEDROCK_CONVERSE_NOVA:
                 break;
             default:
                 throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
