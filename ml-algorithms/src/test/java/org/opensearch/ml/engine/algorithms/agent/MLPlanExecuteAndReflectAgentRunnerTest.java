@@ -15,6 +15,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -168,6 +169,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(conversationIndexMemory).save(any(), any(), any(), any(), any());
 
+        // Pass null for sdkClient - the null check in setToolsAndRunAgent will skip model resolution
+        // Same pattern as MLChatAgentRunnerTest
         mlPlanExecuteAndReflectAgentRunner = new MLPlanExecuteAndReflectAgentRunner(
             client,
             settings,
@@ -175,7 +178,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             xContentRegistry,
             toolFactories,
             memoryMap,
-            sdkClient,
+            null,
             encryptor,
             null
         );
@@ -854,7 +857,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
                 executorParentId,
                 finalResult,
                 input,
-                agentActionListener
+                agentActionListener,
+                null,
+                null
             );
 
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -1054,7 +1059,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
 
             mlTaskUtilsMockedStatic
-                .verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), eq(sdkClient), any()));
+                .verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), isNull(), any()));
         }
     }
 

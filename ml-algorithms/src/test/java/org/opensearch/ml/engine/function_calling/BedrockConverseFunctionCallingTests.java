@@ -52,7 +52,7 @@ public class BedrockConverseFunctionCallingTests {
     public void configure() {
         Map<String, String> parameters = new HashMap<>();
         functionCalling.configure(parameters);
-        Assert.assertEquals(14, parameters.size());
+        Assert.assertEquals(15, parameters.size()); // Updated for token_usage_path
         Assert.assertEquals(BEDROCK_CONVERSE_TOOL_TEMPLATE, parameters.get("tool_template"));
     }
 

@@ -96,6 +96,15 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
         }
     }
 
+    /**
+     * Returns true if an agent listener is present, meaning an agent runner
+     * upstream will handle stream closure. When false, the streaming handler
+     * must close the stream itself.
+     */
+    public boolean hasAgentListener() {
+        return agentListener != null;
+    }
+
     private Response addMetadataToResponse(Response response) {
         if (!(response instanceof MLTaskResponse)) {
             return response;
