@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRU
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -29,6 +30,7 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -245,5 +247,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             );
         }
     }
+
 
 }
