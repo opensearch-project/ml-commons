@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_PREDICT_THREAD_POOL;
@@ -142,13 +141,6 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         Optional<FunctionName> functionName = modelManager.getOptionalModelFunctionName(modelId);
 
-        // If model not in cache, validate it exists before start streaming
-        if (!functionName.isPresent()) {
-            if (!isModelValid(modelId, request, client)) {
-                throw new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND);
-            }
-        }
-
         return channel -> {
             StreamingRestChannel streamingChannel = (StreamingRestChannel) channel;
 
@@ -196,29 +188,6 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
         };
     }
 
-    private boolean isModelValid(String modelId, RestRequest request, NodeClient client) throws IOException {
-        try {
-            CompletableFuture<MLModel> future = new CompletableFuture<>();
-
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                modelManager
-                    .getModel(
-                        modelId,
-                        getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
-                        ActionListener.runBefore(ActionListener.wrap(future::complete, future::completeExceptionally), context::restore)
-                    );
-            }
-
-            // TODO: make this async
-            // Wait for validation
-            future.get(5, SECONDS);
-            return true;
-        } catch (Exception e) {
-            log.error("Failed to validate model {}", e.getMessage());
-            return false;
-        }
-    }
-
     private void loadModelAndExecuteStreaming(
         NodeClient client,
         String modelId,
@@ -236,9 +205,9 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
                 MLPredictionTaskRequest taskRequest = getRequest(modelId, modelAlgorithm, request, chunkContent);
                 executeStreamingRequest(client, taskRequest, channel, future);
             } catch (IOException e) {
-                future.completeExceptionally(e);
+                sendErrorChunk(channel, e, RestStatus.BAD_REQUEST, future);
             }
-        }, future::completeExceptionally);
+        }, e -> sendErrorChunk(channel, e, RestStatus.NOT_FOUND, future));
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             modelManager
@@ -247,6 +216,18 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
                     getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
                     ActionListener.runBefore(listener, context::restore)
                 );
+        }
+    }
+
+    private void sendErrorChunk(StreamingRestChannel channel, Throwable error, RestStatus status, CompletableFuture<HttpChunk> future) {
+        try {
+            BytesRestResponse response = new BytesRestResponse(channel, status, (Exception) error);
+            String sseData = String.format("data: %s\n\n", response.content().utf8ToString().replace("\n", "\\n"));
+            HttpChunk errorChunk = createHttpChunk(sseData, true);
+            future.complete(errorChunk);
+        } catch (Exception ex) {
+            log.error("Failed to send error chunk", ex);
+            future.completeExceptionally(ex);
         }
     }
 
