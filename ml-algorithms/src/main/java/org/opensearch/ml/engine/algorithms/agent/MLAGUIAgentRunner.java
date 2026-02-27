@@ -125,7 +125,9 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             conversationalRunner.run(mlAgent, params, listener, channel, memory);
 
         } catch (Exception e) {
-            log.error("Error starting AG-UI agent execution", e);
+            String agentId = params.getOrDefault("agent_id", mlAgent != null ? mlAgent.getName() : "unknown");
+            String tenantId = mlAgent != null && mlAgent.getTenantId() != null ? mlAgent.getTenantId() : "";
+            log.error("Error starting AG-UI agent execution. agentId={}, tenantId={}", agentId, tenantId, e);
             listener.onFailure(e);
         }
     }
@@ -167,7 +169,9 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     : allMessages;
                 streamingWrapper.sendMessagesSnapshot(history, memory.getId(), listener);
             }, e -> {
-                log.error("Failed to load history for AGUI snapshot", e);
+                String agentId = params.getOrDefault("agent_id", mlAgent != null ? mlAgent.getName() : "unknown");
+                String tenantId = mlAgent != null && mlAgent.getTenantId() != null ? mlAgent.getTenantId() : "";
+                log.error("Failed to load history for AGUI snapshot. agentId={}, tenantId={}", agentId, tenantId, e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
