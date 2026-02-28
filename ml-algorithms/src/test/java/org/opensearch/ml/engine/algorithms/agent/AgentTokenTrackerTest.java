@@ -563,4 +563,15 @@ public class AgentTokenTrackerTest {
         assertEquals(185L, claude3.get("output_tokens")); // 50+135
         assertEquals(3, claude3.get("call_count"));        // 1+2
     }
+
+    @Test
+    public void testSubAgentFlag_defaultFalse() {
+        assertFalse(tracker.isSubAgent());
+    }
+
+    @Test
+    public void testSubAgentFlag_setTrue() {
+        tracker.setSubAgent(true);
+        assertTrue(tracker.isSubAgent());
+    }
 }

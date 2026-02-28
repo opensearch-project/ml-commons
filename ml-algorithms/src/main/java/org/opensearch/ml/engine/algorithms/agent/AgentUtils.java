@@ -1640,6 +1640,11 @@ public class AgentUtils {
                     .build()
             );
 
+        // Skip logging for sub-agents — the parent agent logs the merged totals
+        if (tokenTracker.isSubAgent()) {
+            return;
+        }
+
         // Log structured token usage for each model
         Object perModelObj = tokenUsageMap.get(AgentTokenTracker.PER_MODEL_USAGE);
         if (perModelObj instanceof List) {

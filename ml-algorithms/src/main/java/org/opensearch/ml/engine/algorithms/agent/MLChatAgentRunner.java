@@ -417,6 +417,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         // Token tracking: create tracker and resolve model metadata before starting ReAct loop.
         AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        if (Boolean.parseBoolean(parameters.getOrDefault(AgentTokenTracker.IS_SUB_AGENT_FIELD, "false"))) {
+            tokenTracker.setSubAgent(true);
+        }
 
         // getModelMetadata always calls onResponse (falls back to modelId on failure),
         // but we handle onFailure defensively in case the contract changes.

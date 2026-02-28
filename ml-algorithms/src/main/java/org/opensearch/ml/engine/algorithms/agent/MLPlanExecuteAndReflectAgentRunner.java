@@ -581,6 +581,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 if (allParams.containsKey(MEMORY_CONFIGURATION_FIELD)) {
                     reactParams.put(MEMORY_CONFIGURATION_FIELD, allParams.get(MEMORY_CONFIGURATION_FIELD));
                 }
+                // Mark sub-agent so its token tracker suppresses logging (parent logs merged totals)
+                reactParams.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "true");
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()

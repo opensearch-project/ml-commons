@@ -28,6 +28,7 @@ public class AgentTokenTracker {
     public static final String MODEL_ID = "model_id";
     public static final String CALL_COUNT = "call_count";
     public static final String TURN = "turn";
+    public static final String IS_SUB_AGENT_FIELD = "_is_sub_agent";
 
     // Track each individual LLM call
     private final List<Map<String, Object>> perTurnUsage;
@@ -41,11 +42,25 @@ public class AgentTokenTracker {
     // Current turn counter
     private int turnCounter;
 
+    // Whether this tracker belongs to a sub-agent (e.g., ReAct executor inside PER).
+    // When true, token usage logging is suppressed to avoid double-logging —
+    // the parent agent logs the merged totals instead.
+    private boolean subAgent;
+
     public AgentTokenTracker() {
         this.perTurnUsage = new ArrayList<>();
         this.perModelUsage = new HashMap<>();
         this.modelMetadataMap = new HashMap<>();
         this.turnCounter = 0;
+        this.subAgent = false;
+    }
+
+    public boolean isSubAgent() {
+        return subAgent;
+    }
+
+    public void setSubAgent(boolean subAgent) {
+        this.subAgent = subAgent;
     }
 
     /**

@@ -2327,4 +2327,25 @@ public class AgentUtilsTest extends MLStaticMockBase {
         AgentUtils.addTokenUsageTensor(tensors, tracker, null);
         assertEquals(1, tensors.size());
     }
+
+    @Test
+    public void testAddTokenUsageTensor_subAgentAddsTensorButSkipsLogging() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setSubAgent(true);
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1");
+
+        // Tensor is still added to the response
+        assertEquals(1, tensors.size());
+        ModelTensor tensor = tensors.get(0).getMlModelTensors().get(0);
+        assertEquals(AgentTokenTracker.TOKEN_USAGE, tensor.getName());
+        assertNotNull(tensor.getDataAsMap());
+    }
 }

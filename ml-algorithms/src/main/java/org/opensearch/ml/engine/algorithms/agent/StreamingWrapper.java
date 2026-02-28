@@ -153,7 +153,9 @@ public class StreamingWrapper {
 
             channel.sendResponseBatch(new MLTaskResponse(tokenOutput));
 
-            logPerModelUsage(tokenUsageMap, tenantId);
+            if (!tokenTracker.isSubAgent()) {
+                logPerModelUsage(tokenUsageMap, tenantId);
+            }
         } catch (Exception e) {
             log.error("Failed to send token usage in streaming response", e);
         }
