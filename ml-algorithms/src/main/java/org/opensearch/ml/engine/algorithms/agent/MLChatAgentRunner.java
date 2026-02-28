@@ -416,7 +416,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String tenantIdLog = parameters.getOrDefault(TENANT_ID_FIELD, "");
         long startTime = System.currentTimeMillis();
         log.info("Starting chat agent execution. agentId={}, tenantId={}", agentId, tenantIdLog);
-        
+
         LLMSpec llm = mlAgent.getLlm();
         String tenantId = mlAgent.getTenantId();
         String sessionId = memory != null ? memory.getId() : null;
@@ -859,7 +859,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 String agentId = tmpParameters.getOrDefault("agent_id", "unknown");
                 String tenantIdLog = tmpParameters.getOrDefault(TENANT_ID_FIELD, "");
                 log.info("Tool invoked. toolName={}, agentId={}, tenantId={}", action, agentId, tenantIdLog);
-                
+
                 if (tools.get(action) instanceof MLModelTool) {
                     Map<String, String> llmToolTmpParameters = new HashMap<>();
                     llmToolTmpParameters.putAll(tmpParameters);
@@ -1359,8 +1359,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }, e -> {
                 String agentId = summaryParams.getOrDefault("agent_id", "unknown");
                 String tenantIdLog = summaryParams.getOrDefault(TENANT_ID_FIELD, "");
-                String statusCode = (e instanceof OpenSearchException) ? String.valueOf(((OpenSearchException) e).status().getStatus()) : "unknown";
-                log.error("Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}", llmSpec.getModelId(), agentId, tenantIdLog, statusCode, e);
+                String statusCode = (e instanceof OpenSearchException)
+                    ? String.valueOf(((OpenSearchException) e).status().getStatus())
+                    : "unknown";
+                log
+                    .error(
+                        "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
+                        llmSpec.getModelId(),
+                        agentId,
+                        tenantIdLog,
+                        statusCode,
+                        e
+                    );
                 listener.onFailure(e);
             }));
         } catch (Exception e) {

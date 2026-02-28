@@ -298,7 +298,13 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         long timeToFirstToken = System.currentTimeMillis() - streamStartTime;
                         String modelId = connector != null ? connector.getName() : "unknown";
                         String tenantId = connector != null && connector.getTenantId() != null ? connector.getTenantId() : "";
-                        log.info("First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}", modelId, tenantId, timeToFirstToken);
+                        log
+                            .info(
+                                "First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}",
+                                modelId,
+                                tenantId,
+                                timeToFirstToken
+                            );
                         firstTokenReceived.set(true);
                     }
 

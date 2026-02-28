@@ -50,12 +50,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.OpenSearchException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTaskState;
@@ -632,8 +632,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }, e -> {
             String agentId = allParams.getOrDefault("agent_id", "unknown");
             String tenantIdLog = allParams.getOrDefault(TENANT_ID_FIELD, "");
-            String statusCode = (e instanceof OpenSearchException) ? String.valueOf(((OpenSearchException) e).status().getStatus()) : "unknown";
-            log.error("Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}", llm.getModelId(), agentId, tenantIdLog, statusCode, e);
+            String statusCode = (e instanceof OpenSearchException)
+                ? String.valueOf(((OpenSearchException) e).status().getStatus())
+                : "unknown";
+            log
+                .error(
+                    "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
+                    llm.getModelId(),
+                    agentId,
+                    tenantIdLog,
+                    statusCode,
+                    e
+                );
             finalListener.onFailure(e);
         });
 
@@ -945,8 +955,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             }, e -> {
                 String agentId = summaryParams.getOrDefault("agent_id", "unknown");
                 String tenantIdLog = summaryParams.getOrDefault(TENANT_ID_FIELD, "");
-                String statusCode = (e instanceof OpenSearchException) ? String.valueOf(((OpenSearchException) e).status().getStatus()) : "unknown";
-                log.error("Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}", llmSpec.getModelId(), agentId, tenantIdLog, statusCode, e);
+                String statusCode = (e instanceof OpenSearchException)
+                    ? String.valueOf(((OpenSearchException) e).status().getStatus())
+                    : "unknown";
+                log
+                    .error(
+                        "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
+                        llmSpec.getModelId(),
+                        agentId,
+                        tenantIdLog,
+                        statusCode,
+                        e
+                    );
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
