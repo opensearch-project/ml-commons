@@ -193,6 +193,51 @@ public class StreamingWrapperTest {
     }
 
     @Test
+    public void testSendTokenUsageBatchStreaming() throws Exception {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        streamingWrapper.sendTokenUsageBatch("session1", "parent1", tokenTracker, "tenant1");
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(channel).sendResponseBatch(responseCaptor.capture());
+
+        ModelTensorOutput tokenOutput = (ModelTensorOutput) responseCaptor.getValue().getOutput();
+        List<ModelTensor> tokenTensors = tokenOutput.getMlModelOutputs().get(0).getMlModelTensors();
+
+        boolean foundTokenUsage = false;
+        for (ModelTensor tensor : tokenTensors) {
+            if (AgentTokenTracker.TOKEN_USAGE.equals(tensor.getName()) && tensor.getDataAsMap() != null) {
+                foundTokenUsage = true;
+                Map<String, ?> dataMap = tensor.getDataAsMap();
+                assertTrue("Token usage should contain per_model_usage", dataMap.containsKey(AgentTokenTracker.PER_MODEL_USAGE));
+            }
+        }
+        assertTrue("Token usage chunk should be sent in streaming mode", foundTokenUsage);
+    }
+
+    @Test
+    public void testSendTokenUsageBatchNonStreaming_isNoOp() {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        nonStreamingWrapper.sendTokenUsageBatch("session1", "parent1", tokenTracker, "tenant1");
+
+        // Non-streaming wrapper should not send anything
+        verify(channel, org.mockito.Mockito.never()).sendResponseBatch(any());
+    }
+
+    @Test
     public void testSendToolResponseStreaming() throws Exception {
         streamingWrapper.sendToolResponse("tool output", "session1", "parent1");
 

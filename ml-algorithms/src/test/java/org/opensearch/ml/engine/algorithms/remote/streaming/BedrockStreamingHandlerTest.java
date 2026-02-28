@@ -242,7 +242,7 @@ public class BedrockStreamingHandlerTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testCreateFinalAnswerResponse_WithText() {
-        MLTaskResponse response = handler.createFinalAnswerResponse("Final answer text");
+        MLTaskResponse response = handler.createFinalAnswerResponse("Final answer text", null);
 
         assertNotNull(response);
         ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
@@ -264,7 +264,7 @@ public class BedrockStreamingHandlerTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testCreateFinalAnswerResponse_NullText() {
-        MLTaskResponse response = handler.createFinalAnswerResponse(null);
+        MLTaskResponse response = handler.createFinalAnswerResponse(null, null);
 
         assertNotNull(response);
         ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
@@ -278,7 +278,7 @@ public class BedrockStreamingHandlerTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testCreateFinalAnswerResponse_EmptyText() {
-        MLTaskResponse response = handler.createFinalAnswerResponse("");
+        MLTaskResponse response = handler.createFinalAnswerResponse("", null);
 
         assertNotNull(response);
         ModelTensorOutput output = (ModelTensorOutput) response.getOutput();

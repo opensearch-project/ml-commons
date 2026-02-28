@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -2254,5 +2255,76 @@ public class AgentUtilsTest extends MLStaticMockBase {
         List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils
             .extractMessagePairs(Collections.emptyList(), "s1", null);
         assertTrue(pairs.isEmpty());
+    }
+
+    // ===== getModelMetadata tests =====
+
+    @Test
+    public void testGetModelMetadata_nullSdkClient() {
+        AtomicReference<String[]> result = new AtomicReference<>();
+        AgentUtils.getModelMetadata("model-1", "tenant-1", null, client, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError("Should not fail", e);
+        }));
+
+        assertNotNull(result.get());
+        assertEquals("model-1", result.get()[0]); // url falls back to modelId
+        assertEquals("model-1", result.get()[1]); // name falls back to modelId
+    }
+
+    // ===== addTokenUsageTensor tests =====
+
+    @Test
+    public void testAddTokenUsageTensor_nullTracker() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentUtils.addTokenUsageTensor(tensors, null, "tenant-1");
+        assertTrue(tensors.isEmpty());
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_emptyTracker() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1");
+        assertTrue(tensors.isEmpty()); // hasUsage() is false
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_withUsage() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1");
+
+        assertEquals(1, tensors.size());
+        ModelTensors modelTensors = tensors.get(0);
+        assertEquals(1, modelTensors.getMlModelTensors().size());
+
+        ModelTensor tensor = modelTensors.getMlModelTensors().get(0);
+        assertEquals(AgentTokenTracker.TOKEN_USAGE, tensor.getName());
+        assertNotNull(tensor.getDataAsMap());
+        assertTrue(tensor.getDataAsMap().containsKey(AgentTokenTracker.PER_MODEL_USAGE));
+        assertTrue(tensor.getDataAsMap().containsKey(AgentTokenTracker.PER_TURN_USAGE));
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_logsPerModelUsage() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(200L).outputTokens(100L).totalTokens(300L).build()
+            );
+
+        // Should not throw even with null tenantId
+        AgentUtils.addTokenUsageTensor(tensors, tracker, null);
+        assertEquals(1, tensors.size());
     }
 }

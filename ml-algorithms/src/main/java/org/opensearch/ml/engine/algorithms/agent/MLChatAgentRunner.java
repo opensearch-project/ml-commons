@@ -75,6 +75,7 @@ import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -399,7 +400,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         processUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools);
     }
 
-    private void runReAct(
+    private void resolveModelMetadataAndRunReAct(
         MLAgent mlAgent,
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
@@ -409,11 +410,68 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         Map<String, Tool> backendTools
     ) {
-        LLMSpec llm = mlAgent.getLlm();
         String tenantId = mlAgent.getTenantId();
-        String sessionId = memory != null ? memory.getId() : null;
+        String llmModelId = mlAgent.getLlm().getModelId();
         boolean usesUnifiedInterface = Boolean.parseBoolean(parameters.getOrDefault(MLAgentExecutor.USES_UNIFIED_INTERFACE, "false"));
         ModelProvider modelProvider = usesUnifiedInterface ? ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider()) : null;
+
+        // Token tracking: create tracker and resolve model metadata before starting ReAct loop.
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+
+        // getModelMetadata always calls onResponse (falls back to modelId on failure),
+        // but we handle onFailure defensively in case the contract changes.
+        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(metadata -> {
+            tokenTracker.setModelMetadata(llmModelId, metadata[0], metadata[1]);
+            runReAct(
+                mlAgent,
+                tools,
+                toolSpecMap,
+                parameters,
+                memory,
+                listener,
+                functionCalling,
+                backendTools,
+                tokenTracker,
+                tenantId,
+                usesUnifiedInterface,
+                modelProvider
+            );
+        }, e -> {
+            log.debug("Failed to resolve model metadata for token tracking, proceeding with model ID as fallback", e);
+            tokenTracker.setModelMetadata(llmModelId, llmModelId, llmModelId);
+            runReAct(
+                mlAgent,
+                tools,
+                toolSpecMap,
+                parameters,
+                memory,
+                listener,
+                functionCalling,
+                backendTools,
+                tokenTracker,
+                tenantId,
+                usesUnifiedInterface,
+                modelProvider
+            );
+        }));
+    }
+
+    private void runReAct(
+        MLAgent mlAgent,
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap,
+        Map<String, String> parameters,
+        Memory memory,
+        ActionListener<Object> listener,
+        FunctionCalling functionCalling,
+        Map<String, Tool> backendTools,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean usesUnifiedInterface,
+        ModelProvider modelProvider
+    ) {
+        LLMSpec llm = mlAgent.getLlm();
+        String sessionId = memory != null ? memory.getId() : null;
 
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
@@ -470,6 +528,24 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         functionCalling
                     );
 
+                    // Extract per-turn token usage from LLM response
+                    if (functionCalling != null) {
+                        try {
+                            Map<String, ?> dataAsMap = tmpModelTensorOutput
+                                .getMlModelOutputs()
+                                .getFirst()
+                                .getMlModelTensors()
+                                .getFirst()
+                                .getDataAsMap();
+                            TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
+                            if (usage != null) {
+                                tokenTracker.recordTurn(llm.getModelId(), usage);
+                            }
+                        } catch (Exception e) {
+                            log.debug("Failed to extract token usage from LLM response", e);
+                        }
+                    }
+
                     streamingWrapper.fixInteractionRole(interactions);
                     String thought = String.valueOf(modelOutput.get(THOUGHT));
                     String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
@@ -494,7 +570,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             finalAnswer,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            modelProvider
+                            modelProvider,
+                            tokenTracker,
+                            tenantId
                         );
                         cleanUpResource(tools);
                         return;
@@ -547,7 +625,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tmpParameters,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            modelProvider
+                            modelProvider,
+                            tokenTracker,
+                            functionCalling
                         );
                         return;
                     }
@@ -692,7 +772,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tmpParameters,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            modelProvider
+                            modelProvider,
+                            tokenTracker,
+                            functionCalling
                         );
                         return;
                     }
@@ -930,8 +1012,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String finalAnswer,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        ModelProvider modelProvider
+        ModelProvider modelProvider,
+        AgentTokenTracker tokenTracker,
+        String tenantId
     ) {
+        // Token tracking: send streaming batch or add to response tensors
+        if (streamingWrapper.isStreaming()) {
+            streamingWrapper.sendTokenUsageBatch(sessionId, parentInteractionId, tokenTracker, tenantId);
+        }
+        AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId);
+
         // Send completion chunk for streaming
         streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
 
@@ -1199,7 +1289,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> parameters,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        ModelProvider modelProvider
+        ModelProvider modelProvider,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
     ) {
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             sendTraditionalMaxIterationsResponse(
@@ -1217,7 +1309,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tools,
                 usesUnifiedInterface,
                 toolInteractions,
-                modelProvider
+                modelProvider,
+                tokenTracker,
+                tenantId
             );
         }, listener::onFailure);
 
@@ -1241,7 +1335,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
                         responseListener.onResponse(fallbackResponse);
                     }
-                )
+                ),
+            tokenTracker,
+            functionCalling
         );
     }
 
@@ -1260,7 +1356,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool> tools,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        ModelProvider modelProvider
+        ModelProvider modelProvider,
+        AgentTokenTracker tokenTracker,
+        String tenantId
     ) {
         sendFinalAnswer(
             sessionId,
@@ -1276,7 +1374,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
             response,
             usesUnifiedInterface,
             toolInteractions,
-            modelProvider
+            modelProvider,
+            tokenTracker,
+            tenantId
         );
         cleanUpResource(tools);
     }
@@ -1287,7 +1387,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String tenantId,
         String question,
         Map<String, String> parameter,
-        ActionListener<String> listener
+        ActionListener<String> listener,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
     ) {
         if (stepsSummary == null || stepsSummary.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Steps summary cannot be null or empty"));
@@ -1334,6 +1436,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tenantId
             );
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
+                // Extract token usage from summary LLM response
+                if (tokenTracker != null && functionCalling != null) {
+                    try {
+                        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+                        Map<String, ?> dataAsMap = output.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
+                        TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
+                        if (usage != null) {
+                            tokenTracker.recordTurn(llmSpec.getModelId(), usage);
+                        }
+                    } catch (Exception e) {
+                        log.debug("Failed to extract token usage from summary LLM response", e);
+                    }
+                }
                 String summary = extractSummaryFromResponse(response, summaryParams);
                 if (summary == null || summary.trim().isEmpty()) {
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
@@ -1503,9 +1618,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 );
         }
 
-        // Call runReAct with unified tools - both frontend and backend tools will be visible to LLM
+        // Call resolveModelMetadataAndRunReAct with unified tools - both frontend and backend tools will be visible to LLM
         // Pass mlAgent and backendToolsMap so runReAct can distinguish between frontend and backend tools
-        runReAct(mlAgent, unifiedToolsMap, toolSpecMap, params, memory, listener, functionCalling, backendToolsMap);
+        resolveModelMetadataAndRunReAct(mlAgent, unifiedToolsMap, toolSpecMap, params, memory, listener, functionCalling, backendToolsMap);
     }
 
     /**

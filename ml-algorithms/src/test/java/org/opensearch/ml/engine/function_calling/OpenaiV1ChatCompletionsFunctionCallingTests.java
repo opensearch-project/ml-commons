@@ -58,7 +58,7 @@ public class OpenaiV1ChatCompletionsFunctionCallingTests {
     public void configure() {
         Map<String, String> parameters = new HashMap<>();
         functionCalling.configure(parameters);
-        Assert.assertEquals(16, parameters.size());
+        Assert.assertEquals(17, parameters.size()); // Updated for token_usage_path
         Assert.assertEquals(OPENAI_V1_CHAT_COMPLETION_TEMPLATE, parameters.get("tool_template"));
     }
 

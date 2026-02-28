@@ -1496,7 +1496,7 @@ public class MLChatAgentRunnerTest {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         ActionListener<String> listener = Mockito.mock(ActionListener.class);
 
-        mlChatAgentRunner.generateLLMSummary(null, llmSpec, "tenant", "question", new HashMap<>(), listener);
+        mlChatAgentRunner.generateLLMSummary(null, llmSpec, "tenant", "question", new HashMap<>(), listener, null, null);
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }

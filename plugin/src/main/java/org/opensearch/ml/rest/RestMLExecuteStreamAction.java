@@ -27,6 +27,7 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -464,17 +465,21 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         }
 
         // Create ordered tensors
-        List<ModelTensor> orderedTensors = List
-            .of(
-                ModelTensor.builder().name("memory_id").result(memoryId).build(),
-                ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
-                ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
-                    {
-                        put("content", finalContent);
-                        put("is_last", finalIsLast);
-                    }
-                }).build()
-            );
+        List<ModelTensor> orderedTensors = new ArrayList<>();
+        orderedTensors.add(ModelTensor.builder().name("memory_id").result(memoryId).build());
+        orderedTensors.add(ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build());
+        orderedTensors.add(ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
+            {
+                put("content", finalContent);
+                put("is_last", finalIsLast);
+            }
+        }).build());
+
+        // Pass through token_usage tensor if present (matches non-streaming format)
+        Map<String, ?> tokenUsage = extractTokenUsage(response);
+        if (tokenUsage != null) {
+            orderedTensors.add(ModelTensor.builder().name("token_usage").dataAsMap(tokenUsage).build());
+        }
 
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
 
@@ -516,6 +521,20 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }
         }
         return Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, ?> extractTokenUsage(MLTaskResponse response) {
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        if (output != null && !output.getMlModelOutputs().isEmpty()) {
+            ModelTensors tensors = output.getMlModelOutputs().get(0);
+            for (ModelTensor tensor : tensors.getMlModelTensors()) {
+                if ("token_usage".equals(tensor.getName()) && tensor.getDataAsMap() != null) {
+                    return tensor.getDataAsMap();
+                }
+            }
+        }
+        return null;
     }
 
     private HttpChunk convertToAGUIEvent(String content, boolean isLast) {
