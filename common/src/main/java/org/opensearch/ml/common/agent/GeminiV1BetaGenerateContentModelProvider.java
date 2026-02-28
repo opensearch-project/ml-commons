@@ -297,4 +297,9 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         };
     }
 
+    @Override
+    public Message parseToUnifiedMessage(String json) {
+        throw new UnsupportedOperationException("parseToUnifiedMessage is not yet supported for Gemini model provider");
+    }
+
 }

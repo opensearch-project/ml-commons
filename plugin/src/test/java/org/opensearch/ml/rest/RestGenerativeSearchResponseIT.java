@@ -66,7 +66,7 @@ public class RestGenerativeSearchResponseIT extends MLCommonsRestTestCase {
 
         // Create OpenAI model
         String openaiModelName = "openAI-gpt-3.5-turbo";
-        modelId = registerRemoteModel(openaiConnectorEntity, openaiModelName, true);
+        modelId = registerRemoteModel(openaiConnectorEntity, openaiModelName, false);
 
         // Create RAG pipeline
         createRagPipeline();

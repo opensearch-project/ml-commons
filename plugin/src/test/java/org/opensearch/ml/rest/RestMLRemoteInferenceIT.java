@@ -70,12 +70,15 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    private static boolean initialSleepDone = false;
+
     @Before
-    public void setup() throws IOException, InterruptedException {
+    public void setup() throws Exception {
         disableClusterConnectorAccessControl();
-        // TODO Do we really need to wait this long? This adds 20s to every test case run.
-        // Can we instead check the cluster state and move on?
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
     }
 
     public void testCreate_Get_DeleteConnector() throws IOException {
