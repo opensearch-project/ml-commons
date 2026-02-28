@@ -855,6 +855,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 )
                         );
                 });
+                // Log tool invocation
+                String agentId = tmpParameters.getOrDefault("agent_id", "unknown");
+                String tenantIdLog = tmpParameters.getOrDefault(TENANT_ID_FIELD, "");
+                log.info("Tool invoked. toolName={}, agentId={}, tenantId={}", action, agentId, tenantIdLog);
+                
                 if (tools.get(action) instanceof MLModelTool) {
                     Map<String, String> llmToolTmpParameters = new HashMap<>();
                     llmToolTmpParameters.putAll(tmpParameters);
@@ -1351,7 +1356,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     return;
                 }
                 listener.onResponse(summary);
-            }, listener::onFailure));
+            }, e -> {
+                String agentId = summaryParams.getOrDefault("agent_id", "unknown");
+                String tenantIdLog = summaryParams.getOrDefault(TENANT_ID_FIELD, "");
+                String statusCode = (e instanceof OpenSearchException) ? String.valueOf(((OpenSearchException) e).status().getStatus()) : "unknown";
+                log.error("Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}", llmSpec.getModelId(), agentId, tenantIdLog, statusCode, e);
+                listener.onFailure(e);
+            }));
         } catch (Exception e) {
             listener.onFailure(e);
         }

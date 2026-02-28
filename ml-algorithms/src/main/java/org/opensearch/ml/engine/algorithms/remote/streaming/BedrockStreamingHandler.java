@@ -121,6 +121,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         StreamPredictActionListener<MLTaskResponse, ?> listener
     ) {
         try {
+            long streamStartTime = System.currentTimeMillis();
+            AtomicBoolean firstTokenReceived = new AtomicBoolean(false);
             AtomicBoolean isStreamClosed = new AtomicBoolean(false);
             AtomicBoolean firstToolSent = new AtomicBoolean(false);
             AtomicReference<String> toolName = new AtomicReference<>();
@@ -173,7 +175,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     toolUseId,
                     toolInputAccumulator,
                     accumulatedContent,
-                    currentState
+                    currentState,
+                    streamStartTime,
+                    firstTokenReceived
                 );
             }).build();
 
@@ -260,7 +264,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         AtomicReference<String> toolUseId,
         StringBuilder toolInputAccumulator,
         StringBuilder accumulatedContent,
-        AtomicReference<StreamState> currentState
+        AtomicReference<StreamState> currentState,
+        long streamStartTime,
+        AtomicBoolean firstTokenReceived
     ) {
         String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
         boolean textMessageStarted = (isAGUIAgent && parameters != null)
@@ -286,6 +292,15 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     }
                 } else if (isContentDelta(event)) {
                     String content = getTextContent(event);
+
+                    // Log time to first token
+                    if (!firstTokenReceived.get() && content != null && !content.isEmpty()) {
+                        long timeToFirstToken = System.currentTimeMillis() - streamStartTime;
+                        String modelId = connector != null ? connector.getName() : "unknown";
+                        String tenantId = connector != null && connector.getTenantId() != null ? connector.getTenantId() : "";
+                        log.info("First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}", modelId, tenantId, timeToFirstToken);
+                        firstTokenReceived.set(true);
+                    }
 
                     if (isAGUIAgent) {
                         accumulatedContent.append(content);
