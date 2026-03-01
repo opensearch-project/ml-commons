@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -1412,12 +1413,26 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             // Decrypt the connector credentials (for inline connectors, credentials are already plaintext)
             // This populates the decryptedCredential field which AwsConnector methods depend on
-            connector
-                .decrypt(
-                    ConnectorAction.ActionType.EXECUTE.name(),
-                    (cred, tenant, listener) -> {},  // No-op function - credentials are already plaintext
-                    tenantId
-                );
+            // Use CountDownLatch for synchronous behavior in constructor
+            CountDownLatch latch = new CountDownLatch(1);
+            ActionListener<Boolean> decryptListener = ActionListener.wrap(r -> { latch.countDown(); }, e -> {
+                log.error("Failed to decrypt credentials in inline connector", e);
+                latch.countDown();
+            });
+
+            // No-op function - credentials are already plaintext, just pass them through
+            connector.decrypt(ConnectorAction.ActionType.EXECUTE.name(), (plainCredentials, tenant, listener) -> {
+                latch.countDown();
+                // For inline connectors, credentials are already plaintext, so just pass them through
+                listener.onResponse(plainCredentials);
+            }, tenantId, decryptListener);
+
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                log.error("Interrupted while waiting for credential decryption", e);
+                Thread.currentThread().interrupt();
+            }
 
             return connector;
         }

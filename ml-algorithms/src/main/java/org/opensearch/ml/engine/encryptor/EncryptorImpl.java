@@ -155,43 +155,51 @@ public class EncryptorImpl implements Encryptor {
     }
 
     @Override
-    public void encrypt(String plainText, String tenantId, ActionListener<String> listener) {
+    public void encrypt(List<String> plainTexts, String tenantId, ActionListener<List<String>> listener) {
         String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
-            encryptText(plainText, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
+            encryptTexts(plainTexts, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
         }, listener::onFailure);
         String masterKey = getOrInitMasterKey(effectiveTenantId, initListener);
         if (masterKey != null) {
-            encryptText(plainText, masterKey, listener);
+            encryptTexts(plainTexts, masterKey, listener);
         }
     }
 
-    private void encryptText(String plainText, String masterKey, ActionListener<String> listener) {
+    private void encryptTexts(List<String> plainTexts, String masterKey, ActionListener<List<String>> listener) {
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
         JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
-        final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
-            .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
-        listener.onResponse(Base64.getEncoder().encodeToString(encryptResult.getResult()));
+        List<String> encryptedResults = new ArrayList<>();
+        for (String plainText : plainTexts) {
+            final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
+                .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
+            encryptedResults.add(Base64.getEncoder().encodeToString(encryptResult.getResult()));
+        }
+        listener.onResponse(encryptedResults);
     }
 
     @Override
-    public void decrypt(String encryptedText, String tenantId, ActionListener<String> listener) {
+    public void decrypt(List<String> encryptedTexts, String tenantId, ActionListener<List<String>> listener) {
         String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
-            decryptText(encryptedText, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
+            decryptTexts(encryptedTexts, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
         }, listener::onFailure);
         String masterKey = getOrInitMasterKey(effectiveTenantId, initListener);
         if (masterKey != null) {
-            decryptText(encryptedText, masterKey, listener);
+            decryptTexts(encryptedTexts, masterKey, listener);
         }
     }
 
-    private void decryptText(String encryptedText, String masterKey, ActionListener<String> listener) {
+    private void decryptTexts(List<String> encryptedTexts, String masterKey, ActionListener<List<String>> listener) {
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
         JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
-        final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
-            .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
-        listener.onResponse(new String(decryptedResult.getResult()));
+        List<String> decryptedTextList = new ArrayList<>();
+        for (String encryptedText : encryptedTexts) {
+            final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
+                .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
+            decryptedTextList.add(new String(decryptedResult.getResult()));
+        }
+        listener.onResponse(decryptedTextList);
     }
 
     @Override

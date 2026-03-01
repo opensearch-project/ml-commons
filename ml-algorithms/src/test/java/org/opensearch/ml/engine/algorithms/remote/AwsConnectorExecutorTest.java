@@ -26,6 +26,8 @@ import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static org.opensearch.ml.engine.helper.MLTestHelper.encryptCredentials;
+import static org.opensearch.ml.engine.helper.MLTestHelper.endecryptConnectorCredentials;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -40,7 +42,6 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -153,51 +154,47 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .url("http:///mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-
-                MLInputDataset inputDataSet = RemoteInferenceInputDataSet
-                    .builder()
-                    .parameters(ImmutableMap.of("input", "test input data"))
-                    .build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-                ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-                Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-                assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
-                assertEquals(
-                    "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
-                    exceptionCaptor.getValue().getMessage()
-                );
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
-
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
+                actionListener
+            );
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
+        assertEquals(
+            "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+            exceptionCaptor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -210,38 +207,39 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
     }
 
     @Test
@@ -254,51 +252,52 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap
-                    .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                executor.setClient(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-                MLInputDataset inputDataSet1 = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet1).build(),
-                        actionListener
-                    );
+        MLInputDataset inputDataSet1 = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet1).build(),
+                actionListener
+            );
 
-                Mockito.verify(actionListener, times(0)).onFailure(any());
-                Mockito.verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any());
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        verify(actionListener, times(0)).onFailure(any());
+        verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any());
     }
 
     @Test
@@ -311,59 +310,60 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap
-                    .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-                doAnswer(invocation -> {
-                    MLInput mlInput = invocation.getArgument(1);
-                    ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
-                    String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
-                    Integer idx = Integer.parseInt(doc.substring(doc.length() - 1));
-                    actionListener.onResponse(new Tuple<>(3 - idx, new ModelTensors(modelTensors.subList(3 - idx, 4 - idx))));
-                    return null;
-                }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        doAnswer(invocation -> {
+            MLInput mlInput = invocation.getArgument(1);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
+            String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
+            Integer idx = Integer.parseInt(doc.substring(doc.length() - 1));
+            actionListener.onResponse(new Tuple<>(3 - idx, new ModelTensors(modelTensors.subList(3 - idx, 4 - idx))));
+            return null;
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-                ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
-                Mockito.verify(actionListener, times(1)).onResponse(responseCaptor.capture());
-                for (int idx = 0; idx < 3; idx++) {
-                    assert ((ModelTensorOutput) responseCaptor.getValue().getOutput())
-                        .getMlModelOutputs()
-                        .get(idx)
-                        .getMlModelTensors()
-                        .get(0)
-                        .equals(modelTensors.get(idx));
-                }
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(actionListener, times(1)).onResponse(responseCaptor.capture());
+        for (int idx = 0; idx < 3; idx++) {
+            assert ((ModelTensorOutput) responseCaptor.getValue().getOutput())
+                .getMlModelOutputs()
+                .get(idx)
+                .getMlModelTensors()
+                .get(0)
+                .equals(modelTensors.get(idx));
+        }
     }
 
     @Test
@@ -376,56 +376,57 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap
-                    .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-                doAnswer(invocation -> {
-                    MLInput mlInput = invocation.getArgument(1);
-                    ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
-                    String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
-                    if (doc.endsWith("1")) {
-                        actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
-                    } else {
-                        actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
-                    }
-                    return null;
-                }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        doAnswer(invocation -> {
+            MLInput mlInput = invocation.getArgument(1);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
+            String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
+            if (doc.endsWith("1")) {
+                actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
+            } else {
+                actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
+            }
+            return null;
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-                ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-                Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-                assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
-                assertEquals("test failure", exceptionCaptor.getValue().getMessage());
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
+        assertEquals("test failure", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -438,59 +439,60 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap
-                    .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-                doAnswer(invocation -> {
-                    MLInput mlInput = invocation.getArgument(1);
-                    ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
-                    String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
-                    if (!doc.endsWith("1")) {
-                        actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
-                    } else {
-                        actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
-                    }
-                    return null;
-                }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        doAnswer(invocation -> {
+            MLInput mlInput = invocation.getArgument(1);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
+            String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
+            if (!doc.endsWith("1")) {
+                actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
+            } else {
+                actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
+            }
+            return null;
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-                ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-                Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-                assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
-                assertEquals("test failure", exceptionCaptor.getValue().getMessage());
-                assert exceptionCaptor.getValue().getSuppressed().length == 1;
-                assert exceptionCaptor.getValue().getSuppressed()[0] instanceof OpenSearchStatusException;
-                assertEquals("test failure", exceptionCaptor.getValue().getSuppressed()[0].getMessage());
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
+        assertEquals("test failure", exceptionCaptor.getValue().getMessage());
+        assert exceptionCaptor.getValue().getSuppressed().length == 1;
+        assert exceptionCaptor.getValue().getSuppressed()[0] instanceof OpenSearchStatusException;
+        assertEquals("test failure", exceptionCaptor.getValue().getSuppressed()[0].getMessage());
     }
 
     @Test
@@ -502,45 +504,43 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .url("http://openai.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(executor.getHttpClient()).thenReturn(null);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(executor.getHttpClient()).thenReturn(null);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-                MLInputDataset inputDataSet = RemoteInferenceInputDataSet
-                    .builder()
-                    .parameters(ImmutableMap.of("input", "test input data"))
-                    .build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-                ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-                Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-                assert exceptionCaptor.getValue() instanceof NullPointerException;
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
+                actionListener
+            );
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof NullPointerException;
     }
 
     @Test
@@ -552,43 +552,43 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .url("http://openai.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap
-                    .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-                ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-                Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-                assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
     }
 
     @Test
@@ -601,41 +601,42 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-                ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
-                Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
-                assert exceptionArgumentCaptor.getValue() instanceof IllegalArgumentException;
-                assert "no PREDICT action found".equals(exceptionArgumentCaptor.getValue().getMessage());
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
+        ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        assert exceptionArgumentCaptor.getValue() instanceof IllegalArgumentException;
+        assert "no PREDICT action found".equals(exceptionArgumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -650,39 +651,40 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                 "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"text_inputs\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";"
             )
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-                when(executor.getScriptService()).thenReturn(scriptService);
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(executor.getScriptService()).thenReturn(scriptService);
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
     }
 
     @Test
@@ -695,39 +697,40 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("aws_sigv4")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-                when(executor.getScriptService()).thenReturn(scriptService);
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("aws_sigv4")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(executor.getScriptService()).thenReturn(scriptService);
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
     }
 
     @Test
@@ -739,39 +742,40 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("aws_sigv4")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                when(executor.getClient()).thenReturn(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-                when(executor.getScriptService()).thenReturn(scriptService);
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("aws_sigv4")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(executor.getScriptService()).thenReturn(scriptService);
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
     }
 
     @Test
@@ -784,90 +788,73 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
-            ActionListener<String> listener2 = ActionListener.wrap(encrypted2 -> {
-                Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encrypted1, SECRET_KEY_FIELD, encrypted2);
-                Map<String, String> parameters = ImmutableMap
-                    .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
-                // execute with retry disabled
-                ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(
-                    10,
-                    10,
-                    10,
-                    1,
-                    1,
-                    0,
-                    RetryBackoffPolicy.CONSTANT,
-                    null
-                );
-                Connector connector = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .connectorClientConfig(connectorClientConfig)
-                    .build();
-                connector.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-                Settings settings = Settings.builder().build();
-                threadContext = new ThreadContext(settings);
-                ExecutorService executorService = mock(ExecutorService.class);
-                executor.setClient(client);
-                when(client.threadPool()).thenReturn(threadPool);
-                when(threadPool.getThreadContext()).thenReturn(threadContext);
-                when(threadPool.executor(any())).thenReturn(executorService);
-                doNothing().when(executorService).execute(any());
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
+        // execute with retry disabled
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null);
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(connectorClientConfig)
+            .build();
+        endecryptConnectorCredentials(connector, encryptor, true);
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        ExecutorService executorService = mock(ExecutorService.class);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(any())).thenReturn(executorService);
+        doNothing().when(executorService).execute(any());
 
-                MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-                Mockito.verify(executor, times(0)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
-                Mockito.verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(executor, times(0)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
+        verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
-                // execute with retry enabled
-                ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(
-                    10,
-                    10,
-                    10,
-                    1,
-                    1,
-                    1,
-                    RetryBackoffPolicy.CONSTANT,
-                    null
-                );
-                Connector connector2 = AwsConnector
-                    .awsConnectorBuilder()
-                    .name("test connector")
-                    .version("1")
-                    .protocol("http")
-                    .parameters(parameters)
-                    .credential(credential)
-                    .actions(Arrays.asList(predictAction))
-                    .connectorClientConfig(connectorClientConfig2)
-                    .build();
-                connector2.decrypt(PREDICT.name(), (c, tenantId, listener) -> encryptor.decrypt(c, null, listener), null);
-                executor.initialize(connector2);
-                executor
-                    .executeAction(
-                        PREDICT.name(),
-                        MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                        actionListener
-                    );
+        // execute with retry enabled
+        ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT, null);
+        Connector connector2 = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(connectorClientConfig2)
+            .build();
+        endecryptConnectorCredentials(connector2, encryptor, false);
+        executor.initialize(connector2);
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-                Mockito.verify(executor, times(1)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
-                Mockito.verify(actionListener, times(0)).onFailure(any());
-            }, error -> { throw new MLException(error); });
-            encryptor.encrypt("test_secret_key", null, listener2);
-        }, error -> { throw new MLException(error); });
-        encryptor.encrypt("test_key", null, listener1);
+        verify(executor, times(1)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(0)).onFailure(any());
     }
 
     @Test

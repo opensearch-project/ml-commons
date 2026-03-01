@@ -35,16 +35,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
@@ -60,32 +57,8 @@ import lombok.extern.log4j.Log4j2;
 @EqualsAndHashCode
 @Getter
 @org.opensearch.ml.common.annotation.Connector(MCP_STREAMABLE_HTTP)
-public class McpStreamableHttpConnector implements Connector {
+public class McpStreamableHttpConnector extends AbstractConnector {
 
-    protected String name;
-    protected String description;
-    protected String version;
-    protected String protocol;
-
-    protected Map<String, String> credential;
-    protected Map<String, String> decryptedHeaders;
-    protected Map<String, String> parameters;
-    @Setter
-    protected Map<String, String> decryptedCredential;
-    @Setter
-    protected List<String> backendRoles;
-    @Setter
-    protected User owner;
-    @Setter
-    protected AccessMode access;
-    @Setter
-    protected Instant createdTime;
-    @Setter
-    protected Instant lastUpdateTime;
-    @Setter
-    protected ConnectorClientConfig connectorClientConfig;
-    @Setter
-    protected String tenantId;
     @Setter
     @Getter
     protected String url;
@@ -206,33 +179,6 @@ public class McpStreamableHttpConnector implements Connector {
     }
 
     @Override
-    public void decrypt(String action, TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        if (credential != null) {
-            Map<String, String> decrypted = new HashMap<>();
-            for (String key : credential.keySet()) {
-                function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { decrypted.put(key, result); }, error -> {
-                    throw new MLException(error);
-                }));
-            }
-            this.decryptedCredential = decrypted;
-        } else {
-            this.decryptedCredential = new HashMap<>();
-        }
-        this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    @Override
-    public void encrypt(TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        if (credential != null) {
-            for (String key : credential.keySet()) {
-                function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { credential.put(key, result); }, error -> {
-                    throw new MLException(error);
-                }));
-            }
-        }
-    }
-
-    @Override
     public Connector cloneConnector() {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
@@ -336,7 +282,7 @@ public class McpStreamableHttpConnector implements Connector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, TriConsumer<String, String, ActionListener<String>> function) {
+    public void update(MLCreateConnectorInput updateContent) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -351,7 +297,6 @@ public class McpStreamableHttpConnector implements Connector {
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
-            encrypt(function, this.tenantId);
         }
         if (updateContent.getBackendRoles() != null) {
             this.backendRoles = updateContent.getBackendRoles();
@@ -467,6 +412,11 @@ public class McpStreamableHttpConnector implements Connector {
     @Override
     public String getActionEndpoint(String action, Map<String, String> parameters) {
         throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    protected Map<String, String> getAllHeaders(String action) {
+        return headers;
     }
 
     @Override

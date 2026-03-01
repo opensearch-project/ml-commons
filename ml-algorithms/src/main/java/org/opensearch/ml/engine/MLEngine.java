@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -130,19 +131,19 @@ public class MLEngine {
         return trainable.train(mlInput);
     }
 
-    public Map<String, String> getConnectorCredential(Connector connector) {
-        connector
-            .decrypt(
-                PREDICT.name(),
-                (credential, tenantId, listener) -> encryptor.decrypt(credential, connector.getTenantId(), listener),
-                connector.getTenantId()
-            );
-        Map<String, String> decryptedCredential = connector.getDecryptedCredential();
-        String region = connector.getParameters().get(REGION_FIELD);
-        if (region != null) {
-            decryptedCredential.putIfAbsent(REGION_FIELD, region);
-        }
-        return decryptedCredential;
+    public void getConnectorCredential(Connector connector, ActionListener<Map<String, String>> listener) {
+        ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+            Map<String, String> decryptedCredential = connector.getDecryptedCredential();
+            String region = connector.getParameters().get(REGION_FIELD);
+            if (region != null) {
+                decryptedCredential.putIfAbsent(REGION_FIELD, region);
+            }
+            listener.onResponse(decryptedCredential);
+        }, e -> {
+            log.error("Failed to decrypt credentials in connector", e);
+            listener.onFailure(e);
+        });
+        connector.decrypt(PREDICT.name(), encryptor::decrypt, connector.getTenantId(), decryptSuccessfulListener);
     }
 
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
@@ -153,11 +154,7 @@ public class MLEngine {
 
     public void deploy(MLModel mlModel, Map<String, Object> params, ActionListener<Predictable> listener) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
-        predictable.initModelAsync(mlModel, params, encryptor).thenAccept((b) -> listener.onResponse(predictable)).exceptionally(e -> {
-            log.error("Failed to init model", e);
-            listener.onFailure(new RuntimeException(e));
-            return null;
-        });
+        predictable.initModelAsync(mlModel, params, encryptor, listener);
     }
 
     public MLExecutable deployExecute(MLModel mlModel, Map<String, Object> params) {
@@ -235,7 +232,7 @@ public class MLEngine {
         }
     }
 
-    public void encrypt(String credential, String tenantId, ActionListener<String> listener) {
+    public void encrypt(List<String> credential, String tenantId, ActionListener<List<String>> listener) {
         encryptor.encrypt(credential, tenantId, listener);
     }
 

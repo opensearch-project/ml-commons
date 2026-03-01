@@ -31,16 +31,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
-import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 import com.google.gson.JsonObject;
@@ -317,7 +314,7 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, TriConsumer<String, String, ActionListener<String>> function) {
+    public void update(MLCreateConnectorInput updateContent) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -335,7 +332,6 @@ public class HttpConnector extends AbstractConnector {
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
-            encrypt(function, this.tenantId);
         }
         if (updateContent.getActions() != null) {
             this.actions = updateContent.getActions();
@@ -425,20 +421,6 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void decrypt(String action, TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        Map<String, String> decrypted = new HashMap<>();
-        for (String key : credential.keySet()) {
-            function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { decrypted.put(key, result); }, error -> {
-                throw new MLException(error);
-            }));
-        }
-        this.decryptedCredential = decrypted;
-        Optional<ConnectorAction> connectorAction = findAction(action);
-        Map<String, String> headers = connectorAction.map(ConnectorAction::getHeaders).orElse(null);
-        this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    @Override
     public Connector cloneConnector() {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
@@ -450,17 +432,13 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void encrypt(TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        for (String key : credential.keySet()) {
-            function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { credential.put(key, result); }, error -> {
-                throw new MLException(error);
-            }));
-        }
-    }
-
-    @Override
     public String getActionHttpMethod(String action) {
         return findAction(action).get().getMethod();
     }
 
+    @Override
+    protected Map<String, String> getAllHeaders(String action) {
+        Optional<ConnectorAction> connectorAction = findAction(action);
+        return connectorAction.map(ConnectorAction::getHeaders).orElse(null);
+    }
 }

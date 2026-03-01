@@ -6,22 +6,12 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ACCESS_FIELD;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
-import static org.opensearch.ml.common.CommonValue.CLIENT_CONFIG_FIELD;
-import static org.opensearch.ml.common.CommonValue.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.CREDENTIAL_FIELD;
-import static org.opensearch.ml.common.CommonValue.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.HEADERS_FIELD;
-import static org.opensearch.ml.common.CommonValue.LAST_UPDATED_TIME_FIELD;
-import static org.opensearch.ml.common.CommonValue.NAME_FIELD;
-import static org.opensearch.ml.common.CommonValue.OWNER_FIELD;
-import static org.opensearch.ml.common.CommonValue.PARAMETERS_FIELD;
-import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.URL_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 
@@ -37,16 +27,13 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
-import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
@@ -62,32 +49,8 @@ import lombok.extern.log4j.Log4j2;
 @EqualsAndHashCode
 @Getter
 @org.opensearch.ml.common.annotation.Connector(MCP_SSE)
-public class McpConnector implements Connector {
+public class McpConnector extends AbstractConnector {
 
-    protected String name;
-    protected String description;
-    protected String version;
-    protected String protocol;
-
-    protected Map<String, String> credential;
-    protected Map<String, String> decryptedHeaders;
-    protected Map<String, String> parameters;
-    @Setter
-    protected Map<String, String> decryptedCredential;
-    @Setter
-    protected List<String> backendRoles;
-    @Setter
-    protected User owner;
-    @Setter
-    protected AccessMode access;
-    @Setter
-    protected Instant createdTime;
-    @Setter
-    protected Instant lastUpdateTime;
-    @Setter
-    protected ConnectorClientConfig connectorClientConfig;
-    @Setter
-    protected String tenantId;
     @Setter
     @Getter
     protected String url;
@@ -206,31 +169,8 @@ public class McpConnector implements Connector {
         return decryptedHeaders;
     }
 
-    @Override
-    public void decrypt(String action, TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        if (credential != null) {
-            Map<String, String> decrypted = new HashMap<>();
-            for (String key : credential.keySet()) {
-                function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { decrypted.put(key, result); }, error -> {
-                    throw new MLException(error);
-                }));
-            }
-            this.decryptedCredential = decrypted;
-        } else {
-            this.decryptedCredential = new HashMap<>();
-        }
-        this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    @Override
-    public void encrypt(TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        if (credential != null) {
-            for (String key : credential.keySet()) {
-                function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { credential.put(key, result); }, error -> {
-                    throw new MLException(error);
-                }));
-            }
-        }
+    protected Map<String, String> getAllHeaders(String action) {
+        return headers;
     }
 
     @Override
@@ -343,7 +283,7 @@ public class McpConnector implements Connector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, TriConsumer<String, String, ActionListener<String>> function) {
+    public void update(MLCreateConnectorInput updateContent) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -358,7 +298,6 @@ public class McpConnector implements Connector {
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
-            encrypt(function, this.tenantId);
         }
         if (updateContent.getBackendRoles() != null) {
             this.backendRoles = updateContent.getBackendRoles();

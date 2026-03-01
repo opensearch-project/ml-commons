@@ -80,9 +80,18 @@ public interface Connector extends ToXContentObject, Writeable {
 
     <T> T createPayload(String action, Map<String, String> parameters);
 
-    void decrypt(String action, TriConsumer<String, String, ActionListener<String>> function, String tenantId);
+    void decrypt(
+        String action,
+        TriConsumer<List<String>, String, ActionListener<List<String>>> function,
+        String tenantId,
+        ActionListener<Boolean> listener
+    );
 
-    void encrypt(TriConsumer<String, String, ActionListener<String>> function, String tenantId);
+    void encrypt(
+        TriConsumer<List<String>, String, ActionListener<List<String>>> function,
+        String tenantId,
+        ActionListener<Boolean> listener
+    );
 
     Connector cloneConnector();
 
@@ -92,7 +101,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     void writeTo(StreamOutput out) throws IOException;
 
-    void update(MLCreateConnectorInput updateContent, TriConsumer<String, String, ActionListener<String>> function);
+    void update(MLCreateConnectorInput updateContent);
 
     <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException;
 
