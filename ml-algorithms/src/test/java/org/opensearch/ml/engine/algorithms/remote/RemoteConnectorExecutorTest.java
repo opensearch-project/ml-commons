@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.argThat;
@@ -23,6 +22,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
+import static org.opensearch.ml.engine.helper.MLTestHelper.encryptCredentials;
 import static org.opensearch.ml.engine.processor.ProcessorChain.INPUT_PROCESSORS;
 
 import java.io.IOException;
@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -106,10 +105,14 @@ public class RemoteConnectorExecutorTest {
             .url("http:///mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
-        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, "test_key", SECRET_KEY_FIELD, "test_secret_key");
-        CountDownLatch latch = new CountDownLatch(1);
-        ActionListener<Boolean> encryptListener = ActionListener.wrap(r -> { latch.countDown(); }, e -> { latch.countDown(); });
-        AwsConnector connector = AwsConnector
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        return AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
             .version("1")
@@ -119,13 +122,6 @@ public class RemoteConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
-        connector.decrypt(PREDICT.name(), encryptor::encrypt, null, encryptListener);
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            fail("Failed to encrypt credentials in connector, " + e.getMessage());
-        }
-        return connector;
     }
 
     private AwsConnectorExecutor getExecutor(Connector connector) {

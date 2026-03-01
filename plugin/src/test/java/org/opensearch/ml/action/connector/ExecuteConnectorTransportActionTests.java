@@ -168,12 +168,6 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(connector).decrypt(any(), any(), any(), any());
-
-        doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
             listener.onResponse(connector);
             return null;

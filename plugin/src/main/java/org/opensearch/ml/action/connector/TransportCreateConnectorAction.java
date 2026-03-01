@@ -143,7 +143,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     }
 
     private void indexConnector(Connector connector, ActionListener<MLCreateConnectorResponse> listener) {
-        ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(encrypted -> {
+        ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(res -> {
             log.info("connector created, indexing into the connector system index");
             mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
                 if (!indexCreated) {
