@@ -344,7 +344,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
         }).when(client).get(any(), any());
-        when(client.threadPool()).thenReturn(threadPool);
+        when(client.threadPool()).thenReturn(threadPool);  
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
@@ -668,10 +668,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     @Test
     public void test_accessControlNotEnabled_normalUserAndAccessEnabled_return_false() {
         User normalUser = User.parse(USER_STRING);
-
-        boolean notEnabled = connectorAccessControlHelper.accessControlNotEnabled(normalUser);
-
-        assertFalse(notEnabled);
+        assertFalse(connectorAccessControlHelper.accessControlNotEnabled(normalUser));
     }
 
     @Test
