@@ -227,7 +227,6 @@ public class EncryptorImpl implements Encryptor {
             masterKey = tenantMasterKeys.getIfPresent(tenantId);
             if (masterKey != null) {
                 log.debug("Master key generation is handled by other thread for tenant {}", tenantId);
-                listener.onResponse(true);
                 return masterKey;
             }
             boolean isFirstThread = waitingListeners.isEmpty();
