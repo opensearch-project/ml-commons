@@ -9,8 +9,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 
 import java.util.Collections;
 import java.util.Set;
@@ -122,6 +124,8 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
         // Simplify the merged query for tests
         when(modelAccessControlHelper.mergeWithAccessFilter(any(QueryBuilder.class), any(Set.class)))
             .thenAnswer(inv -> QueryBuilders.termQuery("dummy", "value"));
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     @Override
@@ -267,6 +271,7 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     public void testResourceSharingEnabled_successPath_filtersByAccessibleIds_andCallsSdkClient() {
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
 
         ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
 
@@ -279,7 +284,7 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
 
         searchModelGroupTransportAction.doExecute(null, req, actionListener);
 
-        verify(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+        verify(rsc).getAccessibleResourceIds(eq(ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
         rscListenerCaptor.getValue().onResponse(Set.of("idA", "idB"));
         future.complete(emptySearchDataObjectResponse());
 
@@ -300,6 +305,7 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     public void testResourceSharingEnabled_failSafePath_usesEmptySet_andCallsSdkClient() {
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
 
         ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
 
@@ -312,13 +318,40 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
         searchModelGroupTransportAction.doExecute(null, req, actionListener);
 
         // Simulate failure -> deny-all (empty set)
-        verify(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+        verify(rsc).getAccessibleResourceIds(eq(ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
         rscListenerCaptor.getValue().onFailure(new RuntimeException("boom"));
 
         future.complete(emptySearchDataObjectResponse());
 
         verify(modelAccessControlHelper, atLeastOnce()).mergeWithAccessFilter(any(), eq(Collections.emptySet()));
 
+        verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
+        verify(actionListener).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testResourceSharingEnabled_notMarkedAsProtectedType_skipsEvaluation() {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+
+        // Feature disabled for this type => skip resource sharing
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(false);
+
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
+
+        SearchRequest sr = new SearchRequest(new String[] { CommonValue.ML_MODEL_GROUP_INDEX }, new SearchSourceBuilder());
+        MLSearchActionRequest req = new MLSearchActionRequest(sr, "tenant-2");
+
+        searchModelGroupTransportAction.doExecute(null, req, actionListener);
+
+        // Complete the search as if it returned normally
+        future.complete(emptySearchDataObjectResponse());
+
+        // Verify RSC is NOT called
+        verify(rsc, never()).getAccessibleResourceIds(any(), any());
+
+        // Verify we executed normal flow (i.e., used SDK and returned a response)
         verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
         verify(actionListener).onResponse(any(SearchResponse.class));
     }

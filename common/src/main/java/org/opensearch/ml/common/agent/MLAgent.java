@@ -30,6 +30,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.telemetry.metrics.tags.Tags;
 
 import lombok.Builder;
@@ -43,6 +44,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String AGENT_TYPE_FIELD = "type";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String LLM_FIELD = "llm";
+    public static final String MODEL_FIELD = "model";
     public static final String TOOLS_FIELD = "tools";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String MEMORY_FIELD = "memory";
@@ -51,6 +53,8 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String APP_TYPE_FIELD = "app_type";
     public static final String IS_HIDDEN_FIELD = "is_hidden";
+    public static final String CONTEXT_MANAGEMENT_NAME_FIELD = "context_management_name";
+    public static final String CONTEXT_MANAGEMENT_FIELD = "context_management";
     private static final String LLM_INTERFACE_FIELD = "_llm_interface";
     private static final String TAG_VALUE_UNKNOWN = "unknown";
     private static final String TAG_MEMORY_TYPE = "memory_type";
@@ -58,11 +62,13 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final int AGENT_NAME_MAX_LENGTH = 128;
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONTEXT_MANAGEMENT = CommonValue.VERSION_3_5_0;
 
     private String name;
     private String type;
     private String description;
     private LLMSpec llm;
+    private MLAgentModelSpec model;
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
@@ -71,9 +77,48 @@ public class MLAgent implements ToXContentObject, Writeable {
     private Instant lastUpdateTime;
     private String appType;
     private Boolean isHidden;
-    private final String tenantId;
+    private String contextManagementName;
+    private ContextManagementTemplate contextManagement;
+    private String tenantId;
 
     @Builder(toBuilder = true)
+    public MLAgent(
+        String name,
+        String type,
+        String description,
+        LLMSpec llm,
+        MLAgentModelSpec model,
+        List<MLToolSpec> tools,
+        Map<String, String> parameters,
+        MLMemorySpec memory,
+        Instant createdTime,
+        Instant lastUpdateTime,
+        String appType,
+        Boolean isHidden,
+        String contextManagementName,
+        ContextManagementTemplate contextManagement,
+        String tenantId
+    ) {
+        this.name = name;
+        this.type = type;
+        this.description = description;
+        this.llm = llm;
+        this.model = model;
+        this.tools = tools;
+        this.parameters = parameters;
+        this.memory = memory;
+        this.createdTime = createdTime;
+        this.lastUpdateTime = lastUpdateTime;
+        this.appType = appType;
+        // is_hidden field isn't going to be set by user. It will be set by the code.
+        this.isHidden = isHidden;
+        this.contextManagementName = contextManagementName;
+        this.contextManagement = contextManagement;
+        this.tenantId = tenantId;
+        validate();
+    }
+
+    // Backward compatible constructor for existing tests
     public MLAgent(
         String name,
         String type,
@@ -86,22 +131,27 @@ public class MLAgent implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         String appType,
         Boolean isHidden,
+        String contextManagementName,
+        ContextManagementTemplate contextManagement,
         String tenantId
     ) {
-        this.name = name;
-        this.type = type;
-        this.description = description;
-        this.llm = llm;
-        this.tools = tools;
-        this.parameters = parameters;
-        this.memory = memory;
-        this.createdTime = createdTime;
-        this.lastUpdateTime = lastUpdateTime;
-        this.appType = appType;
-        // is_hidden field isn't going to be set by user. It will be set by the code.
-        this.isHidden = isHidden;
-        this.tenantId = tenantId;
-        validate();
+        this(
+            name,
+            type,
+            description,
+            llm,
+            null,
+            tools,
+            parameters,
+            memory,
+            createdTime,
+            lastUpdateTime,
+            appType,
+            isHidden,
+            contextManagementName,
+            contextManagement,
+            tenantId
+        );
     }
 
     private void validate() {
@@ -114,7 +164,8 @@ public class MLAgent implements ToXContentObject, Writeable {
             );
         }
         validateMLAgentType(type);
-        if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
+        if ((type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString())
+            || type.equalsIgnoreCase(MLAgentType.PLAN_EXECUTE_AND_REFLECT.toString())) && llm == null && model == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }
         Set<String> toolNames = new HashSet<>();
@@ -122,11 +173,22 @@ public class MLAgent implements ToXContentObject, Writeable {
             for (MLToolSpec toolSpec : tools) {
                 String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
                 if (toolNames.contains(toolName)) {
-                    throw new IllegalArgumentException("Duplicate tool defined: " + toolName);
+                    throw new IllegalArgumentException("Duplicate tool defined in agent configuration");
                 } else {
                     toolNames.add(toolName);
                 }
             }
+        }
+        validateContextManagement();
+    }
+
+    private void validateContextManagement() {
+        if (contextManagementName != null && contextManagement != null) {
+            throw new IllegalArgumentException("Cannot specify both context_management_name and context_management");
+        }
+
+        if (contextManagement != null && !contextManagement.isValid()) {
+            throw new IllegalArgumentException("Invalid context management configuration");
         }
     }
 
@@ -138,7 +200,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                 MLAgentType.valueOf(agentType.toUpperCase(Locale.ROOT)); // Use toUpperCase() to allow case-insensitive matching
             } catch (IllegalArgumentException e) {
                 // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
-                throw new IllegalArgumentException(agentType + " is not a valid Agent Type");
+                throw new IllegalArgumentException("Invalid Agent Type");
             }
         }
     }
@@ -150,6 +212,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         description = input.readOptionalString();
         if (input.readBoolean()) {
             llm = new LLMSpec(input);
+        }
+        if (input.readBoolean()) {
+            model = new MLAgentModelSpec(input);
         }
         if (input.readBoolean()) {
             tools = new ArrayList<>();
@@ -171,6 +236,12 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT)) {
             isHidden = input.readOptionalBoolean();
         }
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONTEXT_MANAGEMENT)) {
+            contextManagementName = input.readOptionalString();
+            if (input.readBoolean()) {
+                contextManagement = new ContextManagementTemplate(input);
+            }
+        }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         validate();
     }
@@ -183,6 +254,12 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (llm != null) {
             out.writeBoolean(true);
             llm.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (model != null) {
+            out.writeBoolean(true);
+            model.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -214,8 +291,27 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT)) {
             out.writeOptionalBoolean(isHidden);
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONTEXT_MANAGEMENT)) {
+            out.writeOptionalString(contextManagementName);
+            if (contextManagement != null) {
+                out.writeBoolean(true);
+                contextManagement.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
+        }
+    }
+
+    /**
+     * Remove credentials from the agent's model spec.
+     * Should be called before returning to user-facing APIs.
+     */
+    public void removeCredential() {
+        if (this.model != null) {
+            this.model.removeCredential();
         }
     }
 
@@ -233,6 +329,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (llm != null) {
             builder.field(LLM_FIELD, llm);
+        }
+        if (model != null) {
+            builder.field(MODEL_FIELD, model);
         }
         if (tools != null && tools.size() > 0) {
             builder.field(TOOLS_FIELD, tools);
@@ -256,6 +355,12 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (isHidden != null) {
             builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
         }
+        if (contextManagementName != null) {
+            builder.field(CONTEXT_MANAGEMENT_NAME_FIELD, contextManagementName);
+        }
+        if (contextManagement != null) {
+            builder.field(CONTEXT_MANAGEMENT_FIELD, contextManagement);
+        }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -276,6 +381,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String type = null;
         String description = null;
         LLMSpec llm = null;
+        MLAgentModelSpec model = null;
         List<MLToolSpec> tools = null;
         Map<String, String> parameters = null;
         MLMemorySpec memory = null;
@@ -283,6 +389,8 @@ public class MLAgent implements ToXContentObject, Writeable {
         Instant lastUpdateTime = null;
         String appType = null;
         boolean isHidden = false;
+        String contextManagementName = null;
+        ContextManagementTemplate contextManagement = null;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -302,6 +410,9 @@ public class MLAgent implements ToXContentObject, Writeable {
                     break;
                 case LLM_FIELD:
                     llm = LLMSpec.parse(parser);
+                    break;
+                case MODEL_FIELD:
+                    model = MLAgentModelSpec.parse(parser);
                     break;
                 case TOOLS_FIELD:
                     tools = new ArrayList<>();
@@ -329,6 +440,12 @@ public class MLAgent implements ToXContentObject, Writeable {
                     if (parseHidden)
                         isHidden = parser.booleanValue();
                     break;
+                case CONTEXT_MANAGEMENT_NAME_FIELD:
+                    contextManagementName = parser.text();
+                    break;
+                case CONTEXT_MANAGEMENT_FIELD:
+                    contextManagement = ContextManagementTemplate.parse(parser);
+                    break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
@@ -344,6 +461,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             .type(type)
             .description(description)
             .llm(llm)
+            .model(model)
             .tools(tools)
             .parameters(parameters)
             .memory(memory)
@@ -351,6 +469,8 @@ public class MLAgent implements ToXContentObject, Writeable {
             .lastUpdateTime(lastUpdateTime)
             .appType(appType)
             .isHidden(isHidden)
+            .contextManagementName(contextManagementName)
+            .contextManagement(contextManagement)
             .tenantId(tenantId)
             .build();
     }
@@ -383,5 +503,40 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
 
         return tags;
+    }
+
+    /**
+     * Check if this agent has context management configuration
+     * @return true if agent has either context management name or inline configuration
+     */
+    public boolean hasContextManagement() {
+        return contextManagementName != null || contextManagement != null;
+    }
+
+    /**
+     * Get the effective context management configuration for this agent.
+     * This method prioritizes inline configuration over template reference.
+     * Note: Template resolution requires external service call and should be handled by the caller.
+     * 
+     * @return the inline context management configuration, or null if using template reference or no configuration
+     */
+    public ContextManagementTemplate getInlineContextManagement() {
+        return contextManagement;
+    }
+
+    /**
+     * Check if this agent uses a context management template reference
+     * @return true if agent references a context management template by name
+     */
+    public boolean hasContextManagementTemplate() {
+        return contextManagementName != null;
+    }
+
+    /**
+     * Get the context management template name if this agent references one
+     * @return the template name, or null if no template reference
+     */
+    public String getContextManagementTemplateName() {
+        return contextManagementName;
     }
 }

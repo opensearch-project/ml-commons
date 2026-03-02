@@ -69,7 +69,7 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
             String connectorRequestBody = String
                 .format(templates, COHERE_KEY, StringUtils.substringAfterLast(postProcessFunction, "."), postProcessFunction);
             String testCaseName = postProcessFunction + "_test";
-            String modelId = registerRemoteModel(connectorRequestBody, testCaseName, true);
+            String modelId = registerRemoteModel(connectorRequestBody, testCaseName, false);
             String errorMsg = String.format("failed to run test with test name: %s", testCaseName);
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello", "world")).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();

@@ -69,9 +69,10 @@ public class TransportGetMemoryAction extends HandledTransportAction<ActionReque
         String memoryContainerId = getRequest.getMemoryContainerId();
         MemoryType memoryType = getRequest.getMemoryType();
         String memoryId = getRequest.getMemoryId();
+        String tenantId = getRequest.getTenantId();
 
         // Get memory container to validate access and get memory index name
-        memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
+        memoryContainerHelper.getMemoryContainer(memoryContainerId, tenantId, ActionListener.wrap(container -> {
             // Validate access permissions
             User user = RestActionUtils.getUserContext(client);
             if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {

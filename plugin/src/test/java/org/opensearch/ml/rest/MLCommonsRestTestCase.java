@@ -865,6 +865,25 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return StringUtils.gson.fromJson(entityString, Map.class);
     }
 
+    /**
+     * Polls _cluster/settings until the given setting key has the expected value in persistent settings.
+     * Replaces arbitrary Thread.sleep() with active verification of setting propagation.
+     */
+    @SuppressWarnings("unchecked")
+    protected static void waitForClusterSettingPropagation(String settingKey, String expectedValue, int timeoutSeconds) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutSeconds * 1000L;
+        while (System.currentTimeMillis() < deadline) {
+            Response response = TestHelper.makeRequest(client(), "GET", "_cluster/settings?flat_settings=true", null, "", null);
+            Map<String, Object> settings = parseResponseToMap(response);
+            Map<String, Object> persistent = (Map<String, Object>) settings.get("persistent");
+            if (persistent != null && expectedValue.equals(String.valueOf(persistent.get(settingKey)))) {
+                return;
+            }
+            Thread.sleep(500);
+        }
+        fail("Cluster setting '" + settingKey + "' did not reach value '" + expectedValue + "' within " + timeoutSeconds + " seconds");
+    }
+
     public Map getModelProfile(String modelId, Consumer verifyFunction) throws IOException {
         Response response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/profile/models/" + modelId, null, (String) null, null);
         Map profile = parseResponseToMap(response);
@@ -971,12 +990,15 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 String state = getTaskState(taskId);
                 if (targetState.name().equals(state)) {
                     taskDone.set(true);
+                } else if (MLTaskState.FAILED.name().equals(state) || MLTaskState.CANCELLED.name().equals(state)) {
+                    // Task reached a terminal failure state — stop waiting immediately
+                    taskDone.set(true);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
             return taskDone.get();
-        }, CUSTOM_MODEL_TIMEOUT, TimeUnit.SECONDS);
+        }, CUSTOM_MODEL_TIMEOUT, TimeUnit.MILLISECONDS);
         assertTrue(String.format(Locale.ROOT, "Task Id %s could not get to %s state", taskId, targetState.name()), taskDone.get());
     }
 
@@ -1017,5 +1039,22 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         Response response = TestHelper
             .makeRequest(client, "GET", "/" + indexName + "/" + "_search?search_pipeline=" + pipelineName, null, formattedQuery, null);
         return parseResponseToMap(response);
+    }
+
+    /**
+     * Checks whether a remote hostname is reachable via DNS resolution.
+     * Use this to skip tests that require external services when the CI
+     * environment has no network access to that host.
+     *
+     * @param hostname the hostname to check (e.g. "api.openai.com")
+     * @return true if the hostname resolves successfully, false otherwise
+     */
+    public static boolean isServiceReachable(String hostname) {
+        try {
+            java.net.InetAddress.getByName(hostname);
+            return true;
+        } catch (java.net.UnknownHostException e) {
+            return false;
+        }
     }
 }

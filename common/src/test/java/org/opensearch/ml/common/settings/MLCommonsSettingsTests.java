@@ -77,6 +77,11 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
+    public void testRemoteAgenticMemoryDisabledByDefault() {
+        assertFalse(MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.getDefault(null));
+    }
+
+    @Test
     public void testAgenticMemorySettingProperties() {
         // Test setting key
         assertEquals("plugins.ml_commons.agentic_memory_enabled", MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey());
@@ -97,6 +102,26 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
+    public void testRemoteAgenticMemorySettingProperties() {
+        assertEquals(
+            "plugins.ml_commons.remote_agentic_memory_enabled",
+            MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.getKey()
+        );
+
+        assertTrue(
+            MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED
+                .getProperties()
+                .contains(org.opensearch.common.settings.Setting.Property.Dynamic)
+        );
+
+        assertTrue(
+            MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED
+                .getProperties()
+                .contains(org.opensearch.common.settings.Setting.Property.NodeScope)
+        );
+    }
+
+    @Test
     public void testAgenticMemoryDisabledMessage() {
         String expectedMessage =
             "The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled";
@@ -104,7 +129,34 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
+    public void testRemoteAgenticMemoryDisabledMessage() {
+        String expectedMessage =
+            "The remote agentic memory feature is not enabled. To enable, please update the setting plugins.ml_commons.remote_agentic_memory_enabled";
+        assertEquals(expectedMessage, MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE);
+    }
+
+    @Test
     public void testStreamDisabledByDefault() {
         assertFalse(MLCommonsSettings.ML_COMMONS_STREAM_ENABLED.getDefault(null));
+    }
+
+    @Test
+    public void testMaxJsonSizeDefaultValue() {
+        assertEquals(100_000_000, MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getDefault(null).intValue());
+    }
+
+    @Test
+    public void testMaxJsonSizeSettingProperties() {
+        assertEquals("plugins.ml_commons.max_json_size", MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getKey());
+
+        // Test setting is dynamic
+        assertTrue(
+            MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getProperties().contains(org.opensearch.common.settings.Setting.Property.Dynamic)
+        );
+
+        // Test setting is node scope
+        assertTrue(
+            MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.getProperties().contains(org.opensearch.common.settings.Setting.Property.NodeScope)
+        );
     }
 }

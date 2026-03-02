@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.UPDATE_MEMORY_PATH;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -84,6 +85,7 @@ public class RestMLUpdateMemoryAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLUpdateMemoryInput mlUpdateMemoryInput = MLUpdateMemoryInput.parse(parser);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
 
         return MLUpdateMemoryRequest
             .builder()
@@ -91,6 +93,7 @@ public class RestMLUpdateMemoryAction extends BaseRestHandler {
             .memoryType(memoryType)
             .memoryId(memoryId)
             .mlUpdateMemoryInput(mlUpdateMemoryInput)
+            .tenantId(tenantId)
             .build();
     }
 }

@@ -4,6 +4,7 @@
  */
 
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.opensearch.gradle.info.FipsBuildParams
 
 plugins {
     id 'java'
@@ -78,7 +79,12 @@ dependencies {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
     // needed by aws-encryption-sdk-java
-    implementation "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    // When building with -Pcrypto.standard=FIPS-140-3, bcFips jars are provided by OpenSearch
+    if (FipsBuildParams.isInFipsMode()) {
+        compileOnly "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    } else {
+        implementation "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    }
     compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
@@ -90,7 +96,7 @@ dependencies {
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "${versions.aws}"
     api('io.modelcontextprotocol.sdk:mcp:0.12.1')
-    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson_annotations}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     api group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0'

@@ -40,7 +40,7 @@ dependencies {
         exclude group: 'net.minidev', module: 'json-smart'
     }
     compileOnly ('net.minidev:json-smart:2.5.2')
-    compileOnly("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    compileOnly("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson_annotations}")
     compileOnly("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     compileOnly group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     // Multi-tenant SDK Client
@@ -113,16 +113,17 @@ publishing {
         }
         maven {
             name = "Snapshots" //  optional target repository name
-            url = "https://central.sonatype.com/repository/maven-snapshots/"
-            credentials {
-                username "$System.env.SONATYPE_USERNAME"
-                password "$System.env.SONATYPE_PASSWORD"
+            url = System.getenv("MAVEN_SNAPSHOTS_S3_REPO")
+            credentials(AwsCredentials) {
+                accessKey = System.getenv("AWS_ACCESS_KEY_ID")
+                secretKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+                sessionToken = System.getenv("AWS_SESSION_TOKEN")
             }
         }
     }
     publications {
         shadow(MavenPublication) { publication ->
-            project.shadow.component(publication)
+            from components.shadow
             artifact sourcesJar
             artifact javadocJar
 

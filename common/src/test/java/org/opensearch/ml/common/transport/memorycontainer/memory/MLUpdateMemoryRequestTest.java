@@ -208,6 +208,7 @@ public class MLUpdateMemoryRequestTest {
                 out.writeEnum(MemoryType.WORKING);
                 out.writeString("test-memory");
                 testInput.writeTo(out);
+                out.writeOptionalString("test-tenant");
             }
         };
 

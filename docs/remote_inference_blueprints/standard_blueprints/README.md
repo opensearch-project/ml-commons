@@ -37,6 +37,7 @@ These blueprints include pre- and post-processing functions, suitable when you n
 - Bedrock:
   - [amazon.titan-embed-text-v1](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_titan_embedding_blueprint.md)
   - [amazon.titan-embed-image-v1](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_titan_multimodal_embedding_blueprint.md)
+  - [amazon.nova-2-multimodal-embeddings-v1:0](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_nova_multimodal_model_blueprint.md)
   - [cohere.embed-english-v3](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_cohere_cohere.embed-english-v3_blueprint.md)
   - [cohere.embed-multilingual-v3](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_cohere_cohere.embed-multilingual-v3_blueprint.md)
 - Cohere

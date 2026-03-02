@@ -111,11 +111,9 @@ public final class MemoryContainerSharedIndexValidator {
             log.error("Index '{}' exists but mapping metadata is null", longTermIndexName);
             listener
                 .onFailure(
-                    new IllegalStateException(
-                        "Cannot validate memory container: Index '"
-                            + longTermIndexName
-                            + "' exists but mapping is unavailable. "
-                            + "This indicates a system issue. Please contact your administrator."
+                    new org.opensearch.OpenSearchStatusException(
+                        "Internal server error",
+                        org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
                     )
                 );
             return;
@@ -129,10 +127,9 @@ public final class MemoryContainerSharedIndexValidator {
             log.error("Index '{}' mapping 'properties' field is null or not a Map", longTermIndexName);
             listener
                 .onFailure(
-                    new IllegalStateException(
-                        "Cannot validate memory container: Index '"
-                            + longTermIndexName
-                            + "' has malformed mapping structure (properties field is missing or invalid)."
+                    new org.opensearch.OpenSearchStatusException(
+                        "Internal server error",
+                        org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
                     )
                 );
             return;
@@ -305,11 +302,9 @@ public final class MemoryContainerSharedIndexValidator {
 
         listener
             .onFailure(
-                new IllegalStateException(
-                    "Cannot validate memory container: Failed to retrieve index mapping for '"
-                        + indexName
-                        + "'. Error: "
-                        + error.getMessage()
+                new org.opensearch.OpenSearchStatusException(
+                    "Internal server error",
+                    org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
                 )
             );
     }
@@ -318,15 +313,13 @@ public final class MemoryContainerSharedIndexValidator {
      * Handles errors during pipeline retrieval.
      */
     private static void handlePipelineError(String pipelineName, Exception error, ActionListener<ValidationResult> listener) {
-        log.error("Failed to retrieve pipeline '{}' for validation: {}", pipelineName, error.getMessage(), error);
+        log.error("Failed to retrieve pipeline '{}' for validation", pipelineName, error);
 
         listener
             .onFailure(
-                new IllegalStateException(
-                    "Cannot validate memory container: Failed to retrieve ingest pipeline '"
-                        + pipelineName
-                        + "' for validation. Error: "
-                        + error.getMessage()
+                new org.opensearch.OpenSearchStatusException(
+                    "Internal server error",
+                    org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
                 )
             );
     }

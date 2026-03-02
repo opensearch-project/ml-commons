@@ -67,7 +67,9 @@ public class MLExecuteConnectorRequest extends MLTaskRequest {
         } else if (this.mlInput.getInputDataset() == null) {
             exception = addValidationError("input data can't be null", exception);
         }
-
+        if (this.connectorId == null) {
+            exception = addValidationError("connectorId can't be null", exception);
+        }
         return exception;
     }
 
@@ -82,8 +84,7 @@ public class MLExecuteConnectorRequest extends MLTaskRequest {
                 return new MLExecuteConnectorRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLExecuteConnectorRequest", e);
         }
-
     }
 }

@@ -16,12 +16,14 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ingest.GetPipelineRequest;
 import org.opensearch.action.ingest.GetPipelineResponse;
 import org.opensearch.action.ingest.PutPipelineRequest;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -157,8 +159,9 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
         MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", configuration, client, future);
 
-        RuntimeException exception = expectThrows(RuntimeException.class, future::actionGet);
-        assertEquals("put failure", exception.getMessage());
+        OpenSearchStatusException exception = expectThrows(OpenSearchStatusException.class, future::actionGet);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, exception.status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     public void testCreateHistoryIndexIfEnabled() {

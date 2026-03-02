@@ -65,7 +65,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -285,7 +284,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(new AtomicBoolean(false));
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(false);
 
         modelManager = spy(
             new MLModelManager(

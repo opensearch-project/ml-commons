@@ -148,10 +148,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -214,10 +214,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper to simulate successful flow
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -237,7 +237,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Verify that the flow continues (tenant validation passes in this case)
         // The exact behavior depends on TenantAwareHelper implementation
-        verify(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        verify(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
     }
 
     @Test
@@ -304,10 +304,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper to return error
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onFailure(new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND));
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         // Execute
         transportCreateSessionAction.doExecute(task, request, actionListener);
@@ -329,10 +329,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
 
@@ -357,10 +357,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -380,8 +380,9 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(exceptionCaptor.capture());
 
         Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof IOException);
-        assertEquals("Indexing failed", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     @Test
@@ -404,10 +405,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -460,10 +461,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -517,10 +518,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -597,10 +598,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");

@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
+import static org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput.validateBackendRoles;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
     public MLUpdateMemoryContainerInput(String name, String description, List<String> backendRoles, MemoryConfiguration configuration) {
         this.name = name;
         this.description = description;
+        validateBackendRoles(backendRoles);
         this.backendRoles = backendRoles;
         this.configuration = configuration;
     }

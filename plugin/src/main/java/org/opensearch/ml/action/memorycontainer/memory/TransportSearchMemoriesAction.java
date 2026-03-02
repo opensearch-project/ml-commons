@@ -118,7 +118,7 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             memoryContainerHelper.addContainerIdFilter(input.getMemoryContainerId(), input.getSearchSourceBuilder());
 
             // Add owner filter for non-admin users
-            if (!memoryContainerHelper.isAdminUser(user)) {
+            if (user != null && !ConnectorAccessControlHelper.isAdmin(user)) {
                 memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());
             }
 

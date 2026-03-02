@@ -22,6 +22,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -73,6 +74,7 @@ public class RestMLGetMemoryAction extends BaseRestHandler {
         String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
         MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
         String memoryId = getParameterId(request, PARAMETER_MEMORY_ID);
-        return new MLGetMemoryRequest(memoryContainerId, memoryType, memoryId);
+        String tenantId = TenantAwareHelper.getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+        return new MLGetMemoryRequest(memoryContainerId, memoryType, memoryId, tenantId);
     }
 }

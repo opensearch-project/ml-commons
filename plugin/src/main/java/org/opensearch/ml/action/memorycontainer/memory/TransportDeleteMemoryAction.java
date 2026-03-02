@@ -7,6 +7,8 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
+import java.time.Instant;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -120,6 +122,17 @@ public class TransportDeleteMemoryAction extends HandledTransportAction<ActionRe
                         );
                     return;
                 }
+
+                // Log the deletion event
+                log
+                    .info(
+                        "Delete memory - Event: MEMORY_DELETED, Memory ID: {}, Memory Type: {}, Container ID: {}, User: {}, Timestamp: {}",
+                        memoryId,
+                        memoryType,
+                        memoryContainerId,
+                        user != null ? user.getName() : "unknown",
+                        Instant.now()
+                    );
 
                 // Delete the memory document
                 DeleteRequest deleteMemoryRequest = new DeleteRequest(memoryIndexName, memoryId);

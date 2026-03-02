@@ -33,7 +33,9 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.http.HttpChunk;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -301,5 +303,188 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
 
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
         assertThrows(IllegalStateException.class, () -> restAction.handleRequest(request, channel, client));
+    }
+
+    @Test
+    public void testCombineChunksWithSingleChunk() {
+        String testContent = "{\"parameters\":{\"question\":\"test\"}}";
+        BytesArray bytesArray = new BytesArray(testContent);
+
+        HttpChunk mockChunk = mock(HttpChunk.class);
+        when(mockChunk.content()).thenReturn(bytesArray);
+
+        BytesReference result = restAction.combineChunks(List.of(mockChunk));
+
+        assertNotNull(result);
+        assertEquals(testContent, result.utf8ToString());
+    }
+
+    @Test
+    public void testCombineChunksWithMultipleChunks() {
+        String chunk1Content = "{\"parameters\":";
+        String chunk2Content = "{\"question\":";
+        String chunk3Content = "\"test\"}}";
+
+        BytesArray bytes1 = new BytesArray(chunk1Content);
+        BytesArray bytes2 = new BytesArray(chunk2Content);
+        BytesArray bytes3 = new BytesArray(chunk3Content);
+
+        HttpChunk mockChunk1 = mock(HttpChunk.class);
+        HttpChunk mockChunk2 = mock(HttpChunk.class);
+        HttpChunk mockChunk3 = mock(HttpChunk.class);
+
+        when(mockChunk1.content()).thenReturn(bytes1);
+        when(mockChunk2.content()).thenReturn(bytes2);
+        when(mockChunk3.content()).thenReturn(bytes3);
+
+        BytesReference result = restAction.combineChunks(List.of(mockChunk1, mockChunk2, mockChunk3));
+
+        assertNotNull(result);
+        String expectedContent = chunk1Content + chunk2Content + chunk3Content;
+        assertEquals(expectedContent, result.utf8ToString());
+    }
+
+    @Test
+    public void testCombineChunksWithEmptyList() {
+        BytesReference result = restAction.combineChunks(List.of());
+
+        assertNotNull(result);
+        assertEquals(0, result.length());
+    }
+
+    @Test
+    public void testCombineChunksWithLargeContent() {
+        StringBuilder largeContent = new StringBuilder();
+        for (int i = 0; i < 1000; i++) {
+            largeContent.append("chunk").append(i).append(",");
+        }
+        String content = largeContent.toString();
+
+        BytesArray bytesArray = new BytesArray(content);
+
+        HttpChunk mockChunk = mock(HttpChunk.class);
+        when(mockChunk.content()).thenReturn(bytesArray);
+
+        BytesReference result = restAction.combineChunks(List.of(mockChunk));
+
+        assertNotNull(result);
+        assertEquals(content.length(), result.length());
+        assertEquals(content, result.utf8ToString());
+    }
+
+    @Test
+    public void testPrepareRequestWithMcpHeadersFeatureDisabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(false);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-key"));
+        headers.put("aws-region", List.of("us-west-2"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> restAction.prepareRequest(request, client)
+        );
+        assertTrue(exception.getMessage().contains("MCP header passthrough"));
+        assertTrue(exception.getMessage().contains("plugins.ml_commons.mcp_header_passthrough_enabled"));
+    }
+
+    @Test
+    public void testPrepareRequestWithMcpHeadersFeatureEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-key"));
+        headers.put("aws-region", List.of("us-west-2"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        assertNotNull(spyAction.prepareRequest(request, client));
+        
+        // Verify headers were put into ThreadContext
+        assertEquals("test-key", client.threadPool().getThreadContext().getHeader("aws-access-key-id"));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader("aws-region"));
+    }
+
+    @Test
+    public void testPrepareRequestWithoutMcpHeaders() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        RestRequest request = getExecuteAgentStreamRestRequest();
+
+        // Should work without MCP headers when feature flag state doesn't matter
+        assertNotNull(spyAction.prepareRequest(request, client));
+    }
+
+    @Test
+    public void testPrepareRequestWithAllMcpHeaders() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-access-key"));
+        headers.put("aws-secret-access-key", List.of("test-secret-key"));
+        headers.put("aws-session-token", List.of("test-session-token"));
+        headers.put("aws-region", List.of("us-west-2"));
+        headers.put("aws-service-name", List.of("bedrock"));
+        headers.put("opensearch-url", List.of("https://localhost:9200"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        assertNotNull(spyAction.prepareRequest(request, client));
+        
+        // Verify all MCP headers were put into ThreadContext
+        assertEquals("test-access-key", client.threadPool().getThreadContext().getHeader("aws-access-key-id"));
+        assertEquals("test-secret-key", client.threadPool().getThreadContext().getHeader("aws-secret-access-key"));
+        assertEquals("test-session-token", client.threadPool().getThreadContext().getHeader("aws-session-token"));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader("aws-region"));
+        assertEquals("bedrock", client.threadPool().getThreadContext().getHeader("aws-service-name"));
+        assertEquals("https://localhost:9200", client.threadPool().getThreadContext().getHeader("opensearch-url"));
     }
 }

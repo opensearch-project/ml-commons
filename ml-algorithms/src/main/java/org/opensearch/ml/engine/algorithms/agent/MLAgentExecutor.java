@@ -7,15 +7,26 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.NEW_CHAT_HISTORY;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -46,14 +57,29 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
+import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
+import org.opensearch.ml.common.contextmanager.ContextManager;
+import org.opensearch.ml.common.contextmanager.ContextManagerHookProvider;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.input.execute.agent.AgentInput;
+import org.opensearch.ml.common.input.execute.agent.AgentInputProcessor;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.InputType;
+import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.memory.Memory;
+import org.opensearch.ml.common.model.ModelProvider;
+import org.opensearch.ml.common.model.ModelProviderFactory;
 import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -61,13 +87,12 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.settings.SettingsChangeListener;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
+import org.opensearch.ml.engine.algorithms.contextmanager.ContextManagerFactory;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
@@ -83,6 +108,8 @@ import org.opensearch.transport.client.Client;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -100,6 +127,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final String ERROR_MESSAGE = "error_message";
+    public static final String CONTEXT_MANAGEMENT_PROCESSED = "context_management_processed";
+    public static final String USES_UNIFIED_INTERFACE = "uses_unified_interface";
 
     private Client client;
     private SdkClient sdkClient;
@@ -150,8 +179,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String tenantId = agentMLInput.getTenantId();
         Boolean isAsync = agentMLInput.getIsAsync();
 
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        if (inputDataSet == null || inputDataSet.getParameters() == null) {
+        if (agentMLInput.getInputDataset() == null && !agentMLInput.hasStandardInput()) {
+            throw new IllegalArgumentException("Agent input data can not be empty.");
+        }
+
+        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        if ((dataSet == null || dataSet.getParameters() == null) && !agentMLInput.hasStandardInput()) {
             throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
@@ -204,6 +237,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     ) {
                                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                         MLAgent mlAgent = MLAgent.parse(parser);
+                                        // Use existing HookRegistry from AgentMLInput if available (set by MLExecuteTaskRunner for template
+                                        // references)
+                                        // Otherwise create a fresh HookRegistry for agent execution
+                                        final HookRegistry hookRegistry = agentMLInput.getHookRegistry() != null
+                                            ? agentMLInput.getHookRegistry()
+                                            : new HookRegistry();
                                         if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
                                             listener
                                                 .onFailure(
@@ -213,11 +252,38 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     )
                                                 );
                                         }
+
+                                        processAgentInput(agentMLInput, mlAgent);
+
+                                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
+                                            .getInputDataset();
+                                        Map<String, String> requestParameters = inputDataSet.getParameters();
+
+                                        mlAgent = applyMemoryContainerOverride(mlAgent, inputDataSet, agentId);
+                                        final MLAgent finalMlAgent = mlAgent;
+
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
+                                        if (!mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+                                            boolean usesRemoteMemory = memorySpec != null
+                                                && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(memorySpec.getType());
+                                            String memoryConfig = requestParameters != null
+                                                ? requestParameters.get(MEMORY_CONFIGURATION_FIELD)
+                                                : null;
+                                            if (usesRemoteMemory || !Strings.isNullOrEmpty(memoryConfig)) {
+                                                listener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE,
+                                                            RestStatus.FORBIDDEN
+                                                        )
+                                                    );
+                                                return;
+                                            }
+                                        }
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
                                         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
-                                        String appType = mlAgent.getAppType();
+                                        String appType = finalMlAgent.getAppType();
                                         String question = inputDataSet.getParameters().get(QUESTION);
 
                                         if (parentInteractionId != null && regenerateInteractionId != null) {
@@ -243,83 +309,140 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         }
                                         if (memorySpec != null
                                             && memorySpec.getType() != null
-                                            && memoryFactoryMap.containsKey(memorySpec.getType())
+                                            && memoryFactoryMap != null
+                                            && memoryFactoryMap.containsKey(MLMemoryType.from(memorySpec.getType()).name())
                                             && (memoryId == null || parentInteractionId == null)) {
-                                            ConversationIndexMemory.Factory conversationIndexMemoryFactory =
-                                                (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
-                                            conversationIndexMemoryFactory
-                                                .create(question, memoryId, appType, ActionListener.wrap(memory -> {
-                                                    inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
-                                                    // get question for regenerate
-                                                    if (regenerateInteractionId != null) {
-                                                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
-                                                        client
-                                                            .execute(
-                                                                GetInteractionAction.INSTANCE,
-                                                                new GetInteractionRequest(regenerateInteractionId),
-                                                                ActionListener.wrap(interactionRes -> {
-                                                                    inputDataSet
-                                                                        .getParameters()
-                                                                        .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
-                                                                    saveRootInteractionAndExecute(
-                                                                        listener,
-                                                                        memory,
-                                                                        inputDataSet,
-                                                                        mlTask,
-                                                                        isAsync,
-                                                                        outputs,
-                                                                        modelTensors,
-                                                                        mlAgent,
-                                                                        channel
-                                                                    );
-                                                                }, e -> {
-                                                                    log.error("Failed to get existing interaction for regeneration", e);
-                                                                    listener.onFailure(e);
-                                                                })
-                                                            );
-                                                    } else {
-                                                        saveRootInteractionAndExecute(
-                                                            listener,
-                                                            memory,
-                                                            inputDataSet,
-                                                            mlTask,
-                                                            isAsync,
-                                                            outputs,
-                                                            modelTensors,
-                                                            mlAgent,
-                                                            channel
+                                            Map<String, Object> memoryParams = createMemoryParams(
+                                                question,
+                                                memoryId,
+                                                appType,
+                                                finalMlAgent,
+                                                requestParameters
+                                            );
+                                            log.debug("MLAgentExecutor creating new memory, params: {}", sanitizeForLogging(memoryParams));
+                                            // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
+                                            Memory.Factory<Memory<?, ?, ?>> memoryFactory;
+                                            if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
+                                                // Use RemoteAgenticConversationMemory when inline connector metadata is detected
+                                                memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+                                                log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+                                            } else {
+                                                // Use the originally specified memory factory
+                                                memoryFactory = memoryFactoryMap.get(MLMemoryType.from(memorySpec.getType()).name());
+                                            }
+                                            if (memoryFactory == null) {
+                                                listener
+                                                    .onFailure(
+                                                        new IllegalArgumentException(
+                                                            "Memory factory not found for type: "
+                                                                + (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)
+                                                                    ? MLMemoryType.REMOTE_AGENTIC_MEMORY.name()
+                                                                    : MLMemoryType.from(memorySpec.getType()).name())
+                                                        )
+                                                    );
+                                                return;
+                                            }
+                                            memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
+                                                inputDataSet.getParameters().put(MEMORY_ID, memory.getId());
+                                                // get question for regenerate
+                                                if (regenerateInteractionId != null) {
+                                                    log.info("Regenerate for existing interaction {}", regenerateInteractionId);
+                                                    client
+                                                        .execute(
+                                                            GetInteractionAction.INSTANCE,
+                                                            new GetInteractionRequest(regenerateInteractionId),
+                                                            ActionListener.wrap(interactionRes -> {
+                                                                inputDataSet
+                                                                    .getParameters()
+                                                                    .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
+                                                                saveRootInteractionAndExecute(
+                                                                    listener,
+                                                                    tenantId,
+                                                                    memory,
+                                                                    inputDataSet,
+                                                                    mlTask,
+                                                                    isAsync,
+                                                                    outputs,
+                                                                    modelTensors,
+                                                                    finalMlAgent,
+                                                                    channel,
+                                                                    hookRegistry,
+                                                                    agentMLInput
+                                                                );
+                                                            }, e -> {
+                                                                log.error("Failed to get existing interaction for regeneration", e);
+                                                                listener.onFailure(e);
+                                                            })
                                                         );
-                                                    }
-                                                }, ex -> {
-                                                    log.error("Failed to read conversation memory", ex);
-                                                    listener.onFailure(ex);
-                                                }));
+                                                } else {
+                                                    saveRootInteractionAndExecute(
+                                                        listener,
+                                                        tenantId,
+                                                        memory,
+                                                        inputDataSet,
+                                                        mlTask,
+                                                        isAsync,
+                                                        outputs,
+                                                        modelTensors,
+                                                        finalMlAgent,
+                                                        channel,
+                                                        hookRegistry,
+                                                        agentMLInput
+                                                    );
+                                                }
+                                            }, ex -> {
+                                                log.error("Failed to read conversation memory", ex);
+                                                listener.onFailure(ex);
+                                            }));
                                         } else {
+                                            Map<String, Object> memoryParams = createMemoryParams(
+                                                question,
+                                                memoryId,
+                                                appType,
+                                                finalMlAgent,
+                                                requestParameters
+                                            );
+                                            log
+                                                .debug(
+                                                    "MLAgentExecutor loading existing memory, params: {}",
+                                                    sanitizeForLogging(memoryParams)
+                                                );
                                             // For existing conversations, create memory instance using factory
                                             if (memorySpec != null && memorySpec.getType() != null) {
-                                                ConversationIndexMemory.Factory factory = (ConversationIndexMemory.Factory) memoryFactoryMap
-                                                    .get(memorySpec.getType());
-                                                if (factory != null) {
-                                                    // memoryId exists, so create returns an object with existing memory, therefore name can
+                                                Memory.Factory<Memory<?, ?, ?>> memoryFactory;
+                                                if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
+                                                    // Use RemoteAgenticConversationMemory when inline connector metadata is detected
+                                                    memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+                                                    log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+                                                } else {
+                                                    // Use the originally specified memory factory
+                                                    memoryFactory = memoryFactoryMap.get(MLMemoryType.from(memorySpec.getType()).name());
+                                                }
+
+                                                if (memoryFactory != null) {
+                                                    // memoryId exists, so create returns an object with existing
+                                                    // memory, therefore name can
                                                     // be null
-                                                    factory
+
+                                                    memoryFactory
                                                         .create(
-                                                            null,
-                                                            memoryId,
-                                                            appType,
+                                                            memoryParams,
                                                             ActionListener
                                                                 .wrap(
                                                                     createdMemory -> executeAgent(
                                                                         inputDataSet,
+                                                                        tenantId,
                                                                         mlTask,
                                                                         isAsync,
                                                                         memoryId,
-                                                                        mlAgent,
+                                                                        finalMlAgent,
                                                                         outputs,
                                                                         modelTensors,
                                                                         listener,
                                                                         createdMemory,
-                                                                        channel
+                                                                        channel,
+                                                                        hookRegistry,
+                                                                        null
                                                                     ),
                                                                     ex -> {
                                                                         log.error("Failed to find memory with memory_id: {}", memoryId, ex);
@@ -332,15 +455,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             }
                                             executeAgent(
                                                 inputDataSet,
+                                                tenantId,
                                                 mlTask,
                                                 isAsync,
                                                 memoryId,
-                                                mlAgent,
+                                                finalMlAgent,
                                                 outputs,
                                                 modelTensors,
                                                 listener,
                                                 null,
-                                                channel
+                                                channel,
+                                                hookRegistry,
+                                                null
                                             );
                                         }
                                     } catch (Exception e) {
@@ -370,33 +496,125 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     /**
      * save root interaction and start execute the agent
-     * @param listener callback listener
-     * @param memory memory instance
+     *
+     * @param listener     callback listener
+     * @param memory       memory instance
      * @param inputDataSet input
      * @param mlAgent agent to run
+     * @param agentMLInput the original agent input
      */
     private void saveRootInteractionAndExecute(
         ActionListener<Output> listener,
-        ConversationIndexMemory memory,
+        String tenantId,
+        Memory memory,
         RemoteInferenceInputDataSet inputDataSet,
         MLTask mlTask,
         boolean isAsync,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         MLAgent mlAgent,
-        TransportChannel channel
+        TransportChannel channel,
+        HookRegistry hookRegistry,
+        AgentMLInput agentMLInput
     ) {
         String appType = mlAgent.getAppType();
         String question = inputDataSet.getParameters().get(QUESTION);
         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
-        // Create root interaction ID
+
+        // Convert all unified interface input types to List<Message>
+        List<Message> inputMessages = null;
+        if (agentMLInput.getAgentInput() != null) {
+            InputType inputType = agentMLInput.getAgentInput().getInputType();
+            switch (inputType) {
+                case MESSAGES:
+                    @SuppressWarnings("unchecked")
+                    List<Message> messages = (List<Message>) agentMLInput.getAgentInput().getInput();
+                    inputMessages = messages;
+                    break;
+                case CONTENT_BLOCKS:
+                    @SuppressWarnings("unchecked")
+                    List<ContentBlock> blocks = (List<ContentBlock>) agentMLInput.getAgentInput().getInput();
+                    inputMessages = List.of(new Message("user", blocks));
+                    break;
+                case TEXT:
+                    String text = (String) agentMLInput.getAgentInput().getInput();
+                    ContentBlock textBlock = new ContentBlock();
+                    textBlock.setType(ContentType.TEXT);
+                    textBlock.setText(text);
+                    inputMessages = List.of(new Message("user", List.of(textBlock)));
+                    break;
+            }
+        }
+
+        // For unified interface requests with structured message support, or AGUI history-load,
+        // skip parent interaction creation. The pair-based memory format handles ordering internally.
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+        if ((inputMessages != null && supportsStructuredMessages(mlAgent)) || (agentType == MLAgentType.AG_UI && inputMessages == null)) {
+            executeAgent(
+                inputDataSet,
+                tenantId,
+                mlTask,
+                isAsync,
+                memory.getId(),
+                mlAgent,
+                outputs,
+                modelTensors,
+                listener,
+                memory,
+                channel,
+                hookRegistry,
+                inputMessages
+            );
+            return;
+        }
+
+        createParentInteractionAndExecute(
+            tenantId,
+            memory,
+            appType,
+            question,
+            regenerateInteractionId,
+            inputDataSet,
+            mlTask,
+            isAsync,
+            mlAgent,
+            outputs,
+            modelTensors,
+            listener,
+            channel,
+            hookRegistry,
+            inputMessages
+        );
+    }
+
+    /**
+     * Creates parent interaction and executes the agent.
+     */
+    private void createParentInteractionAndExecute(
+        String tenantId,
+        Memory memory,
+        String appType,
+        String question,
+        String regenerateInteractionId,
+        RemoteInferenceInputDataSet inputDataSet,
+        MLTask mlTask,
+        boolean isAsync,
+        MLAgent mlAgent,
+        List<ModelTensors> outputs,
+        List<ModelTensor> modelTensors,
+        ActionListener<Output> listener,
+        TransportChannel channel,
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
+    ) {
+        // Create root interaction ID for the current question
         ConversationIndexMessage msg = ConversationIndexMessage
             .conversationIndexMessageBuilder()
             .type(appType)
             .question(question)
             .response("")
             .finalAnswer(true)
-            .sessionId(memory.getConversationId())
+            .sessionId(memory.getId())
             .build();
         memory.save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
             log.info("Created parent interaction ID: {}", interaction.getId());
@@ -404,22 +622,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             // only delete previous interaction when new interaction created
             if (regenerateInteractionId != null) {
                 memory
-                    .getMemoryManager()
                     .deleteInteractionAndTrace(
                         regenerateInteractionId,
                         ActionListener
                             .wrap(
                                 deleted -> executeAgent(
                                     inputDataSet,
+                                    tenantId,
                                     mlTask,
                                     isAsync,
-                                    memory.getConversationId(),
+                                    memory.getId(),
                                     mlAgent,
                                     outputs,
                                     modelTensors,
                                     listener,
                                     memory,
-                                    channel
+                                    channel,
+                                    hookRegistry,
+                                    inputMessages
                                 ),
                                 e -> {
                                     log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
@@ -430,15 +650,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             } else {
                 executeAgent(
                     inputDataSet,
+                    tenantId,
                     mlTask,
                     isAsync,
-                    memory.getConversationId(),
+                    memory.getId(),
                     mlAgent,
                     outputs,
                     modelTensors,
                     listener,
                     memory,
-                    channel
+                    channel,
+                    hookRegistry,
+                    inputMessages
                 );
             }
         }, ex -> {
@@ -447,8 +670,167 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }));
     }
 
+    /**
+     * Process context management configuration and register context managers in
+     * hook registry
+     *
+     * @param mlAgent      the ML agent with context management configuration
+     * @param hookRegistry the hook registry to register context managers with
+     * @param inputDataSet the input dataset to update with context management info
+     */
+    private void processContextManagement(MLAgent mlAgent, HookRegistry hookRegistry, RemoteInferenceInputDataSet inputDataSet) {
+        try {
+            // Check if context management was already processed (by MLExecuteTaskRunner for runtime overrides)
+            String contextManagementProcessed = inputDataSet.getParameters().get(CONTEXT_MANAGEMENT_PROCESSED);
+            if ("true".equals(contextManagementProcessed)) {
+                log.info("Context management already processed by MLExecuteTaskRunner, skipping agent's stored config");
+                return;
+            }
+
+            // Check if context_management is already specified in runtime parameters
+            String runtimeContextManagement = inputDataSet.getParameters().get(CONTEXT_MANAGEMENT_NAME_FIELD);
+            if (runtimeContextManagement != null && !runtimeContextManagement.trim().isEmpty()) {
+                log.info("Using runtime context management parameter: {}", runtimeContextManagement);
+                return; // Runtime parameter takes precedence, let MLExecuteTaskRunner handle it
+            }
+
+            ContextManagementTemplate template = null;
+            String templateName = null;
+
+            if (mlAgent.hasContextManagementTemplate()) {
+                // Template reference - would need to be resolved from template service
+                templateName = mlAgent.getContextManagementTemplateName();
+                log.info("Agent '{}' has context management template reference: {}", mlAgent.getName(), templateName);
+                // For now, we'll pass the template name to parameters for MLExecuteTaskRunner
+                // to handle
+                inputDataSet.getParameters().put(CONTEXT_MANAGEMENT_NAME_FIELD, templateName);
+                return; // Let MLExecuteTaskRunner handle template resolution
+            } else if (mlAgent.getInlineContextManagement() != null) {
+                // Inline template - process directly
+                template = mlAgent.getInlineContextManagement();
+                templateName = template.getName();
+                log.info("Agent '{}' has inline context management configuration: {}", mlAgent.getName(), templateName);
+            }
+
+            if (template != null) {
+                // Process inline context management template
+                processInlineContextManagement(template, hookRegistry);
+                // Mark as processed to prevent MLExecuteTaskRunner from processing it again
+
+                inputDataSet.getParameters().put(CONTEXT_MANAGEMENT_PROCESSED, "true");
+                inputDataSet.getParameters().put(CONTEXT_MANAGEMENT_NAME_FIELD, templateName);
+            }
+        } catch (Exception e) {
+            log.error("Failed to process context management for agent '{}': {}", mlAgent.getName(), e.getMessage(), e);
+            // Don't fail the entire execution, just log the error
+        }
+    }
+
+    /**
+     * Process inline context management template and register context managers
+     *
+     * @param template     the context management template
+     * @param hookRegistry the hook registry to register with
+     */
+    private void processInlineContextManagement(ContextManagementTemplate template, HookRegistry hookRegistry) {
+        try {
+            log.debug("Processing inline context management template: {}", template.getName());
+
+            // Fresh HookRegistry ensures no duplicate registrations
+
+            // Create context managers from template configuration
+            List<ContextManager> contextManagers = ContextManagerFactory.createContextManagers(template, client);
+
+            if (!contextManagers.isEmpty()) {
+                // Create hook provider with template configuration and register with hook registry
+                ContextManagerHookProvider hookProvider = new ContextManagerHookProvider(contextManagers, template.getHooks());
+
+                // Register hooks with the registry
+                hookProvider.registerHooks(hookRegistry);
+
+                log.info("Successfully registered {} context managers from template '{}'", contextManagers.size(), template.getName());
+            } else {
+                log.warn("No context managers created from template '{}'", template.getName());
+            }
+        } catch (Exception e) {
+            log.error("Failed to process inline context management template '{}': {}", template.getName(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Performs initial memory operations for unified interface agents:
+     * 1. Gets structured message history
+     * 2. Saves input messages
+     * 3. Appends AGUI context if applicable
+     * 4. Formats history for the LLM
+     * 5. Invokes continuation when done
+     */
+    @VisibleForTesting
+    void performInitialMemoryOperations(
+        Memory memory,
+        List<Message> inputMessages,
+        Map<String, String> params,
+        MLAgent mlAgent,
+        ActionListener<?> listener,
+        Runnable continuation
+    ) {
+        int messageHistoryLimit = getMessageHistoryLimit(params);
+
+        memory.getStructuredMessages(ActionListener.wrap(result -> {
+            @SuppressWarnings("unchecked")
+            List<Message> allMessages = (List<Message>) result;
+
+            // Apply history limit
+            List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
+                ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
+                : allMessages;
+
+            // Save input messages — memory auto-resolves the next message ID
+            memory.saveStructuredMessages(inputMessages, ActionListener.wrap(v -> {
+                try {
+                    ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+                    MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+
+                    // Append AGUI context to current input for this LLM call (not persisted in memory)
+                    if (agentType == MLAgentType.AG_UI) {
+                        String contextJson = params.get(AGUI_PARAM_CONTEXT);
+                        if (contextJson != null) {
+                            JsonArray contextArray = JsonParser.parseString(contextJson).getAsJsonArray();
+                            AGUIInputConverter.appendContextToLatestUserMessage(inputMessages, contextArray);
+                            // Re-format current input with context included
+                            String updatedBody = modelProvider.mapMessages(inputMessages, agentType).get("body");
+                            if (updatedBody != null) {
+                                params.put("body", updatedBody);
+                            }
+                        }
+                    }
+
+                    if (!history.isEmpty()) {
+                        // Format history messages using the model provider for API-compatible output
+                        String formattedHistory = modelProvider.mapMessages(history, agentType).get("body");
+                        if (formattedHistory != null && !formattedHistory.isEmpty()) {
+                            params.put(NEW_CHAT_HISTORY, formattedHistory + ", ");
+                        }
+                    }
+
+                    continuation.run();
+                } catch (Exception ex) {
+                    log.error("Failed during memory post-processing", ex);
+                    listener.onFailure(ex);
+                }
+            }, e -> {
+                log.error("Failed to save input messages", e);
+                listener.onFailure(e);
+            }));
+        }, e -> {
+            log.error("Failed to get history", e);
+            listener.onFailure(e);
+        }));
+    }
+
     private void executeAgent(
         RemoteInferenceInputDataSet inputDataSet,
+        String tenantId,
         MLTask mlTask,
         boolean isAsync,
         String memoryId,
@@ -456,8 +838,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener,
-        ConversationIndexMemory memory,
-        TransportChannel channel
+        Memory memory,
+        TransportChannel channel,
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
@@ -466,10 +850,19 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             return;
         }
 
-        MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
+        // Check for agent-level context management configuration (following connector
+        // pattern)
+        if (mlAgent.hasContextManagement()) {
+            processContextManagement(mlAgent, hookRegistry, inputDataSet);
+        }
+
+        MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent, hookRegistry);
         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
 
-        // If async is true, index ML task and return the taskID. Also add memoryID to the task if it exists
+        boolean usesUnifiedInterface = "true".equals(inputDataSet.getParameters().get(USES_UNIFIED_INTERFACE));
+
+        // If async is true, index ML task and return the taskID. Also add memoryID to
+        // the task if it exists
         if (isAsync) {
             Map<String, Object> agentResponse = new HashMap<>();
             if (memoryId != null && !memoryId.isEmpty()) {
@@ -494,6 +887,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(
                     mlTask,
+                    tenantId,
                     outputs,
                     modelTensors,
                     parentInteractionId,
@@ -501,7 +895,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
                 inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
                 try {
-                    mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                    if (usesUnifiedInterface && inputMessages != null && memory != null && supportsStructuredMessages(mlAgent)) {
+                        performInitialMemoryOperations(
+                            memory,
+                            inputMessages,
+                            inputDataSet.getParameters(),
+                            mlAgent,
+                            agentActionListener,
+                            () -> {
+                                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
+                            }
+                        );
+                    } else {
+                        mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                    }
                 } catch (Exception e) {
                     log.error("Failed to run agent", e);
                     agentActionListener.onFailure(e);
@@ -520,7 +927,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 memory
             );
             try {
-                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                if (usesUnifiedInterface && inputMessages != null && memory != null && supportsStructuredMessages(mlAgent)) {
+                    performInitialMemoryOperations(
+                        memory,
+                        inputMessages,
+                        inputDataSet.getParameters(),
+                        mlAgent,
+                        agentActionListener,
+                        () -> {
+                            mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
+                        }
+                    );
+                } else {
+                    mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                }
             } catch (Exception e) {
                 log.error("Failed to run agent", e);
                 agentActionListener.onFailure(e);
@@ -535,7 +955,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors,
         String agentType,
         String parentInteractionId,
-        ConversationIndexMemory memory
+        Memory memory
     ) {
         return ActionListener.wrap(output -> {
             if (output != null) {
@@ -553,10 +973,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     private ActionListener<Object> createAsyncTaskUpdater(
         MLTask mlTask,
+        String tenantId,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String parentInteractionId,
-        ConversationIndexMemory memory
+        Memory memory
     ) {
         String taskId = mlTask.getTaskId();
         Map<String, Object> agentResponse = new HashMap<>();
@@ -575,12 +996,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             updatedTask.put(STATE_FIELD, MLTaskState.COMPLETED);
             updateMLTaskDirectly(
                 taskId,
+                tenantId,
                 updatedTask,
                 client,
+                sdkClient,
                 ActionListener
                     .wrap(
                         response -> log.info("Updated ML task {} with agent execution results", taskId),
-                        e -> log.error("Failed to update ML task {} with agent execution results", taskId)
+                        e -> log.error("Failed to update ML task {} with agent execution results: {}", taskId, e.getMessage(), e)
                     )
             );
         }, ex -> {
@@ -592,12 +1015,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             updateMLTaskDirectly(
                 taskId,
+                tenantId,
                 updatedTask,
                 client,
+                sdkClient,
                 ActionListener
                     .wrap(
                         response -> log.info("Updated ML task {} with agent execution failed reason", taskId),
-                        e -> log.error("Failed to update ML task {} with agent execution results", taskId)
+                        e -> log.error("Failed to update ML task {} with agent execution results: {}", taskId, e.getMessage(), e)
                     )
             );
 
@@ -606,7 +1031,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     }
 
     @VisibleForTesting
-    protected MLAgentRunner getAgentRunner(MLAgent mlAgent) {
+    protected MLAgentRunner getAgentRunner(MLAgent mlAgent, HookRegistry hookRegistry) {
         final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase(Locale.ROOT));
         switch (agentType) {
             case FLOW:
@@ -640,7 +1065,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     toolFactories,
                     memoryFactoryMap,
                     sdkClient,
-                    encryptor
+                    encryptor,
+                    hookRegistry
                 );
             case PLAN_EXECUTE_AND_REFLECT:
                 return new MLPlanExecuteAndReflectAgentRunner(
@@ -651,10 +1077,23 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     toolFactories,
                     memoryFactoryMap,
                     sdkClient,
-                    encryptor
+                    encryptor,
+                    hookRegistry
+                );
+            case AG_UI:
+                return new MLAGUIAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor,
+                    hookRegistry
                 );
             default:
-                throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
+                throw new IllegalArgumentException("Unsupported agent type");
         }
     }
 
@@ -711,15 +1150,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    private void updateInteractionWithFailure(String interactionId, ConversationIndexMemory memory, String errorMessage) {
+    private void updateInteractionWithFailure(String interactionId, Memory memory, String errorMessage) {
         if (interactionId != null && memory != null) {
             String failureMessage = "Agent execution failed: " + errorMessage;
             Map<String, Object> updateContent = new HashMap<>();
             updateContent.put(RESPONSE_FIELD, failureMessage);
 
             memory
-                .getMemoryManager()
-                .updateInteraction(
+                .update(
                     interactionId,
                     updateContent,
                     ActionListener
@@ -730,4 +1168,125 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
         }
     }
+
+    /**
+     * Processes standardized input if present in AgentMLInput.
+     * This method handles the conversion from AgentInput to parameters that can be used
+     * by the existing agent execution logic.
+     */
+    void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+
+        // old style agent registration, except AG_UI agent
+        if (mlAgent.getModel() == null && agentType != MLAgentType.AG_UI) {
+            return;
+        }
+
+        // AGUI history-load: no question extraction needed, MLAGUIAgentRunner handles it
+        if (agentMLInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            RemoteInferenceInputDataSet ds = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+            if (ds.getParameters() != null && "true".equals(ds.getParameters().get(AGUI_PARAM_LOAD_CHAT_HISTORY))) {
+                return;
+            }
+        }
+
+        if (agentMLInput.getAgentInput() != null
+            && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES
+            && MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
+            throw new IllegalArgumentException("Messages input is not supported for Plan Execute and Reflect Agent.");
+        }
+
+        // If legacy question input is provided and no structured input exists, parse to new standard input
+        if (agentMLInput.getAgentInput() == null && agentMLInput.getInputDataset() != null) {
+            RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+            if (remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
+                AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
+                agentMLInput.setAgentInput(standardInput);
+            }
+        }
+
+        try {
+            // Extract the question text for prompt template and memory storage
+            String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
+
+            // create input dataset if it doesn't exist
+            if (agentMLInput.getInputDataset() == null) {
+                agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
+            }
+
+            // Set parameters to processed params
+            RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+
+            // For agent with revamped interface, use ModelProvider to map the entire AgentInput
+            if (mlAgent.getModel() != null) {
+                remoteDataSet.getParameters().put(USES_UNIFIED_INTERFACE, "true");
+                ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+                Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
+
+                parameters.put(QUESTION, question);
+
+                remoteDataSet.getParameters().putAll(parameters);
+            } else {
+                // For old-style AG_UI agents without model field
+                remoteDataSet.getParameters().putIfAbsent(QUESTION, question);
+            }
+        } catch (Exception e) {
+            log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
+            throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Applies memory container ID override from request parameters if provided.
+     *
+     * This method allows runtime override of the memory container ID that an agent uses,
+     * enabling dynamic memory context switching. If a memory_container_id parameter is
+     * provided in the request and differs from the agent's current container ID, the
+     * agent's memory configuration is updated to use the override value.
+     *
+     * @param mlAgent The agent whose memory container may be overridden
+     * @param inputDataSet The input dataset containing request parameters
+     * @param agentId The agent ID for logging purposes
+     * @return Updated MLAgent with overridden memory container if applicable, or original agent
+     * @throws IllegalArgumentException if memory_container_id override is requested but agent has no memory configured
+     */
+    private MLAgent applyMemoryContainerOverride(MLAgent mlAgent, RemoteInferenceInputDataSet inputDataSet, String agentId) {
+        Map<String, String> requestParameters = inputDataSet.getParameters();
+        MLMemorySpec memorySpec = mlAgent.getMemory();
+
+        // Extract memory_container_id override from request parameters if present
+        String containerOverride = null;
+        if (requestParameters != null && requestParameters.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
+            String containerParam = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
+            if (!Strings.isNullOrEmpty(containerParam)) {
+                containerOverride = containerParam;
+            }
+        }
+
+        // Apply override if provided
+        if (containerOverride != null) {
+            // Validate that agent has memory configured
+            if (memorySpec == null) {
+                throw new IllegalArgumentException("memory_container_id override requires the agent to be configured with memory");
+            }
+
+            // Only update if override differs from current container ID
+            String currentContainerId = memorySpec.getMemoryContainerId();
+            if (!containerOverride.equals(currentContainerId)) {
+                MLMemorySpec updatedSpec = memorySpec.toBuilder().memoryContainerId(containerOverride).build();
+                mlAgent = mlAgent.toBuilder().memory(updatedSpec).build();
+
+                log.debug("Agent {} overriding memory container from {} to {}", agentId, currentContainerId, containerOverride);
+            }
+        }
+
+        return mlAgent;
+    }
+
+    @VisibleForTesting
+    boolean supportsStructuredMessages(MLAgent mlAgent) {
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+        return agentType == MLAgentType.CONVERSATIONAL || agentType == MLAgentType.AG_UI;
+    }
+
 }

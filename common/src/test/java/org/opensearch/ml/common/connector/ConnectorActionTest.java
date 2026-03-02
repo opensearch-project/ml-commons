@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.isValidActionInModelPrediction;
@@ -99,7 +100,7 @@ public class ConnectorActionTest {
     public void constructor_NullActionType() {
         Throwable exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new ConnectorAction(null, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+            () -> new ConnectorAction(null, null, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
         );
         assertEquals("action type can't be null", exception.getMessage());
 
@@ -109,7 +110,7 @@ public class ConnectorActionTest {
     public void constructor_NullUrl() {
         Throwable exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_POST, null, null, TEST_REQUEST_BODY, null, null)
+            () -> new ConnectorAction(TEST_ACTION_TYPE, null, TEST_METHOD_POST, null, null, TEST_REQUEST_BODY, null, null)
         );
         assertEquals("url can't be null", exception.getMessage());
     }
@@ -118,14 +119,118 @@ public class ConnectorActionTest {
     public void constructor_NullMethod() {
         Throwable exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new ConnectorAction(TEST_ACTION_TYPE, null, URL, null, TEST_REQUEST_BODY, null, null)
+            () -> new ConnectorAction(TEST_ACTION_TYPE, null, null, URL, null, TEST_REQUEST_BODY, null, null)
         );
         assertEquals("method can't be null", exception.getMessage());
     }
 
+    // Name validation tests
+
+    @Test
+    public void constructor_ValidName() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            "my_action-name123",
+            TEST_METHOD_POST,
+            URL,
+            null,
+            TEST_REQUEST_BODY,
+            null,
+            null
+        );
+        assertEquals("my_action-name123", action.getName());
+    }
+
+    @Test
+    public void constructor_NullName() {
+        // Null name should be allowed
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, null, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null);
+        assertNull(action.getName());
+    }
+
+    @Test
+    public void constructor_NameWithCarriageReturn() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name\rwith_cr", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void constructor_NameWithLineFeed() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name\nwith_lf", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void constructor_NameWithTab() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name\twith_tab", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void constructor_NameTooLong() {
+        String longName = "a".repeat(65);
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, longName, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("maximum length"));
+    }
+
+    @Test
+    public void constructor_NameExactlyMaxLength() {
+        String maxName = "a".repeat(64);
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, maxName, TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null);
+        assertEquals(maxName, action.getName());
+    }
+
+    @Test
+    public void constructor_NameWithSpaces() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name with spaces", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("invalid characters"));
+    }
+
+    @Test
+    public void constructor_NameWithSpecialChars() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "name@special!", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("invalid characters"));
+    }
+
+    @Test
+    public void constructor_NameIsActionType() {
+        Throwable exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new ConnectorAction(TEST_ACTION_TYPE, "PREDICT", TEST_METHOD_POST, URL, null, TEST_REQUEST_BODY, null, null)
+        );
+        assertTrue(exception.getMessage().contains("action type"));
+    }
+
     @Test
     public void testValidatePrePostProcessFunctionsWithNullPreProcessFunctionSuccess() {
-        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, OPENAI_URL, null, TEST_REQUEST_BODY, null, null);
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            null,
+            TEST_METHOD_HTTP,
+            OPENAI_URL,
+            null,
+            TEST_REQUEST_BODY,
+            null,
+            null
+        );
         action.validatePrePostProcessFunctions(Map.of());
         assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
     }
@@ -134,6 +239,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithExternalServers() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             URL,
             null,
@@ -151,6 +257,7 @@ public class ConnectorActionTest {
             "\"\\n    StringBuilder builder = new StringBuilder();\\n    builder.append(\\\"\\\\\\\"\\\");\\n    String first = params.text_docs[0];\\n    builder.append(first);\\n    builder.append(\\\"\\\\\\\"\\\");\\n    def parameters = \\\"{\\\" +\\\"\\\\\\\"text_inputs\\\\\\\":\\\" + builder + \\\"}\\\";\\n    return  \\\"{\\\" +\\\"\\\\\\\"parameters\\\\\\\":\\\" + parameters + \\\"}\\\";\"";
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             OPENAI_URL,
             null,
@@ -166,6 +273,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithOpenAIConnectorCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             "https://${parameters.endpoint}/v1/chat/completions",
             null,
@@ -181,6 +289,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithOpenAIConnectorWrongInBuiltPreProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             OPENAI_URL,
             null,
@@ -206,6 +315,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithOpenAIConnectorWrongInBuiltPostProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             OPENAI_URL,
             null,
@@ -231,6 +341,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithCohereConnectorCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             COHERE_URL,
             null,
@@ -243,6 +354,7 @@ public class ConnectorActionTest {
 
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             COHERE_URL,
             null,
@@ -255,6 +367,7 @@ public class ConnectorActionTest {
 
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             COHERE_URL,
             null,
@@ -270,6 +383,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithCohereConnectorWrongInBuiltPreProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             COHERE_URL,
             null,
@@ -295,6 +409,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithCohereConnectorWrongInBuiltPostProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             COHERE_URL,
             null,
@@ -320,6 +435,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithBedrockConnectorCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
             null,
@@ -332,6 +448,7 @@ public class ConnectorActionTest {
 
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
             null,
@@ -344,6 +461,7 @@ public class ConnectorActionTest {
 
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
             null,
@@ -359,6 +477,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithBedrockConnectorWrongInBuiltPreProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
             null,
@@ -384,6 +503,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithBedrockConnectorWrongInBuiltPostProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
             null,
@@ -409,6 +529,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWithCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
             null,
@@ -421,6 +542,7 @@ public class ConnectorActionTest {
 
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
             null,
@@ -436,6 +558,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWrongInBuiltPreProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
             null,
@@ -463,6 +586,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWrongInBuiltPostProcessFunction() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
             null,
@@ -488,7 +612,7 @@ public class ConnectorActionTest {
 
     @Test
     public void writeTo_NullValue() throws IOException {
-        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, URL, null, TEST_REQUEST_BODY, null, null);
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, null, TEST_METHOD_HTTP, URL, null, TEST_REQUEST_BODY, null, null);
         BytesStreamOutput output = new BytesStreamOutput();
         action.writeTo(output);
         ConnectorAction action2 = new ConnectorAction(output.bytes().streamInput());
@@ -504,6 +628,7 @@ public class ConnectorActionTest {
 
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             URL,
             headers,
@@ -519,7 +644,7 @@ public class ConnectorActionTest {
 
     @Test
     public void toXContent_NullValue() throws IOException {
-        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, URL, null, TEST_REQUEST_BODY, null, null);
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, null, TEST_METHOD_HTTP, URL, null, TEST_REQUEST_BODY, null, null);
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         action.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -540,6 +665,7 @@ public class ConnectorActionTest {
 
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
+            null,
             TEST_METHOD_HTTP,
             URL,
             headers,

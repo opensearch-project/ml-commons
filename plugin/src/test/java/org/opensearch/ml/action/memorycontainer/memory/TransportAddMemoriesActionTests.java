@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
@@ -35,6 +36,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
@@ -191,10 +193,10 @@ public class TransportAddMemoriesActionTests {
         MLMemoryContainer container = mock(MLMemoryContainer.class);
         
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
         
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(false);
         
@@ -222,10 +224,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(MemoryConfiguration.builder().build());
         
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
         
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
         when(memoryContainerHelper.getMemoryIndexName(eq(container), any(MemoryType.class))).thenReturn("memory-index");
@@ -263,10 +265,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -282,7 +284,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify the full flow
-        verify(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        verify(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
         verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
     }
@@ -316,10 +318,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -335,7 +337,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify the full flow including response
-        verify(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        verify(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
         verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
         // Note: Async LLM processing happens in background thread pool - not verified in unit test
@@ -354,10 +356,10 @@ public class TransportAddMemoriesActionTests {
         Exception testException = new RuntimeException("Container not found");
         
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onFailure(testException);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
         
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
@@ -397,10 +399,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -447,10 +449,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -505,19 +507,19 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
         // Mock summarizeMessages
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(3);
             listener.onResponse("Session summary");
             return null;
-        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
 
         // Mock indexData for both session and working memory
         doAnswer(invocation -> {
@@ -537,7 +539,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify session creation flow
-        verify(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        verify(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
         // Verify indexData called twice: once for session, once for working memory
         verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
@@ -576,26 +578,28 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
         // Mock summarizeMessages to fail
         Exception summarizeException = new RuntimeException("Summarization failed");
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(3);
             listener.onFailure(summarizeException);
             return null;
-        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify summarize was called and failure was propagated
-        verify(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
-        verify(actionListener).onFailure(summarizeException);
+        verify(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
+        verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
+            && ((OpenSearchStatusException)exception).status() == RestStatus.INTERNAL_SERVER_ERROR
+            && exception.getMessage().contains("Internal server error")));
     }
 
     @Test
@@ -627,10 +631,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -679,10 +683,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -728,10 +732,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -788,10 +792,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -846,10 +850,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -905,10 +909,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -964,10 +968,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -984,12 +988,12 @@ public class TransportAddMemoriesActionTests {
         doAnswer(invocation -> {
             // Don't invoke callback yet - we'll trigger it manually
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), factsListenerCaptor.capture());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), factsListenerCaptor.capture());
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify runMemoryStrategy was called for the enabled strategy
-        verify(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        verify(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
     }
 
     @Test
@@ -1029,10 +1033,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -1047,8 +1051,8 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify both strategies were processed
-        verify(memoryProcessingService).runMemoryStrategy(eq(strategy1), eq(messages), eq(config), any());
-        verify(memoryProcessingService).runMemoryStrategy(eq(strategy2), eq(messages), eq(config), any());
+        verify(memoryProcessingService).runMemoryStrategy(any(), eq(strategy1), eq(messages), eq(config), any());
+        verify(memoryProcessingService).runMemoryStrategy(any(), eq(strategy2), eq(messages), eq(config), any());
     }
 
     @Test
@@ -1086,10 +1090,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -1104,7 +1108,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify disabled strategy was NOT processed
-        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any());
+        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1143,10 +1147,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -1161,7 +1165,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify strategy with incomplete namespace was NOT processed
-        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any());
+        verify(memoryProcessingService, org.mockito.Mockito.never()).runMemoryStrategy(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1199,10 +1203,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -1217,10 +1221,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to trigger failure
         Exception strategyException = new RuntimeException("LLM extraction failed");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onFailure(strategyException);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
@@ -1265,10 +1269,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -1283,10 +1287,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to return facts
         List<String> facts = Arrays.asList("fact1", "fact2", "fact3");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onResponse(facts);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         // Mock searchSimilarFactsForSession to return empty list (no similar facts)
         doAnswer(invocation -> {
@@ -1350,10 +1354,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -1368,10 +1372,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to return facts
         List<String> facts = Arrays.asList("fact1", "fact2");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onResponse(facts);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         // Mock searchSimilarFactsForSession to return similar facts
         List<Object> similarFacts = Arrays.asList("similarFact1", "similarFact2");
@@ -1387,10 +1391,10 @@ public class TransportAddMemoriesActionTests {
             MemoryDecision.builder().event(MemoryEvent.UPDATE).text("fact2").build()
         );
         doAnswer(invocation -> {
-            ActionListener<List<MemoryDecision>> listener = invocation.getArgument(4);
+            ActionListener<List<MemoryDecision>> listener = invocation.getArgument(5);
             listener.onResponse(decisions);
             return null;
-        }).when(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), any(), eq(config), any());
+        }).when(memoryProcessingService).makeMemoryDecisions(any(), eq(facts), any(), any(), eq(config), any());
 
         // Mock executeMemoryOperations to succeed
         doAnswer(invocation -> {
@@ -1406,7 +1410,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify decision-making was called
-        verify(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), any(), eq(config), any());
+        verify(memoryProcessingService).makeMemoryDecisions(any(), eq(facts), any(), any(), eq(config), any());
         verify(memoryOperationsService).executeMemoryOperations(eq(decisions), eq(config), any(), any(), eq(input), eq(strategy), any());
     }
 
@@ -1445,10 +1449,10 @@ public class TransportAddMemoriesActionTests {
         when(container.getConfiguration()).thenReturn(config);
 
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(container);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
@@ -1463,10 +1467,10 @@ public class TransportAddMemoriesActionTests {
         // Mock runMemoryStrategy to return facts
         List<String> facts = Arrays.asList("fact1");
         doAnswer(invocation -> {
-            ActionListener<List<String>> listener = invocation.getArgument(3);
+            ActionListener<List<String>> listener = invocation.getArgument(4);
             listener.onResponse(facts);
             return null;
-        }).when(memoryProcessingService).runMemoryStrategy(eq(strategy), eq(messages), eq(config), any());
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
 
         // Mock searchSimilarFactsForSession to trigger failure
         Exception searchException = new RuntimeException("Search failed");
@@ -1484,8 +1488,61 @@ public class TransportAddMemoriesActionTests {
         // The async callback handles its own error differently
     }
 
-    // Note: testStoreLongTermMemory_NoLLM_SkipsDecisions removed - invalid scenario
-    // When llmId is null, infer=true fails validation at line 200 (INFER_REQUIRES_LLM_MODEL_ERROR)
-    // The storeLongTermMemory code path for no LLM (line 357-369) can only be reached when
-    // facts.isEmpty() OR llmId is null, but the validation ensures infer=true always has an LLM
+    @Test
+    public void testSummarizeMessages_Preserves4XXErrors() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-123");
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock summarizeMessages to return BAD_REQUEST (4XX)
+        OpenSearchStatusException notFoundException = new OpenSearchStatusException(
+            "LLM predict result cannot be extracted with current llm_result_path",
+            RestStatus.BAD_REQUEST
+        );
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(3);
+            listener.onFailure(notFoundException);
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Verify 4XX error is preserved with detailed message
+        verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
+            && ((OpenSearchStatusException)exception).status() == RestStatus.BAD_REQUEST
+            && exception.getMessage().contains("LLM predict result cannot be extracted")));
+    }
 }

@@ -117,14 +117,22 @@ public class MLExtractJsonProcessor extends AbstractMLProcessor {
 
         String text = (String) input;
         if (text.trim().isEmpty()) {
-            return defaultValue != null ? defaultValue : input;
+            if (defaultValue != null) {
+                log.warn("Input text is empty, returning default value");
+                return defaultValue;
+            }
+            return input;
         }
 
         try {
             int start = findJsonStart(text);
             if (start < 0) {
+                if (defaultValue != null) {
+                    log.warn("No JSON found in input text, returning default value");
+                    return defaultValue;
+                }
                 log.debug("No JSON found in text");
-                return defaultValue != null ? defaultValue : input;
+                return input;
             }
 
             JsonNode jsonNode = mapper.readTree(text.substring(start));
@@ -133,16 +141,24 @@ public class MLExtractJsonProcessor extends AbstractMLProcessor {
                 if (jsonNode.isObject()) {
                     return mapper.convertValue(jsonNode, Map.class);
                 }
+                if (defaultValue != null) {
+                    log.warn("Expected JSON object but found {}, returning default value", jsonNode.getNodeType());
+                    return defaultValue;
+                }
                 log.debug("Expected JSON object but found {}", jsonNode.getNodeType());
-                return defaultValue != null ? defaultValue : input;
+                return input;
             }
 
             if (EXTRACT_TYPE_ARRAY.equalsIgnoreCase(extractType)) {
                 if (jsonNode.isArray()) {
                     return mapper.convertValue(jsonNode, List.class);
                 }
+                if (defaultValue != null) {
+                    log.warn("Expected JSON array but found {}, returning default value", jsonNode.getNodeType());
+                    return defaultValue;
+                }
                 log.debug("Expected JSON array but found {}", jsonNode.getNodeType());
-                return defaultValue != null ? defaultValue : input;
+                return input;
             }
 
             // auto detect
@@ -153,12 +169,20 @@ public class MLExtractJsonProcessor extends AbstractMLProcessor {
                 return mapper.convertValue(jsonNode, List.class);
             }
 
+            if (defaultValue != null) {
+                log.warn("JSON node is neither object nor array: {}, returning default value", jsonNode.getNodeType());
+                return defaultValue;
+            }
             log.debug("JSON node is neither object nor array: {}", jsonNode.getNodeType());
-            return defaultValue != null ? defaultValue : input;
+            return input;
 
         } catch (Exception e) {
-            log.warn("Failed to extract JSON from text: {}", e.getMessage());
-            return defaultValue != null ? defaultValue : input;
+            if (defaultValue != null) {
+                log.warn("Failed to extract JSON from input text: {}, returning default value", e.getMessage());
+                return defaultValue;
+            }
+            log.warn("Failed to extract JSON from input text: {}", e.getMessage());
+            return input;
         }
     }
 

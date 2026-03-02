@@ -77,7 +77,7 @@ public class MemorySearchService {
             QueryBuilder queryBuilder = MemorySearchQueryBuilder
                 .buildFactSearchQuery(strategy, fact, input.getNamespace(), input.getOwnerId(), memoryConfig, input.getMemoryContainerId());
 
-            log.debug("Searching for similar facts with query: {}", queryBuilder.toString());
+            log.debug("Searching for similar facts");
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             searchSourceBuilder.query(queryBuilder);
@@ -103,16 +103,16 @@ public class MemorySearchService {
                     }
                 }
 
-                log.debug("Found {} similar facts for: {}", response.getHits().getHits().length, fact);
+                log.debug("Found {} similar facts", response.getHits().getHits().length);
 
                 searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             }, e -> {
-                log.error("Failed to search for similar facts for: {}", fact, e);
+                log.error("Failed to search for similar facts");
                 searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             });
             memoryContainerHelper.searchData(memoryConfig, searchRequest, searchResponseActionListener);
         } catch (Exception e) {
-            log.error("Failed to build search query for fact: {}", fact, e);
+            log.error("Failed to build search query for facts");
             searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
         }
     }

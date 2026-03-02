@@ -8,11 +8,16 @@ package org.opensearch.ml.common.transport.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLE_EMPTY_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLE_INVALID_CHARACTERS_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLE_INVALID_LENGTH_ERROR;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -58,6 +63,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             this.configuration = configuration;
         }
         this.tenantId = tenantId;
+        validateBackendRoles(backendRoles);
         this.backendRoles = backendRoles;
     }
 
@@ -112,6 +118,42 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         }
         builder.endObject();
         return builder;
+    }
+
+    /**
+     * Validates backend roles according to security constraints.
+     * Each role must:
+     * - Be at most 128 Unicode characters long
+     * - Contain only alphanumeric characters and special symbols: :+=,.@-_/
+     * - Not be empty or blank
+     *
+     * @param backendRoles List of backend role strings to validate (null/empty list is allowed)
+     * @throws OpenSearchParseException if any role violates constraints
+     */
+    public static void validateBackendRoles(List<String> backendRoles) {
+        if (backendRoles == null || backendRoles.isEmpty()) {
+            return; // null or empty list is allowed
+        }
+
+        // Regex pattern: Unicode letters/digits + allowed special chars: :+=,.@-_/
+        Pattern validPattern = Pattern.compile("^[\\p{L}\\p{N}:+=,.@\\-_/]+$");
+
+        for (String role : backendRoles) {
+            // Check for null or empty
+            if (role == null || role.isEmpty() || role.isBlank()) {
+                throw new OpenSearchParseException(BACKEND_ROLE_EMPTY_ERROR);
+            }
+
+            // Check length (Unicode character count)
+            if (role.length() > 128) {
+                throw new OpenSearchParseException(String.format(BACKEND_ROLE_INVALID_LENGTH_ERROR, role));
+            }
+
+            // Check allowed characters
+            if (!validPattern.matcher(role).matches()) {
+                throw new OpenSearchParseException(String.format(BACKEND_ROLE_INVALID_CHARACTERS_ERROR, role));
+            }
+        }
     }
 
     public static MLCreateMemoryContainerInput parse(XContentParser parser) throws IOException {

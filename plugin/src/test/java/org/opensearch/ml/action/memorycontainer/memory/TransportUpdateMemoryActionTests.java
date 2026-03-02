@@ -172,10 +172,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
@@ -208,7 +208,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
-        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
         verify(memoryContainerHelper, times(1)).getData(any(), any(GetRequest.class), any());
         verify(memoryContainerHelper, times(1)).indexData(any(), any(IndexRequest.class), any());
@@ -234,16 +234,16 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer to fail
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onFailure(expectedError);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Act
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
-        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, never()).checkMemoryContainerAccess(any(), any());
         verify(client, never()).get(any(), any());
         verify(client, never()).update(any(), any());
@@ -267,10 +267,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess to return false
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(false);
@@ -279,7 +279,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
-        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
         verify(client, never()).get(any(), any());
         verify(client, never()).update(any(), any());
@@ -313,10 +313,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
@@ -335,7 +335,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
-        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
         verify(memoryContainerHelper, times(1)).getData(any(), any(GetRequest.class), any());
         verify(memoryContainerHelper, never()).indexData(any(), any(), any());
@@ -376,10 +376,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
@@ -412,7 +412,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
-        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
         verify(memoryContainerHelper, times(1)).getData(any(), any(GetRequest.class), any());
         verify(memoryContainerHelper, times(1)).indexData(any(), any(IndexRequest.class), any()); // Index should still happen without
@@ -455,10 +455,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(containerWithoutSemantic);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(containerWithoutSemantic))).thenReturn(true);
@@ -485,7 +485,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
-        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(containerWithoutSemantic));
         verify(memoryContainerHelper, times(1)).getData(any(MemoryConfiguration.class), any(GetRequest.class), any());
         verify(memoryContainerHelper, times(1)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
@@ -555,10 +555,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
@@ -597,10 +597,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
@@ -647,10 +647,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
@@ -768,10 +768,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(mockContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);

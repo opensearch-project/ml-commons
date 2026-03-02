@@ -103,12 +103,12 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
     @Override
     public List<LLMMessage> supply(List<Map<String, Object>> toolResults) {
         List<LLMMessage> messages = new ArrayList<>();
-        OpenaiMessage toolMessage = new OpenaiMessage();
         for (Map toolResult : toolResults) {
             String toolUseId = (String) toolResult.get(TOOL_CALL_ID);
             if (toolUseId == null) {
                 continue;
             }
+            OpenaiMessage toolMessage = new OpenaiMessage();
             toolMessage.setToolCallId(toolUseId);
             Map toolResultMap = (Map) toolResult.get(TOOL_RESULT);
             toolMessage.setContent((String) toolResultMap.get("text"));

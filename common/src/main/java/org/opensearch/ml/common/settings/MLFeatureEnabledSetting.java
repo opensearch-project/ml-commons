@@ -7,25 +7,28 @@ package org.opensearch.ml.common.settings;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -36,9 +39,10 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isRemoteInferenceEnabled;
     private volatile Boolean isAgentFrameworkEnabled;
+    private volatile Boolean isUnifiedAgentApiEnabled;
 
     private volatile Boolean isLocalModelEnabled;
-    private volatile AtomicBoolean isConnectorPrivateIpEnabled;
+    private volatile Boolean isConnectorPrivateIpEnabled;
 
     private volatile Boolean isControllerEnabled;
     private volatile Boolean isBatchIngestionEnabled;
@@ -60,17 +64,26 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isAgenticMemoryEnabled;
 
+    private volatile Boolean isRemoteAgenticMemoryEnabled;
+
     private volatile Boolean isIndexInsightEnabled;
 
     private volatile Boolean isStreamEnabled;
+
+    private volatile Integer maxJsonSize;
+
+    private volatile Boolean isMcpHeaderPassthroughEnabled;
+
+    private volatile Boolean isAGUIEnabled;
 
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
         isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
+        isUnifiedAgentApiEnabled = ML_COMMONS_UNIFIED_AGENT_API_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
-        isConnectorPrivateIpEnabled = new AtomicBoolean(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings));
+        isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
         isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
         isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
@@ -82,8 +95,12 @@ public class MLFeatureEnabledSetting {
         isExecuteToolEnabled = ML_COMMONS_EXECUTE_TOOL_ENABLED.get(settings);
         isMcpConnectorEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(settings);
         isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
+        isRemoteAgenticMemoryEnabled = ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
+        maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
+        isMcpHeaderPassthroughEnabled = ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.get(settings);
+        isAGUIEnabled = ML_COMMONS_AG_UI_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -91,10 +108,13 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_UNIFIED_AGENT_API_ENABLED, it -> isUnifiedAgentApiEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled.set(it));
+            .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
         clusterService
             .getClusterSettings()
@@ -109,16 +129,24 @@ public class MLFeatureEnabledSetting {
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_EXECUTE_TOOL_ENABLED, it -> isExecuteToolEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> isMcpConnectorEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_MEMORY_ENABLED, it -> isAgenticMemoryEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED, it -> isRemoteAgenticMemoryEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED, it -> isIndexInsightEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED, it -> isMcpHeaderPassthroughEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AG_UI_ENABLED, it -> isAGUIEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
             isStaticMetricCollectionEnabled = it;
             for (SettingsChangeListener listener : listeners) {
                 listener.onStaticMetricCollectionEnabledChanged(it);
             }
         });
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE, it -> maxJsonSize = it);
     }
 
     /**
@@ -138,6 +166,14 @@ public class MLFeatureEnabledSetting {
     }
 
     /**
+     * Whether unified agent API is enabled. If disabled, APIs in ml-commons will block agent registration with model creation and unified execution interface.
+     * @return whether unified agent API is enabled.
+     */
+    public boolean isUnifiedAgentApiEnabled() {
+        return isUnifiedAgentApiEnabled;
+    }
+
+    /**
      * Whether the local model feature is enabled. If disabled, APIs in ml-commons will block local model inference.
      * @return whether the local inference is enabled.
      */
@@ -145,7 +181,7 @@ public class MLFeatureEnabledSetting {
         return isLocalModelEnabled;
     }
 
-    public AtomicBoolean isConnectorPrivateIpEnabled() {
+    public boolean isConnectorPrivateIpEnabled() {
         return isConnectorPrivateIpEnabled;
     }
 
@@ -225,6 +261,14 @@ public class MLFeatureEnabledSetting {
         return isAgenticMemoryEnabled;
     }
 
+    /**
+     * Whether the Remote Agentic Memory feature is enabled. If disabled, APIs in ml-commons will block remote agentic memory usage.
+     * @return whether the remote agentic memory feature is enabled.
+     */
+    public boolean isRemoteAgenticMemoryEnabled() {
+        return isRemoteAgenticMemoryEnabled;
+    }
+
     @VisibleForTesting
     public void notifyMultiTenancyListeners(boolean isEnabled) {
         for (SettingsChangeListener listener : listeners) {
@@ -245,5 +289,29 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isStreamEnabled() {
         return isStreamEnabled;
+    }
+
+    /**
+     * Gets the maximum allowed JSON string size in bytes for parsing.
+     * @return the maximum size in bytes, or -1 for unlimited
+     */
+    public int getMaxJsonSize() {
+        return maxJsonSize;
+    }
+
+    /**
+     * Whether the MCP header passthrough feature is enabled. If disabled, MCP headers will not be passed through to MCP connectors.
+     * @return whether the MCP header passthrough feature is enabled.
+     */
+    public boolean isMcpHeaderPassthroughEnabled() {
+        return isMcpHeaderPassthroughEnabled;
+    }
+
+    /**
+     * Whether the AG-UI agent feature is enabled. If disabled, AG-UI agents will be blocked.
+     * @return whether the AG-UI agent feature is enabled.
+     */
+    public boolean isAGUIEnabled() {
+        return isAGUIEnabled;
     }
 }

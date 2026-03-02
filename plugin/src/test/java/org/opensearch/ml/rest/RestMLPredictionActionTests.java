@@ -26,11 +26,13 @@ import java.util.Optional;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -267,10 +269,11 @@ public class RestMLPredictionActionTests {
         
         FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict");
         
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
             restAction.getRequest("test-model", "REMOTE", "REMOTE", request);
         });
         assertEquals("Remote Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.remote_inference_enabled\" to true.", exception.getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, exception.status());
     }
 
     @Test
@@ -317,11 +320,12 @@ public class RestMLPredictionActionTests {
 
         FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict");
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
             restAction.getRequest("test-model", "TEXT_EMBEDDING", "TEXT_EMBEDDING", request);
         });
         assertEquals("Local Model is currently disabled. To enable it, update the setting \"plugins.ml_commons.local_model.enabled\" to true.",
                 exception.getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, exception.status());
     }
 
     private FakeRestRequest createFakeRestRequestWithValidContent(String path) {

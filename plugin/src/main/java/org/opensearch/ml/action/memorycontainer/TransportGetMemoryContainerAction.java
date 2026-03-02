@@ -117,7 +117,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
                 .whenComplete((r, throwable) -> handleResponse(r, throwable, memoryContainerId, tenantId, user, wrappedListener));
         } catch (Exception e) {
             log.error("Failed to get ML memory container {}", memoryContainerId, e);
-            actionListener.onFailure(e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -148,7 +148,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
             wrappedListener.onFailure(new OpenSearchStatusException("Failed to find memory container index", RestStatus.NOT_FOUND));
         } else {
             log.error("Failed to get ML memory container {}", memoryContainerId, cause);
-            wrappedListener.onFailure(cause);
+            wrappedListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 

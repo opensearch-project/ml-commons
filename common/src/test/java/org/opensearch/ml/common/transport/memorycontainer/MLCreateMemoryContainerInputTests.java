@@ -11,9 +11,13 @@ import static org.junit.Assert.assertNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -399,5 +403,186 @@ public class MLCreateMemoryContainerInputTests {
 
     private void assertFalse(boolean condition) {
         org.junit.Assert.assertFalse(condition);
+    }
+
+    // Backend Roles Validation Tests
+
+    @Test
+    public void testValidateBackendRoles_ValidRoles() {
+        // Test various valid backend roles
+        List<String> validRoles = Arrays
+            .asList(
+                "admin",
+                "user123",
+                "team:developers",
+                "role+test",
+                "email@domain.com",
+                "path/to/resource",
+                "key=value",
+                "role-name_test",
+                "config.property",
+                "complex:role+name@test.com/path_to-resource=value"
+            );
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(validRoles).build();
+
+        assertNotNull(input);
+        assertEquals(validRoles, input.getBackendRoles());
+    }
+
+    @Test
+    public void testValidateBackendRoles_UnicodeCharacters() {
+        // Test Unicode alphanumeric characters
+        List<String> unicodeRoles = Arrays.asList("用户角色", "роль", "角色123");
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-container")
+            .backendRoles(unicodeRoles)
+            .build();
+
+        assertNotNull(input);
+        assertEquals(unicodeRoles, input.getBackendRoles());
+    }
+
+    @Test
+    public void testValidateBackendRoles_NullList() {
+        // Null list should be allowed
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(null).build();
+
+        assertNotNull(input);
+        assertNull(input.getBackendRoles());
+    }
+
+    @Test
+    public void testValidateBackendRoles_EmptyList() {
+        // Empty list should be allowed
+        List<String> emptyList = Collections.emptyList();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(emptyList).build();
+
+        assertNotNull(input);
+        assertEquals(emptyList, input.getBackendRoles());
+    }
+
+    @Test
+    public void testValidateBackendRoles_Exactly128Characters() {
+        // Edge case: exactly 128 characters should be valid
+        String exactly128 = "a".repeat(128);
+        List<String> roles = Arrays.asList(exactly128);
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+
+        assertNotNull(input);
+        assertEquals(roles, input.getBackendRoles());
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_TooLong() {
+        // 129 characters - should fail
+        String tooLong = "a".repeat(129);
+        List<String> roles = Arrays.asList(tooLong);
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithSpaces() {
+        // Spaces are not allowed
+        List<String> roles = Arrays.asList("role with spaces");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithTabs() {
+        // Tabs are not allowed
+        List<String> roles = Arrays.asList("role\twith\ttabs");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithSemicolon() {
+        // Semicolon is not allowed
+        List<String> roles = Arrays.asList("role;semicolon");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithPipe() {
+        // Pipe is not allowed
+        List<String> roles = Arrays.asList("role|pipe");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithBackslash() {
+        // Backslash is not allowed
+        List<String> roles = Arrays.asList("role\\backslash");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithHash() {
+        // Hash is not allowed
+        List<String> roles = Arrays.asList("role#hash");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_EmptyString() {
+        // Empty string should be rejected
+        List<String> roles = Arrays.asList("");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_BlankString() {
+        // Blank string (only whitespace) should be rejected
+        List<String> roles = Arrays.asList("   ");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_NullElement() {
+        // Null element in list should be rejected
+        List<String> roles = Arrays.asList("valid-role", null, "another-role");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithAsterisk() {
+        // Asterisk is not allowed
+        List<String> roles = Arrays.asList("role*wildcard");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_WithParentheses() {
+        // Parentheses are not allowed
+        List<String> roles = Arrays.asList("role(parens)");
+
+        MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(roles).build();
+    }
+
+    @Test
+    public void testValidateBackendRoles_MixedValidRoles() {
+        // Test combination of different valid patterns
+        List<String> mixedRoles = Arrays
+            .asList("admin", "user:123", "team+dev", "email@test.com", "path/to/role", "key=val", "name-test_role", "config.yml");
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").backendRoles(mixedRoles).build();
+
+        assertNotNull(input);
+        assertEquals(mixedRoles, input.getBackendRoles());
     }
 }

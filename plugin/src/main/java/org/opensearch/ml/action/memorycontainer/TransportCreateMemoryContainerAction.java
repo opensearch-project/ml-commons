@@ -116,9 +116,12 @@ public class TransportCreateMemoryContainerAction extends
 
                 } catch (Exception e) {
                     log.error("Failed to create memory container", e);
-                    listener.onFailure(e);
+                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 }
-            }, listener::onFailure);
+            }, e -> {
+                log.error("Failed to initialize memory container index", e);
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            });
 
             // Initialize memory container index if it doesn't exist
             mlIndicesHandler.initMemoryContainerIndex(indexCheckListener);
@@ -257,7 +260,7 @@ public class TransportCreateMemoryContainerAction extends
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         log.error("Failed to index memory container", cause);
-                        listener.onFailure(cause);
+                        listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                     } else {
                         try {
                             IndexResponse indexResponse = r.indexResponse();
@@ -272,16 +275,18 @@ public class TransportCreateMemoryContainerAction extends
                                         "Failed to create memory container - unexpected index response result: {}",
                                         indexResponse.getResult()
                                     );
-                                listener.onFailure(new RuntimeException("Failed to create memory container"));
+                                listener
+                                    .onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                             }
                         } catch (Exception e) {
-                            listener.onFailure(e);
+                            log.error("Failed to process index response", e);
+                            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                         }
                     }
                 });
         } catch (Exception e) {
             log.error("Failed to save memory container", e);
-            listener.onFailure(e);
+            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 

@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_SESSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INDEX_PREFIX_INVALID_CHARACTERS_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INDEX_SETTINGS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_ID_FIELD;
@@ -36,6 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.opensearch.OpenSearchParseException;
+import org.opensearch.cluster.metadata.MetadataCreateIndexService;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -78,7 +81,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     @Builder.Default
     private boolean disableHistory = false;
     @Builder.Default
-    private boolean disableSession = true;
+    private boolean disableSession = false;
     @Builder.Default
     private boolean useSystemIndex = true;
     private String tenantId;
@@ -133,6 +136,14 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 ? DEFAULT_MEMORY_INDEX_PREFIX
                 : UUID.randomUUID().toString().replace("-", "").substring(0, 8).toLowerCase();
         }
+        if (indexPrefix.indexOf('\r') >= 0 || indexPrefix.indexOf('\n') >= 0 || indexPrefix.chars().anyMatch(ch -> ch < 32)) {
+            throw new OpenSearchParseException(INDEX_PREFIX_INVALID_CHARACTERS_ERROR);
+        }
+        MetadataCreateIndexService
+            .validateIndexOrAliasName(
+                indexPrefix,
+                (s1, s2) -> new OpenSearchParseException("missing or invalid index prefix [" + s1 + "] " + s2)
+            );
         return indexPrefix;
     }
 
@@ -254,7 +265,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Map<String, Map<String, Object>> indexSettings = new HashMap<>();
         Map<String, Object> parameters = new HashMap<>();
         boolean disableHistory = false;
-        boolean disableSession = true;
+        boolean disableSession = false;
         boolean useSystemIndex = true;
         String tenantId = null;
 
@@ -615,11 +626,6 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                         if (modelId instanceof String) {
                             return (String) modelId;
                         }
-                        log
-                            .warn(
-                                "Pipeline text_embedding model_id is not a String: {}",
-                                modelId != null ? modelId.getClass().getSimpleName() : "null"
-                            );
                     }
                 }
                 // Check sparse_encoding processor
