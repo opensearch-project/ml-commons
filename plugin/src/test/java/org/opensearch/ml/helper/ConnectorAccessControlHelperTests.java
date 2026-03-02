@@ -6,8 +6,10 @@
 package org.opensearch.ml.helper;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,7 +20,9 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.Before;
@@ -36,6 +40,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -47,6 +52,7 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -386,6 +392,60 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void test_validateConnectorAccess_multiTenancyEnabled_adminDoesNotBypassConnectorFetch() {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|role-1|all_access");
+        HttpConnector httpConnector = createRestrictedConnectorWithTenant("tenant-a", ImmutableList.of("role-3"));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener.onResponse(httpConnector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+
+        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", "tenant-a", mlFeatureEnabledSetting, actionListener);
+
+        verify(connectorAccessControlHelper, times(1)).getConnector(any(), any(), any(), any(), any(), any());
+        verify(actionListener).onResponse(true);
+    }
+
+    @Test
+    public void test_validateConnectorAccess_multiTenancyEnabled_tenantMismatch_returnsForbiddenOnce() {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
+        HttpConnector httpConnector = createRestrictedConnectorWithTenant("tenant-b", ImmutableList.of("role-1"));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener.onResponse(httpConnector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+
+        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", "tenant-a", mlFeatureEnabledSetting, actionListener);
+
+        verify(actionListener, times(1)).onFailure(any(OpenSearchStatusException.class));
+        verify(actionListener, never()).onResponse(anyBoolean());
+    }
+
+    @Test
+    public void test_validateConnectorAccess_syncRestrictedConnector_userWithoutRole_returnsFalse() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
+        HttpConnector httpConnector = createRestrictedConnectorWithTenant(null, ImmutableList.of("role-3"));
+
+        boolean hasAccess = connectorAccessControlHelper.validateConnectorAccess(client, httpConnector);
+
+        assertFalse(hasAccess);
+    }
+
+    @Test
+    public void test_validateConnectorAccess_syncRestrictedConnector_admin_returnsTrue() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|role-1|all_access");
+        HttpConnector httpConnector = createRestrictedConnectorWithTenant(null, ImmutableList.of("role-3"));
+
+        boolean hasAccess = connectorAccessControlHelper.validateConnectorAccess(client, httpConnector);
+
+        assertTrue(hasAccess);
+    }
+
+    @Test
     public void test_addUserBackendRolesFilter_nullQuery() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         SearchSourceBuilder result = connectorAccessControlHelper.addUserBackendRolesFilter(user, searchSourceBuilder);
@@ -406,6 +466,40 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         searchSourceBuilder.query(new MatchAllQueryBuilder());
         SearchSourceBuilder result = connectorAccessControlHelper.addUserBackendRolesFilter(user, searchSourceBuilder);
         assertEquals("bool", result.query().getName());
+    }
+
+    @Test
+    public void test_addUserBackendRolesFilter_nullQuery_hasExpectedShouldClauses() {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchSourceBuilder result = connectorAccessControlHelper.addUserBackendRolesFilter(user, searchSourceBuilder);
+
+        String queryString = result.query().toString();
+        assertTrue(queryString.contains("public"));
+        assertTrue(queryString.contains("backend_roles.keyword"));
+        assertTrue(queryString.contains("owner.name.keyword"));
+        assertTrue(queryString.contains("private"));
+    }
+
+    @Test
+    public void test_addUserBackendRolesFilter_existingBoolQuery_addsFilterClause() {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(new BoolQueryBuilder().must(new MatchAllQueryBuilder()));
+        SearchSourceBuilder result = connectorAccessControlHelper.addUserBackendRolesFilter(user, searchSourceBuilder);
+
+        BoolQueryBuilder query = (BoolQueryBuilder) result.query();
+        assertEquals(1, query.must().size());
+        assertEquals(1, query.filter().size());
+    }
+
+    @Test
+    public void test_addUserBackendRolesFilter_nonBoolQuery_rewritesWithMustAndFilter() {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(new MatchAllQueryBuilder());
+        SearchSourceBuilder result = connectorAccessControlHelper.addUserBackendRolesFilter(user, searchSourceBuilder);
+
+        BoolQueryBuilder query = (BoolQueryBuilder) result.query();
+        assertEquals(1, query.must().size());
+        assertEquals(1, query.filter().size());
     }
 
     @Test
@@ -435,6 +529,32 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         Connector capturedConnector = argumentCaptor.getValue();
         assertNotNull(capturedConnector);
         assertEquals("test_connector", capturedConnector.getName());
+    }
+
+    @Test
+    public void testGetConnectorHappyCase_removesCredentialFromResponse() throws IOException, InterruptedException {
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
+        GetResponse getResponse = prepareConnectorWithCredential();
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        connectorAccessControlHelper
+            .getConnector(
+                sdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                getRequest,
+                "connectorId",
+                getConnectorActionListener
+            );
+
+        ArgumentCaptor<Connector> argumentCaptor = ArgumentCaptor.forClass(Connector.class);
+        verify(getConnectorActionListener).onResponse(argumentCaptor.capture());
+        assertNull(((AbstractConnector) argumentCaptor.getValue()).getCredential());
     }
 
     @Test
@@ -488,6 +608,95 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         assertEquals(RestStatus.NOT_FOUND, argumentCaptor.getValue().status());
     }
 
+    @Test
+    public void testGetConnectorNotFoundWhenResponseIsNull() throws IOException, InterruptedException {
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(client).get(any(), any());
+
+        connectorAccessControlHelper
+            .getConnector(
+                sdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                getRequest,
+                "connectorId",
+                getConnectorActionListener
+            );
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(getConnectorActionListener).onFailure(argumentCaptor.capture());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, argumentCaptor.getValue().status());
+    }
+
+    @Test
+    public void testGetConnectorParseExceptionForMalformedConnectorPayload() throws IOException, InterruptedException {
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
+        GetResponse malformedResponse = createMalformedGetResponse();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(malformedResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        connectorAccessControlHelper
+            .getConnector(
+                sdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                getRequest,
+                "connectorId",
+                getConnectorActionListener
+            );
+
+        verify(getConnectorActionListener).onFailure(any(Exception.class));
+        verify(getConnectorActionListener, never()).onResponse(any());
+    }
+
+    @Test
+    public void test_skipConnectorAccessControl_normalUserAndAccessEnabled_return_false() {
+        User normalUser = User.parse(USER_STRING);
+
+        boolean skip = connectorAccessControlHelper.skipConnectorAccessControl(normalUser);
+
+        assertFalse(skip);
+    }
+
+    @Test
+    public void test_accessControlNotEnabled_normalUserAndAccessEnabled_return_false() {
+        User normalUser = User.parse(USER_STRING);
+
+        boolean notEnabled = connectorAccessControlHelper.accessControlNotEnabled(normalUser);
+
+        assertFalse(notEnabled);
+    }
+
+    @Test
+    public void test_isAdmin_nullUser_returnsFalse() {
+        assertFalse(ConnectorAccessControlHelper.isAdmin(null));
+    }
+
+    @Test
+    public void test_isAdmin_emptyRoles_returnsFalse() {
+        User emptyRolesUser = User.parse("userA|role-1|");
+        assertFalse(ConnectorAccessControlHelper.isAdmin(emptyRolesUser));
+    }
+
+    @Test
+    public void test_isAdmin_nonAdminRole_returnsFalse() {
+        User nonAdmin = User.parse(USER_STRING);
+        assertFalse(ConnectorAccessControlHelper.isAdmin(nonAdmin));
+    }
+
+    @Test
+    public void test_isAdmin_allAccessRole_returnsTrue() {
+        User admin = User.parse("admin|role-1|all_access");
+        assertTrue(ConnectorAccessControlHelper.isAdmin(admin));
+    }
+
     private GetResponse createGetResponse(List<String> backendRoles) {
         HttpConnector httpConnector = HttpConnector
             .builder()
@@ -516,5 +725,34 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         return getResponse;
+    }
+
+    public GetResponse prepareConnectorWithCredential() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("api_key", "secret");
+        HttpConnector httpConnector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+        XContentBuilder content = httpConnector.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        return new GetResponse(getResult);
+    }
+
+    private GetResponse createMalformedGetResponse() {
+        BytesReference bytesReference = new BytesArray("[]");
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        return new GetResponse(getResult);
+    }
+
+    private HttpConnector createRestrictedConnectorWithTenant(String tenantId, List<String> backendRoles) {
+        return HttpConnector
+            .builder()
+            .name("testConnector")
+            .protocol(ConnectorProtocols.HTTP)
+            .owner(User.parse(USER_STRING))
+            .description("This is test connector")
+            .backendRoles(backendRoles)
+            .tenantId(tenantId)
+            .accessMode(AccessMode.RESTRICTED)
+            .build();
     }
 }
