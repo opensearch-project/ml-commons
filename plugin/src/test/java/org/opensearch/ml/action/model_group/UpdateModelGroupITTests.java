@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.model_group;
 
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
@@ -21,20 +20,16 @@ import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
 
+@OpenSearchIntegTestCase.SuiteScopeTestCase
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private String modelGroupId;
+    private static String modelGroupId;
 
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
-        registerModelGroup();
-    }
-
-    private void registerModelGroup() {
+    @Override
+    protected void setupSuiteScopeCluster() throws Exception {
         MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
             "mock_model_group_name",
             "mock_model_group_desc",
@@ -45,7 +40,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         MLRegisterModelGroupResponse response = client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
-        this.modelGroupId = response.getModelGroupId();
+        modelGroupId = response.getModelGroupId();
     }
 
     public void test_update_public_model_group() {

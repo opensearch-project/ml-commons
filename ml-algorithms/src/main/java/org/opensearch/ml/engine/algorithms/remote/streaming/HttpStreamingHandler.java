@@ -129,6 +129,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         private String accumulatedToolCallId = null;
         private String accumulatedToolName = null;
         private String accumulatedArguments = "";
+        private StringBuilder accumulatedContent = new StringBuilder();
 
         public HTTPEventSourceListener(
             StreamPredictActionListener<MLTaskResponse, ?> streamActionListener,
@@ -233,23 +234,28 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         private void handleDoneEvent() {
             if (!agentExecutionInProgress) {
-                String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
-                boolean textMessageStarted = (isAGUIAgent && parameters != null)
-                    && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+                if (isAGUIAgent && !isStreamClosed.get()) {
+                    String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+                    boolean textMessageStarted = (isAGUIAgent && parameters != null)
+                        && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
 
-                if (isAGUIAgent && textMessageStarted) {
-                    // End any remaining text message
-                    parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
-                    BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
-                    sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
-                    log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {} at stream end", messageId);
+                    if (textMessageStarted) {
+                        // End any remaining text message
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {} at stream end", messageId);
+                    }
 
                     // Send RUN_FINISHED event
                     String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
                     String runId = parameters.get(AGUI_PARAM_RUN_ID);
                     BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                    sendAGUIEvent(runFinishedEvent, true, streamActionListener);
+                    sendAGUIEvent(runFinishedEvent, false, streamActionListener);
                     log.debug("AG-UI: Sent RUN_FINISHED event at [DONE] - threadId={}, runId={}", threadId, runId);
+
+                    // Trigger agentListener callback to save assistant structured message
+                    streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
                 }
 
                 sendCompletionResponse(isStreamClosed, streamActionListener);
@@ -265,19 +271,24 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             if ("stop".equals(finishReason)) {
                 agentExecutionInProgress = false;
 
-                if (isAGUIAgent && textMessageStarted) {
-                    // End the current text message
-                    parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
-                    BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
-                    sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
-                    log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+                if (isAGUIAgent) {
+                    if (textMessageStarted) {
+                        // End the current text message
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+                    }
 
                     // Send RUN_FINISHED event
                     String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
                     String runId = parameters.get(AGUI_PARAM_RUN_ID);
                     BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                    sendAGUIEvent(runFinishedEvent, true, streamActionListener);
+                    sendAGUIEvent(runFinishedEvent, false, streamActionListener);
                     log.debug("AG-UI: Sent RUN_FINISHED event - threadId={}, runId={}", threadId, runId);
+
+                    // Trigger agentListener callback to save assistant structured message
+                    streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
                 }
 
                 sendCompletionResponse(isStreamClosed, streamActionListener);
@@ -287,6 +298,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             String content = extractPath(dataMap, "$.choices[0].delta.content");
             if (content != null && !content.isEmpty()) {
                 if (isAGUIAgent) {
+                    accumulatedContent.append(content);
+
                     // Start text message if not already started
                     if (!textMessageStarted) {
                         messageId = "msg_" + System.nanoTime();
@@ -365,6 +378,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             accumulatedToolCallId = null;
             accumulatedToolName = null;
             accumulatedArguments = "";
+            accumulatedContent.setLength(0);
             functionCallInProgress = false;
         }
 
@@ -374,11 +388,28 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
             Map<String, Object> function = Map.of("name", accumulatedToolName, "arguments", arguments);
             Map<String, Object> toolCall = Map.of("id", accumulatedToolCallId, "type", "function", "function", function);
-            Map<String, Object> message = Map.of("tool_calls", List.of(toolCall));
+
+            // Include accumulated text content if the LLM sent text before the tool call
+            String content = accumulatedContent.toString();
+            Map<String, Object> message;
+            if (!content.isEmpty()) {
+                message = Map.of("content", content, "tool_calls", List.of(toolCall));
+            } else {
+                message = Map.of("tool_calls", List.of(toolCall));
+            }
+
             Map<String, Object> choice = Map.of("message", message, "finish_reason", "tool_calls");
             Map<String, Object> response = Map.of("choices", List.of(choice));
 
             return StringUtils.toJson(response);
+        }
+
+        private MLTaskResponse createFinalAnswerResponse(String text) {
+            Map<String, Object> message = Map.of("content", text != null ? text : "");
+            Map<String, Object> choice = Map.of("message", message, "finish_reason", "stop");
+            Map<String, Object> response = Map.of("choices", List.of(choice));
+            ModelTensorOutput output = createModelTensorOutput(response);
+            return new MLTaskResponse(output);
         }
 
         private ModelTensorOutput createModelTensorOutput(Map<String, Object> responseData) {

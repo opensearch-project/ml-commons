@@ -208,7 +208,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
 
     private String registerQueryPlanningModel() throws IOException, InterruptedException {
         String openaiModelName = "openai gpt-4o model " + randomAlphaOfLength(5);
-        return registerRemoteModel(openaiConnectorEntity, openaiModelName, true);
+        return registerRemoteModel(openaiConnectorEntity, openaiModelName, false);
     }
 
     private void ingestIrisIndexData() throws IOException {
