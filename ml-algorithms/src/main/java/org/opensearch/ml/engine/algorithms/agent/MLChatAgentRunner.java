@@ -562,7 +562,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         // If it's NOT a backend tool, it must be a frontend tool, so break out of the loop
                         boolean isBackendTool = backendTools != null && backendTools.containsKey(action);
 
-                        log.info("AG-UI: Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
+                        log.info("Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
 
                         if (!isBackendTool) {
                             // For frontend tool use, we close the response stream and wait for frontend tool result
@@ -707,7 +707,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
-                log.error("Failed to run chat agent. agentId={}, tenantId={}", agentId, tenantId, e);
+                log.error("Failed to run chat agent. agentId={}, tenantId={}, statusCode={}", agentId, tenantId, extractStatusCode(e), e);
                 listener.onFailure(e);
             });
             if (nextStepListener != null) {
@@ -1367,7 +1367,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
                         llmSpec.getModelId(),
                         summaryParams.get(AGENT_ID_FIELD),
-                        summaryParams.get(TENANT_ID_FIELD),
+                        tenantId,
                         AgentUtils.extractStatusCode(e),
                         e
                     );

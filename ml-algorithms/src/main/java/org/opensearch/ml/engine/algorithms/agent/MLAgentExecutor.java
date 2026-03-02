@@ -957,9 +957,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 } catch (Exception e) {
                     log
                         .error(
-                            "Failed to run agent. agentId={}, tenantId={}",
+                            "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
                             inputDataSet.getParameters().get(AGENT_ID_FIELD),
                             tenantId,
+                            extractStatusCode(e),
                             e
                         );
                     agentActionListener.onFailure(e);
@@ -1001,7 +1002,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
                 }
             } catch (Exception e) {
-                log.error("Failed to run agent. agentId={}, tenantId={}", inputDataSet.getParameters().get(AGENT_ID_FIELD), tenantId, e);
+                log
+                    .error(
+                        "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
+                        inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                        tenantId,
+                        extractStatusCode(e),
+                        e
+                    );
                 agentActionListener.onFailure(e);
             }
         }
@@ -1074,12 +1082,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             long latencyMs = System.currentTimeMillis() - startTime;
             log
                 .info(
-                    "Async agent execution completed successfully. agentType={}, agentId={}, tenantId={}, taskId={}, latencyMs={}",
+                    "Agent execution completed successfully. agentType={}, agentId={}, tenantId={}, latencyMs={}, taskId={}",
                     agentType,
                     agentId,
                     tenantId,
-                    taskId,
-                    latencyMs
+                    latencyMs,
+                    taskId
                 );
             if (output != null) {
                 processOutput(output, modelTensors);
