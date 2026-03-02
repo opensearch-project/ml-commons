@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -107,9 +108,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             if (version == null) {
                 throw new IllegalArgumentException("Connector version is null");
             }
-            if (protocol == null) {
-                throw new IllegalArgumentException("Connector protocol is null");
-            }
+            validateProtocol(protocol);
             boolean isMcpConnector = (protocol.equals(MCP_SSE) || protocol.equals(MCP_STREAMABLE_HTTP));
             if ((credential == null || credential.isEmpty()) && !isMcpConnector) {
                 throw new IllegalArgumentException("Connector credential is null or empty list");
@@ -185,7 +184,19 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     parameters = getParameterMap(parser.map());
                     break;
                 case CONNECTOR_CREDENTIAL_FIELD:
-                    credential = parser.mapStrings();
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+                    credential = new HashMap<>();
+                    while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                        String key = parser.currentName();
+                        parser.nextToken();
+                        if (parser.currentToken() != XContentParser.Token.VALUE_STRING
+                            && parser.currentToken() != XContentParser.Token.VALUE_NULL) {
+                            throw new IllegalArgumentException(
+                                "Credential values must be strings, found invalid type: " + parser.currentToken()
+                            );
+                        }
+                        credential.put(key, parser.textOrNull());
+                    }
                     break;
                 case CONNECTOR_ACTIONS_FIELD:
                     actions = new ArrayList<>();
@@ -198,7 +209,14 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     backendRoles = new ArrayList<>();
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        backendRoles.add(parser.text());
+                        if (parser.currentToken() != XContentParser.Token.VALUE_STRING
+                            && parser.currentToken() != XContentParser.Token.VALUE_NUMBER
+                            && parser.currentToken() != XContentParser.Token.VALUE_NULL) {
+                            throw new IllegalArgumentException(
+                                "Backend roles must contain only string values, found invalid type: " + parser.currentToken()
+                            );
+                        }
+                        backendRoles.add(parser.textOrNull());
                     }
                     break;
                 case ADD_ALL_BACKEND_ROLES_FIELD:
