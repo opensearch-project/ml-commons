@@ -110,7 +110,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                                 actionListener.onResponse(taskResponse);
                             }, e -> {
                                 connector.removeCredential();
-                                actionListener.onFailure(e); }));
+                                actionListener.onFailure(e);
+                            }));
                     }, e -> {
                         log.error("Failed to decrypt credentials in connector", e);
                         connector.removeCredential();
