@@ -63,7 +63,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
     private static final int TERM_SIZE = 5;
     private static final List<String> PREFIXES = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
-    private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
+    private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short");
     private static final Double HIGH_PRIORITY_COLUMN_THRESHOLD = 0.001;
     private static final int SAMPLE_NUMBER = 100000;
     private static final String PARSE_COLUMN_NAME_PATTERN = "<column_name>(.*?)</column_name>";
