@@ -20,13 +20,13 @@ import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -343,9 +343,9 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     @Test
     public void test_validateConnectorAccess_old_getConnectorThrows_return_failure() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
-        doAnswer(invocation -> {
-            throw new RuntimeException("get connector failed");
-        }).when(connectorAccessControlHelper).getConnector(any(Client.class), anyString(), any());
+        doAnswer(invocation -> { throw new RuntimeException("get connector failed"); })
+            .when(connectorAccessControlHelper)
+            .getConnector(any(Client.class), anyString(), any());
 
         connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
 
@@ -358,9 +358,9 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     @Test
     public void test_validateConnectorAccess_sdk_getConnectorThrows_return_failure() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
-        doAnswer(invocation -> {
-            throw new RuntimeException("get connector failed");
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        doAnswer(invocation -> { throw new RuntimeException("get connector failed"); })
+            .when(connectorAccessControlHelper)
+            .getConnector(any(), any(), any(), any(), any(), any());
 
         connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
 
@@ -378,7 +378,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
         }).when(client).get(any(), any());
-        when(client.threadPool()).thenReturn(threadPool);  
+        when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
