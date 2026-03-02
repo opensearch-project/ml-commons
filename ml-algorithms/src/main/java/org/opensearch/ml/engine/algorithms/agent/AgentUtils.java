@@ -65,6 +65,7 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -1419,5 +1420,20 @@ public class AgentUtils {
         Collections.reverse(messagePairs);
 
         return messagePairs;
+    }
+
+    /**
+     * Extracts HTTP status code from exception if available.
+     * Returns the status code as a string if the exception is an OpenSearchException,
+     * otherwise returns "unknown".
+     *
+     * @param e the exception to extract status code from
+     * @return status code as string or "unknown"
+     */
+    public static String extractStatusCode(Exception e) {
+        if (e instanceof OpenSearchException) {
+            return String.valueOf(((OpenSearchException) e).status().getStatus());
+        }
+        return "unknown";
     }
 }

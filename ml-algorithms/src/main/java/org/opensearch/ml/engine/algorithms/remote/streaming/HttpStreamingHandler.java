@@ -304,8 +304,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 // Log time to first token
                 if (!firstTokenReceived.get()) {
                     long timeToFirstToken = System.currentTimeMillis() - streamStartTime;
-                    String modelId = connector != null ? connector.getName() : "unknown";
-                    String tenantId = connector != null && connector.getTenantId() != null ? connector.getTenantId() : "";
+                    String modelId = parameters != null ? parameters.get("model") : null;
+                    String tenantId = connector != null ? connector.getTenantId() : null;
                     log.info("First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}", modelId, tenantId, timeToFirstToken);
                     firstTokenReceived.set(true);
                 }

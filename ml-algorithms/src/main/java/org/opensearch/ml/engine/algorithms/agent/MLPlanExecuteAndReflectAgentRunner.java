@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -22,6 +23,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIG
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatusCode;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
@@ -50,7 +52,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.OpenSearchException;
 import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -358,9 +359,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
             }, e -> {
-                String agentId = allParams.getOrDefault("agent_id", mlAgent.getName() != null ? mlAgent.getName() : "unknown");
-                String tenantIdLog = allParams.getOrDefault(TENANT_ID_FIELD, "");
-                log.error("Failed to get chat history. agentId={}, tenantId={}", agentId, tenantIdLog, e);
+                log.error("Failed to get chat history. agentId={}, tenantId={}", allParams.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
@@ -624,24 +623,19 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     );
                 }, e -> {
                     String agentId = allParams.getOrDefault("agent_id", "unknown");
-                    String tenantIdLog = allParams.getOrDefault(TENANT_ID_FIELD, "");
+                    String tenantIdLog = allParams.get(TENANT_ID_FIELD);
                     log.error("Failed to execute ReAct agent. agentId={}, tenantId={}", agentId, tenantIdLog, e);
                     finalListener.onFailure(e);
                 }));
             }
         }, e -> {
-            String agentId = allParams.getOrDefault("agent_id", "unknown");
-            String tenantIdLog = allParams.getOrDefault(TENANT_ID_FIELD, "");
-            String statusCode = (e instanceof OpenSearchException)
-                ? String.valueOf(((OpenSearchException) e).status().getStatus())
-                : "unknown";
             log
                 .error(
                     "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
                     llm.getModelId(),
-                    agentId,
-                    tenantIdLog,
-                    statusCode,
+                    allParams.get(AGENT_ID_FIELD),
+                    allParams.get(TENANT_ID_FIELD),
+                    extractStatusCode(e),
                     e
                 );
             finalListener.onFailure(e);
@@ -953,18 +947,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 }
                 listener.onResponse(summary);
             }, e -> {
-                String agentId = summaryParams.getOrDefault("agent_id", "unknown");
-                String tenantIdLog = summaryParams.getOrDefault(TENANT_ID_FIELD, "");
-                String statusCode = (e instanceof OpenSearchException)
-                    ? String.valueOf(((OpenSearchException) e).status().getStatus())
-                    : "unknown";
                 log
                     .error(
                         "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
                         llmSpec.getModelId(),
-                        agentId,
-                        tenantIdLog,
-                        statusCode,
+                        summaryParams.get(AGENT_ID_FIELD),
+                        summaryParams.get(TENANT_ID_FIELD),
+                        extractStatusCode(e),
                         e
                     );
                 listener.onFailure(e);
