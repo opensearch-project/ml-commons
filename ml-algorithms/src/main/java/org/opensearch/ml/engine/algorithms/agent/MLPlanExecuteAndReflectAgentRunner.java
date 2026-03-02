@@ -32,6 +32,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MAX_IT
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_REFLECT_PROMPT;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_REFLECT_PROMPT_TEMPLATE;
@@ -39,7 +40,6 @@ import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.EXECUTOR_
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getCommonInstructionWithCustomInstruction;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getPlanExecuteReflectResponseFormat;
 
 import java.util.ArrayList;

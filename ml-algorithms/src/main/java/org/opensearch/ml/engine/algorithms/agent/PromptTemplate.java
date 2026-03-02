@@ -129,7 +129,7 @@ public class PromptTemplate {
     public static String getCommonInstructionWithCustomInstruction(String customInstruction) {
         return """
             # Instructions
-            
+
             ## Core Planning Rules
             - Break the objective into an ordered list of atomic, self-contained Steps that, if executed, will lead to the final result or complete the objective
             - Each Step must state what to do, where, and which tool/parameters would be used. You do not execute tools, only reference them for planning
@@ -141,16 +141,15 @@ public class PromptTemplate {
             - Never make assumptions or rely on implicit knowledge
             - Respond only in JSON format
             """
-            + customInstruction
-            + """
-            ## Step Examples
-            **Good example:** "Use Tool to sample documents from index: 'my-index'"
-            
-            **Bad example:** "Use Tool to sample documents from each index"
-            
-            **Bad example:** "Use Tool to sample documents from all indices"
-            
-            """;
+            + customInstruction + """
+                ## Step Examples
+                **Good example:** "Use Tool to sample documents from index: 'my-index'"
+
+                **Bad example:** "Use Tool to sample documents from each index"
+
+                **Bad example:** "Use Tool to sample documents from all indices"
+
+                """;
     }
 
     public static final String EXECUTOR_RESPONSIBILITY =
