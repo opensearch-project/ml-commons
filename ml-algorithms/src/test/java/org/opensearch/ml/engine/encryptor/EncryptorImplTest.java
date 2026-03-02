@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -396,6 +397,67 @@ public class EncryptorImplTest {
         String encrypted = MLTestHelper.encryptCredentials(List.of("test"), null, encryptor);
         String decrypted = MLTestHelper.decryptCredentials(List.of(encrypted), null, encryptor);
         Assert.assertEquals("test", decrypted);
+        Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+    }
+
+    @Test
+    public void encryptAndDecrypt_MultipleTexts() throws IOException, InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        GetResponse response = prepareMLConfigResponse(null);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+
+        List<String> plainTexts = List.of("test1", "test2", "test3");
+        CountDownLatch encryptLatch = new CountDownLatch(1);
+        AtomicReference<List<String>> encryptedRef = new AtomicReference<>();
+        AtomicReference<Exception> encryptError = new AtomicReference<>();
+        encryptor.encrypt(plainTexts, null, ActionListener.wrap(r -> {
+            encryptedRef.set(r);
+            encryptLatch.countDown();
+        }, e -> {
+            encryptError.set((Exception) e);
+            encryptLatch.countDown();
+        }));
+        Assert.assertTrue("Encrypt did not complete in time", encryptLatch.await(LATCH_WAIT_TIME, SECONDS));
+        if (encryptError.get() != null) {
+            throw new AssertionError("Encrypt failed", encryptError.get());
+        }
+        List<String> encrypted = encryptedRef.get();
+        Assert.assertNotNull(encrypted);
+        Assert.assertEquals(3, encrypted.size());
+
+        CountDownLatch decryptLatch = new CountDownLatch(1);
+        AtomicReference<List<String>> decryptedRef = new AtomicReference<>();
+        AtomicReference<Exception> decryptError = new AtomicReference<>();
+        encryptor.decrypt(encrypted, null, ActionListener.wrap(r -> {
+            decryptedRef.set(r);
+            decryptLatch.countDown();
+        }, e -> {
+            decryptError.set((Exception) e);
+            decryptLatch.countDown();
+        }));
+        Assert.assertTrue("Decrypt did not complete in time", decryptLatch.await(LATCH_WAIT_TIME, SECONDS));
+        if (decryptError.get() != null) {
+            throw new AssertionError("Decrypt failed", decryptError.get());
+        }
+        List<String> decrypted = decryptedRef.get();
+        Assert.assertNotNull(decrypted);
+        Assert.assertEquals(3, decrypted.size());
+        Assert.assertEquals("test1", decrypted.get(0));
+        Assert.assertEquals("test2", decrypted.get(1));
+        Assert.assertEquals("test3", decrypted.get(2));
         Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
     }
 
