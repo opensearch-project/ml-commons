@@ -2328,6 +2328,8 @@ public class AgentUtilsTest extends MLStaticMockBase {
         assertEquals(1, tensors.size());
     }
 
+    // ===== addTokenUsageTensor sub-agent tests =====
+
     @Test
     public void testAddTokenUsageTensor_subAgentAddsTensorButSkipsLogging() {
         List<ModelTensors> tensors = new ArrayList<>();
@@ -2347,5 +2349,104 @@ public class AgentUtilsTest extends MLStaticMockBase {
         ModelTensor tensor = tensors.get(0).getMlModelTensors().get(0);
         assertEquals(AgentTokenTracker.TOKEN_USAGE, tensor.getName());
         assertNotNull(tensor.getDataAsMap());
+    }
+
+    // ===== getLongValue tests =====
+
+    @Test
+    public void testGetLongValue_fromNumber() {
+        Map<String, Object> map = Map.of("tokens", 42L);
+        assertEquals(Long.valueOf(42L), AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_fromInteger() {
+        Map<String, Object> map = Map.of("tokens", 42);
+        assertEquals(Long.valueOf(42L), AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_fromString() {
+        Map<String, Object> map = Map.of("tokens", "100");
+        assertEquals(Long.valueOf(100L), AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_fromInvalidString() {
+        Map<String, Object> map = Map.of("tokens", "not_a_number");
+        assertNull(AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_missingKey() {
+        Map<String, Object> map = Map.of("other", 42);
+        assertNull(AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_nullValue() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("tokens", null);
+        assertNull(AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    // ===== resolveModelUrl tests =====
+
+    @Test
+    public void testResolveModelUrl_withInlineConnector() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        Connector connector = mock(Connector.class);
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(connector.getParameters()).thenReturn(Map.of());
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn("https://bedrock.amazonaws.com/model/claude/converse");
+
+        AtomicReference<String> result = new AtomicReference<>();
+        AgentUtils.resolveModelUrl(mlModel, "tenant-1", null, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError("Should not fail", e);
+        }));
+
+        assertEquals("https://bedrock.amazonaws.com/model/claude/converse", result.get());
+    }
+
+    @Test
+    public void testResolveModelUrl_noConnectorOrConnectorId() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mlModel.getConnector()).thenReturn(null);
+        when(mlModel.getConnectorId()).thenReturn(null);
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .resolveModelUrl(
+                mlModel,
+                "tenant-1",
+                null,
+                null,
+                ActionListener.wrap(url -> { throw new AssertionError("Should not succeed"); }, error::set)
+            );
+
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalStateException);
+    }
+
+    @Test
+    public void testResolveModelUrl_inlineConnectorNullEndpoint() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        Connector connector = mock(Connector.class);
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(connector.getParameters()).thenReturn(null);
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(null);
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .resolveModelUrl(
+                mlModel,
+                "tenant-1",
+                null,
+                null,
+                ActionListener.wrap(url -> { throw new AssertionError("Should not succeed"); }, error::set)
+            );
+
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalStateException);
     }
 }

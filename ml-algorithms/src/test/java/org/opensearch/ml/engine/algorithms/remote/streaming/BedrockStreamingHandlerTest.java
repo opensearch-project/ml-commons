@@ -288,4 +288,141 @@ public class BedrockStreamingHandlerTest {
         List<Map<String, Object>> content = (List<Map<String, Object>>) message.get("content");
         assertEquals("", content.get(0).get("text"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCreateFinalAnswerResponse_WithTokenUsage() {
+        Map<String, Object> tokenUsage = new HashMap<>();
+        tokenUsage.put("inputTokens", 100);
+        tokenUsage.put("outputTokens", 50);
+        tokenUsage.put("totalTokens", 150);
+
+        MLTaskResponse response = handler.createFinalAnswerResponse("answer", tokenUsage);
+
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        Map<String, ?> dataMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        assertEquals("end_turn", dataMap.get("stopReason"));
+
+        Map<String, Object> usage = (Map<String, Object>) dataMap.get("usage");
+        assertNotNull(usage);
+        assertEquals(100, usage.get("inputTokens"));
+        assertEquals(50, usage.get("outputTokens"));
+        assertEquals(150, usage.get("totalTokens"));
+    }
+
+    // ==================== Tests for buildConverseStreamRequest with messages ====================
+
+    @Test
+    public void testBuildConverseStreamRequest_withBasicTextMessages() throws Exception {
+        String payloadJson = """
+            {
+              "messages": [
+                {"role": "user", "content": [{"text": "Hello"}]},
+                {"role": "assistant", "content": [{"text": "Hi there"}]},
+                {"role": "user", "content": [{"text": "How are you?"  }]}
+              ]
+            }
+            """;
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("model", "anthropic.claude-v2");
+
+        ConverseStreamRequest request = handler.buildConverseStreamRequest(payloadJson, parameters);
+
+        assertNotNull(request);
+        assertEquals(3, request.messages().size());
+        assertEquals("user", request.messages().get(0).role().toString());
+        assertEquals("Hello", request.messages().get(0).content().get(0).text());
+        assertEquals("assistant", request.messages().get(1).role().toString());
+    }
+
+    @Test
+    public void testBuildConverseStreamRequest_withSystemMessages() throws Exception {
+        String payloadJson = """
+            {
+              "system": [{"text": "You are a helpful assistant"}],
+              "messages": [
+                {"role": "user", "content": [{"text": "Hello"}]}
+              ]
+            }
+            """;
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("model", "anthropic.claude-v2");
+
+        ConverseStreamRequest request = handler.buildConverseStreamRequest(payloadJson, parameters);
+
+        assertNotNull(request);
+        assertNotNull(request.system());
+        assertEquals(1, request.system().size());
+        assertEquals("You are a helpful assistant", request.system().get(0).text());
+    }
+
+    @Test
+    public void testBuildConverseStreamRequest_withToolConfig() throws Exception {
+        String payloadJson = """
+            {
+              "messages": [
+                {"role": "user", "content": [{"text": "What is the weather?"}]}
+              ],
+              "toolConfig": {
+                "tools": [
+                  {
+                    "toolSpec": {
+                      "name": "get_weather",
+                      "description": "Gets the weather",
+                      "inputSchema": {
+                        "json": {
+                          "type": "object",
+                          "properties": {
+                            "location": {"type": "string"}
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("model", "anthropic.claude-v2");
+
+        ConverseStreamRequest request = handler.buildConverseStreamRequest(payloadJson, parameters);
+
+        assertNotNull(request);
+        assertNotNull(request.toolConfig());
+        assertEquals(1, request.toolConfig().tools().size());
+        assertEquals("get_weather", request.toolConfig().tools().get(0).toolSpec().name());
+        assertEquals("Gets the weather", request.toolConfig().tools().get(0).toolSpec().description());
+    }
+
+    @Test
+    public void testBuildConverseStreamRequest_withToolResultContent() throws Exception {
+        String payloadJson = """
+            {
+              "messages": [
+                {"role": "user", "content": [{"text": "What is the weather?"}]},
+                {"role": "assistant", "content": [
+                  {"toolUse": {"toolUseId": "tool_1", "name": "get_weather", "input": {"location": "Seattle"}}}
+                ]},
+                {"role": "user", "content": [
+                  {"toolResult": {"toolUseId": "tool_1", "content": [{"text": "72F and sunny"}]}}
+                ]}
+              ]
+            }
+            """;
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("model", "anthropic.claude-v2");
+
+        ConverseStreamRequest request = handler.buildConverseStreamRequest(payloadJson, parameters);
+
+        assertNotNull(request);
+        assertEquals(3, request.messages().size());
+        // Third message should have a tool result content block
+        assertNotNull(request.messages().get(2).content().get(0).toolResult());
+        assertEquals("tool_1", request.messages().get(2).content().get(0).toolResult().toolUseId());
+    }
 }

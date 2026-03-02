@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.function_calling;
 
-import static org.junit.Assert.*;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
@@ -21,6 +20,7 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -121,5 +121,59 @@ public class OpenaiV1ChatCompletionsFunctionCallingTests {
 
         // Verify tool_call_ids are unique
         Assert.assertNotEquals("tool_call_id values should be unique", message1.getToolCallId(), message2.getToolCallId());
+    }
+
+    @Test
+    public void extractTokenUsage_allFields() {
+        Map<String, Object> usageMap = new HashMap<>();
+        usageMap.put("prompt_tokens", 100);
+        usageMap.put("completion_tokens", 50);
+        usageMap.put("total_tokens", 150);
+        usageMap.put("prompt_tokens_details", Map.of("cached_tokens", 10));
+        usageMap.put("completion_tokens_details", Map.of("reasoning_tokens", 5));
+        Map<String, Object> response = new HashMap<>();
+        response.put("usage", usageMap);
+
+        TokenUsage result = functionCalling.extractTokenUsage(response);
+
+        Assert.assertNotNull(result);
+        Assert.assertEquals(Long.valueOf(100), result.getInputTokens());
+        Assert.assertEquals(Long.valueOf(50), result.getOutputTokens());
+        Assert.assertEquals(Long.valueOf(150), result.getTotalTokens());
+        Assert.assertEquals(Long.valueOf(10), result.getCacheReadInputTokens());
+        Assert.assertEquals(Long.valueOf(5), result.getReasoningTokens());
+    }
+
+    @Test
+    public void extractTokenUsage_basicFieldsOnly() {
+        Map<String, Object> usageMap = new HashMap<>();
+        usageMap.put("prompt_tokens", 200);
+        usageMap.put("completion_tokens", 75);
+        usageMap.put("total_tokens", 275);
+        Map<String, Object> response = new HashMap<>();
+        response.put("usage", usageMap);
+
+        TokenUsage result = functionCalling.extractTokenUsage(response);
+
+        Assert.assertNotNull(result);
+        Assert.assertEquals(Long.valueOf(200), result.getInputTokens());
+        Assert.assertEquals(Long.valueOf(75), result.getOutputTokens());
+        Assert.assertNull(result.getCacheReadInputTokens());
+        Assert.assertNull(result.getReasoningTokens());
+    }
+
+    @Test
+    public void extractTokenUsage_nullInput() {
+        Assert.assertNull(functionCalling.extractTokenUsage(null));
+    }
+
+    @Test
+    public void extractTokenUsage_missingUsageKey() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("other", "data")));
+    }
+
+    @Test
+    public void extractTokenUsage_usageNotMap() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("usage", "not_a_map")));
     }
 }

@@ -25,6 +25,7 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -83,5 +84,37 @@ public class BedrockConverseDeepseekR1FunctionCallingTests {
         Map<String, Object> resultMap = StringUtils.fromJson(textJson, "response");
         Assert.assertEquals("test_tool_call_id", resultMap.get("tool_call_id"));
         Assert.assertEquals("test result for bedrock deepseek", resultMap.get("tool_result"));
+    }
+
+    @Test
+    public void extractTokenUsage_allFields() {
+        Map<String, Object> usageMap = new HashMap<>();
+        usageMap.put("prompt_tokens", 100);
+        usageMap.put("completion_tokens", 50);
+        usageMap.put("total_tokens", 150);
+        Map<String, Object> response = new HashMap<>();
+        response.put("usage", usageMap);
+
+        TokenUsage result = functionCalling.extractTokenUsage(response);
+
+        Assert.assertNotNull(result);
+        Assert.assertEquals(Long.valueOf(100), result.getInputTokens());
+        Assert.assertEquals(Long.valueOf(50), result.getOutputTokens());
+        Assert.assertEquals(Long.valueOf(150), result.getTotalTokens());
+    }
+
+    @Test
+    public void extractTokenUsage_nullInput() {
+        Assert.assertNull(functionCalling.extractTokenUsage(null));
+    }
+
+    @Test
+    public void extractTokenUsage_missingUsageKey() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("other", "data")));
+    }
+
+    @Test
+    public void extractTokenUsage_usageNotMap() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("usage", "not_a_map")));
     }
 }
