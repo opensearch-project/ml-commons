@@ -168,6 +168,10 @@ public abstract class AbstractConnector implements Connector {
         String tenantId,
         ActionListener<Boolean> listener
     ) {
+        if (credential == null || credential.isEmpty()) {
+            listener.onResponse(true);
+            return;
+        }
         List<String> orderedEncryptKeys = new ArrayList<>();
         List<String> orderedToEncrypt = new ArrayList<>();
         for (String key : credential.keySet()) {
@@ -195,6 +199,11 @@ public abstract class AbstractConnector implements Connector {
         String tenantId,
         ActionListener<Boolean> listener
     ) {
+        if (credential == null || credential.isEmpty()) {
+            this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
+            listener.onResponse(true);
+            return;
+        }
         List<String> orderedDecryptKeys = new ArrayList<>();
         List<String> orderedToDecrypt = new ArrayList<>();
         for (Map.Entry<String, String> entry : credential.entrySet()) {

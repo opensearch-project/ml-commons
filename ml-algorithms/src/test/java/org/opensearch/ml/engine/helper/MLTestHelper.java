@@ -122,11 +122,11 @@ public class MLTestHelper {
         AtomicReference<List<String>> encryptedResults = new AtomicReference<>();
         AtomicReference<RuntimeException> exceptionAtomicReference = new AtomicReference<>();
         ActionListener<List<String>> listener = ActionListener.wrap(r -> {
-            latch.countDown();
             encryptedResults.set(r);
-        }, e -> {
             latch.countDown();
+        }, e -> {
             exceptionAtomicReference.set((RuntimeException) e);
+            latch.countDown();
         });
         encryptor.encrypt(plainTexts, tenantId, listener);
         try {
@@ -145,11 +145,11 @@ public class MLTestHelper {
         AtomicReference<List<String>> decryptedResults = new AtomicReference<>();
         AtomicReference<RuntimeException> exceptionAtomicReference = new AtomicReference<>();
         ActionListener<List<String>> listener = ActionListener.wrap(r -> {
-            latch.countDown();
             decryptedResults.set(r);
-        }, e -> {
             latch.countDown();
+        }, e -> {
             exceptionAtomicReference.set((RuntimeException) e);
+            latch.countDown();
         });
         encryptor.decrypt(encryptedTexts, tenantId, listener);
         try {

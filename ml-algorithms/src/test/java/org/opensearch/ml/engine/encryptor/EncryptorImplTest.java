@@ -959,7 +959,7 @@ public class EncryptorImplTest {
         Assert.assertNull(encryptor.getMasterKey(null));
         String encrypted = MLTestHelper.encryptCredentials(List.of(text), tenantId, encryptor);
         Assert.assertNotNull(encrypted);
-        String decrypted = MLTestHelper.decryptCredentials(List.of(encrypted), TENANT_ID, encryptor);
+        String decrypted = MLTestHelper.decryptCredentials(List.of(encrypted), tenantId, encryptor);
         Assert.assertEquals(text, decrypted);
         threadLatch.countDown();
     }

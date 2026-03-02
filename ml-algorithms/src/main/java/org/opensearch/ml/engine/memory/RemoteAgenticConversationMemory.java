@@ -1422,7 +1422,6 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             // No-op function - credentials are already plaintext, just pass them through
             connector.decrypt(ConnectorAction.ActionType.EXECUTE.name(), (plainCredentials, tenant, listener) -> {
-                latch.countDown();
                 // For inline connectors, credentials are already plaintext, so just pass them through
                 listener.onResponse(plainCredentials);
             }, tenantId, decryptListener);

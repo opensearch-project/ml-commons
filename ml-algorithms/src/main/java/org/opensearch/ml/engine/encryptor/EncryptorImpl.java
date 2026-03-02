@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import javax.crypto.spec.SecretKeySpec;
@@ -220,7 +221,8 @@ public class EncryptorImpl implements Encryptor {
             return masterKey;
         }
 
-        List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.computeIfAbsent(tenantId, k -> new ArrayList<>());
+        List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap
+            .computeIfAbsent(tenantId, k -> new CopyOnWriteArrayList<>());
         synchronized (waitingListeners) {
             masterKey = tenantMasterKeys.getIfPresent(tenantId);
             if (masterKey != null) {
@@ -249,27 +251,36 @@ public class EncryptorImpl implements Encryptor {
     private void handleSuccess(String tenantId, String masterKey) {
         this.tenantMasterKeys.put(tenantId, masterKey);
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
-        log.info("ML encryption master key initialized for tenant {}, responding to {} queued requests", tenantId, waitingListeners.size());
-        synchronized (waitingListeners) {
-            waitingListeners.forEach(listener -> listener.onResponse(true));
-            waitingListeners.clear();
+        if (waitingListeners != null) {
+            log
+                .info(
+                    "ML encryption master key initialized for tenant {}, responding to {} queued requests",
+                    tenantId,
+                    waitingListeners.size()
+                );
+            synchronized (waitingListeners) {
+                waitingListeners.forEach(listener -> listener.onResponse(true));
+                waitingListeners.clear();
+            }
         }
     }
 
     private void handleError(String tenantId, Exception exception) {
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
-        synchronized (waitingListeners) {
-            if (exception != null) {
-                log.debug("Failed to init master key for tenant {}", tenantId, exception);
-                if (exception instanceof RuntimeException) {
-                    waitingListeners.forEach(listener -> listener.onFailure(exception));
+        if (waitingListeners != null) {
+            synchronized (waitingListeners) {
+                if (exception != null) {
+                    log.debug("Failed to init master key for tenant {}", tenantId, exception);
+                    if (exception instanceof RuntimeException) {
+                        waitingListeners.forEach(listener -> listener.onFailure(exception));
+                    } else {
+                        waitingListeners.forEach(listener -> listener.onFailure(new MLException(exception)));
+                    }
                 } else {
-                    waitingListeners.forEach(listener -> listener.onFailure(new MLException(exception)));
+                    waitingListeners.forEach(listener -> listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR)));
                 }
-            } else {
-                waitingListeners.forEach(listener -> listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR)));
+                waitingListeners.clear();
             }
-            waitingListeners.clear();
         }
     }
 

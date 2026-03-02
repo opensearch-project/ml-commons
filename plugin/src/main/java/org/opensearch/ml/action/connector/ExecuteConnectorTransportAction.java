@@ -106,10 +106,14 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                         connectorExecutor.setXContentRegistry(xContentRegistry);
                         connectorExecutor
                             .executeAction(finalConnectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
+                                connector.removeCredential();
                                 actionListener.onResponse(taskResponse);
-                            }, e -> { actionListener.onFailure(e); }));
+                            }, e -> {
+                                connector.removeCredential();
+                                actionListener.onFailure(e); }));
                     }, e -> {
                         log.error("Failed to decrypt credentials in connector", e);
+                        connector.removeCredential();
                         actionListener.onFailure(e);
                     });
                     connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
