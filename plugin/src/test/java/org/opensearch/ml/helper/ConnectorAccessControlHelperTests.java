@@ -341,7 +341,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_validateConnectorAccess_old_stashContextException_return_failure() {
+    public void test_validateConnectorAccess_old_getConnectorThrows_return_failure() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         doAnswer(invocation -> {
             throw new RuntimeException("get connector failed");
@@ -349,11 +349,14 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
         connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
 
-        verify(actionListener).onFailure(any(RuntimeException.class));
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("get connector failed", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
-    public void test_validateConnectorAccess_sdk_stashContextException_return_failure() {
+    public void test_validateConnectorAccess_sdk_getConnectorThrows_return_failure() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         doAnswer(invocation -> {
             throw new RuntimeException("get connector failed");
@@ -361,7 +364,10 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
         connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
 
-        verify(actionListener).onFailure(any(RuntimeException.class));
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("get connector failed", exceptionCaptor.getValue().getMessage());
     }
 
     // todo will remove later
@@ -647,7 +653,9 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
         connectorAccessControlHelper.getConnector(client, "connectorId", getConnectorActionListener);
 
-        verify(getConnectorActionListener).onFailure(any(Exception.class));
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConnectorActionListener).onFailure(exceptionCaptor.capture());
+        assertNotNull(exceptionCaptor.getValue().getMessage());
         verify(getConnectorActionListener, never()).onResponse(any());
     }
 
@@ -720,7 +728,12 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 getConnectorActionListener
             );
 
-        verify(getConnectorActionListener).onFailure(any(Exception.class));
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConnectorActionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        OpenSearchStatusException exception = (OpenSearchStatusException) exceptionCaptor.getValue();
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, exception.status());
+        assertTrue(exception.getMessage().contains("Failed to get data object from index"));
         verify(getConnectorActionListener, never()).onResponse(any());
     }
 
@@ -743,7 +756,10 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 getConnectorActionListener
             );
 
-        verify(getConnectorActionListener).onFailure(any(Exception.class));
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConnectorActionListener).onFailure(exceptionCaptor.capture());
+        assertNotNull(exceptionCaptor.getValue().getMessage());
+        assertFalse(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
         verify(getConnectorActionListener, never()).onResponse(any());
     }
 
