@@ -7,6 +7,7 @@ package org.opensearch.ml.helper;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,6 +20,8 @@ import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -58,6 +61,7 @@ import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -336,6 +340,30 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         verify(actionListener, times(1)).onFailure(any(RuntimeException.class));
     }
 
+    @Test
+    public void test_validateConnectorAccess_old_stashContextException_return_failure() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
+        doAnswer(invocation -> {
+            throw new RuntimeException("get connector failed");
+        }).when(connectorAccessControlHelper).getConnector(any(Client.class), anyString(), any());
+
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
+
+        verify(actionListener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void test_validateConnectorAccess_sdk_stashContextException_return_failure() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
+        doAnswer(invocation -> {
+            throw new RuntimeException("get connector failed");
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+
+        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
+
+        verify(actionListener).onFailure(any(RuntimeException.class));
+    }
+
     // todo will remove later
     public void test_validateConnectorAccess_searchConnectorException_return_false_old() {
         Client client = mock(Client.class);
@@ -609,6 +637,21 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testGetConnectorOldParseExceptionForMalformedPayload() {
+        GetResponse malformedResponse = createMalformedGetResponse();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(malformedResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        connectorAccessControlHelper.getConnector(client, "connectorId", getConnectorActionListener);
+
+        verify(getConnectorActionListener).onFailure(any(Exception.class));
+        verify(getConnectorActionListener, never()).onResponse(any());
+    }
+
+    @Test
     public void testGetConnectorNotFoundWhenResponseIsNull() throws IOException, InterruptedException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
         doAnswer(invocation -> {
@@ -633,6 +676,31 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testGetConnectorSdkNotFoundWhenResponseDoesNotExist() {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+        GetResponse getResponse = new GetResponse(new GetResult("indexName", "111", -2, 0, 1, false, null, null, null));
+        when(response.getResponse()).thenReturn(getResponse);
+        CompletionStage<GetDataObjectResponse> future = CompletableFuture.completedStage(response);
+        when(mockSdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+
+        GetDataObjectRequest request = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
+        connectorAccessControlHelper
+            .getConnector(
+                mockSdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                request,
+                "connectorId",
+                getConnectorActionListener
+            );
+
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(getConnectorActionListener).onFailure(captor.capture());
+        assertEquals(RestStatus.NOT_FOUND, captor.getValue().status());
+    }
+
+    @Test
     public void testGetConnectorParseExceptionForMalformedConnectorPayload() throws IOException, InterruptedException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
         GetResponse malformedResponse = createMalformedGetResponse();
@@ -654,6 +722,53 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
         verify(getConnectorActionListener).onFailure(any(Exception.class));
         verify(getConnectorActionListener, never()).onResponse(any());
+    }
+
+    @Test
+    public void testGetConnectorSdkParseExceptionForMalformedPayload() {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+        when(response.getResponse()).thenReturn(createMalformedGetResponse());
+        CompletionStage<GetDataObjectResponse> future = CompletableFuture.completedStage(response);
+        when(mockSdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+
+        GetDataObjectRequest request = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
+        connectorAccessControlHelper
+            .getConnector(
+                mockSdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                request,
+                "connectorId",
+                getConnectorActionListener
+            );
+
+        verify(getConnectorActionListener).onFailure(any(Exception.class));
+        verify(getConnectorActionListener, never()).onResponse(any());
+    }
+
+    @Test
+    public void testGetConnectorSdkOuterCatchWhenResponseAccessThrows() {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+        when(response.getResponse()).thenThrow(new RuntimeException("response access failure"));
+        CompletionStage<GetDataObjectResponse> future = CompletableFuture.completedStage(response);
+        when(mockSdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+
+        GetDataObjectRequest request = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
+        connectorAccessControlHelper
+            .getConnector(
+                mockSdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                request,
+                "connectorId",
+                getConnectorActionListener
+            );
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConnectorActionListener).onFailure(captor.capture());
+        assertEquals("response access failure", captor.getValue().getMessage());
     }
 
     @Test
