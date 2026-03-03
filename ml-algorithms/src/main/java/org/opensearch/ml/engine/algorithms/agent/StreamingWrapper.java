@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.returnFinalResponse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -109,22 +108,6 @@ public class StreamingWrapper {
         }
     }
 
-    public void sendFinalResponse(
-        String sessionId,
-        ActionListener<Object> listener,
-        String parentInteractionId,
-        boolean verbose,
-        List<ModelTensors> cotModelTensors,
-        Map<String, Object> additionalInfo,
-        String finalAnswer
-    ) {
-        if (isStreaming) {
-            listener.onResponse("Streaming completed");
-        } else {
-            returnFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
-        }
-    }
-
     /**
      * Send token usage as a streaming batch before the completion chunk.
      * No-op if tokenTracker is null, has no usage, or not streaming.
@@ -153,27 +136,8 @@ public class StreamingWrapper {
 
             channel.sendResponseBatch(new MLTaskResponse(tokenOutput));
 
-            if (!tokenTracker.isSubAgent()) {
-                logPerModelUsage(tokenUsageMap, tenantId);
-            }
         } catch (Exception e) {
             log.error("Failed to send token usage in streaming response", e);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void logPerModelUsage(Map<String, Object> tokenUsageMap, String tenantId) {
-        Object perModelObj = tokenUsageMap.get(AgentTokenTracker.PER_MODEL_USAGE);
-        if (perModelObj instanceof List) {
-            List<Map<String, Object>> perModelUsage = (List<Map<String, Object>>) perModelObj;
-            long eventTime = System.currentTimeMillis();
-            for (Map<String, Object> modelUsage : perModelUsage) {
-                Map<String, Object> logEntry = new java.util.LinkedHashMap<>();
-                logEntry.put("tenantId", tenantId);
-                logEntry.put("tokenDetails", modelUsage);
-                logEntry.put("eventTime", eventTime);
-                log.info("{}", StringUtils.toJson(logEntry));
-            }
         }
     }
 

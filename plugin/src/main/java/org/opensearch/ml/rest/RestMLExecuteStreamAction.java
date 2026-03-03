@@ -59,7 +59,9 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.CustomEvent;
 import org.opensearch.ml.common.agui.RunErrorEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.RunStartedEvent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
@@ -193,12 +195,11 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
+                    String threadId = extractThreadId(mlExecuteTaskRequest);
+                    String runId = extractRunId(mlExecuteTaskRequest);
 
                     // Send RUN_STARTED event immediately for AG-UI agents (ReAct cycle begins)
                     if (isAGUI) {
-                        String threadId = extractThreadId(mlExecuteTaskRequest);
-                        String runId = extractRunId(mlExecuteTaskRequest);
-
                         BaseEvent runStartedEvent = new RunStartedEvent(threadId, runId);
                         HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
                         channel.sendChunk(startChunk);
@@ -213,7 +214,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                 MLTaskResponse response = streamResponse.nextResponse();
 
                                 if (response != null) {
-                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI);
+                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI, threadId, runId);
                                     channel.sendChunk(responseChunk);
 
                                     // Recursively handle the next response
@@ -429,7 +430,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return "run_" + System.currentTimeMillis();
     }
 
-    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent) throws IOException {
+    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent, String threadId, String runId) throws IOException {
         String memoryId = "";
         String parentInteractionId = "";
         String content = "";
@@ -461,7 +462,26 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         // If this is an AG-UI agent, convert to AG-UI event format
         if (isAGUIAgent) {
-            return convertToAGUIEvent(content, isLast);
+            // Build the combined SSE: [Custom(token_usage)?] + [content events] + [RunFinished if last]
+            Map<String, ?> aguiTokenUsage = extractTokenUsage(response);
+            StringBuilder combinedSse = new StringBuilder();
+
+            if (aguiTokenUsage != null) {
+                BaseEvent tokenUsageEvent = new CustomEvent("token_usage", aguiTokenUsage);
+                combinedSse.append("data: ").append(tokenUsageEvent.toJsonString()).append("\n\n");
+            }
+
+            // Forward any content events (pass false — isLast is controlled by the outer chunk)
+            HttpChunk contentChunk = convertToAGUIEvent(content, false);
+            combinedSse.append(new String(BytesReference.toBytes(contentChunk.content())));
+
+            // RunFinished is the last AG-UI event, emitted only on the final chunk
+            if (isLast) {
+                BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+                combinedSse.append("data: ").append(runFinishedEvent.toJsonString()).append("\n\n");
+            }
+
+            return createHttpChunk(combinedSse.toString(), isLast);
         }
 
         // Create ordered tensors

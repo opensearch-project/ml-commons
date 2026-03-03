@@ -7,9 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,7 +25,6 @@ import javax.naming.AuthenticationException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agui.BaseEvent;
-import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.TextMessageContentEvent;
 import org.opensearch.ml.common.agui.TextMessageEndEvent;
 import org.opensearch.ml.common.agui.TextMessageStartEvent;
@@ -201,6 +198,13 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     onStreamComplete(listener, isStreamClosed, toolName, toolInput, toolUseId, accumulatedContent, tokenUsage);
                 } else {
                     // Safety net: unexpected early completion (e.g., error during streaming)
+                    log
+                        .warn(
+                            "Stream completed in unexpected state [{}]. Token usage {}: {}",
+                            currentState.get(),
+                            tokenUsage.get() != null ? "was captured" : "was not captured",
+                            tokenUsage.get()
+                        );
                     sendCompletionResponse(isStreamClosed, listener);
                 }
             }).subscriber(event -> {
@@ -366,12 +370,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                             sendAGUIEvent(textMessageEndEvent, false, listener);
                             log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
                         }
-
-                        String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-                        String runId = parameters.get(AGUI_PARAM_RUN_ID);
-                        BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                        sendAGUIEvent(runFinishedEvent, false, listener);
-                        log.debug("BedrockStreamingHandler: Added RUN_FINISHED event - ReAct loop completed");
+                        // RUN_FINISHED is emitted by RestMLExecuteStreamAction after token_usage,
+                        // once the final response chunk (is_last=true) arrives from the agent runner.
                     }
 
                     // All paths: defer finalization to onComplete() so Metadata (token usage) is captured.

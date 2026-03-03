@@ -1022,11 +1022,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Token tracking: send streaming batch or add to response tensors
         if (streamingWrapper.isStreaming()) {
             streamingWrapper.sendTokenUsageBatch(sessionId, parentInteractionId, tokenTracker, tenantId);
+            streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
         }
-        AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId);
-
-        // Send completion chunk for streaming
-        streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
 
         if (memory != null) {
             String copyOfFinalAnswer = finalAnswer;
@@ -1046,7 +1043,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             cotModelTensors,
                             additionalInfo,
-                            copyOfFinalAnswer
+                            copyOfFinalAnswer,
+                            tokenTracker,
+                            tenantId
                         );
                     }, e -> {
                         log.error("Failed to save assistant response as structured message", e);
@@ -1055,39 +1054,81 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 );
             } else {
                 // For legacy interface, use traditional saveMessage
-                ActionListener saveTraceListener = ActionListener.wrap(r -> {
-                    memory
-                        .update(
-                            parentInteractionId,
-                            Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
-                            ActionListener.wrap(res -> {
-                                returnFinalResponse(
-                                    sessionId,
-                                    listener,
-                                    parentInteractionId,
-                                    verbose,
-                                    cotModelTensors,
-                                    additionalInfo,
-                                    copyOfFinalAnswer
-                                );
-                            }, e -> { listener.onFailure(e); })
+                if (parentInteractionId == null) {
+                    // No parent interaction (e.g. AG-UI agents skip interaction creation).
+                    // Save the question + answer as a structured message pair instead.
+                    ContentBlock userContent = new ContentBlock();
+                    userContent.setType(ContentType.TEXT);
+                    userContent.setText(question);
+                    Message userMessage = new Message("user", List.of(userContent));
+
+                    ContentBlock assistantContent = new ContentBlock();
+                    assistantContent.setType(ContentType.TEXT);
+                    assistantContent.setText(copyOfFinalAnswer);
+                    Message assistantMessage = new Message("assistant", List.of(assistantContent));
+
+                    memory.saveStructuredMessages(List.of(userMessage, assistantMessage), ActionListener.wrap(v -> {
+                        returnFinalResponse(
+                            sessionId,
+                            listener,
+                            null,
+                            verbose,
+                            cotModelTensors,
+                            additionalInfo,
+                            copyOfFinalAnswer,
+                            tokenTracker,
+                            tenantId
                         );
-                }, e -> { listener.onFailure(e); });
-                saveMessage(
-                    memory,
-                    question,
-                    finalAnswer,
-                    sessionId,
-                    parentInteractionId,
-                    traceNumber,
-                    true,
-                    traceDisabled,
-                    saveTraceListener
-                );
+                    }, e -> {
+                        log.error("Failed to save structured messages for AG-UI agent", e);
+                        listener.onFailure(e);
+                    }));
+                } else {
+                    ActionListener saveTraceListener = ActionListener.wrap(r -> {
+                        memory
+                            .update(
+                                parentInteractionId,
+                                Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
+                                ActionListener.wrap(res -> {
+                                    returnFinalResponse(
+                                        sessionId,
+                                        listener,
+                                        parentInteractionId,
+                                        verbose,
+                                        cotModelTensors,
+                                        additionalInfo,
+                                        copyOfFinalAnswer,
+                                        tokenTracker,
+                                        tenantId
+                                    );
+                                }, e -> { listener.onFailure(e); })
+                            );
+                    }, e -> { listener.onFailure(e); });
+                    saveMessage(
+                        memory,
+                        question,
+                        finalAnswer,
+                        sessionId,
+                        parentInteractionId,
+                        traceNumber,
+                        true,
+                        traceDisabled,
+                        saveTraceListener
+                    );
+                }
             }
         } else {
-            streamingWrapper
-                .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+            returnFinalResponse(
+                sessionId,
+                listener,
+                parentInteractionId,
+                verbose,
+                cotModelTensors,
+                additionalInfo,
+                finalAnswer,
+                tokenTracker,
+                tenantId
+            );
         }
     }
 
@@ -1248,7 +1289,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         List<ModelTensors> cotModelTensors, // AtomicBoolean getFinalAnswer,
         Map<String, Object> additionalInfo,
-        String finalAnswer2
+        String finalAnswer2,
+        AgentTokenTracker tokenTracker,
+        String tenantId
     ) {
         cotModelTensors
             .add(
@@ -1267,8 +1310,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 )
         );
         if (verbose) {
+            AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId);
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
         } else {
+            AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId);
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
     }

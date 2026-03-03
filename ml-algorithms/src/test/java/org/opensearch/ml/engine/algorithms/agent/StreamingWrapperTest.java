@@ -186,13 +186,6 @@ public class StreamingWrapperTest {
     }
 
     @Test
-    public void testSendFinalResponseStreaming() {
-        streamingWrapper.sendFinalResponse("session1", listener, "parent1", true, null, null, "answer");
-
-        verify(listener).onResponse("Streaming completed");
-    }
-
-    @Test
     public void testSendTokenUsageBatchStreaming() throws Exception {
         AgentTokenTracker tokenTracker = new AgentTokenTracker();
         tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");

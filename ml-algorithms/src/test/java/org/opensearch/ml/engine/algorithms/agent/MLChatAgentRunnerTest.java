@@ -170,6 +170,12 @@ public class MLChatAgentRunnerTest {
             return null;
         }).when(conversationIndexMemory).update(any(), any(), any());
 
+        doAnswer(invocation -> {
+            ActionListener<Void> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(conversationIndexMemory).saveStructuredMessages(any(), any());
+
         mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(Mockito.anyMap())).thenReturn(secondTool);
@@ -889,10 +895,10 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
 
         doAnswer(invocation -> {
-            ActionListener<CreateInteractionResponse> listener = invocation.getArgument(4);
+            ActionListener<Void> listener = invocation.getArgument(1);
             listener.onFailure(new IllegalArgumentException());
             return null;
-        }).when(conversationIndexMemory).save(any(), any(), any(), any(), conversationIndexMemoryCapture.capture());
+        }).when(conversationIndexMemory).saveStructuredMessages(any(), any());
         // Run the MLChatAgentRunner
         mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
 
