@@ -66,6 +66,7 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManager;
+import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.contextmanager.ContextManagerHookProvider;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
@@ -89,6 +90,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
+import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.algorithms.contextmanager.ContextManagerFactory;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -760,10 +762,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     /**
      * Performs initial memory operations for unified interface agents:
      * 1. Gets structured message history
-     * 2. Saves input messages
-     * 3. Appends AGUI context if applicable
-     * 4. Formats history for the LLM
-     * 5. Invokes continuation when done
+     * 2. Applies POST_MEMORY hook for context management (summarization, sliding window, etc.)
+     * 3. Saves input messages
+     * 4. Appends AGUI context if applicable
+     * 5. Formats history for the LLM
+     * 6. Invokes continuation when done
      */
     @VisibleForTesting
     void performInitialMemoryOperations(
@@ -772,7 +775,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         Map<String, String> params,
         MLAgent mlAgent,
         ActionListener<?> listener,
-        Runnable continuation
+        Runnable continuation,
+        HookRegistry hookRegistry
     ) {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
@@ -781,9 +785,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             List<Message> allMessages = (List<Message>) result;
 
             // Apply history limit
-            List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
+            List<Message> limitedHistory = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
                 ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
                 : allMessages;
+
+            AgentContextUtil.ensureLlmModelId(mlAgent, params);
+
+            // Emit POST_MEMORY hook to allow context managers to modify retrieved structured history
+            List<Message> history = processPostStructuredMemoryHook(params, limitedHistory, memory, hookRegistry);
 
             // Save input messages — memory auto-resolves the next message ID
             memory.saveStructuredMessages(inputMessages, ActionListener.wrap(v -> {
@@ -904,7 +913,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             agentActionListener,
                             () -> {
                                 mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
-                            }
+                            },
+                            hookRegistry
                         );
                     } else {
                         mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
@@ -936,7 +946,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         agentActionListener,
                         () -> {
                             mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
-                        }
+                        },
+                        hookRegistry
                     );
                 } else {
                     mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
@@ -1287,6 +1298,44 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     boolean supportsStructuredMessages(MLAgent mlAgent) {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
         return agentType == MLAgentType.CONVERSATIONAL || agentType == MLAgentType.AG_UI;
+    }
+
+    /**
+     * Process POST_MEMORY hook for structured messages and return the (potentially modified) list.
+     * Context managers like SlidingWindowManager or SummarizationManager can modify
+     * the retrieved structured chat history before it is formatted into the prompt.
+     */
+    private List<Message> processPostStructuredMemoryHook(
+        Map<String, String> params,
+        List<Message> retrievedStructuredHistory,
+        Memory memory,
+        HookRegistry hookRegistry
+    ) {
+        log
+            .debug(
+                "processPostStructuredMemoryHook called with {} messages, hookRegistry: {}",
+                retrievedStructuredHistory.size(),
+                hookRegistry != null ? "present" : "null"
+            );
+
+        if (hookRegistry != null && !retrievedStructuredHistory.isEmpty()) {
+            int originalSize = retrievedStructuredHistory.size();
+            ContextManagerContext contextAfterEvent = AgentContextUtil
+                .emitPostStructuredMemoryHook(params, retrievedStructuredHistory, null, hookRegistry);
+
+            log.debug("POST_MEMORY hook emitted, estimated token count: {}", contextAfterEvent.getEstimatedTokenCount());
+
+            List<Message> updatedHistory = contextAfterEvent.getStructuredChatHistory();
+            // Use size comparison — more robust than List.equals() which relies on
+            // Message.equals() and can miss in-place mutations of shared references.
+            if (updatedHistory != null && updatedHistory.size() != originalSize) {
+                log.info("POST_MEMORY hook modified structured history: {} -> {} messages", originalSize, updatedHistory.size());
+                return updatedHistory;
+            } else {
+                log.debug("POST_MEMORY hook did not modify structured history");
+            }
+        }
+        return retrievedStructuredHistory;
     }
 
 }
