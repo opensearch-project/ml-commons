@@ -7,7 +7,7 @@ plugins {
     id 'java'
     id "io.freefair.lombok"
     id 'jacoco'
-    id 'com.github.johnrengelman.shadow'
+    id 'com.gradleup.shadow'
     id 'maven-publish'
     id 'com.diffplug.spotless' version '6.23.0'
     id 'signing'
