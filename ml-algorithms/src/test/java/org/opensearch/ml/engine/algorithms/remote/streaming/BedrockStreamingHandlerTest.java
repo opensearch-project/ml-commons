@@ -7,11 +7,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.ml.common.connector.AwsConnector;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -232,5 +235,57 @@ public class BedrockStreamingHandlerTest {
         assertEquals(1, request.messages().size());
         assertNotNull(request.messages().get(0).content().get(0).image());
         assertEquals("jpeg", request.messages().get(0).content().get(0).image().format().toString());
+    }
+
+    // ==================== Tests for createFinalAnswerResponse ====================
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCreateFinalAnswerResponse_WithText() {
+        MLTaskResponse response = handler.createFinalAnswerResponse("Final answer text");
+
+        assertNotNull(response);
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        assertNotNull(output);
+        assertEquals(1, output.getMlModelOutputs().size());
+        assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
+
+        Map<String, ?> dataMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        assertNotNull(dataMap);
+        assertEquals("end_turn", dataMap.get("stopReason"));
+
+        Map<String, Object> outputMap = (Map<String, Object>) dataMap.get("output");
+        Map<String, Object> message = (Map<String, Object>) outputMap.get("message");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) message.get("content");
+        assertEquals(1, content.size());
+        assertEquals("Final answer text", content.get(0).get("text"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCreateFinalAnswerResponse_NullText() {
+        MLTaskResponse response = handler.createFinalAnswerResponse(null);
+
+        assertNotNull(response);
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        Map<String, ?> dataMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        Map<String, Object> outputMap = (Map<String, Object>) dataMap.get("output");
+        Map<String, Object> message = (Map<String, Object>) outputMap.get("message");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) message.get("content");
+        assertEquals("", content.get(0).get("text"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCreateFinalAnswerResponse_EmptyText() {
+        MLTaskResponse response = handler.createFinalAnswerResponse("");
+
+        assertNotNull(response);
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        Map<String, ?> dataMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        Map<String, Object> outputMap = (Map<String, Object>) dataMap.get("output");
+        Map<String, Object> message = (Map<String, Object>) outputMap.get("message");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) message.get("content");
+        assertEquals("", content.get(0).get("text"));
     }
 }

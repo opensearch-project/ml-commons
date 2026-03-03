@@ -127,6 +127,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             AtomicReference<Map<String, Object>> toolInput = new AtomicReference<>();
             AtomicReference<String> toolUseId = new AtomicReference<>();
             StringBuilder toolInputAccumulator = new StringBuilder();
+            StringBuilder accumulatedContent = new StringBuilder();
             AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
 
             // Build Bedrock client
@@ -171,6 +172,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     toolInput,
                     toolUseId,
                     toolInputAccumulator,
+                    accumulatedContent,
                     currentState
                 );
             }).build();
@@ -257,6 +259,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId,
         StringBuilder toolInputAccumulator,
+        StringBuilder accumulatedContent,
         AtomicReference<StreamState> currentState
     ) {
         String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
@@ -285,6 +288,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     String content = getTextContent(event);
 
                     if (isAGUIAgent) {
+                        accumulatedContent.append(content);
+
                         if (!textMessageStarted) {
                             messageId = "msg_" + System.nanoTime();
                             parameters.put(AGUI_PARAM_MESSAGE_ID, messageId);
@@ -302,17 +307,21 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         sendContentResponse(content, false, listener);
                     }
                 } else if (isStreamComplete(event)) {
-                    if (isAGUIAgent && textMessageStarted) {
-                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
-                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
-                        sendAGUIEvent(textMessageEndEvent, false, listener);
-                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+                    if (isAGUIAgent) {
+                        if (textMessageStarted) {
+                            parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                            BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                            sendAGUIEvent(textMessageEndEvent, false, listener);
+                            log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+                        }
 
                         String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
                         String runId = parameters.get(AGUI_PARAM_RUN_ID);
                         BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                        sendAGUIEvent(runFinishedEvent, true, listener);
+                        sendAGUIEvent(runFinishedEvent, false, listener);
                         log.debug("BedrockStreamingHandler: Added RUN_FINISHED event - ReAct loop completed");
+
+                        listener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
                     }
 
                     currentState.set(StreamState.COMPLETED);
@@ -367,7 +376,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     }
 
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
-                    listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId));
+                    listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId, accumulatedContent));
                 }
                 break;
 
@@ -424,37 +433,48 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         return event.sdkEventType() == ConverseStreamOutput.EventType.CONTENT_BLOCK_STOP;
     }
 
+    /**
+     * Create a Bedrock-formatted final answer response that parseLLMOutput can extract
+     * the final answer from. Uses the same format as a Bedrock Converse API response
+     * with stopReason="end_turn".
+     */
+    @VisibleForTesting
+    MLTaskResponse createFinalAnswerResponse(String text) {
+        Map<String, Object> wrappedResponse = Map
+            .of(
+                "output",
+                Map.of("message", Map.of("content", List.of(Map.of("text", text != null ? text : "")))),
+                "stopReason",
+                "end_turn"
+            );
+
+        ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        return new MLTaskResponse(output);
+    }
+
     private MLTaskResponse createToolUseResponse(
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
-        AtomicReference<String> toolUseId
+        AtomicReference<String> toolUseId,
+        StringBuilder accumulatedContent
     ) {
         // Validate inputs
         if (toolName == null || toolInput == null || toolUseId == null) {
             throw new IllegalArgumentException("Tool references cannot be null");
         }
+
+        // Build content blocks — include accumulated text if the LLM sent text before the tool call
+        List<Map<String, Object>> contentBlocks = new ArrayList<>();
+        String textContent = accumulatedContent != null ? accumulatedContent.toString() : "";
+        if (!textContent.isEmpty()) {
+            contentBlocks.add(Map.of("text", textContent));
+        }
+        contentBlocks.add(Map.of("toolUse", Map.of("name", toolName.get(), "input", toolInput.get(), "toolUseId", toolUseId.get())));
+
         Map<String, Object> wrappedResponse = Map
-            .of(
-                "output",
-                Map
-                    .of(
-                        "message",
-                        Map
-                            .of(
-                                "content",
-                                List
-                                    .of(
-                                        Map
-                                            .of(
-                                                "toolUse",
-                                                Map.of("name", toolName.get(), "input", toolInput.get(), "toolUseId", toolUseId.get())
-                                            )
-                                    )
-                            )
-                    ),
-                "stopReason",
-                "tool_use"
-            );
+            .of("output", Map.of("message", Map.of("content", contentBlocks)), "stopReason", "tool_use");
 
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();

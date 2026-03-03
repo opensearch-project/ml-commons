@@ -107,7 +107,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
 
-    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET = "anthropic.claude-3-5-sonnet-20240620-v1:0";
+    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET = "anthropic.claude-3-5-sonnet-20241022-v2:0";
     private static final String BEDROCK_ANTHROPIC_CLAUDE_3_SONNET = "anthropic.claude-3-sonnet-20240229-v1:0";
 
     private static final String BEDROCK_CONNECTOR_BLUEPRINT_INVOKE = "{\n"
@@ -231,6 +231,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 200\n"
+        + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
@@ -332,7 +335,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "\"\n"
         + "    },\n"
         + "    \"parameters\": {\n"
-        + "        \"model\": \"command-a-03-2025\"\n"
+        + "        \"model\": \"command-r-08-2024\"\n"
         + "    },\n"
         + "    \"actions\": [\n"
         + "        {\n"
@@ -540,15 +543,18 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     private static final String ML_RAG_REMOTE_MODEL_GROUP = "rag_remote_model_group";
 
+    private static boolean initialSleepDone = false;
+
     // "client" gets initialized by the test framework at the instance level
     // so we perform this per test case, not via @BeforeClass.
     @Before
     public void init() throws Exception {
 
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        // TODO Do we really need to wait this long? This adds 20s to every test case run.
-        // Can we instead check the cluster state and move on?
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
 
         Response response = TestHelper
             .makeRequest(
@@ -591,8 +597,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithOpenAI() throws Exception {
-        // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         Response response = createConnector(OPENAI_CONNECTOR_BLUEPRINT);
@@ -645,8 +651,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithOpenAIWithImage() throws Exception {
-        // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         Response response = createConnector(OPENAI_4o_CONNECTOR_BLUEPRINT);
@@ -966,8 +972,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     public void testBM25WithOpenAIWithConversation() throws Exception {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            System.out.println("Skipping testBM25WithOpenAIWithConversation because OPENAI_KEY is null");
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
+            System.out.println("Skipping testBM25WithOpenAIWithConversation because OPENAI_KEY is null or api.openai.com is unreachable");
             return;
         }
         System.out.println("Running testBM25WithOpenAIWithConversation");
@@ -1026,8 +1032,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     public void testBM25WithOpenAIWithConversationAndImage() throws Exception {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            System.out.println("Skipping testBM25WithOpenAIWithConversationAndImage because OPENAI_KEY is null");
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
+            System.out
+                .println("Skipping testBM25WithOpenAIWithConversationAndImage because OPENAI_KEY is null or api.openai.com is unreachable");
             return;
         }
         System.out.println("Running testBM25WithOpenAIWithConversationAndImage");

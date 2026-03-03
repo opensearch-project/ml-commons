@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.input.execute.agent;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -13,6 +15,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ContentBlock {
     private ContentType type;
     private String text; // for text content

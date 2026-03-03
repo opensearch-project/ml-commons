@@ -48,6 +48,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
@@ -1589,4 +1590,62 @@ public class MLChatAgentRunnerTest {
         String response = (String) agentOutput.get(0).getDataAsMap().get("response");
         assertEquals("Agent reached maximum iterations (1) without completing the task. Last thought: Analyzing the problem", response);
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testUnifiedInterfaceDisablesTraceSaving() {
+        // Create MLAgent with model spec (needed for unified interface ModelProvider)
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLAgentModelSpec modelSpec = MLAgentModelSpec.builder().modelId("MODEL_ID").modelProvider("bedrock/converse").build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .model(modelSpec)
+            .tools(Arrays.asList(firstToolSpec))
+            .build();
+
+        // Reset mocks for clean setup
+        Mockito.reset(client);
+        Mockito.reset(firstTool);
+        when(firstTool.getName()).thenReturn(FIRST_TOOL);
+        when(firstTool.validate(Mockito.anyMap())).thenReturn(true);
+        Mockito.doAnswer(generateToolResponse("First tool response")).when(firstTool).run(Mockito.anyMap(), any());
+
+        // Mock LLM: first returns tool call, then returns final answer
+        Mockito
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 1", "action", FIRST_TOOL)))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 2", "final_answer", "This is the final answer")))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        // Mock saveStructuredMessages to succeed (used by unified flow for final answer)
+        doAnswer(invocation -> {
+            ActionListener<Void> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(conversationIndexMemory).saveStructuredMessages(any(), any());
+
+        // Set up params for unified interface
+        HashMap<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.USES_UNIFIED_INTERFACE, "true");
+
+        // Run with executorMemory (5th arg) - unified flow passes memory directly
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null, conversationIndexMemory);
+
+        // Verify agent completes successfully
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+
+        // Verify trace data was NOT saved to memory (4-arg version used by saveTraceData)
+        verify(conversationIndexMemory, never()).save(any(), any(), any(Integer.class), anyString());
+        // Verify trace data was NOT saved to memory (5-arg version used by saveMessage)
+        verify(conversationIndexMemory, never()).save(any(), any(), any(Integer.class), anyString(), any());
+
+        // Verify structured messages WERE saved (unified flow uses this for final answer)
+        verify(conversationIndexMemory).saveStructuredMessages(any(), any());
+    }
+
 }

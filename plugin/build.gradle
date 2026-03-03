@@ -199,6 +199,13 @@ def _numNodes = findProperty('numNodes') as Integer ?: 1
 test {
     include '**/*Tests.class'
     systemProperty 'tests.security.manager', 'false'
+    // In FIPS mode, bc-fips is excluded from the plugin bundle to avoid jar hell with OpenSearch core.
+    // Unit tests don't run inside OpenSearch, so we add bc-fips directly to the test classpath.
+    if (FipsBuildParams.isInFipsMode()) {
+        classpath += configurations.detachedConfiguration(
+            dependencies.create("org.bouncycastle:bc-fips:2.1.2")
+        )
+    }
 }
 
 def opensearch_tmp_dir = rootProject.file('build/private/opensearch_tmp').absoluteFile
