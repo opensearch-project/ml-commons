@@ -77,14 +77,14 @@ jobs:
         id: step-build-test-linux
         run: |
           chown -R 1000:1000 `pwd`
-          su `id -un 1000` -c 'whoami && java -version && 
-                               export OPENAI_KEY=`aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text` &&
-                               export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
-                               echo "::add-mask::$OPENAI_KEY" &&
-                               echo "::add-mask::$COHERE_KEY" &&
-                               echo "build and run tests" && ./gradlew build -x spotlessJava &&
-                               echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
-                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava'
+          su `id -un 1000` -c "export JAVA_HOME=$JAVA_HOME && export PATH=\$JAVA_HOME/bin:\$PATH && whoami && java -version &&
+                               export OPENAI_KEY=\`aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text\` &&
+                               export COHERE_KEY=\`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text\` &&
+                               echo '::add-mask::'\$OPENAI_KEY &&
+                               echo '::add-mask::'\$COHERE_KEY &&
+                               echo 'build and run tests' && ./gradlew build -x spotlessJava &&
+                               echo 'Publish to Maven Local' && ./gradlew publishToMavenLocal -x spotlessJava &&
+                               echo 'Multi Nodes Integration Testing' && ./gradlew integTest -PnumNodes=3 -x spotlessJava"
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
