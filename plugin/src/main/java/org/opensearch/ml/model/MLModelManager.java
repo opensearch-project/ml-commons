@@ -1168,8 +1168,10 @@ public class MLModelManager {
      */
     public void getConnectorCredential(String connectorId, ActionListener<Map<String, String>> connectorCredentialListener) {
         getConnector(connectorId, null, ActionListener.wrap(connector -> {
-            mlEngine.getConnectorCredential(connector, connectorCredentialListener);
-            log.info("Completed loading credential in the connector {}", connectorId);
+            mlEngine.getConnectorCredential(connector, ActionListener.wrap(credential -> {
+                log.info("Completed loading credential in the connector {}", connectorId);
+                connectorCredentialListener.onResponse(credential);
+            }, connectorCredentialListener::onFailure));
         }, connectorCredentialListener::onFailure));
     }
 

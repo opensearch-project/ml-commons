@@ -88,7 +88,7 @@ public class MLTestHelper {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<RuntimeException> exceptionAtomicReference = new AtomicReference<>();
         ActionListener<Boolean> listener = ActionListener.wrap(r -> { latch.countDown(); }, e -> {
-            exceptionAtomicReference.set((RuntimeException) e);
+            exceptionAtomicReference.set(e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e));
             latch.countDown();
         });
         if (encrypt) {
@@ -125,7 +125,7 @@ public class MLTestHelper {
             encryptedResults.set(r);
             latch.countDown();
         }, e -> {
-            exceptionAtomicReference.set((RuntimeException) e);
+            exceptionAtomicReference.set(e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e));
             latch.countDown();
         });
         encryptor.encrypt(plainTexts, tenantId, listener);
@@ -148,7 +148,7 @@ public class MLTestHelper {
             decryptedResults.set(r);
             latch.countDown();
         }, e -> {
-            exceptionAtomicReference.set((RuntimeException) e);
+            exceptionAtomicReference.set(e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e));
             latch.countDown();
         });
         encryptor.decrypt(encryptedTexts, tenantId, listener);

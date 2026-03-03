@@ -41,6 +41,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -1415,8 +1416,10 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             // This populates the decryptedCredential field which AwsConnector methods depend on
             // Use CountDownLatch for synchronous behavior in constructor
             CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<Exception> decryptError = new AtomicReference<>();
             ActionListener<Boolean> decryptListener = ActionListener.wrap(r -> { latch.countDown(); }, e -> {
                 log.error("Failed to decrypt credentials in inline connector", e);
+                decryptError.set(e);
                 latch.countDown();
             });
 
@@ -1431,6 +1434,9 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             } catch (InterruptedException e) {
                 log.error("Interrupted while waiting for credential decryption", e);
                 Thread.currentThread().interrupt();
+            }
+            if (decryptError.get() != null) {
+                throw new MLException("Failed to decrypt credentials, ", decryptError.get());
             }
 
             return connector;

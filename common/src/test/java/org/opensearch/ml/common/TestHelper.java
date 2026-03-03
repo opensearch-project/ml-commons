@@ -90,7 +90,7 @@ public class TestHelper {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<RuntimeException> exceptionAtomicReference = new AtomicReference<>();
         ActionListener<Boolean> listener = ActionListener.wrap(r -> { latch.countDown(); }, e -> {
-            exceptionAtomicReference.set((RuntimeException) e);
+            exceptionAtomicReference.set(e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e));
             latch.countDown();
         });
         if (encrypt) {

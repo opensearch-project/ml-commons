@@ -762,7 +762,7 @@ public class TestHelper {
             encryptedResults.set(r);
         }, e -> {
             latch.countDown();
-            exceptionAtomicReference.set((RuntimeException) e);
+            exceptionAtomicReference.set(e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e));
         });
         encryptor.encrypt(plainTexts, tenantId, listener);
         try {

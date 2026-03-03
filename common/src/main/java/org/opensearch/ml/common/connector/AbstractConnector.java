@@ -211,9 +211,7 @@ public abstract class AbstractConnector implements Connector {
             orderedToDecrypt.add(entry.getValue());
         }
         ActionListener<List<String>> updateDecryptedCredentialsListener = ActionListener.wrap(r -> {
-            if (decryptedCredential == null) {
-                decryptedCredential = new HashMap<>();
-            }
+            decryptedCredential = new HashMap<>();
             for (int i = 0; i < r.size(); i++) {
                 decryptedCredential.put(orderedDecryptKeys.get(i), r.get(i));
             }

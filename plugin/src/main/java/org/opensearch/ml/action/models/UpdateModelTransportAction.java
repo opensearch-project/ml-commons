@@ -339,8 +339,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             );
                         return;
                     }
+                    connector.update(updateModelInput.getConnector());
                     ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(r -> {
-                        connector.update(updateModelInput.getConnector());
                         connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                         updateModelInput.setUpdatedConnector(connector);
                         updateModelInput.setConnector(null);
