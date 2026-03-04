@@ -88,7 +88,7 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
     private List<String> allIndices;
     private Map<String, PatternInfo> detectedPatterns;
 
-    public final double OVERLAP_THRESHOLD = 0.85;
+    public final double OVERLAP_THRESHOLD = 0.88;
     public final int SAMPLE_DOCS_LIMIT = 5;
     public final int MAX_FIELDS_DISPLAY = 30;
     public final String COMPLETE_STATUS = "COMPLETED";
@@ -185,11 +185,14 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
 
         // Group indices by similarity
         for (String index : indices) {
+            if (index.startsWith(".")) {
+                continue;
+            }
             boolean addedToGroup = false;
 
             // Try to find a matching group
             for (IndexGroup group : groups) {
-                double overlap = calculateOverlap(index, group.getRepresentative());
+                double overlap = calculateOverlap(maskConsecutiveDigits(index), maskConsecutiveDigits(group.getRepresentative()));
                 if (overlap >= OVERLAP_THRESHOLD) {
                     group.addIndex(index);
                     addedToGroup = true;
@@ -319,15 +322,15 @@ public class IndexCorrelationTask extends AbstractIndexInsightTask {
         }
 
         // Find longest common prefix
-        String commonPrefix = indices.get(0);
+        String commonPrefix = maskConsecutiveDigits(indices.get(0));
         for (int i = 1; i < indices.size(); i++) {
-            commonPrefix = getCommonPrefix(commonPrefix, indices.get(i));
+            commonPrefix = getCommonPrefix(commonPrefix, maskConsecutiveDigits(indices.get(i)));
         }
 
         // Find longest common suffix
-        String commonSuffix = indices.get(0);
+        String commonSuffix = maskConsecutiveDigits(indices.get(0));
         for (int i = 1; i < indices.size(); i++) {
-            commonSuffix = getCommonSuffix(commonSuffix, indices.get(i));
+            commonSuffix = getCommonSuffix(commonSuffix, maskConsecutiveDigits(indices.get(i)));
         }
 
         // Avoid overlap between prefix and suffix
