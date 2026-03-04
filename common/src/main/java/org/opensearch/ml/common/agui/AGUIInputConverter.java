@@ -132,6 +132,16 @@ public class AGUIInputConverter {
 
             if (forwardedProps != null) {
                 parameters.put(AGUI_PARAM_FORWARDED_PROPS, gson.toJson(forwardedProps));
+                if (forwardedProps.isJsonObject()) {
+                    JsonObject fwdObj = forwardedProps.getAsJsonObject();
+                    if (fwdObj.has("memory_container_id")) {
+                        parameters.put("memory_container_id", fwdObj.get("memory_container_id").getAsString());
+                    }
+                    if (fwdObj.has("memory_configuration")) {
+                        JsonElement memCfg = fwdObj.get("memory_configuration");
+                        parameters.put("memory_configuration", memCfg.isJsonObject() ? gson.toJson(memCfg) : memCfg.getAsString());
+                    }
+                }
             }
 
             RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
