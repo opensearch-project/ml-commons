@@ -781,9 +781,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             List<Message> allMessages = (List<Message>) result;
 
             // Apply history limit
-            List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
-                ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
-                : allMessages;
+            List<Message> history = allMessages;
 
             // Save input messages — memory auto-resolves the next message ID
             memory.saveStructuredMessages(inputMessages, ActionListener.wrap(v -> {
