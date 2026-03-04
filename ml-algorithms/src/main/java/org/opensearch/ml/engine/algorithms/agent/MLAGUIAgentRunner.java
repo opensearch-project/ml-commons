@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
@@ -125,7 +126,13 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             conversationalRunner.run(mlAgent, params, listener, channel, memory);
 
         } catch (Exception e) {
-            log.error("Error starting AG-UI agent execution", e);
+            log
+                .error(
+                    "Error starting AG-UI agent execution. agentId={}, tenantId={}",
+                    params.get(AGENT_ID_FIELD),
+                    mlAgent.getTenantId(),
+                    e
+                );
             listener.onFailure(e);
         }
     }
@@ -167,7 +174,13 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     : allMessages;
                 streamingWrapper.sendMessagesSnapshot(history, memory.getId(), listener);
             }, e -> {
-                log.error("Failed to load history for AGUI snapshot", e);
+                log
+                    .error(
+                        "Failed to load history for AGUI snapshot. agentId={}, tenantId={}",
+                        params.get(AGENT_ID_FIELD),
+                        mlAgent.getTenantId(),
+                        e
+                    );
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
