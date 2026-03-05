@@ -654,6 +654,31 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         log.info("Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
 
                         if (!isBackendTool) {
+                            // Save assistant tool call messages to memory before closing stream (AGUI agents only)
+                            if (memory != null && modelProvider != null && isAGUIAgent(parameters)) {
+                                List<Message> toolCallMessages = new ArrayList<>();
+                                for (String interaction : interactions) {
+                                    try {
+                                        Message msg = modelProvider.parseToUnifiedMessage(interaction);
+                                        if (msg != null) {
+                                            toolCallMessages.add(msg);
+                                        }
+                                    } catch (Exception e) {
+                                        log.warn("Failed to parse tool call interaction message", e);
+                                    }
+                                }
+                                if (!toolCallMessages.isEmpty()) {
+                                    memory
+                                        .saveStructuredMessages(
+                                            toolCallMessages,
+                                            ActionListener
+                                                .wrap(
+                                                    v -> log.debug("Saved assistant tool call to memory"),
+                                                    e -> log.error("Failed to save assistant tool call to memory", e)
+                                                )
+                                        );
+                                }
+                            }
                             // For frontend tool use, we close the response stream and wait for frontend tool result
                             if (streamingWrapper != null) {
                                 streamingWrapper.sendRunFinishedAndCloseStream(sessionId, parentInteractionId);
