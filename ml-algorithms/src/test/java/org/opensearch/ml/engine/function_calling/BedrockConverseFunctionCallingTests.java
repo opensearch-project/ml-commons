@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.function_calling;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
@@ -23,6 +23,7 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -52,7 +53,7 @@ public class BedrockConverseFunctionCallingTests {
     public void configure() {
         Map<String, String> parameters = new HashMap<>();
         functionCalling.configure(parameters);
-        Assert.assertEquals(14, parameters.size());
+        Assert.assertEquals(15, parameters.size()); // Updated for token_usage_path
         Assert.assertEquals(BEDROCK_CONVERSE_TOOL_TEMPLATE, parameters.get("tool_template"));
     }
 
@@ -172,5 +173,54 @@ public class BedrockConverseFunctionCallingTests {
         assertEquals(2, resultContent.size());
         assertEquals("Some text", ((Map<?, ?>) resultContent.get(0)).get("text"));
         assertEquals("tool1", ((Map<?, ?>) ((Map<?, ?>) resultContent.get(1)).get("toolUse")).get("name"));
+    }
+
+    @Test
+    public void extractTokenUsage_allFields() {
+        Map<String, Object> usageMap = new HashMap<>();
+        usageMap.put("inputTokens", 100);
+        usageMap.put("outputTokens", 50);
+        usageMap.put("totalTokens", 150);
+        usageMap.put("cacheReadInputTokens", 10);
+        usageMap.put("cacheWriteInputTokens", 5);
+        Map<String, Object> response = new HashMap<>();
+        response.put("usage", usageMap);
+
+        TokenUsage result = functionCalling.extractTokenUsage(response);
+
+        Assert.assertNotNull(result);
+        Assert.assertEquals(Long.valueOf(100), result.getInputTokens());
+        Assert.assertEquals(Long.valueOf(50), result.getOutputTokens());
+        Assert.assertEquals(Long.valueOf(150), result.getTotalTokens());
+        Assert.assertEquals(Long.valueOf(10), result.getCacheReadInputTokens());
+        Assert.assertEquals(Long.valueOf(5), result.getCacheCreationInputTokens());
+    }
+
+    @Test
+    public void extractTokenUsage_nullInput() {
+        Assert.assertNull(functionCalling.extractTokenUsage(null));
+    }
+
+    @Test
+    public void extractTokenUsage_missingUsageKey() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("other", "data")));
+    }
+
+    @Test
+    public void extractTokenUsage_usageNotMap() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("usage", "not_a_map")));
+    }
+
+    @Test
+    public void extractTokenUsage_exceptionDuringExtraction() {
+        Map<String, Object> badUsageMap = new HashMap<>() {
+            @Override
+            public Object get(Object key) {
+                throw new RuntimeException("Simulated error");
+            }
+        };
+        Map<String, Object> response = new HashMap<>();
+        response.put("usage", badUsageMap);
+        Assert.assertNull(functionCalling.extractTokenUsage(response));
     }
 }

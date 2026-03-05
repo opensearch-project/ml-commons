@@ -7,9 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,7 +25,6 @@ import javax.naming.AuthenticationException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agui.BaseEvent;
-import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.TextMessageContentEvent;
 import org.opensearch.ml.common.agui.TextMessageEndEvent;
 import org.opensearch.ml.common.agui.TextMessageStartEvent;
@@ -63,6 +60,7 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockDeltaEvent;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockStartEvent;
+import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamMetadataEvent;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamOutput;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
@@ -70,6 +68,7 @@ import software.amazon.awssdk.services.bedrockruntime.model.GuardrailStreamConfi
 import software.amazon.awssdk.services.bedrockruntime.model.ImageBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ImageSource;
 import software.amazon.awssdk.services.bedrockruntime.model.Message;
+import software.amazon.awssdk.services.bedrockruntime.model.MessageStopEvent;
 import software.amazon.awssdk.services.bedrockruntime.model.SystemContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.Tool;
 import software.amazon.awssdk.services.bedrockruntime.model.ToolConfiguration;
@@ -80,6 +79,33 @@ import software.amazon.awssdk.services.bedrockruntime.model.ToolSpecification;
 import software.amazon.awssdk.services.bedrockruntime.model.ValidationException;
 import software.amazon.awssdk.services.s3.model.InvalidRequestException;
 
+/**
+ * Bedrock ConverseStream handler supporting three streaming paths:
+ *
+ * <p><b>Bedrock event sequence:</b>
+ * <pre>
+ * ContentBlockStart → ContentBlockDelta* → ContentBlockStop → ... → MessageStop → Metadata → onComplete()
+ * </pre>
+ *
+ * <p><b>Streaming paths:</b>
+ * <ul>
+ *   <li><b>Normal predict (no agent):</b> Text chunks streamed to client via SSE.
+ *       Stream closed at onComplete after Metadata (token usage) is captured.
+ *   <li><b>Conversational agent (non-AGUI):</b> Text chunks streamed via SSE. At onComplete,
+ *       agent runner is notified with a Bedrock-format response containing accumulated content
+ *       and token usage. Agent runner handles memory save and stream closure via StreamingWrapper.
+ *   <li><b>AG-UI agent:</b> Structured AG-UI events streamed (TextMessageStart/Content/End,
+ *       ToolCallStart/Args/End, RunFinished). AG-UI events fire in real-time at MessageStop.
+ *       Agent runner is notified at onComplete with accumulated content and token usage.
+ *       Stream closure is handled by StreamingWrapper (same as conv agent).
+ * </ul>
+ *
+ * <p><b>Key design decision:</b> All paths defer finalization to {@code onComplete()} so that
+ * the Metadata event (which carries token usage) is captured before constructing the response.
+ * AG-UI streaming protocol events (TextMessage*, ToolCall*, RunFinished) still fire at
+ * MessageStop time for real-time delivery; only the agent runner notification and stream
+ * closure are deferred.
+ */
 @Log4j2
 public class BedrockStreamingHandler extends BaseStreamingHandler {
 
@@ -87,14 +113,23 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private final AwsConnector connector;
     private final Map<String, String> parameters;
     private final boolean isAGUIAgent;
-    private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
 
+    /**
+     * States for the Bedrock ConverseStream state machine.
+     *
+     *   STREAMING_CONTENT       — receiving text content deltas
+     *   TOOL_CALL_DETECTED      — ContentBlockStart with toolUse received
+     *   ACCUMULATING_TOOL_INPUT — receiving tool input deltas
+     *   AWAITING_COMPLETION     — MessageStop received, waiting for Metadata + onComplete to finalize
+     *
+     * All paths (AGUI, conv agent, predict) converge to AWAITING_COMPLETION at MessageStop.
+     * Finalization always happens in onComplete() after the Metadata event (token usage) is captured.
+     */
     private enum StreamState {
         STREAMING_CONTENT,
         TOOL_CALL_DETECTED,
         ACCUMULATING_TOOL_INPUT,
-        WAITING_FOR_TOOL_RESULT,
-        COMPLETED
+        AWAITING_COMPLETION
     }
 
     public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector) {
@@ -131,6 +166,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             StringBuilder toolInputAccumulator = new StringBuilder();
             StringBuilder accumulatedContent = new StringBuilder();
             AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
+            AtomicReference<Map<String, Object>> tokenUsage = new AtomicReference<>();
 
             // Build Bedrock client
             BedrockRuntimeAsyncClient bedrockClient = buildBedrockRuntimeAsyncClient();
@@ -158,13 +194,30 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     listener.onFailure(new MLException(REMOTE_SERVICE_ERROR + error.getMessage(), error));
                 }
             }).onComplete(() -> {
-                if (currentState.get() != StreamState.WAITING_FOR_TOOL_RESULT) {
-                    sendCompletionResponse(isStreamClosed, listener);
+                if (currentState.get() == StreamState.AWAITING_COMPLETION) {
+                    // All paths converge here: Metadata (token usage) has been captured.
+                    // Notify agent runner with response, or close stream for predict.
+                    onStreamComplete(listener, isStreamClosed, toolName, toolInput, toolUseId, accumulatedContent, tokenUsage);
                 } else {
-                    log.debug("Tool execution in progress - keeping stream open");
+                    // Safety net: unexpected early completion (e.g., error during streaming)
+                    log
+                        .warn(
+                            "Stream completed in unexpected state [{}]. Token usage {}: {}",
+                            currentState.get(),
+                            tokenUsage.get() != null ? "was captured" : "was not captured",
+                            tokenUsage.get()
+                        );
+                    sendCompletionResponse(isStreamClosed, listener);
                 }
             }).subscriber(event -> {
                 log.debug("BEDROCK_RAW_EVENT: Type={}, Event={}", event.sdkEventType(), event);
+                // Capture Metadata event (token usage) before state machine processing.
+                // Metadata arrives after MessageStop, before onComplete — all paths capture it
+                // and all paths (AGUI, conv agent, predict) use it in onStreamComplete.
+                if (isMetadataEvent(event)) {
+                    captureTokenUsage(event, tokenUsage);
+                    return;
+                }
                 handleStreamEvent(
                     event,
                     listener,
@@ -292,6 +345,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     }
                 } else if (isContentDelta(event)) {
                     String content = getTextContent(event);
+                    // Accumulate content for all paths — needed for createFinalAnswerResponse (conv agent)
+                    // and createToolUseResponse (text blocks before tool calls)
+                    accumulatedContent.append(content);
 
                     // Log time to first token
                     if (!firstTokenReceived.get() && content != null && !content.isEmpty()) {
@@ -309,7 +365,6 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     }
 
                     if (isAGUIAgent) {
-                        accumulatedContent.append(content);
 
                         if (!textMessageStarted) {
                             messageId = "msg_" + System.nanoTime();
@@ -327,7 +382,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     } else {
                         sendContentResponse(content, false, listener);
                     }
-                } else if (isStreamComplete(event)) {
+                } else if (isEndTurnStop(event)) {
+                    // AG-UI: send terminal streaming protocol events immediately
                     if (isAGUIAgent) {
                         if (textMessageStarted) {
                             parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
@@ -335,18 +391,13 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                             sendAGUIEvent(textMessageEndEvent, false, listener);
                             log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
                         }
-
-                        String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-                        String runId = parameters.get(AGUI_PARAM_RUN_ID);
-                        BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                        sendAGUIEvent(runFinishedEvent, false, listener);
-                        log.debug("BedrockStreamingHandler: Added RUN_FINISHED event - ReAct loop completed");
-
-                        listener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
+                        // RUN_FINISHED is emitted by RestMLExecuteStreamAction after token_usage,
+                        // once the final response chunk (is_last=true) arrives from the agent runner.
                     }
 
-                    currentState.set(StreamState.COMPLETED);
-                    sendCompletionResponse(isStreamClosed, listener);
+                    // All paths: defer finalization to onComplete() so Metadata (token usage) is captured.
+                    // onStreamComplete() will notify the agent runner or close the stream.
+                    currentState.set(StreamState.AWAITING_COMPLETION);
                 }
                 break;
 
@@ -384,28 +435,28 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     // Since we do not support parallel tool execution yet, drop tool args after the first
                     firstToolSent.set(true);
                     log.info("First tool complete, will drop events for subsequent tools");
-                } else if (isToolInputComplete(event)) {
+                } else if (isToolUseStop(event)) {
                     // Ensure toolInput is set even if it's empty
                     if (toolInput.get() == null) {
                         toolInput.set(Map.of());
                     }
 
+                    // AG-UI: send ToolCallEnd streaming protocol event immediately
                     if (isAGUIAgent) {
                         BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
                         sendAGUIEvent(toolCallEndEvent, false, listener);
                         log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}'", toolName.get());
                     }
 
-                    currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
-                    listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId, accumulatedContent));
+                    // All paths: defer finalization to onComplete() so Metadata (token usage) is captured.
+                    // onStreamComplete() will send createToolUseResponse with token usage included.
+                    currentState.set(StreamState.AWAITING_COMPLETION);
                 }
                 break;
 
-            case WAITING_FOR_TOOL_RESULT:
-                log.debug("Waiting for tool result - keeping stream open");
-                break;
-
-            case COMPLETED:
+            case AWAITING_COMPLETION:
+                // MessageStop received, waiting for Metadata event and onComplete to finalize.
+                // Metadata capture is handled in the subscriber before this switch statement.
                 break;
         }
     }
@@ -442,32 +493,98 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             && ((ContentBlockDeltaEvent) event).delta().toolUse() != null;
     }
 
-    private boolean isStreamComplete(ConverseStreamOutput event) {
-        return event.sdkEventType() == ConverseStreamOutput.EventType.MESSAGE_STOP && !event.toString().contains(STOP_REASON_TOOL_USE);
+    /**
+     * Checks if the event is a MessageStop with a non-tool_use stop reason (e.g., end_turn, max_tokens).
+     * Note: this is NOT stream completion — the Metadata event and onComplete() still follow.
+     */
+    private boolean isEndTurnStop(ConverseStreamOutput event) {
+        if (!(event instanceof MessageStopEvent)) {
+            return false;
+        }
+        return !"tool_use".equals(((MessageStopEvent) event).stopReasonAsString());
     }
 
-    private boolean isToolInputComplete(ConverseStreamOutput event) {
-        return event.sdkEventType() == ConverseStreamOutput.EventType.MESSAGE_STOP && event.toString().contains(STOP_REASON_TOOL_USE);
+    /**
+     * Checks if the event is a MessageStop with tool_use stop reason,
+     * indicating the LLM wants to call a tool.
+     */
+    private boolean isToolUseStop(ConverseStreamOutput event) {
+        if (!(event instanceof MessageStopEvent)) {
+            return false;
+        }
+        return "tool_use".equals(((MessageStopEvent) event).stopReasonAsString());
     }
 
     private boolean isCurrentToolInputComplete(ConverseStreamOutput event) {
         return event.sdkEventType() == ConverseStreamOutput.EventType.CONTENT_BLOCK_STOP;
     }
 
+    private boolean isMetadataEvent(ConverseStreamOutput event) {
+        return event instanceof ConverseStreamMetadataEvent;
+    }
+
     /**
-     * Create a Bedrock-formatted final answer response that parseLLMOutput can extract
-     * the final answer from. Uses the same format as a Bedrock Converse API response
-     * with stopReason="end_turn".
+     * Extracts token usage from the Bedrock Metadata event and stores it for inclusion
+     * in the response constructed at onComplete time.
+     */
+    private void captureTokenUsage(ConverseStreamOutput event, AtomicReference<Map<String, Object>> tokenUsage) {
+        ConverseStreamMetadataEvent metadataEvent = (ConverseStreamMetadataEvent) event;
+        if (metadataEvent.usage() != null) {
+            Map<String, Object> usage = new HashMap<>();
+            usage.put("inputTokens", metadataEvent.usage().inputTokens());
+            usage.put("outputTokens", metadataEvent.usage().outputTokens());
+            usage.put("totalTokens", metadataEvent.usage().totalTokens());
+            tokenUsage.set(usage);
+            log.debug("Captured token usage from metadata: {}", usage);
+        }
+    }
+
+    /**
+     * Finalization — called from onComplete() after all Bedrock events (including Metadata)
+     * have been received. Constructs the appropriate response with token usage and notifies upstream.
+     * All paths (AGUI, conv agent, predict) converge here.
+     *
+     * Three outcomes:
+     * - Tool call (agent): send Bedrock-format tool use response with token usage to agent runner
+     * - End turn (agent): send Bedrock-format final answer with token usage to agent runner
+     * - End turn (predict, no agent): close stream directly
+     */
+    private void onStreamComplete(
+        StreamPredictActionListener<MLTaskResponse, ?> listener,
+        AtomicBoolean isStreamClosed,
+        AtomicReference<String> toolName,
+        AtomicReference<Map<String, Object>> toolInput,
+        AtomicReference<String> toolUseId,
+        StringBuilder accumulatedContent,
+        AtomicReference<Map<String, Object>> tokenUsage
+    ) {
+        if (toolName.get() != null) {
+            // Tool use: construct response with accumulated text + tool call + token usage
+            listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId, accumulatedContent, tokenUsage.get()));
+        } else if (listener.hasAgentListener()) {
+            // Conv agent end_turn: construct final answer with accumulated content + token usage
+            listener.onResponse(createFinalAnswerResponse(accumulatedContent.toString(), tokenUsage.get()));
+        } else {
+            // Predict (no agent): close stream directly
+            sendCompletionResponse(isStreamClosed, listener);
+        }
+    }
+
+    /**
+     * Create a Bedrock-formatted final answer response with optional token usage.
+     * Token usage is captured from the Bedrock Metadata event at onComplete time.
+     * The agent runner extracts token usage via functionCalling.extractTokenUsage().
+     *
+     * Response format matches Bedrock Converse API: stopReason="end_turn", output.message.content[].text
      */
     @VisibleForTesting
-    MLTaskResponse createFinalAnswerResponse(String text) {
-        Map<String, Object> wrappedResponse = Map
-            .of(
-                "output",
-                Map.of("message", Map.of("content", List.of(Map.of("text", text != null ? text : "")))),
-                "stopReason",
-                "end_turn"
-            );
+    MLTaskResponse createFinalAnswerResponse(String text, Map<String, Object> tokenUsage) {
+        Map<String, Object> wrappedResponse = new HashMap<>();
+        wrappedResponse.put("output", Map.of("message", Map.of("content", List.of(Map.of("text", text != null ? text : "")))));
+        wrappedResponse.put("stopReason", "end_turn");
+        if (tokenUsage != null) {
+            wrappedResponse.put("usage", tokenUsage);
+        }
 
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
@@ -475,11 +592,19 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         return new MLTaskResponse(output);
     }
 
+    /**
+     * Create a tool use response with optional token usage.
+     * Token usage is captured from the Bedrock Metadata event at onComplete time.
+     *
+     * Response format matches Bedrock Converse API: stopReason="tool_use",
+     * output.message.content[] with text blocks (if any) + toolUse block.
+     */
     private MLTaskResponse createToolUseResponse(
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId,
-        StringBuilder accumulatedContent
+        StringBuilder accumulatedContent,
+        Map<String, Object> tokenUsage
     ) {
         // Validate inputs
         if (toolName == null || toolInput == null || toolUseId == null) {
@@ -494,8 +619,12 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         }
         contentBlocks.add(Map.of("toolUse", Map.of("name", toolName.get(), "input", toolInput.get(), "toolUseId", toolUseId.get())));
 
-        Map<String, Object> wrappedResponse = Map
-            .of("output", Map.of("message", Map.of("content", contentBlocks)), "stopReason", "tool_use");
+        Map<String, Object> wrappedResponse = new HashMap<>();
+        wrappedResponse.put("output", Map.of("message", Map.of("content", contentBlocks)));
+        wrappedResponse.put("stopReason", "tool_use");
+        if (tokenUsage != null) {
+            wrappedResponse.put("usage", tokenUsage);
+        }
 
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
