@@ -122,7 +122,6 @@ public class BedrockInvokeClaudeFunctionCalling implements FunctionCalling {
     public List<Map<String, String>> handle(ModelTensorOutput tmpModelTensorOutput, Map<String, String> parameters) {
         List<Map<String, String>> output = new ArrayList<>();
         Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-        log.info("BedrockInvokeClaude handle() dataAsMap keys: {}", dataAsMap.keySet());
 
         // Wrap flat responses to match wrapped format expected by configure() paths
         boolean isWrapped = isWrappedFormat(dataAsMap);

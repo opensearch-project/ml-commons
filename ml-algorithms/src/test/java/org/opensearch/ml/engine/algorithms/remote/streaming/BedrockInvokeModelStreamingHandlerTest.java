@@ -40,7 +40,8 @@ public class BedrockInvokeModelStreamingHandlerTest {
 
     @Test
     public void testBuildInvokeModelRequest_passesPayloadAsRawBytes() {
-        String payload = "{\"anthropic_version\":\"bedrock-2023-05-31\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}";
+        String payload =
+            "{\"anthropic_version\":\"bedrock-2023-05-31\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}";
         Map<String, String> parameters = new HashMap<>();
         parameters.put("model", "anthropic.claude-3-5-sonnet-20241022-v2:0");
 
@@ -128,11 +129,7 @@ public class BedrockInvokeModelStreamingHandlerTest {
     public void testConstructorWithParameters() {
         Map<String, String> params = new HashMap<>();
         params.put("model", "test-model");
-        BedrockInvokeModelStreamingHandler paramHandler = new BedrockInvokeModelStreamingHandler(
-            mockHttpClient,
-            mockConnector,
-            params
-        );
+        BedrockInvokeModelStreamingHandler paramHandler = new BedrockInvokeModelStreamingHandler(mockHttpClient, mockConnector, params);
 
         assertNotNull(paramHandler);
     }

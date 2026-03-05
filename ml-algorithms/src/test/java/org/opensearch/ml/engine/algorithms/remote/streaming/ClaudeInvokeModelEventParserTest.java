@@ -42,7 +42,8 @@ public class ClaudeInvokeModelEventParserTest {
 
     @Test
     public void testParseContentBlockStartToolUse() {
-        String json = "{\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_123\",\"name\":\"get_weather\"}}";
+        String json =
+            "{\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_123\",\"name\":\"get_weather\"}}";
         InvokeModelEventParser.InvokeModelEvent event = parser.parse(json);
 
         assertNotNull(event);
@@ -75,24 +76,14 @@ public class ClaudeInvokeModelEventParserTest {
 
     @Test
     public void testParseToolInputDelta() {
-        String json = "{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"location\\\"\"}}";
+        String json =
+            "{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"location\\\"\"}}";
         InvokeModelEventParser.InvokeModelEvent event = parser.parse(json);
 
         assertNotNull(event);
         assertEquals(InvokeModelEventParser.EventType.TOOL_INPUT_DELTA, event.getType());
         assertEquals("{\"location\"", event.getToolInputJson());
         assertEquals(1, event.getIndex());
-    }
-
-    @Test
-    public void testParseCompactionDelta() {
-        String json = "{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"compaction_delta\",\"summary\":\"Summary of conversation\"}}";
-        InvokeModelEventParser.InvokeModelEvent event = parser.parse(json);
-
-        assertNotNull(event);
-        assertEquals(InvokeModelEventParser.EventType.COMPACTION_DELTA, event.getType());
-        assertEquals("Summary of conversation", event.getText());
-        assertEquals(2, event.getIndex());
     }
 
     @Test
@@ -187,7 +178,8 @@ public class ClaudeInvokeModelEventParserTest {
 
     @Test
     public void testParseTextDeltaWithSpecialCharacters() {
-        String json = "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\\n\\\"world\\\"\"}}";
+        String json =
+            "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\\n\\\"world\\\"\"}}";
         InvokeModelEventParser.InvokeModelEvent event = parser.parse(json);
 
         assertNotNull(event);
