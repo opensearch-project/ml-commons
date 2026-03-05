@@ -99,7 +99,7 @@ public class ClaudeInvokeModelEventParser implements InvokeModelEventParser {
                 return InvokeModelEvent.toolInputDelta(index, delta.path("partial_json").asText(""));
 
             case "compaction_delta":
-                return InvokeModelEvent.compactionDelta(index, delta.path("summary").asText(""));
+                return InvokeModelEvent.compactionDelta(index, delta.path("content").asText(""));
 
             default:
                 log.debug("Unknown delta type: {}", deltaType);

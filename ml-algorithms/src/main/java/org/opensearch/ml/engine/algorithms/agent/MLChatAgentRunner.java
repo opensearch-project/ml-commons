@@ -1204,19 +1204,42 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
         }
 
-        // Add final assistant message with the answer
-        ContentBlock contentBlock = new ContentBlock();
-        contentBlock.setType(ContentType.TEXT);
-        contentBlock.setText(finalAnswer);
+        // Check if this is BedrockInvokeModelProvider (which supports structured responses with compaction)
+        boolean isBedrockInvoke = modelProvider instanceof org.opensearch.ml.common.agent.BedrockInvokeModelProvider;
 
-        Message assistantMessage = new Message();
-        assistantMessage.setRole("assistant");
-        assistantMessage.setContent(List.of(contentBlock));
+        Message assistantMessage = null;
+
+        // Only parse structured responses for Bedrock InvokeModel to avoid breaking existing flows
+        if (isBedrockInvoke) {
+            try {
+                // Parse finalAnswer to extract structured content (including compaction blocks)
+                // Bedrock Invoke model returns a compaction message along with the final response.
+                // Therefore, we need to parse it here and the raw final json is returned.
+                // For other models, only the final answer is provided.
+                assistantMessage = modelProvider.parseToUnifiedMessage(finalAnswer);
+            } catch (Exception e) {
+                log.debug("Could not parse finalAnswer as structured message", e);
+            }
+        }
+
+        // If parsing failed or returned null, or if not Bedrock Invoke, create a simple text message
+        if (assistantMessage == null) {
+            ContentBlock contentBlock = new ContentBlock();
+            contentBlock.setType(ContentType.TEXT);
+            contentBlock.setText(finalAnswer);
+
+            assistantMessage = new Message();
+            assistantMessage.setRole("assistant");
+            assistantMessage.setContent(List.of(contentBlock));
+        }
 
         assistantMessages.add(assistantMessage);
 
         // Save assistant response messages (tool interactions + final answer)
-        memory.saveStructuredMessages(assistantMessages, ActionListener.wrap(v -> { listener.onResponse(null); }, listener::onFailure));
+        memory.saveStructuredMessages(assistantMessages, ActionListener.wrap(v -> { listener.onResponse(null); }, e -> {
+            log.error("Failed to save structured messages to memory", e);
+            listener.onFailure(e);
+        }));
     }
 
     public static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
