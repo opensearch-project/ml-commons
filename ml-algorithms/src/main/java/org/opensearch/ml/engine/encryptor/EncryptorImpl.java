@@ -69,7 +69,7 @@ public class EncryptorImpl implements Encryptor {
     private ClusterService clusterService;
     private Client client;
     private SdkClient sdkClient;
-    private final Map<String, List<ActionListener<Boolean>>> tenantWaitingListenerMap;
+    private final Map<String, List<ActionListener<Boolean>>> tenantWaitingListenerMap = new ConcurrentHashMap<>();
     private final Cache<String, String> tenantMasterKeys;
     private MLIndicesHandler mlIndicesHandler;
     private final Object lock = new Object();
@@ -80,7 +80,6 @@ public class EncryptorImpl implements Encryptor {
     public static final String DEFAULT_TENANT_ID = "03000200-0400-0500-0006-000700080009";
 
     public EncryptorImpl(ClusterService clusterService, Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler) {
-        this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
         this.masterKeyCacheTtlMinutes = ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES.get(clusterService.getSettings());
         this.tenantMasterKeys = CacheBuilder
             .newBuilder()
@@ -108,7 +107,6 @@ public class EncryptorImpl implements Encryptor {
         long cacheTtl,
         TimeUnit timeUnit
     ) {
-        this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
         this.tenantMasterKeys = CacheBuilder
             .newBuilder()
             .expireAfterWrite(cacheTtl, timeUnit)
@@ -131,7 +129,6 @@ public class EncryptorImpl implements Encryptor {
 
     // Package-private constructor for testing with custom TTL
     EncryptorImpl(String tenantId, String masterKey, long cacheTtl, TimeUnit timeUnit) {
-        this.tenantWaitingListenerMap = new ConcurrentHashMap<>();
         this.tenantMasterKeys = CacheBuilder
             .newBuilder()
             .expireAfterWrite(cacheTtl, timeUnit)
@@ -269,7 +266,7 @@ public class EncryptorImpl implements Encryptor {
         if (waitingListeners != null) {
             synchronized (waitingListeners) {
                 if (exception != null) {
-                    log.debug("Failed to init master key for tenant {}", tenantId, exception);
+                    log.error("Failed to init master key for tenant {}", tenantId, exception);
                     if (exception instanceof RuntimeException) {
                         waitingListeners.forEach(listener -> listener.onFailure(exception));
                     } else {
