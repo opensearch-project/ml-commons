@@ -174,7 +174,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                     }
                 })
                 .subscriber(event -> {
-                    // log.debug("INVOKE_MODEL_RAW_EVENT: Type={}, Event={}", event.sdkEventType(), event.toString());
                     handleResponseStreamEvent(
                         event,
                         listener,
@@ -209,17 +208,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
 
     InvokeModelWithResponseStreamRequest buildInvokeModelRequest(String payload, Map<String, String> parameters) {
         String modelId = parameters.get("model");
-        log.info("[BEDROCK_REQUEST] modelId: {}", modelId);
-        log.info("[BEDROCK_REQUEST] payload length: {} chars", payload != null ? payload.length() : 0);
-
-        // Log sanitized payload structure without full text content
-        try {
-            String sanitizedPayload = sanitizePayloadForLogging(payload);
-            log.info("[BEDROCK_REQUEST] Payload structure:\n{}", sanitizedPayload);
-        } catch (Exception e) {
-            log.warn("[BEDROCK_REQUEST] Failed to sanitize payload for logging", e);
-        }
-
         return InvokeModelWithResponseStreamRequest
             .builder()
             .modelId(modelId)
@@ -227,74 +215,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             .accept("application/json")
             .body(SdkBytes.fromString(payload, StandardCharsets.UTF_8))
             .build();
-    }
-
-    /**
-     * Sanitizes the payload for logging by replacing text content with PLACEHOLDER
-     */
-    private String sanitizePayloadForLogging(String payload) {
-        try {
-            Map<String, Object> payloadMap = OBJECT_MAPPER.readValue(payload, Map.class);
-
-            // Replace text/content fields in messages
-            if (payloadMap.containsKey("messages")) {
-                List<Map<String, Object>> messages = (List<Map<String, Object>>) payloadMap.get("messages");
-                for (Map<String, Object> message : messages) {
-                    if (message.containsKey("content")) {
-                        List<Map<String, Object>> contentBlocks = (List<Map<String, Object>>) message.get("content");
-                        if (contentBlocks != null) {
-                            for (Map<String, Object> block : contentBlocks) {
-                                if (block.containsKey("text")) {
-                                    block.put("text", "PLACEHOLDER");
-                                }
-                                if (block.containsKey("content")) {
-                                    block.put("content", "PLACEHOLDER");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Replace system prompt
-            if (payloadMap.containsKey("system")) {
-                payloadMap.put("system", "PLACEHOLDER");
-            }
-
-            // Replace tool descriptions
-            if (payloadMap.containsKey("tools")) {
-                List<Map<String, Object>> tools = (List<Map<String, Object>>) payloadMap.get("tools");
-                if (tools != null) {
-                    for (Map<String, Object> tool : tools) {
-                        if (tool.containsKey("description")) {
-                            tool.put("description", "PLACEHOLDER");
-                        }
-                        if (tool.containsKey("input_schema")) {
-                            Map<String, Object> schema = (Map<String, Object>) tool.get("input_schema");
-                            if (schema != null && schema.containsKey("properties")) {
-                                Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
-                                if (properties != null) {
-                                    for (Map.Entry<String, Object> entry : properties.entrySet()) {
-                                        if (entry.getValue() instanceof Map) {
-                                            Map<String, Object> prop = (Map<String, Object>) entry.getValue();
-                                            if (prop.containsKey("description")) {
-                                                prop.put("description", "PLACEHOLDER");
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Pretty print the sanitized JSON
-            return OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(payloadMap);
-        } catch (Exception e) {
-            log.warn("[BEDROCK_REQUEST] Failed to sanitize payload", e);
-            return payload.substring(0, Math.min(500, payload.length())) + "...";
-        }
     }
 
     private void handleResponseStreamEvent(
@@ -319,16 +239,10 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             return;
         }
 
-        // Log raw JSON event from Bedrock for debugging
-        // log.info("Bedrock streaming raw JSON event: {}", jsonEvent);
-
         InvokeModelEventParser.InvokeModelEvent parsed = eventParser.parse(jsonEvent);
         if (parsed == null) {
-            // log.info("Event parsing returned null - event type may be unknown or ignorable");
             return;
         }
-
-        // log.info("Parsed event type: {}", parsed.getType());
 
         handleParsedEvent(
             parsed,
@@ -466,7 +380,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
 
                     BaseEvent toolCallStartEvent = new ToolCallStartEvent(toolUseId.get(), toolName.get(), messageId);
                     sendAGUIEvent(toolCallStartEvent, false, listener);
-                    // log.debug("AG-UI: Sent TOOL_CALL_START for messageId: {} and toolUseId: {}", messageId, toolUseId);
                 }
                 break;
 
@@ -483,7 +396,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
 
                         BaseEvent textMessageStartEvent = new TextMessageStartEvent(messageId, "assistant");
                         sendAGUIEvent(textMessageStartEvent, false, listener);
-                        // log.debug("AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", messageId);
                     }
 
                     BaseEvent textMessageContentEvent = new TextMessageContentEvent(messageId, textContent);
@@ -496,8 +408,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             case COMPACTION_DELTA:
                 // Accumulate compaction summary content (comes in multiple deltas like text)
                 String compactionContent = event.getText();
-                // log.info("Message compaction delta received - appending {} characters, currentCompactionBlock now has {} characters",
-                // compactionContent.length(), currentCompactionBlock.length() + compactionContent.length());
                 accumulatedContent.append(compactionContent);
                 currentCompactionBlock.append(compactionContent);
 
@@ -562,7 +472,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                 parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
                 BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
                 sendAGUIEvent(toolCallArgsEvent, false, listener);
-                // log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
             } else {
                 sendContentResponse(inputFragment, false, listener);
             }
@@ -594,7 +503,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                     if (isAGUIAgent) {
                         BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
                         sendAGUIEvent(toolCallArgsEvent, false, listener);
-                        // log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
                     } else {
                         sendContentResponse(inputFragment, false, listener);
                     }
@@ -604,7 +512,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             case CONTENT_BLOCK_STOP:
                 // Current tool's input is complete
                 firstToolSent.set(true);
-                // log.info("First tool complete, will drop events for subsequent tools");
                 break;
 
             case MESSAGE_DELTA:
@@ -638,7 +545,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                     if (isAGUIAgent) {
                         BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
                         sendAGUIEvent(toolCallEndEvent, false, listener);
-                        // log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}'", toolName.get());
                     }
 
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
@@ -665,14 +571,10 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
         String messageId,
         boolean textMessageStarted
     ) {
-        // log.info("handleMessageStop called - currentCompactionBlock.length()={}, currentTextBlock.length()={}, contentBlocks.size()={}",
-        // currentCompactionBlock.length(), currentTextBlock.length(), contentBlocks.size());
-
         String stopReason = pendingStopReason.get();
 
         if ("tool_use".equals(stopReason)) {
             // This shouldn't happen in STREAMING_CONTENT state, but handle defensively
-            // log.warn("Received tool_use stop reason in STREAMING_CONTENT state");
             return;
         }
 
@@ -682,9 +584,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             compactionBlock.setType(ContentType.COMPACTION);
             compactionBlock.setContent(currentCompactionBlock.toString());
             contentBlocks.add(compactionBlock);
-            // log.info("Finalized compaction block with {} characters", currentCompactionBlock.length());
-        } else {
-            // log.info("Skipping compaction block finalization - currentCompactionBlock is empty");
         }
 
         // Finalize current text block if it has content
@@ -693,9 +592,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             textBlock.setType(ContentType.TEXT);
             textBlock.setText(currentTextBlock.toString());
             contentBlocks.add(textBlock);
-            // log.info("Finalized text block with {} characters", currentTextBlock.length());
-        } else {
-            // log.info("Skipping text block finalization - currentTextBlock is empty");
         }
 
         // For end_turn, compaction, or any other stop reason, complete the stream
@@ -711,7 +607,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             String runId = parameters.get(AGUI_PARAM_RUN_ID);
             BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
             sendAGUIEvent(runFinishedEvent, false, listener);
-            // log.debug("BedrockInvokeModelStreamingHandler: Added RUN_FINISHED event - stream completed");
 
             listener.onResponse(createFinalAnswerResponse(contentBlocks));
         }
@@ -726,12 +621,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
      * Content blocks include both text and compaction blocks in the order they appeared.
      */
     private MLTaskResponse createFinalAnswerResponse(List<ContentBlock> contentBlocks) {
-        // log.info("createFinalAnswerResponse called with {} content blocks", contentBlocks.size());
-        // for (int i = 0; i < contentBlocks.size(); i++) {
-        // ContentBlock block = contentBlocks.get(i);
-        // log.info(" Content block {}: type={}", i, block.getType());
-        // }
-
         // Build content array with proper Claude Messages API format
         List<Map<String, String>> content = new ArrayList<>();
 
@@ -755,8 +644,6 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                 "stop_reason",
                 "end_turn"
             );
-
-        // log.info("createFinalAnswerResponse: created wrappedResponse with {} content blocks in message", content.size());
 
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
@@ -813,7 +700,7 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                 "tool_use"
             );
 
-        log.info("BedrockInvokeModel streaming: Creating wrapped tool use response: {}", wrappedResponse);
+        log.debug("BedrockInvokeModel streaming: Creating wrapped tool use response with {} content blocks", contentBlocks.size());
 
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
