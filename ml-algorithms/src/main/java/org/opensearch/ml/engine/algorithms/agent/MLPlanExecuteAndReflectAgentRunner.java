@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -22,6 +23,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIG
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatusCode;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
@@ -357,7 +359,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                log.error("Failed to get chat history. agentId={}, tenantId={}", allParams.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
@@ -620,12 +622,22 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         finalListener
                     );
                 }, e -> {
-                    log.error("Failed to execute ReAct agent", e);
+                    String agentId = allParams.getOrDefault("agent_id", "unknown");
+                    String tenantIdLog = allParams.get(TENANT_ID_FIELD);
+                    log.error("Failed to execute ReAct agent. agentId={}, tenantId={}", agentId, tenantIdLog, e);
                     finalListener.onFailure(e);
                 }));
             }
         }, e -> {
-            log.error("Failed to run deep research agent", e);
+            log
+                .error(
+                    "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
+                    llm.getModelId(),
+                    allParams.get(AGENT_ID_FIELD),
+                    allParams.get(TENANT_ID_FIELD),
+                    extractStatusCode(e),
+                    e
+                );
             finalListener.onFailure(e);
         });
 
@@ -934,7 +946,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     return;
                 }
                 listener.onResponse(summary);
-            }, listener::onFailure));
+            }, e -> {
+                log
+                    .error(
+                        "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
+                        llmSpec.getModelId(),
+                        summaryParams.get(AGENT_ID_FIELD),
+                        summaryParams.get(TENANT_ID_FIELD),
+                        extractStatusCode(e),
+                        e
+                    );
+                listener.onFailure(e);
+            }));
         } catch (Exception e) {
             listener.onFailure(e);
         }
