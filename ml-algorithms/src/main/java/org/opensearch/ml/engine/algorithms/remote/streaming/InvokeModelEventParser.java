@@ -48,7 +48,15 @@ public interface InvokeModelEventParser {
         private final String stopReason;
         private final int index;
 
-        public InvokeModelEvent(EventType type, String text, String toolName, String toolUseId, String toolInputJson, String stopReason, int index) {
+        public InvokeModelEvent(
+            EventType type,
+            String text,
+            String toolName,
+            String toolUseId,
+            String toolInputJson,
+            String stopReason,
+            int index
+        ) {
             this.type = type;
             this.text = text;
             this.toolName = toolName;
