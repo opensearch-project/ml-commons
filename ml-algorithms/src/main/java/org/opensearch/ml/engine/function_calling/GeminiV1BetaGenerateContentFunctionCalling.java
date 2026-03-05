@@ -13,6 +13,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_RE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOKEN_USAGE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
@@ -30,8 +31,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -85,6 +88,9 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
         // TODO: Once tool call detection is refactored into FunctionCalling interface (see AgentUtils.java:434),
         // this parameter may need to be removed or repurposed since it's not used for Gemini.
         params.put(LLM_FINISH_REASON_TOOL_USE, "N/A");
+
+        // Token usage tracking paths
+        params.put(TOKEN_USAGE_PATH, "$.usageMetadata");
     }
 
     @Override
@@ -180,6 +186,33 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
         } catch (Exception e) {
             log.error("Failed to filter out to only first tool call", e);
             return dataAsMap;
+        }
+    }
+
+    @Override
+    public TokenUsage extractTokenUsage(Map<String, ?> llmResponseDataAsMap) {
+        if (llmResponseDataAsMap == null) {
+            return null;
+        }
+
+        try {
+            Object usageMetadataObj = llmResponseDataAsMap.get("usageMetadata");
+            if (!(usageMetadataObj instanceof Map)) {
+                return null;
+            }
+
+            Map<String, Object> usageMap = (Map<String, Object>) usageMetadataObj;
+
+            return TokenUsage
+                .builder()
+                .inputTokens(AgentUtils.getLongValue(usageMap, "promptTokenCount"))
+                .outputTokens(AgentUtils.getLongValue(usageMap, "candidatesTokenCount"))
+                .totalTokens(AgentUtils.getLongValue(usageMap, "totalTokenCount"))
+                .cacheReadInputTokens(AgentUtils.getLongValue(usageMap, "cachedContentInputTokenCount"))
+                .reasoningTokens(AgentUtils.getLongValue(usageMap, "thoughtsTokenCount"))
+                .build();
+        } catch (Exception e) {
+            return null;
         }
     }
 }

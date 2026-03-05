@@ -13,6 +13,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_RE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOKEN_USAGE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
@@ -30,8 +31,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -78,6 +81,9 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
 
         params.put(LLM_FINISH_REASON_PATH, "$.stopReason");
         params.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        // Token usage tracking paths
+        params.put(TOKEN_USAGE_PATH, "$.usage");
     }
 
     @Override
@@ -171,6 +177,35 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         } catch (Exception e) {
             log.error("Failed to filter out to only first tool call", e);
             return dataAsMap;
+        }
+    }
+
+    @Override
+    public TokenUsage extractTokenUsage(Map<String, ?> llmResponseDataAsMap) {
+        if (llmResponseDataAsMap == null) {
+            return null;
+        }
+
+        try {
+            Object usageObj = llmResponseDataAsMap.get("usage");
+            if (!(usageObj instanceof Map)) {
+                return null;
+            }
+
+            Map<String, Object> usageMap = (Map<String, Object>) usageObj;
+
+            // Bedrock Converse API always normalizes to camelCase format
+            // regardless of the underlying model (Claude, Llama, etc.)
+            return TokenUsage
+                .builder()
+                .inputTokens(AgentUtils.getLongValue(usageMap, "inputTokens"))
+                .outputTokens(AgentUtils.getLongValue(usageMap, "outputTokens"))
+                .totalTokens(AgentUtils.getLongValue(usageMap, "totalTokens"))
+                .cacheReadInputTokens(AgentUtils.getLongValue(usageMap, "cacheReadInputTokens"))
+                .cacheCreationInputTokens(AgentUtils.getLongValue(usageMap, "cacheWriteInputTokens"))
+                .build();
+        } catch (Exception e) {
+            return null;
         }
     }
 
