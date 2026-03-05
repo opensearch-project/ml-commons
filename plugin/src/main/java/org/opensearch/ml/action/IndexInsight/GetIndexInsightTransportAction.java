@@ -25,6 +25,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.indexInsight.FieldDescriptionTask;
+import org.opensearch.ml.common.indexInsight.IndexCorrelationTask;
 import org.opensearch.ml.common.indexInsight.IndexInsight;
 import org.opensearch.ml.common.indexInsight.IndexInsightAccessControllerHelper;
 import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
@@ -52,7 +53,8 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
     private static final MLIndexInsightType[] ALL_TYPE_ORDER = {
         MLIndexInsightType.STATISTICAL_DATA,
         MLIndexInsightType.FIELD_DESCRIPTION,
-        MLIndexInsightType.LOG_RELATED_INDEX_CHECK };
+        MLIndexInsightType.LOG_RELATED_INDEX_CHECK,
+        MLIndexInsightType.INDEX_CORRELATION };
 
     private final Client client;
     private final SdkClient sdkClient;
@@ -255,6 +257,10 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                 return new FieldDescriptionTask(request.getIndexName(), client, sdkClient);
             case LOG_RELATED_INDEX_CHECK:
                 return new LogRelatedIndexCheckTask(request.getIndexName(), client, sdkClient);
+            case INDEX_CORRELATION:
+                return new IndexCorrelationTask(request.getIndexName(), client, sdkClient);
+            case PATTERN_TYPE_CACHE:
+                throw new IllegalArgumentException("PATTERN_TYPE_CACHE is internal and cannot be queried directly");
             default:
                 throw new IllegalArgumentException("Unsupported task type: " + request.getTargetIndexInsight());
         }
