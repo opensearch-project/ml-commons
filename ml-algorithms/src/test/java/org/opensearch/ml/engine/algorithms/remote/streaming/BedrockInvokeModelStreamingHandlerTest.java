@@ -563,9 +563,9 @@ public class BedrockInvokeModelStreamingHandlerTest {
     }
 
     private MLTaskResponse invokeCreateFinalAnswerResponse(List<ContentBlock> contentBlocks) throws Exception {
-        Method method = BedrockInvokeModelStreamingHandler.class.getDeclaredMethod("createFinalAnswerResponse", List.class);
+        Method method = BedrockInvokeModelStreamingHandler.class.getDeclaredMethod("createFinalAnswerResponse", List.class, Map.class);
         method.setAccessible(true);
-        return (MLTaskResponse) method.invoke(handler, contentBlocks);
+        return (MLTaskResponse) method.invoke(handler, contentBlocks, null);
     }
 
     private MLTaskResponse invokeCreateToolUseResponse(
@@ -575,9 +575,9 @@ public class BedrockInvokeModelStreamingHandlerTest {
         List<ContentBlock> textBlocks
     ) throws Exception {
         Method method = BedrockInvokeModelStreamingHandler.class
-            .getDeclaredMethod("createToolUseResponse", AtomicReference.class, AtomicReference.class, AtomicReference.class, List.class);
+            .getDeclaredMethod("createToolUseResponse", AtomicReference.class, AtomicReference.class, AtomicReference.class, List.class, Map.class);
         method.setAccessible(true);
-        return (MLTaskResponse) method.invoke(handler, toolName, toolInput, toolUseId, textBlocks);
+        return (MLTaskResponse) method.invoke(handler, toolName, toolInput, toolUseId, textBlocks, null);
     }
 
     private boolean invokeIsThrottlingError(Throwable error) throws Exception {
