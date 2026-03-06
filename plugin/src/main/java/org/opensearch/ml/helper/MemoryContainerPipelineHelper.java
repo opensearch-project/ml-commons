@@ -12,6 +12,10 @@ import java.io.IOException;
 
 import org.opensearch.action.ingest.GetPipelineRequest;
 import org.opensearch.action.ingest.PutPipelineRequest;
+import org.opensearch.action.search.GetSearchPipelineAction;
+import org.opensearch.action.search.GetSearchPipelineRequest;
+import org.opensearch.action.search.PutSearchPipelineAction;
+import org.opensearch.action.search.PutSearchPipelineRequest;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -225,6 +229,100 @@ public final class MemoryContainerPipelineHelper {
         } else {
             log.debug("History index disabled, skipping creation");
             listener.onResponse(true);
+        }
+    }
+
+    /**
+     * Creates a hybrid search pipeline for the memory container.
+     * Uses normalization-processor with min_max normalization and arithmetic_mean combination (50/50 weights).
+     * Only created when embedding model is configured.
+     *
+     * @param longTermIndexName The long-term memory index name (used to derive pipeline name)
+     * @param client            The OpenSearch client
+     * @param listener          Action listener that receives true on success, or error on failure
+     */
+    public static void createHybridSearchPipeline(String longTermIndexName, Client client, ActionListener<Boolean> listener) {
+        String pipelineName = longTermIndexName + "-hybrid-search";
+
+        // Check if pipeline already exists (shared index scenario)
+        client.execute(GetSearchPipelineAction.INSTANCE, new GetSearchPipelineRequest(pipelineName), ActionListener.wrap(response -> {
+            if (!response.pipelines().isEmpty()) {
+                log.info("Hybrid search pipeline '{}' already exists, skipping creation", pipelineName);
+                listener.onResponse(true);
+                return;
+            }
+            createHybridSearchPipelineInternal(pipelineName, client, listener);
+        }, error -> {
+            // Only create on NOT_FOUND; for other errors (permission, cluster issues) log and continue
+            // Pipeline creation is best-effort — container creation should not fail if neural-search
+            // plugin is not installed (normalization-processor may be unavailable)
+            if (error instanceof org.opensearch.OpenSearchStatusException
+                && ((org.opensearch.OpenSearchStatusException) error).status() == org.opensearch.core.rest.RestStatus.NOT_FOUND) {
+                createHybridSearchPipelineInternal(pipelineName, client, listener);
+            } else {
+                log
+                    .warn(
+                        "Could not check hybrid search pipeline '{}', skipping creation. "
+                            + "Hybrid search may not work if neural-search plugin is not installed. Error: {}",
+                        pipelineName,
+                        error.getMessage()
+                    );
+                listener.onResponse(true); // best-effort: don't fail container creation
+            }
+        }));
+    }
+
+    private static void createHybridSearchPipelineInternal(String pipelineName, Client client, ActionListener<Boolean> listener) {
+        try {
+            XContentBuilder builder = XContentFactory
+                .jsonBuilder()
+                .startObject()
+                .field("description", "Hybrid search pipeline for agentic memory")
+                .startArray("phase_results_processors")
+                .startObject()
+                .startObject("normalization-processor")
+                .startObject("normalization")
+                .field("technique", "min_max")
+                .endObject()
+                .startObject("combination")
+                .field("technique", "arithmetic_mean")
+                .startObject("parameters")
+                .field("weights", new float[] { 0.5f, 0.5f })
+                .endObject()
+                .endObject()
+                .endObject()
+                .endObject()
+                .endArray()
+                .endObject();
+
+            PutSearchPipelineRequest putRequest = new PutSearchPipelineRequest(
+                pipelineName,
+                BytesReference.bytes(builder),
+                XContentType.JSON
+            );
+
+            client.execute(PutSearchPipelineAction.INSTANCE, putRequest, ActionListener.wrap(response -> {
+                if (response.isAcknowledged()) {
+                    log.info("Successfully created hybrid search pipeline: {}", pipelineName);
+                    listener.onResponse(true);
+                } else {
+                    log.warn("Hybrid search pipeline creation not acknowledged: {}, skipping", pipelineName);
+                    listener.onResponse(true); // best-effort
+                }
+            }, e -> {
+                // Best-effort: log warning but don't fail container creation
+                // normalization-processor may not be available if neural-search plugin is not installed
+                log
+                    .warn(
+                        "Could not create hybrid search pipeline '{}', skipping. " + "Hybrid search may not work. Error: {}",
+                        pipelineName,
+                        e.getMessage()
+                    );
+                listener.onResponse(true);
+            }));
+        } catch (IOException e) {
+            log.warn("Failed to build hybrid search pipeline configuration for '{}', skipping. Error: {}", pipelineName, e.getMessage());
+            listener.onResponse(true); // best-effort
         }
     }
 }

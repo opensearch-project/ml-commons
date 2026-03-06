@@ -225,22 +225,40 @@ public class TransportCreateMemoryContainerAction extends
             // Return the actual index name that was created
             // Create the memory data index with appropriate mapping
             createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
-                // Return the actual index name that was created
-                if (!configuration.isDisableHistory()) {
-                    mlIndicesHandler
-                        .createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
-                            listener.onResponse(longTermMemoryIndexName);
-                        }, listener::onFailure));
-                } else {
-                    listener.onResponse(longTermMemoryIndexName);
-                }
-
+                // Create hybrid search pipeline (only when embedding model is configured)
+                createHybridSearchPipelineIfNeeded(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success2 -> {
+                    // Return the actual index name that was created
+                    if (!configuration.isDisableHistory()) {
+                        mlIndicesHandler
+                            .createLongTermMemoryHistoryIndex(
+                                longTermMemoryHistoryIndexName,
+                                configuration,
+                                ActionListener.wrap(success3 -> {
+                                    listener.onResponse(longTermMemoryIndexName);
+                                }, listener::onFailure)
+                            );
+                    } else {
+                        listener.onResponse(longTermMemoryIndexName);
+                    }
+                }, listener::onFailure));
             }, listener::onFailure));
         }, listener::onFailure));
     }
 
     private void createLongTermMemoryIngestPipeline(String indexName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener) {
         MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline(indexName, memoryConfig, mlIndicesHandler, client, listener);
+    }
+
+    private void createHybridSearchPipelineIfNeeded(
+        String longTermIndexName,
+        MemoryConfiguration memoryConfig,
+        ActionListener<Boolean> listener
+    ) {
+        if (memoryConfig.getEmbeddingModelType() != null) {
+            MemoryContainerPipelineHelper.createHybridSearchPipeline(longTermIndexName, client, listener);
+        } else {
+            listener.onResponse(true);
+        }
     }
 
     private void indexMemoryContainer(MLMemoryContainer container, ActionListener<String> listener) {

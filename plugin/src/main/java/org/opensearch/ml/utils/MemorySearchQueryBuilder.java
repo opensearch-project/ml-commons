@@ -181,4 +181,131 @@ public class MemorySearchQueryBuilder {
 
         return boolQuery;
     }
+
+    /**
+     * Builds a semantic search query for long-term memory retrieval.
+     * Uses neural (or neural_sparse) query with namespace/tag/owner/container filters.
+     */
+    public static QueryBuilder buildSemanticSearchQuery(
+        String query,
+        Map<String, String> namespace,
+        Map<String, String> tags,
+        String ownerId,
+        String memoryContainerId,
+        MemoryConfiguration memoryConfig,
+        QueryBuilder filter
+    ) {
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+
+        // Add semantic query as must clause
+        if (memoryConfig == null || memoryConfig.getEmbeddingModelType() == null) {
+            throw new IllegalStateException("Embedding model type is required for semantic search");
+        }
+        if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+            String neuralQuery = "{\"neural\":{\""
+                + MEMORY_EMBEDDING_FIELD
+                + "\":{\"query_text\":\""
+                + StringEscapeUtils.escapeJson(query)
+                + "\",\"model_id\":\""
+                + StringEscapeUtils.escapeJson(memoryConfig.getEmbeddingModelId())
+                + "\"}}}";
+            boolQuery.must(QueryBuilders.wrapperQuery(neuralQuery));
+        } else if (memoryConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+            String sparseQuery = "{\"neural_sparse\":{\""
+                + MEMORY_EMBEDDING_FIELD
+                + "\":{\"query_text\":\""
+                + StringEscapeUtils.escapeJson(query)
+                + "\",\"model_id\":\""
+                + StringEscapeUtils.escapeJson(memoryConfig.getEmbeddingModelId())
+                + "\"}}}";
+            boolQuery.must(QueryBuilders.wrapperQuery(sparseQuery));
+        } else {
+            throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
+        }
+
+        // Add filters
+        addFilters(boolQuery, namespace, tags, ownerId, memoryContainerId);
+        if (filter != null) {
+            boolQuery.filter(filter);
+        }
+
+        return boolQuery;
+    }
+
+    /**
+     * Builds a post-filter query for hybrid search (namespace/tag/owner/container filters).
+     * Used as post_filter because hybrid query cannot be wrapped in bool.
+     */
+    public static QueryBuilder buildPostFilter(
+        Map<String, String> namespace,
+        Map<String, String> tags,
+        String ownerId,
+        String memoryContainerId,
+        QueryBuilder filter
+    ) {
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        addFilters(boolQuery, namespace, tags, ownerId, memoryContainerId);
+        if (filter != null) {
+            boolQuery.filter(filter);
+        }
+        return boolQuery;
+    }
+
+    /**
+     * Builds a hybrid query JSON string combining match + neural for use with wrapperQuery.
+     */
+    public static String buildHybridSearchQueryString(String query, MemoryConfiguration memoryConfig) {
+        if (memoryConfig == null || memoryConfig.getEmbeddingModelType() == null) {
+            throw new IllegalStateException("Embedding model type is required for hybrid search");
+        }
+        String neuralSubQuery;
+        if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+            neuralSubQuery = "{\"neural\":{\""
+                + MEMORY_EMBEDDING_FIELD
+                + "\":{\"query_text\":\""
+                + StringEscapeUtils.escapeJson(query)
+                + "\",\"model_id\":\""
+                + StringEscapeUtils.escapeJson(memoryConfig.getEmbeddingModelId())
+                + "\"}}}";
+        } else if (memoryConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+            neuralSubQuery = "{\"neural_sparse\":{\""
+                + MEMORY_EMBEDDING_FIELD
+                + "\":{\"query_text\":\""
+                + StringEscapeUtils.escapeJson(query)
+                + "\",\"model_id\":\""
+                + StringEscapeUtils.escapeJson(memoryConfig.getEmbeddingModelId())
+                + "\"}}}";
+        } else {
+            throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
+        }
+
+        String matchSubQuery = "{\"match\":{\"" + MEMORY_FIELD + "\":\"" + StringEscapeUtils.escapeJson(query) + "\"}}";
+
+        return "{\"hybrid\":{\"queries\":[" + matchSubQuery + "," + neuralSubQuery + "]}}";
+    }
+
+    private static void addFilters(
+        BoolQueryBuilder boolQuery,
+        Map<String, String> namespace,
+        Map<String, String> tags,
+        String ownerId,
+        String memoryContainerId
+    ) {
+        if (namespace != null) {
+            for (Map.Entry<String, String> entry : namespace.entrySet()) {
+                boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_FIELD + "." + entry.getKey(), entry.getValue()));
+            }
+        }
+        if (tags != null) {
+            for (Map.Entry<String, String> entry : tags.entrySet()) {
+                boolQuery.filter(QueryBuilders.termQuery("tags." + entry.getKey(), entry.getValue()));
+            }
+        }
+        if (ownerId != null) {
+            boolQuery.filter(QueryBuilders.termQuery(OWNER_ID_FIELD, ownerId));
+        }
+        if (memoryContainerId != null && !memoryContainerId.isBlank()) {
+            boolQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, memoryContainerId));
+        }
+    }
 }

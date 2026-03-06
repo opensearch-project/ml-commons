@@ -113,7 +113,9 @@ import org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesActio
 import org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoriesByQueryAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportGetMemoryAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportHybridSearchMemoriesAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportSemanticSearchMemoriesAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction;
 import org.opensearch.ml.action.model_group.DeleteModelGroupTransportAction;
 import org.opensearch.ml.action.model_group.GetModelGroupTransportAction;
@@ -219,7 +221,9 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAc
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLHybridSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLSemanticSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -354,6 +358,7 @@ import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
+import org.opensearch.ml.rest.RestMLHybridSearchMemoriesAction;
 import org.opensearch.ml.rest.RestMLListContextManagementTemplatesAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
@@ -371,6 +376,7 @@ import org.opensearch.ml.rest.RestMLSearchMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLSearchModelAction;
 import org.opensearch.ml.rest.RestMLSearchModelGroupAction;
 import org.opensearch.ml.rest.RestMLSearchTaskAction;
+import org.opensearch.ml.rest.RestMLSemanticSearchMemoriesAction;
 import org.opensearch.ml.rest.RestMLStatsAction;
 import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
@@ -588,6 +594,8 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLMemoryContainerDeleteAction.INSTANCE, TransportDeleteMemoryContainerAction.class),
                 new ActionHandler<>(MLAddMemoriesAction.INSTANCE, TransportAddMemoriesAction.class),
                 new ActionHandler<>(MLSearchMemoriesAction.INSTANCE, TransportSearchMemoriesAction.class),
+                new ActionHandler<>(MLSemanticSearchMemoriesAction.INSTANCE, TransportSemanticSearchMemoriesAction.class),
+                new ActionHandler<>(MLHybridSearchMemoriesAction.INSTANCE, TransportHybridSearchMemoriesAction.class),
                 new ActionHandler<>(MLDeleteMemoryAction.INSTANCE, TransportDeleteMemoryAction.class),
                 new ActionHandler<>(MLDeleteMemoriesByQueryAction.INSTANCE, TransportDeleteMemoriesByQueryAction.class),
                 new ActionHandler<>(MLUpdateMemoryAction.INSTANCE, TransportUpdateMemoryAction.class),
@@ -1065,6 +1073,10 @@ public class MachineLearningPlugin extends Plugin
         );
         RestMLAddMemoriesAction restMLAddMemoriesAction = new RestMLAddMemoriesAction(mlFeatureEnabledSetting);
         RestMLSearchMemoriesAction restMLSearchMemoriesAction = new RestMLSearchMemoriesAction(mlFeatureEnabledSetting);
+        RestMLSemanticSearchMemoriesAction restMLSemanticSearchMemoriesAction = new RestMLSemanticSearchMemoriesAction(
+            mlFeatureEnabledSetting
+        );
+        RestMLHybridSearchMemoriesAction restMLHybridSearchMemoriesAction = new RestMLHybridSearchMemoriesAction(mlFeatureEnabledSetting);
         RestMLDeleteMemoryAction restMLDeleteMemoryAction = new RestMLDeleteMemoryAction(mlFeatureEnabledSetting);
         RestMLDeleteMemoriesByQueryAction restMLDeleteMemoriesByQueryAction = new RestMLDeleteMemoriesByQueryAction(
             mlFeatureEnabledSetting
@@ -1162,6 +1174,8 @@ public class MachineLearningPlugin extends Plugin
                 restMLDeleteMemoryContainerAction,
                 restMLAddMemoriesAction,
                 restMLSearchMemoriesAction,
+                restMLSemanticSearchMemoriesAction,
+                restMLHybridSearchMemoriesAction,
                 restMLDeleteMemoryAction,
                 restMLDeleteMemoriesByQueryAction,
                 restMLUpdateMemoryAction,
