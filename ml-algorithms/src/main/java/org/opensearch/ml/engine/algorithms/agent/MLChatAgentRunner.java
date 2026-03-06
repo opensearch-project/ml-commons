@@ -656,7 +656,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         if (!isBackendTool) {
                             // For frontend tool use, we close the response stream and wait for frontend tool result
                             if (streamingWrapper != null) {
-                                streamingWrapper.sendRunFinishedAndCloseStream(sessionId, parentInteractionId);
+                                streamingWrapper.closeStream(sessionId, parentInteractionId);
                             }
                         } else {
                             // Handle backend tool normally

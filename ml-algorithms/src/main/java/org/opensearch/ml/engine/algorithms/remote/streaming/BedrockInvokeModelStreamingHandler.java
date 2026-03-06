@@ -7,9 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -25,7 +23,6 @@ import javax.naming.AuthenticationException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agui.BaseEvent;
-import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.TextMessageContentEvent;
 import org.opensearch.ml.common.agui.TextMessageEndEvent;
 import org.opensearch.ml.common.agui.TextMessageStartEvent;
@@ -85,12 +82,22 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
     private final boolean isAGUIAgent;
     private final InvokeModelEventParser eventParser;
 
+    /**
+     * States for the Bedrock InvokeModel stream state machine.
+     *
+     *   STREAMING_CONTENT       — receiving text content deltas
+     *   TOOL_CALL_DETECTED      — ContentBlockStart with toolUse received
+     *   ACCUMULATING_TOOL_INPUT — receiving tool input deltas
+     *   AWAITING_COMPLETION     — MessageStop received, waiting for onComplete to finalize
+     *
+     * All paths (AGUI, conv agent, predict) converge to AWAITING_COMPLETION at MessageStop.
+     * Finalization always happens in onComplete() after usage events are captured.
+     */
     private enum StreamState {
         STREAMING_CONTENT,
         TOOL_CALL_DETECTED,
         ACCUMULATING_TOOL_INPUT,
-        WAITING_FOR_TOOL_RESULT,
-        COMPLETED
+        AWAITING_COMPLETION
     }
 
     public BedrockInvokeModelStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector) {
@@ -139,6 +146,7 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
             StringBuilder currentCompactionBlock = new StringBuilder();
             AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
             AtomicReference<String> pendingStopReason = new AtomicReference<>();
+            AtomicReference<Map<String, Object>> tokenUsage = new AtomicReference<>();
 
             BedrockRuntimeAsyncClient bedrockClient = buildBedrockRuntimeAsyncClient();
 
@@ -167,10 +175,20 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                     }
                 })
                 .onComplete(() -> {
-                    if (currentState.get() != StreamState.WAITING_FOR_TOOL_RESULT) {
-                        sendCompletionResponse(isStreamClosed, listener);
+                    if (currentState.get() == StreamState.AWAITING_COMPLETION) {
+                        // All paths converge here: usage has been captured from message_start and message_delta.
+                        // Notify agent runner with response, or close stream for predict.
+                        onStreamComplete(listener, isStreamClosed, toolName, toolInput, toolUseId, contentBlocks, tokenUsage);
                     } else {
-                        log.debug("Tool execution in progress - keeping stream open");
+                        // Safety net: unexpected early completion (e.g., error during streaming)
+                        log
+                            .warn(
+                                "Stream completed in unexpected state [{}]. Token usage {}: {}",
+                                currentState.get(),
+                                tokenUsage.get() != null ? "was captured" : "was not captured",
+                                tokenUsage.get()
+                            );
+                        sendCompletionResponse(isStreamClosed, listener);
                     }
                 })
                 .subscriber(event -> {
@@ -188,7 +206,8 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                         currentTextBlock,
                         currentCompactionBlock,
                         currentState,
-                        pendingStopReason
+                        pendingStopReason,
+                        tokenUsage
                     );
                 })
                 .build();
@@ -231,7 +250,8 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
         StringBuilder currentTextBlock,
         StringBuilder currentCompactionBlock,
         AtomicReference<StreamState> currentState,
-        AtomicReference<String> pendingStopReason
+        AtomicReference<String> pendingStopReason,
+        AtomicReference<Map<String, Object>> tokenUsage
     ) {
         // Extract JSON from PayloadPart bytes
         String jsonEvent = extractJsonFromEvent(event);
@@ -242,6 +262,27 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
         InvokeModelEventParser.InvokeModelEvent parsed = eventParser.parse(jsonEvent);
         if (parsed == null) {
             return;
+        }
+
+        // Capture usage from MESSAGE_START and MESSAGE_DELTA events
+        if (parsed.getUsage() != null) {
+            if (parsed.getType() == InvokeModelEventParser.EventType.MESSAGE_START) {
+                // Initial usage (input tokens from message_start)
+                tokenUsage.set(new HashMap<>(parsed.getUsage()));
+                log.debug("Captured initial token usage from message_start: {}", parsed.getUsage());
+            } else if (parsed.getType() == InvokeModelEventParser.EventType.MESSAGE_DELTA) {
+                // Final usage (includes output tokens and compaction iterations)
+                // Merge with existing usage if present
+                Map<String, Object> existing = tokenUsage.get();
+                if (existing != null) {
+                    Map<String, Object> merged = new HashMap<>(existing);
+                    merged.putAll(parsed.getUsage());
+                    tokenUsage.set(merged);
+                } else {
+                    tokenUsage.set(new HashMap<>(parsed.getUsage()));
+                }
+                log.debug("Captured final token usage from message_delta: {}", tokenUsage.get());
+            }
         }
 
         handleParsedEvent(
@@ -341,11 +382,9 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                 );
                 break;
 
-            case WAITING_FOR_TOOL_RESULT:
-                log.debug("Waiting for tool result - keeping stream open");
-                break;
-
-            case COMPLETED:
+            case AWAITING_COMPLETION:
+                // MessageStop received, waiting for onComplete to finalize.
+                // Usage capture is handled in handleResponseStreamEvent before this switch statement.
                 break;
         }
     }
@@ -547,10 +586,12 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                         sendAGUIEvent(toolCallEndEvent, false, listener);
                     }
 
-                    currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
-                    listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId, contentBlocks));
+                    // All paths: defer finalization to onComplete() so token usage from message_delta is captured.
+                    // onStreamComplete() will send createToolUseResponse with token usage included.
+                    currentState.set(StreamState.AWAITING_COMPLETION);
                 } else {
-                    currentState.set(StreamState.COMPLETED);
+                    // For non-tool-use stop reasons, also transition to AWAITING_COMPLETION
+                    currentState.set(StreamState.AWAITING_COMPLETION);
                 }
                 break;
 
@@ -602,25 +643,57 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
                 sendAGUIEvent(textMessageEndEvent, false, listener);
                 log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
             }
-
-            String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-            String runId = parameters.get(AGUI_PARAM_RUN_ID);
-            BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-            sendAGUIEvent(runFinishedEvent, false, listener);
-
-            listener.onResponse(createFinalAnswerResponse(contentBlocks));
+            // RUN_FINISHED is emitted by RestMLExecuteStreamAction after token_usage,
+            // once the final response chunk (is_last=true) arrives from the agent runner.
         }
 
-        currentState.set(StreamState.COMPLETED);
-        sendCompletionResponse(isStreamClosed, listener);
+        // All paths: defer finalization to onComplete() so token usage from message_delta is captured.
+        // onStreamComplete() will notify the agent runner or close the stream.
+        currentState.set(StreamState.AWAITING_COMPLETION);
     }
 
     /**
-     * Create a Bedrock-formatted final answer response that parseLLMOutput can extract
-     * the final answer from. Uses Claude Messages API format with stopReason="end_turn".
+     * Finalization — called from onComplete() after all InvokeModel events have been received.
+     * Constructs the appropriate response with token usage and notifies upstream.
+     * All paths (AGUI, conv agent, predict) converge here.
+     *
+     * Three outcomes:
+     * - Tool call (agent): send Bedrock-format tool use response with token usage to agent runner
+     * - End turn (agent): send Bedrock-format final answer with token usage to agent runner
+     * - End turn (predict, no agent): close stream directly
+     */
+    private void onStreamComplete(
+        StreamPredictActionListener<MLTaskResponse, ?> listener,
+        AtomicBoolean isStreamClosed,
+        AtomicReference<String> toolName,
+        AtomicReference<Map<String, Object>> toolInput,
+        AtomicReference<String> toolUseId,
+        List<ContentBlock> contentBlocks,
+        AtomicReference<Map<String, Object>> tokenUsage
+    ) {
+        if (toolName.get() != null) {
+            // Tool use: construct response with accumulated text + tool call + token usage
+            // For both AGUI and conv agents, the agent runner needs this to execute the tool.
+            // AGUI streaming events (TOOL_CALL_START/ARGS/END) are sent separately during streaming.
+            listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId, contentBlocks, tokenUsage.get()));
+        } else if (listener.hasAgentListener()) {
+            // Conv agent end_turn: construct final answer with accumulated content + token usage
+            listener.onResponse(createFinalAnswerResponse(contentBlocks, tokenUsage.get()));
+        } else {
+            // Predict (no agent): close stream directly
+            sendCompletionResponse(isStreamClosed, listener);
+        }
+    }
+
+    /**
+     * Create a Bedrock-formatted final answer response with optional token usage.
+     * Token usage is captured from message_start and message_delta events.
+     * The agent runner extracts token usage via functionCalling.extractTokenUsage().
+     *
+     * Uses Claude Messages API format with stopReason="end_turn".
      * Content blocks include both text and compaction blocks in the order they appeared.
      */
-    private MLTaskResponse createFinalAnswerResponse(List<ContentBlock> contentBlocks) {
+    private MLTaskResponse createFinalAnswerResponse(List<ContentBlock> contentBlocks, Map<String, Object> tokenUsage) {
         // Build content array with proper Claude Messages API format
         List<Map<String, String>> content = new ArrayList<>();
 
@@ -635,15 +708,13 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
         }
 
         // Claude Messages API format (flat format)
-        Map<String, Object> wrappedResponse = Map
-            .of(
-                "output",
-                Map.of("message", Map.of("role", "assistant", "content", content)),
-                "stopReason",
-                "end_turn",
-                "stop_reason",
-                "end_turn"
-            );
+        Map<String, Object> wrappedResponse = new HashMap<>();
+        wrappedResponse.put("output", Map.of("message", Map.of("role", "assistant", "content", content)));
+        wrappedResponse.put("stopReason", "end_turn");
+        wrappedResponse.put("stop_reason", "end_turn");
+        if (tokenUsage != null) {
+            wrappedResponse.put("usage", tokenUsage);
+        }
 
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(wrappedResponse).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
@@ -665,11 +736,19 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
         }
     }
 
+    /**
+     * Create a tool use response with optional token usage.
+     * Token usage is captured from message_start and message_delta events.
+     *
+     * Response format matches Bedrock Converse API: stopReason="tool_use",
+     * output.message.content[] with text blocks (if any) + toolUse block.
+     */
     private MLTaskResponse createToolUseResponse(
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId,
-        List<ContentBlock> textAndCompactionBlocks
+        List<ContentBlock> textAndCompactionBlocks,
+        Map<String, Object> tokenUsage
     ) {
         if (toolName == null || toolInput == null || toolUseId == null) {
             throw new IllegalArgumentException("Tool references cannot be null");
@@ -690,15 +769,13 @@ public class BedrockInvokeModelStreamingHandler extends BaseStreamingHandler {
 
         // Wrap in Converse API-like format to match BedrockStreamingHandler
         // This prevents RestMLExecuteStreamAction from seeing "content" at root level
-        Map<String, Object> wrappedResponse = Map
-            .of(
-                "output",
-                Map.of("message", Map.of("role", "assistant", "content", contentBlocks)),
-                "stopReason",
-                "tool_use",
-                "stop_reason",
-                "tool_use"
-            );
+        Map<String, Object> wrappedResponse = new HashMap<>();
+        wrappedResponse.put("output", Map.of("message", Map.of("role", "assistant", "content", contentBlocks)));
+        wrappedResponse.put("stopReason", "tool_use");
+        wrappedResponse.put("stop_reason", "tool_use");
+        if (tokenUsage != null) {
+            wrappedResponse.put("usage", tokenUsage);
+        }
 
         log.debug("BedrockInvokeModel streaming: Creating wrapped tool use response with {} content blocks", contentBlocks.size());
 

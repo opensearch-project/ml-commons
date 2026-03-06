@@ -47,6 +47,7 @@ public interface InvokeModelEventParser {
         private final String toolInputJson;
         private final String stopReason;
         private final int index;
+        private final java.util.Map<String, Object> usage;
 
         public InvokeModelEvent(
             EventType type,
@@ -55,7 +56,8 @@ public interface InvokeModelEventParser {
             String toolUseId,
             String toolInputJson,
             String stopReason,
-            int index
+            int index,
+            java.util.Map<String, Object> usage
         ) {
             this.type = type;
             this.text = text;
@@ -64,6 +66,7 @@ public interface InvokeModelEventParser {
             this.toolInputJson = toolInputJson;
             this.stopReason = stopReason;
             this.index = index;
+            this.usage = usage;
         }
 
         public EventType getType() {
@@ -94,44 +97,48 @@ public interface InvokeModelEventParser {
             return index;
         }
 
-        public static InvokeModelEvent messageStart() {
-            return new InvokeModelEvent(EventType.MESSAGE_START, null, null, null, null, null, 0);
+        public java.util.Map<String, Object> getUsage() {
+            return usage;
+        }
+
+        public static InvokeModelEvent messageStart(java.util.Map<String, Object> usage) {
+            return new InvokeModelEvent(EventType.MESSAGE_START, null, null, null, null, null, 0, usage);
         }
 
         public static InvokeModelEvent contentBlockStartText(int index) {
-            return new InvokeModelEvent(EventType.CONTENT_BLOCK_START_TEXT, null, null, null, null, null, index);
+            return new InvokeModelEvent(EventType.CONTENT_BLOCK_START_TEXT, null, null, null, null, null, index, null);
         }
 
         public static InvokeModelEvent contentBlockStartToolUse(int index, String toolUseId, String toolName) {
-            return new InvokeModelEvent(EventType.CONTENT_BLOCK_START_TOOL_USE, null, toolName, toolUseId, null, null, index);
+            return new InvokeModelEvent(EventType.CONTENT_BLOCK_START_TOOL_USE, null, toolName, toolUseId, null, null, index, null);
         }
 
         public static InvokeModelEvent contentBlockStartCompaction(int index) {
-            return new InvokeModelEvent(EventType.CONTENT_BLOCK_START_COMPACTION, null, null, null, null, null, index);
+            return new InvokeModelEvent(EventType.CONTENT_BLOCK_START_COMPACTION, null, null, null, null, null, index, null);
         }
 
         public static InvokeModelEvent textDelta(int index, String text) {
-            return new InvokeModelEvent(EventType.TEXT_DELTA, text, null, null, null, null, index);
+            return new InvokeModelEvent(EventType.TEXT_DELTA, text, null, null, null, null, index, null);
         }
 
         public static InvokeModelEvent toolInputDelta(int index, String json) {
-            return new InvokeModelEvent(EventType.TOOL_INPUT_DELTA, null, null, null, json, null, index);
+            return new InvokeModelEvent(EventType.TOOL_INPUT_DELTA, null, null, null, json, null, index, null);
         }
 
         public static InvokeModelEvent compactionDelta(int index, String text) {
-            return new InvokeModelEvent(EventType.COMPACTION_DELTA, text, null, null, null, null, index);
+            return new InvokeModelEvent(EventType.COMPACTION_DELTA, text, null, null, null, null, index, null);
         }
 
         public static InvokeModelEvent contentBlockStop(int index) {
-            return new InvokeModelEvent(EventType.CONTENT_BLOCK_STOP, null, null, null, null, null, index);
+            return new InvokeModelEvent(EventType.CONTENT_BLOCK_STOP, null, null, null, null, null, index, null);
         }
 
-        public static InvokeModelEvent messageDelta(String stopReason) {
-            return new InvokeModelEvent(EventType.MESSAGE_DELTA, null, null, null, null, stopReason, 0);
+        public static InvokeModelEvent messageDelta(String stopReason, java.util.Map<String, Object> usage) {
+            return new InvokeModelEvent(EventType.MESSAGE_DELTA, null, null, null, null, stopReason, 0, usage);
         }
 
         public static InvokeModelEvent messageStop() {
-            return new InvokeModelEvent(EventType.MESSAGE_STOP, null, null, null, null, null, 0);
+            return new InvokeModelEvent(EventType.MESSAGE_STOP, null, null, null, null, null, 0, null);
         }
     }
 }
