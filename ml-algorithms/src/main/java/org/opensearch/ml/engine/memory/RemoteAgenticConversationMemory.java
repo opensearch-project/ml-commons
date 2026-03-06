@@ -13,6 +13,7 @@ import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,9 +38,11 @@ import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -64,6 +67,7 @@ import com.google.gson.Gson;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 /**
  * Remote agentic memory implementation backed by connector-defined REST APIs.
@@ -77,6 +81,13 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     private static final String CREATED_TIME_FIELD = "created_time";
     private static final String MESSAGE_ID_FIELD = "message_id";
     private static final Gson GSON = new Gson();
+
+    private static volatile SdkAsyncHttpClient DEFAULT_HTTP_CLIENT = null;
+    // The connector is an inline connector so we use default connector client configs.
+    private static final ConnectorClientConfig DEFAULT_CONNECTOR_CLIENT_CONFIG = new ConnectorClientConfig();
+    // The connector will be used to handle all the memory operations during agent running and one agent consumes one connection at any
+    // given time, let's say we support 200 concurrent agents running we need at least 200 connections.
+    private static final int MAX_CONNECTIONS = 200;
 
     private final String conversationId;
     private final String memoryContainerId;
@@ -120,6 +131,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         this.executor.setClient(client);
         this.executor.setXContentRegistry(xContentRegistry);
         this.executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+        this.executor.setAsyncHttpClient(getOrCreateDefaultHttpClient());
 
         // Log creation for debugging/monitoring
         log
@@ -288,7 +300,6 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             if (workingMemory == null || workingMemory.getStructuredDataBlob() == null) {
                 structuredData = new HashMap<>();
             } else {
-                // Create a mutable copy
                 structuredData = new HashMap<>(workingMemory.getStructuredDataBlob());
             }
 
@@ -1137,6 +1148,40 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     }
 
     /**
+     * Get or create the default HTTP client.
+     * This is shared across all RemoteAgenticConversationMemory instances.
+     */
+    private static SdkAsyncHttpClient getOrCreateDefaultHttpClient() {
+        if (DEFAULT_HTTP_CLIENT == null) {
+            synchronized (RemoteAgenticConversationMemory.class) {
+                if (DEFAULT_HTTP_CLIENT == null) {
+                    try {
+                        log
+                            .info(
+                                "Creating default HTTP client for RemoteAgenticConversationMemory with configurations connection timeout: {}ms, read timeout: {}s, max connections: {}, the private ip enabled and skip ssl verification both uses default value: false",
+                                DEFAULT_CONNECTOR_CLIENT_CONFIG.getConnectionTimeout(),
+                                DEFAULT_CONNECTOR_CLIENT_CONFIG.getReadTimeout(),
+                                MAX_CONNECTIONS
+                            );
+                        DEFAULT_HTTP_CLIENT = MLHttpClientFactory
+                            .getAsyncHttpClient(
+                                Duration.ofMillis(DEFAULT_CONNECTOR_CLIENT_CONFIG.getConnectionTimeout()),
+                                Duration.ofSeconds(DEFAULT_CONNECTOR_CLIENT_CONFIG.getReadTimeout()),
+                                MAX_CONNECTIONS,
+                                false,
+                                false
+                            );
+                    } catch (Exception e) {
+                        log.error("Failed to create default HTTP client for RemoteAgenticConversationMemory", e);
+                        throw new RuntimeException("Failed to create default HTTP client", e);
+                    }
+                }
+            }
+        }
+        return DEFAULT_HTTP_CLIENT;
+    }
+
+    /**
      * Factory for creating RemoteAgenticConversationMemory instances
      */
     public static class Factory implements Memory.Factory<RemoteAgenticConversationMemory> {
@@ -1260,6 +1305,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             executor.setClient(client);
             executor.setXContentRegistry(xContentRegistry);
             executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+            executor.setAsyncHttpClient(getOrCreateDefaultHttpClient());
 
             // Prepare parameters for the action
             Map<String, String> inputParams = new HashMap<>();
