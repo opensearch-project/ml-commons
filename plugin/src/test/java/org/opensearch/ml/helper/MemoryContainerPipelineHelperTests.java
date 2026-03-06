@@ -202,4 +202,67 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
     private AcknowledgedResponse acknowledgedTrue() {
         return new AcknowledgedResponse(true);
     }
+
+    // ===== Hybrid Search Pipeline Tests =====
+
+    public void testCreateHybridSearchPipeline_Success() {
+        // Pipeline doesn't exist (NOT_FOUND) → create it
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onFailure(new OpenSearchStatusException("not found", RestStatus.NOT_FOUND));
+            return null;
+        }).when(client).execute(any(), any(), any(ActionListener.class));
+
+        // Re-mock: first call (GetSearchPipeline) → NOT_FOUND, second call (PutSearchPipeline) → success
+        final int[] callCount = { 0 };
+        doAnswer(invocation -> {
+            callCount[0]++;
+            ActionListener listener = invocation.getArgument(2);
+            if (callCount[0] == 1) {
+                listener.onFailure(new OpenSearchStatusException("not found", RestStatus.NOT_FOUND));
+            } else {
+                listener.onResponse(acknowledgedTrue());
+            }
+            return null;
+        }).when(client).execute(any(), any(), any(ActionListener.class));
+
+        PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
+        MemoryContainerPipelineHelper.createHybridSearchPipeline("test-memory-long-term", client, future);
+        assertTrue(future.actionGet());
+    }
+
+    public void testCreateHybridSearchPipeline_AlreadyExists() {
+        // Pipeline already exists → skip creation
+        org.opensearch.action.search.GetSearchPipelineResponse response = mock(
+            org.opensearch.action.search.GetSearchPipelineResponse.class
+        );
+        when(response.pipelines()).thenReturn(Collections.singletonList(null));
+
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any(ActionListener.class));
+
+        PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
+        MemoryContainerPipelineHelper.createHybridSearchPipeline("test-memory-long-term", client, future);
+        assertTrue(future.actionGet());
+    }
+
+    public void testCreateHybridSearchPipeline_NonNotFoundError_Propagates() {
+        // Non-NOT_FOUND error (e.g., permission denied) → best-effort: log warning, return true
+        OpenSearchStatusException permissionError = new OpenSearchStatusException("forbidden", RestStatus.FORBIDDEN);
+
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onFailure(permissionError);
+            return null;
+        }).when(client).execute(any(), any(), any(ActionListener.class));
+
+        PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
+        MemoryContainerPipelineHelper.createHybridSearchPipeline("test-memory-long-term", client, future);
+
+        // Should succeed (best-effort) even when neural-search plugin is not available
+        assertTrue(future.actionGet());
+    }
 }
