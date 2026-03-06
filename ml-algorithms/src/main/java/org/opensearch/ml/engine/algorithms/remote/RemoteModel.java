@@ -97,7 +97,14 @@ public class RemoteModel implements Predictable {
 
     @Override
     public void close() {
-        this.connectorExecutor = null;
+        if (this.connectorExecutor != null) {
+            try {
+                this.connectorExecutor.close();
+            } catch (Exception e) {
+                log.warn("Failed to close remote model executor!", e);
+            }
+            this.connectorExecutor = null;
+        }
     }
 
     @Override
