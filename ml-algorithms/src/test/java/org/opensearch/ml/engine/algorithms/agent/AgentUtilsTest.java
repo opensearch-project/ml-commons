@@ -1923,25 +1923,33 @@ public class AgentUtilsTest extends MLStaticMockBase {
         dataAsMap.put("type", "message");
         dataAsMap.put("role", "assistant");
         dataAsMap.put("stop_reason", "end_turn");
-        dataAsMap.put("content", List.of(
-            Map.of("type", "text", "text", "This is the final answer"),
-            Map.of("type", "compaction", "data", "some_compaction_data")
-        ));
+        dataAsMap
+            .put(
+                "content",
+                List
+                    .of(
+                        Map.of("type", "text", "text", "This is the final answer"),
+                        Map.of("type", "compaction", "data", "some_compaction_data")
+                    )
+            );
 
         ModelTensorOutput modelTensorOutput = ModelTensorOutput
             .builder()
             .mlModelOutputs(
-                List.of(
-                    ModelTensors
-                        .builder()
-                        .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
-                        .build()
-                )
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
             )
             .build();
 
         // Create a mock BedrockInvokeClaudeFunctionCalling instance
-        FunctionCalling bedrockInvokeFunctionCalling = mock(org.opensearch.ml.engine.function_calling.BedrockInvokeClaudeFunctionCalling.class);
+        FunctionCalling bedrockInvokeFunctionCalling = mock(
+            org.opensearch.ml.engine.function_calling.BedrockInvokeClaudeFunctionCalling.class
+        );
 
         Map<String, String> output = AgentUtils
             .parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), bedrockInvokeFunctionCalling);
@@ -1972,17 +1980,17 @@ public class AgentUtilsTest extends MLStaticMockBase {
         ModelTensorOutput modelTensorOutput = ModelTensorOutput
             .builder()
             .mlModelOutputs(
-                List.of(
-                    ModelTensors
-                        .builder()
-                        .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
-                        .build()
-                )
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
             )
             .build();
 
-        Map<String, String> output = AgentUtils
-            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
 
         // Should apply post filter
         Assert.assertTrue(output.containsKey(FINAL_ANSWER));
@@ -2008,17 +2016,17 @@ public class AgentUtilsTest extends MLStaticMockBase {
         ModelTensorOutput modelTensorOutput = ModelTensorOutput
             .builder()
             .mlModelOutputs(
-                List.of(
-                    ModelTensors
-                        .builder()
-                        .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
-                        .build()
-                )
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
             )
             .build();
 
-        Map<String, String> output = AgentUtils
-            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
 
         // Should just convert to JSON
         Assert.assertTrue(output.containsKey(FINAL_ANSWER));
