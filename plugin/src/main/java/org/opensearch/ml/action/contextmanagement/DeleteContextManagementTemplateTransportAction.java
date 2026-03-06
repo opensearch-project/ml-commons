@@ -5,11 +5,13 @@
 
 package org.opensearch.ml.action.contextmanagement;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.contextmanagement.MLDeleteContextManagementTemplateAction;
 import org.opensearch.ml.common.transport.contextmanagement.MLDeleteContextManagementTemplateRequest;
 import org.opensearch.ml.common.transport.contextmanagement.MLDeleteContextManagementTemplateResponse;
@@ -53,7 +55,13 @@ public class DeleteContextManagementTemplateTransportAction extends
                     listener.onResponse(new MLDeleteContextManagementTemplateResponse(request.getTemplateName(), "deleted"));
                 } else {
                     log.warn("Context management template not found for deletion: {}", request.getTemplateName());
-                    listener.onFailure(new RuntimeException("Context management template not found: " + request.getTemplateName()));
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Context management template not found: " + request.getTemplateName(),
+                                RestStatus.NOT_FOUND
+                            )
+                        );
                 }
             }, exception -> {
                 log.error("Error deleting context management template: {}", request.getTemplateName(), exception);
