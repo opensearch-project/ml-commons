@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
@@ -20,7 +18,6 @@ import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.agui.BaseEvent;
 import org.opensearch.ml.common.agui.MessagesSnapshotEvent;
-import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.ToolCallResultEvent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.Message;
@@ -163,25 +160,21 @@ public class StreamingWrapper {
         }
     }
 
-    public void sendRunFinishedAndCloseStream(String sessionId, String parentInteractionId) {
+    public void closeStream(String sessionId, String parentInteractionId) {
         try {
-            String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-            String runId = parameters.get(AGUI_PARAM_RUN_ID);
-
-            // Ensure non-null values to avoid NPE in RunFinishedEvent.writeTo()
-            if (threadId == null) {
-                log.warn("AG-UI threadId is null, using generated value. This may cause frontend errors.");
-                threadId = "thread_" + System.nanoTime();
-            }
-            if (runId == null) {
-                log.warn("AG-UI runId is null, using generated value. This may cause frontend errors.");
-                runId = "run_" + System.nanoTime();
-            }
-
-            BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-            sendAGUIEvent(runFinishedEvent, true);
+            // Send an empty is_last=true signal. RestMLExecuteStreamAction appends the
+            // RunFinished event when it sees is_last=true, so we must NOT include one here
+            // to avoid duplicate RunFinished events reaching the client.
+            List<ModelTensor> modelTensors = new ArrayList<>();
+            Map<String, Object> dataMap = Map.of("content", "", "is_last", true);
+            modelTensors.add(ModelTensor.builder().name("response").dataAsMap(dataMap).build());
+            ModelTensorOutput output = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(modelTensors).build()))
+                .build();
+            channel.sendResponseBatch(new MLTaskResponse(output));
         } catch (Exception e) {
-            log.error("Failed to send run finished event and close stream", e);
+            log.error("Failed to close stream", e);
         }
     }
 
@@ -194,7 +187,7 @@ public class StreamingWrapper {
             MessagesSnapshotEvent event = new MessagesSnapshotEvent(new ArrayList<>(aguiMessages));
 
             sendAGUIEvent(event, false);
-            sendRunFinishedAndCloseStream(memoryId, null);
+            closeStream(memoryId, null);
             listener.onResponse("History load completed");
         } catch (Exception e) {
             log.error("Failed to send messages snapshot", e);

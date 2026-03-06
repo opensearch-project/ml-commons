@@ -1909,6 +1909,132 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testParseLLMOutput_FinalAnswerHandling_BedrockInvoke() {
+        // Test case 1: When functionCalling is BedrockInvokeClaudeFunctionCalling
+        // Should preserve full dataAsMap structure
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.content[0].text");
+        parameters.put(TOOL_CALLS_PATH, "$.content[*].toolUse");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.stop_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("id", "msg_123");
+        dataAsMap.put("type", "message");
+        dataAsMap.put("role", "assistant");
+        dataAsMap.put("stop_reason", "end_turn");
+        dataAsMap
+            .put(
+                "content",
+                List
+                    .of(
+                        Map.of("type", "text", "text", "This is the final answer"),
+                        Map.of("type", "compaction", "data", "some_compaction_data")
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        // Create a mock BedrockInvokeClaudeFunctionCalling instance
+        FunctionCalling bedrockInvokeFunctionCalling = mock(
+            org.opensearch.ml.engine.function_calling.BedrockInvokeClaudeFunctionCalling.class
+        );
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), bedrockInvokeFunctionCalling);
+
+        // Should preserve full dataAsMap structure
+        Assert.assertTrue(output.containsKey(FINAL_ANSWER));
+        String finalAnswer = output.get(FINAL_ANSWER);
+        Assert.assertTrue(finalAnswer.contains("\"id\":\"msg_123\""));
+        Assert.assertTrue(finalAnswer.contains("\"type\":\"message\""));
+        Assert.assertTrue(finalAnswer.contains("compaction"));
+    }
+
+    @Test
+    public void testParseLLMOutput_FinalAnswerHandling_JsonResponse() {
+        // Test case 2: When response is JSON (not BedrockInvoke)
+        // Should apply post filter if configured
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.text");
+        parameters.put(TOOL_CALLS_PATH, "$.toolUse");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.stop_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+        parameters.put(AgentUtils.LLM_FINAL_RESPONSE_POST_FILTER, "$.content");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("text", "{\"content\": \"filtered answer\", \"metadata\": \"should be filtered\"}");
+        dataAsMap.put("stop_reason", "end_turn");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+
+        // Should apply post filter
+        Assert.assertTrue(output.containsKey(FINAL_ANSWER));
+        String finalAnswer = output.get(FINAL_ANSWER);
+        Assert.assertEquals("filtered answer", finalAnswer);
+        Assert.assertFalse(finalAnswer.contains("metadata"));
+    }
+
+    @Test
+    public void testParseLLMOutput_FinalAnswerHandling_NonJsonResponse() {
+        // Test case 3: When response is not JSON (not BedrockInvoke)
+        // Should just convert to JSON string
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.text");
+        parameters.put(TOOL_CALLS_PATH, "$.toolUse");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.stop_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("text", "Plain text final answer");
+        dataAsMap.put("stop_reason", "end_turn");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+
+        // Should just convert to JSON
+        Assert.assertTrue(output.containsKey(FINAL_ANSWER));
+        String finalAnswer = output.get(FINAL_ANSWER);
+        Assert.assertEquals("Plain text final answer", finalAnswer);
+    }
+
+    @Test
     public void testGetMcpToolSpecs_McpStreamableHttpConnectorSuccess() throws Exception {
         stubGetConnector();
         List<MLToolSpec> expected = List
