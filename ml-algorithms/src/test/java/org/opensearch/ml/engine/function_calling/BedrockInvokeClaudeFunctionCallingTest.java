@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.function_calling;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH;
@@ -518,12 +517,13 @@ public class BedrockInvokeClaudeFunctionCallingTest {
         return ModelTensorOutput
             .builder()
             .mlModelOutputs(
-                List.of(
-                    ModelTensors
-                        .builder()
-                        .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
-                        .build()
-                )
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
             )
             .build();
     }
