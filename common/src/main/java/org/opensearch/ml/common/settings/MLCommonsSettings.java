@@ -76,6 +76,15 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+    public static final Setting<Integer> ML_COMMONS_TEXT_SIMILARITY_BATCH_SIZE = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "text_similarity_batch_size",
+            500,
+            1,
+            1000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
     public static final Setting<Integer> ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "max_deploy_model_tasks_per_node",

@@ -694,7 +694,7 @@ public class MachineLearningPlugin extends Plugin
 
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
-        mlEngine = new MLEngine(dataPath, encryptor);
+        mlEngine = new MLEngine(dataPath, encryptor, clusterService);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
@@ -1417,6 +1417,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
                 MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
+                MLCommonsSettings.ML_COMMONS_TEXT_SIMILARITY_BATCH_SIZE,
                 MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                 MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
