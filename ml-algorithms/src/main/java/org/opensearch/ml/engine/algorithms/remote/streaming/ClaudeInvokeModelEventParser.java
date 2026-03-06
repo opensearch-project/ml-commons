@@ -36,7 +36,7 @@ public class ClaudeInvokeModelEventParser implements InvokeModelEventParser {
 
             switch (type) {
                 case "message_start":
-                    return InvokeModelEvent.messageStart();
+                    return parseMessageStart(root);
 
                 case "content_block_start":
                     return parseContentBlockStart(root);
@@ -61,6 +61,17 @@ public class ClaudeInvokeModelEventParser implements InvokeModelEventParser {
             log.warn("Failed to parse Claude streaming event: {}", jsonEvent, e);
             return null;
         }
+    }
+
+    private InvokeModelEvent parseMessageStart(JsonNode root) {
+        // Extract usage from message.usage (initial token counts)
+        JsonNode message = root.path("message");
+        JsonNode usageNode = message.path("usage");
+        java.util.Map<String, Object> usage = null;
+        if (!usageNode.isMissingNode()) {
+            usage = MAPPER.convertValue(usageNode, java.util.Map.class);
+        }
+        return InvokeModelEvent.messageStart(usage);
     }
 
     private InvokeModelEvent parseContentBlockStart(JsonNode root) {
@@ -110,6 +121,14 @@ public class ClaudeInvokeModelEventParser implements InvokeModelEventParser {
     private InvokeModelEvent parseMessageDelta(JsonNode root) {
         JsonNode delta = root.path("delta");
         String stopReason = delta.path("stop_reason").asText(null);
-        return InvokeModelEvent.messageDelta(stopReason);
+
+        // Extract usage from root.usage (final token counts, includes compaction iterations)
+        JsonNode usageNode = root.path("usage");
+        java.util.Map<String, Object> usage = null;
+        if (!usageNode.isMissingNode()) {
+            usage = MAPPER.convertValue(usageNode, java.util.Map.class);
+        }
+
+        return InvokeModelEvent.messageDelta(stopReason, usage);
     }
 }

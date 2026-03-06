@@ -25,12 +25,15 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jayway.jsonpath.DocumentContext;
@@ -192,6 +195,117 @@ public class BedrockInvokeClaudeFunctionCalling implements FunctionCalling {
         }
 
         return List.of(toolMessage);
+    }
+
+    @Override
+    public TokenUsage extractTokenUsage(Map<String, ?> llmResponseDataAsMap) {
+        if (llmResponseDataAsMap == null) {
+            return null;
+        }
+
+        try {
+            // Both wrapped (streaming) and flat (non-streaming) formats have usage at root level
+            // (not nested inside output.message), so we can access it directly
+            Object usageObj = llmResponseDataAsMap.get("usage");
+            if (!(usageObj instanceof Map)) {
+                return null;
+            }
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> usageMap = (Map<String, Object>) usageObj;
+
+            // Claude InvokeModel API uses snake_case field names (input_tokens, output_tokens)
+            // Different from Bedrock Converse API which uses camelCase (inputTokens, outputTokens)
+
+            // Check if iterations array exists - if it does, calculate totals from iterations
+            Object iterationsObj = usageMap.get("iterations");
+            Long finalInputTokens;
+            Long finalOutputTokens;
+            Long compactionInputTokens = null;
+            Long compactionOutputTokens = null;
+            Map<String, Long> additionalUsage = null;
+
+            if (iterationsObj instanceof List) {
+                List<?> iterations = (List<?>) iterationsObj;
+                additionalUsage = new HashMap<>();
+
+                // Store iteration count for tracking
+                additionalUsage.put("iterations_count", (long) iterations.size());
+
+                // Calculate tokens from iterations array
+                // - Total tokens = sum of ALL iterations (compaction + message)
+                // - Compaction tokens = sum of only compaction type iterations
+                long totalInputFromIterations = 0;
+                long totalOutputFromIterations = 0;
+                long compactionInputFromIterations = 0;
+                long compactionOutputFromIterations = 0;
+
+                for (Object iterObj : iterations) {
+                    if (iterObj instanceof Map) {
+                        Map<String, Object> iter = (Map<String, Object>) iterObj;
+                        String iterType = (String) iter.get("type");
+                        Long inputTokens = AgentUtils.getLongValue(iter, "input_tokens");
+                        Long outputTokens = AgentUtils.getLongValue(iter, "output_tokens");
+
+                        // Sum all iterations for total
+                        if (inputTokens != null) {
+                            totalInputFromIterations += inputTokens;
+                        }
+                        if (outputTokens != null) {
+                            totalOutputFromIterations += outputTokens;
+                        }
+
+                        // Sum only compaction iterations separately
+                        if ("compaction".equals(iterType)) {
+                            if (inputTokens != null) {
+                                compactionInputFromIterations += inputTokens;
+                            }
+                            if (outputTokens != null) {
+                                compactionOutputFromIterations += outputTokens;
+                            }
+                        }
+                    }
+                }
+
+                // Use totals from iterations (sum of all iterations)
+                finalInputTokens = totalInputFromIterations;
+                finalOutputTokens = totalOutputFromIterations;
+
+                // Store compaction tokens separately if any compaction occurred
+                if (compactionInputFromIterations > 0) {
+                    compactionInputTokens = compactionInputFromIterations;
+                    additionalUsage.put("compaction_input_tokens", compactionInputFromIterations);
+                }
+                if (compactionOutputFromIterations > 0) {
+                    compactionOutputTokens = compactionOutputFromIterations;
+                    additionalUsage.put("compaction_output_tokens", compactionOutputFromIterations);
+                }
+            } else {
+                // No iterations array - use top-level tokens (no compaction occurred)
+                finalInputTokens = AgentUtils.getLongValue(usageMap, "input_tokens");
+                finalOutputTokens = AgentUtils.getLongValue(usageMap, "output_tokens");
+            }
+
+            TokenUsage.TokenUsageBuilder builder = TokenUsage
+                .builder()
+                .inputTokens(finalInputTokens)
+                .outputTokens(finalOutputTokens)
+                .totalTokens(finalInputTokens != null && finalOutputTokens != null ? finalInputTokens + finalOutputTokens : null);
+
+            // Claude cache tokens (prompt caching feature)
+            builder.cacheReadInputTokens(AgentUtils.getLongValue(usageMap, "cache_read_input_tokens"));
+            builder.cacheCreationInputTokens(AgentUtils.getLongValue(usageMap, "cache_creation_input_tokens"));
+
+            // Add additional usage metrics if present
+            if (additionalUsage != null && !additionalUsage.isEmpty()) {
+                builder.additionalUsage(additionalUsage);
+            }
+
+            return builder.build();
+        } catch (Exception e) {
+            log.error("Failed to extract token usage from Claude InvokeModel response", e);
+            return null;
+        }
     }
 
     @Override
