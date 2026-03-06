@@ -63,6 +63,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -83,6 +84,8 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
@@ -299,9 +302,40 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // planner prompt for the first call
         usePlannerPromptTemplate(allParams);
 
+        // Token tracking: resolve model metadata, then proceed with memory setup and execution.
+        String llmModelId = mlAgent.getLlm().getModelId();
+        String tenantId = allParams.get(TENANT_ID_FIELD);
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+
+        // Create FunctionCalling for token usage extraction only.
+        // Do NOT call configure() — that adds tool_configs, tool_template, etc. to allParams
+        // which would break the planner LLM request (PER planner doesn't use native function calling).
+        String llmInterface = allParams.get(MLChatAgentRunner.LLM_INTERFACE);
+        FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
+
+        // getModelMetadata always calls onResponse (falls back to modelId on failure),
+        // but we handle onFailure defensively in case the contract changes.
+        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(metadata -> {
+            tokenTracker.setModelMetadata(llmModelId, metadata[0], metadata[1]);
+            setupMemoryAndRun(mlAgent, apiParams, allParams, listener, tokenTracker, functionCalling);
+        }, e -> {
+            log.debug("Failed to resolve model metadata for token tracking, proceeding with model ID as fallback", e);
+            tokenTracker.setModelMetadata(llmModelId, llmModelId, llmModelId);
+            setupMemoryAndRun(mlAgent, apiParams, allParams, listener, tokenTracker, functionCalling);
+        }));
+    }
+
+    private void setupMemoryAndRun(
+        MLAgent mlAgent,
+        Map<String, String> apiParams,
+        Map<String, String> allParams,
+        ActionListener<Object> listener,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
+    ) {
         if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
             List<String> completedSteps = new ArrayList<>();
-            setToolsAndRunAgent(mlAgent, allParams, completedSteps, null, null, listener);
+            setToolsAndRunAgent(mlAgent, allParams, completedSteps, null, null, listener, tokenTracker, functionCalling);
             return;
         }
 
@@ -357,7 +391,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     usePlannerWithHistoryPromptTemplate(allParams);
                 }
 
-                setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
+                setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener, tokenTracker, functionCalling);
             }, e -> {
                 log.error("Failed to get chat history. agentId={}, tenantId={}", allParams.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
                 listener.onFailure(e);
@@ -371,7 +405,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         List<String> completedSteps,
         Memory memory,
         String conversationId,
-        ActionListener<Object> finalListener
+        ActionListener<Object> finalListener,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
     ) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams);
 
@@ -384,7 +420,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             AtomicInteger traceNumber = new AtomicInteger(0);
 
-            executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+            executePlanningLoop(
+                mlAgent.getLlm(),
+                allParams,
+                completedSteps,
+                memory,
+                conversationId,
+                0,
+                traceNumber,
+                finalListener,
+                functionCalling,
+                tokenTracker
+            );
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -405,13 +452,24 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String conversationId,
         int stepsExecuted,
         AtomicInteger traceNumber,
-        ActionListener<Object> finalListener
+        ActionListener<Object> finalListener,
+        FunctionCalling functionCalling,
+        AgentTokenTracker tokenTracker
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
         String parentInteractionId = allParams.get(MLAgentExecutor.PARENT_INTERACTION_ID);
 
         if (stepsExecuted >= maxSteps) {
-            handleMaxStepsReached(llm, allParams, completedSteps, memory, parentInteractionId, finalListener);
+            handleMaxStepsReached(
+                llm,
+                allParams,
+                completedSteps,
+                memory,
+                parentInteractionId,
+                finalListener,
+                functionCalling,
+                tokenTracker
+            );
             return;
         }
         MLPredictionTaskRequest request;
@@ -463,10 +521,30 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         planListener.whenComplete(llmOutput -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
+
+            // Extract token usage from planner LLM response
+            if (functionCalling != null) {
+                try {
+                    Map<String, ?> dataAsMap = modelTensorOutput
+                        .getMlModelOutputs()
+                        .getFirst()
+                        .getMlModelTensors()
+                        .getFirst()
+                        .getDataAsMap();
+                    TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
+                    if (usage != null) {
+                        tokenTracker.recordTurn(llm.getModelId(), usage);
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to extract token usage from planner LLM response", e);
+                }
+            }
+
             Map<String, Object> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = (String) parseLLMOutput.get(RESULT_FIELD);
+                boolean includeTokenUsage = Boolean.parseBoolean(allParams.getOrDefault(AgentUtils.INCLUDE_TOKEN_USAGE, "false"));
                 saveAndReturnFinalResult(
                     memory,
                     parentInteractionId,
@@ -474,7 +552,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
                     finalResult,
                     null,
-                    finalListener
+                    finalListener,
+                    tokenTracker,
+                    allParams.get(TENANT_ID_FIELD),
+                    includeTokenUsage
                 );
             } else {
                 List<String> steps = (List<String>) parseLLMOutput.get(STEPS_FIELD);
@@ -504,6 +585,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 if (allParams.containsKey(MEMORY_CONFIGURATION_FIELD)) {
                     reactParams.put(MEMORY_CONFIGURATION_FIELD, allParams.get(MEMORY_CONFIGURATION_FIELD));
                 }
+                // Mark sub-agent so its token tracker suppresses logging (parent logs merged totals)
+                reactParams.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "true");
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
@@ -532,6 +615,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                 break;
                             case PARENT_INTERACTION_ID_FIELD:
                                 results.put(PARENT_INTERACTION_ID_FIELD, tensor.getResult());
+                                break;
+                            case AgentTokenTracker.TOKEN_USAGE:
+                                if (tensor.getDataAsMap() != null) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> tokenData = (Map<String, Object>) tensor.getDataAsMap();
+                                    tokenTracker.mergeSubAgentUsage(tokenData);
+                                }
                                 break;
                             default:
                                 String stepResult = parseTensorDataMap(tensor);
@@ -619,7 +709,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         conversationId,
                         stepsExecuted + 1,
                         traceNumber,
-                        finalListener
+                        finalListener,
+                        functionCalling,
+                        tokenTracker
                     );
                 }, e -> {
                     String agentId = allParams.getOrDefault("agent_id", "unknown");
@@ -769,7 +861,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String reactParentInteractionId,
         String finalResult,
         String input,
-        ActionListener<Object> finalListener
+        ActionListener<Object> finalListener,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage
     ) {
         if (memory != null) {
             Map<String, Object> updateContent = new HashMap<>();
@@ -795,6 +890,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             )
                             .build()
                     );
+                AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
                 finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
             }, e -> {
                 log.error("Failed to update interaction with final result", e);
@@ -816,6 +912,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         )
                         .build()
                 );
+            AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
             finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
     }
@@ -861,11 +958,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         List<String> completedSteps,
         Memory memory,
         String parentInteractionId,
-        ActionListener<Object> finalListener
+        ActionListener<Object> finalListener,
+        FunctionCalling functionCalling,
+        AgentTokenTracker tokenTracker
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
         log.info("[SUMMARY] Max steps reached. Completed steps: {}", completedSteps.size());
 
+        boolean includeTokenUsage = Boolean.parseBoolean(allParams.getOrDefault(AgentUtils.INCLUDE_TOKEN_USAGE, "false"));
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             saveAndReturnFinalResult(
                 memory,
@@ -874,11 +974,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
                 response,
                 null,
-                finalListener
+                finalListener,
+                tokenTracker,
+                allParams.get(TENANT_ID_FIELD),
+                includeTokenUsage
             );
         }, finalListener::onFailure);
 
-        generateSummary(llm, completedSteps, allParams, ActionListener.wrap(summary -> {
+        generateSummary(llm, completedSteps, allParams, functionCalling, tokenTracker, ActionListener.wrap(summary -> {
             log.info("Summary generated successfully");
             responseListener
                 .onResponse(
@@ -905,6 +1008,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         LLMSpec llmSpec,
         List<String> completedSteps,
         Map<String, String> allParams,
+        FunctionCalling functionCalling,
+        AgentTokenTracker tokenTracker,
         ActionListener<String> listener
     ) {
         if (completedSteps == null || completedSteps.isEmpty()) {
@@ -939,6 +1044,24 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             );
 
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
+                // Extract token usage from summary LLM call
+                if (tokenTracker != null && functionCalling != null) {
+                    try {
+                        ModelTensorOutput tmpOutput = (ModelTensorOutput) response.getOutput();
+                        if (tmpOutput != null && tmpOutput.getMlModelOutputs() != null && !tmpOutput.getMlModelOutputs().isEmpty()) {
+                            Map<String, ?> dataAsMap = tmpOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+                            if (dataAsMap != null) {
+                                TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
+                                if (usage != null) {
+                                    tokenTracker.recordTurn(llmSpec.getModelId(), usage);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.debug("Failed to extract token usage from summary generation", e);
+                    }
+                }
+
                 String summary = extractSummaryFromResponse(response, summaryParams);
                 if (summary == null || summary.trim().isEmpty()) {
                     log.error("Extracted summary is empty");
