@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.returnFinalResponse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +50,10 @@ public class StreamingWrapper {
         this.client = client;
         this.parameters = parameters;
         this.isStreaming = (channel != null);
+    }
+
+    public boolean isStreaming() {
+        return isStreaming;
     }
 
     public void fixInteractionRole(List<String> interactions) {
@@ -105,19 +108,36 @@ public class StreamingWrapper {
         }
     }
 
-    public void sendFinalResponse(
-        String sessionId,
-        ActionListener<Object> listener,
-        String parentInteractionId,
-        boolean verbose,
-        List<ModelTensors> cotModelTensors,
-        Map<String, Object> additionalInfo,
-        String finalAnswer
-    ) {
-        if (isStreaming) {
-            listener.onResponse("Streaming completed");
-        } else {
-            returnFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+    /**
+     * Send token usage as a streaming batch before the completion chunk.
+     * No-op if tokenTracker is null, has no usage, or not streaming.
+     */
+    public void sendTokenUsageBatch(String sessionId, String parentInteractionId, AgentTokenTracker tokenTracker, String tenantId) {
+        if (!isStreaming || tokenTracker == null || !tokenTracker.hasUsage()) {
+            return;
+        }
+        try {
+            Map<String, Object> tokenUsageMap = tokenTracker.toOutputMap();
+            List<ModelTensor> tokenTensors = new ArrayList<>();
+
+            if (sessionId != null) {
+                tokenTensors.add(ModelTensor.builder().name("memory_id").result(sessionId).build());
+            }
+            if (parentInteractionId != null) {
+                tokenTensors.add(ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build());
+            }
+
+            tokenTensors.add(ModelTensor.builder().name(AgentTokenTracker.TOKEN_USAGE).dataAsMap(tokenUsageMap).build());
+
+            ModelTensorOutput tokenOutput = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(tokenTensors).build()))
+                .build();
+
+            channel.sendResponseBatch(new MLTaskResponse(tokenOutput));
+
+        } catch (Exception e) {
+            log.error("Failed to send token usage in streaming response", e);
         }
     }
 

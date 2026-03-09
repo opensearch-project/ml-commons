@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
@@ -24,6 +25,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REM
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatusCode;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.NEW_CHAT_HISTORY;
@@ -215,10 +217,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                             if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
-                                log.error("Failed to get Agent index", cause);
+                                log.error("Failed to get Agent index. agentId={}, tenantId={}", agentId, tenantId, cause);
                                 listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                             } else {
-                                log.error("Failed to get ML Agent {}", agentId, cause);
+                                log.error("Failed to get ML Agent. agentId={}, tenantId={}", agentId, tenantId, cause);
                                 listener.onFailure(cause);
                             }
                         } else {
@@ -258,6 +260,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
                                             .getInputDataset();
                                         Map<String, String> requestParameters = inputDataSet.getParameters();
+
+                                        // Add agentId to parameters for logging in agent runners
+                                        inputDataSet.getParameters().put(AGENT_ID_FIELD, agentId);
 
                                         mlAgent = applyMemoryContainerOverride(mlAgent, inputDataSet, agentId);
                                         final MLAgent finalMlAgent = mlAgent;
@@ -370,7 +375,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                     agentMLInput
                                                                 );
                                                             }, e -> {
-                                                                log.error("Failed to get existing interaction for regeneration", e);
+                                                                log
+                                                                    .error(
+                                                                        "Failed to get existing interaction for regeneration. agentId={}, tenantId={}",
+                                                                        agentId,
+                                                                        tenantId,
+                                                                        e
+                                                                    );
                                                                 listener.onFailure(e);
                                                             })
                                                         );
@@ -391,7 +402,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     );
                                                 }
                                             }, ex -> {
-                                                log.error("Failed to read conversation memory", ex);
+                                                log
+                                                    .error(
+                                                        "Failed to read conversation memory. agentId={}, tenantId={}",
+                                                        agentId,
+                                                        tenantId,
+                                                        ex
+                                                    );
                                                 listener.onFailure(ex);
                                             }));
                                         } else {
@@ -445,7 +462,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         null
                                                                     ),
                                                                     ex -> {
-                                                                        log.error("Failed to find memory with memory_id: {}", memoryId, ex);
+                                                                        log
+                                                                            .error(
+                                                                                "Failed to find memory with memory_id: {}. agentId={}, tenantId={}",
+                                                                                memoryId,
+                                                                                agentId,
+                                                                                tenantId,
+                                                                                ex
+                                                                            );
                                                                         listener.onFailure(ex);
                                                                     }
                                                                 )
@@ -470,7 +494,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             );
                                         }
                                     } catch (Exception e) {
-                                        log.error("Failed to parse ml agent {}", agentId, e);
+                                        log.error("Failed to parse ml agent. agentId={}, tenantId={}", agentId, tenantId, e);
                                         listener.onFailure(e);
                                     }
                                 } else {
@@ -483,7 +507,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         );
                                 }
                             } catch (Exception e) {
-                                log.error("Failed to get agent", e);
+                                log.error("Failed to get agent. agentId={}, tenantId={}", agentId, tenantId, e);
                                 listener.onFailure(e);
                             }
                         }
@@ -642,7 +666,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     inputMessages
                                 ),
                                 e -> {
-                                    log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
+                                    log
+                                        .error(
+                                            "Failed to regenerate for interaction {}. agentId={}, tenantId={}",
+                                            regenerateInteractionId,
+                                            inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                                            tenantId,
+                                            e
+                                        );
                                     listener.onFailure(e);
                                 }
                             )
@@ -665,7 +696,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
             }
         }, ex -> {
-            log.error("Failed to create parent interaction", ex);
+            log
+                .error(
+                    "Failed to create parent interaction. agentId={}, tenantId={}",
+                    inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                    tenantId,
+                    ex
+                );
             listener.onFailure(ex);
         }));
     }
@@ -815,15 +852,21 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
                     continuation.run();
                 } catch (Exception ex) {
-                    log.error("Failed during memory post-processing", ex);
+                    log
+                        .error(
+                            "Failed during memory post-processing. agentId={}, tenantId={}",
+                            params.get(AGENT_ID_FIELD),
+                            mlAgent.getTenantId(),
+                            ex
+                        );
                     listener.onFailure(ex);
                 }
             }, e -> {
-                log.error("Failed to save input messages", e);
+                log.error("Failed to save input messages. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
                 listener.onFailure(e);
             }));
         }, e -> {
-            log.error("Failed to get history", e);
+            log.error("Failed to get history. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
             listener.onFailure(e);
         }));
     }
@@ -887,6 +930,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(
                     mlTask,
+                    mlAgent.getType(),
+                    inputDataSet.getParameters().get(AGENT_ID_FIELD),
                     tenantId,
                     outputs,
                     modelTensors,
@@ -910,11 +955,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
                     }
                 } catch (Exception e) {
-                    log.error("Failed to run agent", e);
+                    log
+                        .error(
+                            "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
+                            inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                            tenantId,
+                            extractStatusCode(e),
+                            e
+                        );
                     agentActionListener.onFailure(e);
                 }
             }, e -> {
-                log.error("Failed to create task for agent async execution", e);
+                log
+                    .error(
+                        "Failed to create task for agent async execution. agentId={}, tenantId={}",
+                        inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                        tenantId,
+                        e
+                    );
                 listener.onFailure(e);
             }));
         } else {
@@ -923,6 +981,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 outputs,
                 modelTensors,
                 mlAgent.getType(),
+                inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                tenantId,
                 parentInteractionId,
                 memory
             );
@@ -942,7 +1002,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
                 }
             } catch (Exception e) {
-                log.error("Failed to run agent", e);
+                log
+                    .error(
+                        "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
+                        inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                        tenantId,
+                        extractStatusCode(e),
+                        e
+                    );
                 agentActionListener.onFailure(e);
             }
         }
@@ -954,10 +1021,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String agentType,
+        String agentId,
+        String tenantId,
         String parentInteractionId,
         Memory memory
     ) {
+        long startTime = System.currentTimeMillis();
         return ActionListener.wrap(output -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            log
+                .info(
+                    "Agent execution completed successfully. agentType={}, agentId={}, tenantId={}, latencyMs={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs
+                );
             if (output != null) {
                 processOutput(output, modelTensors);
                 listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
@@ -965,7 +1044,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener.onResponse(null);
             }
         }, ex -> {
-            log.error("Failed to run {} agent", agentType, ex);
+            long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
+            // CENTRAL AGENT FAILURE LOG - All agent execution failures flow through here
+            log
+                .error(
+                    "Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}, error={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    statusCode,
+                    ex.getMessage(),
+                    ex
+                );
             updateInteractionWithFailure(parentInteractionId, memory, ex.getMessage());
             listener.onFailure(ex);
         });
@@ -973,17 +1065,30 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     private ActionListener<Object> createAsyncTaskUpdater(
         MLTask mlTask,
+        String agentType,
+        String agentId,
         String tenantId,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String parentInteractionId,
         Memory memory
     ) {
+        long startTime = System.currentTimeMillis();
         String taskId = mlTask.getTaskId();
         Map<String, Object> agentResponse = new HashMap<>();
         Map<String, Object> updatedTask = new HashMap<>();
 
         return ActionListener.wrap(output -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            log
+                .info(
+                    "Agent execution completed successfully. agentType={}, agentId={}, tenantId={}, latencyMs={}, taskId={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    taskId
+                );
             if (output != null) {
                 processOutput(output, modelTensors);
                 agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
@@ -1007,6 +1112,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     )
             );
         }, ex -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
+            // CENTRAL AGENT FAILURE LOG - All async agent execution failures flow through here
+            log
+                .error(
+                    "Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}, error={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    statusCode,
+                    ex.getMessage(),
+                    ex
+                );
             agentResponse.put(ERROR_MESSAGE, ex.getMessage());
 
             updatedTask.put(RESPONSE_FIELD, agentResponse);
@@ -1288,5 +1407,4 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
         return agentType == MLAgentType.CONVERSATIONAL || agentType == MLAgentType.AG_UI;
     }
-
 }
