@@ -8,6 +8,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.4.0
 * allow higher maximum number of batch inference job tasks ([#4474](https://github.com/opensearch-project/ml-commons/pull/4474))
 
 ### Bug Fixes
+* Add NONE pooling mode to support pre-pooled model outputs, fixing bug where MEAN pooling was applied by default ([#4708](https://github.com/opensearch-project/ml-commons/issues/4708))
 * Fix agent type update ([#4341](https://github.com/opensearch-project/ml-commons/pull/4341))
 * Handle edge case of empty values of tool configs ([#4479](https://github.com/opensearch-project/ml-commons/pull/4479))
 * Fix OpenAI RAG integration tests: Replace Wikimedia image URL with Unsplash ([#4472](https://github.com/opensearch-project/ml-commons/pull/4472))

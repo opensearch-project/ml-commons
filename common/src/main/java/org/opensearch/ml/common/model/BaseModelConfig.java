@@ -247,7 +247,8 @@ public class BaseModelConfig extends MLModelConfig {
         MAX("max"),
         WEIGHTED_MEAN("weightedmean"),
         CLS("cls"),
-        LAST_TOKEN("lasttoken");
+        LAST_TOKEN("lasttoken"),
+        NONE("none");
 
         private String name;
 
