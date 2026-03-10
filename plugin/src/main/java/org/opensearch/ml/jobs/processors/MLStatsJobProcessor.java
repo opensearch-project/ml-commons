@@ -213,20 +213,23 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                         Tags agentTags = agent.getTags();
 
                         // Add model and provider info if agent has LLM spec
-                        Optional
+                        Tags finalAgentTags = Optional
                             .of(agent)
                             .map(MLAgent::getLlm)
                             .map(LLMSpec::getModelId)
                             .map(modelTagsCache::get)
                             .map(Tags::getTagsMap)
-                            .ifPresent(tagsMap -> {
-                                addTagIfExists(tagsMap, MODEL_TAG_MODEL, TAG_AGENT_MODEL, agentTags);
-                                addTagIfExists(tagsMap, MODEL_TAG_SERVICE_PROVIDER, TAG_AGENT_MODEL_SERVICE_PROVIDER, agentTags);
-                                addTagIfExists(tagsMap, MODEL_TAG_DEPLOYMENT, TAG_AGENT_MODEL_DEPLOYMENT, agentTags);
-                                addTagIfExists(tagsMap, MODEL_TAG_TYPE, TAG_AGENT_MODEL_TYPE, agentTags);
-                            });
+                            .map(tagsMap -> {
+                                Tags t = agentTags;
+                                t = addTagIfExists(tagsMap, MODEL_TAG_MODEL, TAG_AGENT_MODEL, t);
+                                t = addTagIfExists(tagsMap, MODEL_TAG_SERVICE_PROVIDER, TAG_AGENT_MODEL_SERVICE_PROVIDER, t);
+                                t = addTagIfExists(tagsMap, MODEL_TAG_DEPLOYMENT, TAG_AGENT_MODEL_DEPLOYMENT, t);
+                                t = addTagIfExists(tagsMap, MODEL_TAG_TYPE, TAG_AGENT_MODEL_TYPE, t);
+                                return t;
+                            })
+                            .orElse(agentTags);
 
-                        MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.AGENT_COUNT, agentTags);
+                        MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.AGENT_COUNT, finalAgentTags);
                     } catch (Exception e) {
                         log.error("Failed to parse agent from hit: {}", hit.getId(), e);
                     }
@@ -241,9 +244,10 @@ public class MLStatsJobProcessor extends MLJobProcessor {
     }
 
     @VisibleForTesting
-    void addTagIfExists(Map<String, ?> sourceTagsMap, String sourceKey, String targetKey, Tags targetTags) {
+    Tags addTagIfExists(Map<String, ?> sourceTagsMap, String sourceKey, String targetKey, Tags targetTags) {
         if (sourceTagsMap.containsKey(sourceKey) && sourceTagsMap.get(sourceKey) != null) {
-            targetTags.addTag(targetKey, (String) sourceTagsMap.get(sourceKey));
+            return targetTags.addTag(targetKey, (String) sourceTagsMap.get(sourceKey));
         }
+        return targetTags;
     }
 }
