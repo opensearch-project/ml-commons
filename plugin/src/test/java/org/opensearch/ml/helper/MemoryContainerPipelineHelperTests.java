@@ -202,4 +202,5 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
     private AcknowledgedResponse acknowledgedTrue() {
         return new AcknowledgedResponse(true);
     }
+
 }
