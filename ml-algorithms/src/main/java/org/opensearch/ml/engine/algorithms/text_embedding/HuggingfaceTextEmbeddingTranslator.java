@@ -102,6 +102,9 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
             case "cls":
                 embeddings = embeddings.get(0);
                 break;
+            case "lasttoken":
+                embeddings = lastTokenPool(embeddings, inputAttentionMask);
+                break;
             default:
                 throw new AssertionError("Unexpected pooling model: " + pooling);
         }
@@ -144,6 +147,18 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
         NDArray maskSum = inputAttentionMask.sum(AXIS);
         NDArray embeddingSum = embeddings.mul(inputAttentionMask).sum(AXIS);
         return embeddingSum.div(maskSum);
+    }
+
+    private NDArray lastTokenPool(NDArray embeddings, NDArray inputAttentionMask) {
+        // Sum attention mask to get count of real tokens
+        long tokenCount = (long) inputAttentionMask.sum().toFloatArray()[0];
+        // Last token index (0-based)
+        long lastTokenIdx = tokenCount - 1;
+        // Handle edge case
+        if (lastTokenIdx < 0) {
+            lastTokenIdx = 0;
+        }
+        return embeddings.get(lastTokenIdx);
     }
 
     /**
@@ -216,10 +231,10 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
                 && !"max".equals(poolingMode)
                 && !"cls".equals(poolingMode)
                 && !"mean_sqrt_len".equals(poolingMode)
-                && !"weightedmean".equals(poolingMode)) {
+                && !"weightedmean".equals(poolingMode)
+                && !"lasttoken".equals(poolingMode)) {
                 throw new IllegalArgumentException(
-                    "Invalid pooling model, must be one of [mean_tokens, max_tokens,"
-                        + " cls_token, mean_sqrt_len_tokens, weightedmean_tokens]."
+                    "Invalid pooling model, must be one of [mean, max, cls, mean_sqrt_len, weightedmean, lasttoken]."
                 );
             }
             this.pooling = poolingMode;
