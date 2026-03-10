@@ -474,10 +474,10 @@ public class MLStatsJobProcessorTests {
         sourceTagsMap.put("service_provider", "openai");
         sourceTagsMap.put("empty_key", null);
 
-        processor.addTagIfExists(sourceTagsMap, "model", "agent_model", agentTags);
-        processor.addTagIfExists(sourceTagsMap, "service_provider", "agent_service_provider", agentTags);
-        processor.addTagIfExists(sourceTagsMap, "nonexistent_key", "agent_nonexistent", agentTags);
-        processor.addTagIfExists(sourceTagsMap, "empty_key", "agent_empty", agentTags);
+        agentTags = processor.addTagIfExists(sourceTagsMap, "model", "agent_model", agentTags);
+        agentTags = processor.addTagIfExists(sourceTagsMap, "service_provider", "agent_service_provider", agentTags);
+        agentTags = processor.addTagIfExists(sourceTagsMap, "nonexistent_key", "agent_nonexistent", agentTags);
+        agentTags = processor.addTagIfExists(sourceTagsMap, "empty_key", "agent_empty", agentTags);
 
         Map<String, ?> resultTags = agentTags.getTagsMap();
         Assert.assertEquals("test-model", resultTags.get("agent_model"));
