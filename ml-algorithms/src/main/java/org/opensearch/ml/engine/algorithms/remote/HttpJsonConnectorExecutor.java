@@ -224,4 +224,16 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
         return httpClientRef.get();
     }
+
+    /**
+     * Closes the underlying HTTP client. Safe to call concurrently — NettyNioAsyncHttpClient.close()
+     * gracefully drains in-flight requests before shutting down the event loop group.
+     */
+    @Override
+    public void close() {
+        SdkAsyncHttpClient client = httpClientRef.getAndSet(null);
+        if (client != null) {
+            client.close();
+        }
+    }
 }
