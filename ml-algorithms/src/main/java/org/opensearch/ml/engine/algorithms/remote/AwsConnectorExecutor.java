@@ -16,7 +16,6 @@ import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -203,34 +202,16 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @VisibleForTesting
     protected SdkAsyncHttpClient getHttpClient() {
         if (httpClientRef.get() == null) {
-            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
-            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
-            if (skipSslVerificationValue) {
-                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
-            }
             log
                 .info(
                     "AwsConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
                     connector.getName(),
-                    maxConnection,
+                    super.getConnectorClientConfig().getMaxConnections(),
                     super.getConnectorClientConfig().getConnectionTimeout(),
                     super.getConnectorClientConfig().getReadTimeout()
                 );
             this.httpClientRef
-                .compareAndSet(
-                    null,
-                    MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            connectionTimeout,
-                            readTimeout,
-                            maxConnection,
-                            connectorPrivateIpEnabled,
-                            skipSslVerificationValue
-                        )
-                );
+                .compareAndSet(null, MLHttpClientFactory.getAsyncHttpClient(super.getConnectorClientConfig(), connectorPrivateIpEnabled));
         }
         return httpClientRef.get();
     }

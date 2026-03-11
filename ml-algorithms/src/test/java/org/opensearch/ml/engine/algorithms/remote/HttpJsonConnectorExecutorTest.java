@@ -7,10 +7,10 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -19,7 +19,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -291,7 +290,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .url("http://openai.com/mock")
                 .requestBody("hello world")
                 .build();
-            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, true);
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, null, 1, 1, 0, RetryBackoffPolicy.CONSTANT, true);
             Connector connector = HttpConnector
                 .builder()
                 .name("test connector")
@@ -302,10 +301,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .build();
             SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
             mockedFactory
-                .when(
-                    () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
-                )
+                .when(() -> MLHttpClientFactory.getAsyncHttpClient(any(ConnectorClientConfig.class), anyBoolean()))
                 .thenReturn(mockClient);
 
             HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
@@ -322,20 +318,10 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                     actionListener
                 );
             verify(actionListener, never()).onFailure(any());
-            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
-            mockedFactory
-                .verify(
-                    () -> MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            any(Duration.class),
-                            any(Duration.class),
-                            anyInt(),
-                            anyBoolean(),
-                            sslVerificationCaptor.capture()
-                        )
-                );
+            ArgumentCaptor<ConnectorClientConfig> configCaptor = ArgumentCaptor.forClass(ConnectorClientConfig.class);
+            mockedFactory.verify(() -> MLHttpClientFactory.getAsyncHttpClient(configCaptor.capture(), anyBoolean()));
             // Assert that skipSslVerification was set to true
-            assertTrue("SSL verification should be disabled", sslVerificationCaptor.getValue());
+            assertTrue("SSL verification should be disabled", configCaptor.getValue().getSkipSslVerification());
         }
     }
 
@@ -349,7 +335,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .url("http://openai.com/mock")
                 .requestBody("hello world")
                 .build();
-            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, false);
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, null, 1, 1, 0, RetryBackoffPolicy.CONSTANT, false);
             Connector connector = HttpConnector
                 .builder()
                 .name("test connector")
@@ -360,10 +346,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .build();
             SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
             mockedFactory
-                .when(
-                    () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
-                )
+                .when(() -> MLHttpClientFactory.getAsyncHttpClient(any(ConnectorClientConfig.class), anyBoolean()))
                 .thenReturn(mockClient);
 
             HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
@@ -380,20 +363,10 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                     actionListener
                 );
             verify(actionListener, never()).onFailure(any());
-            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
-            mockedFactory
-                .verify(
-                    () -> MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            any(Duration.class),
-                            any(Duration.class),
-                            anyInt(),
-                            anyBoolean(),
-                            sslVerificationCaptor.capture()
-                        )
-                );
+            ArgumentCaptor<ConnectorClientConfig> configCaptor = ArgumentCaptor.forClass(ConnectorClientConfig.class);
+            mockedFactory.verify(() -> MLHttpClientFactory.getAsyncHttpClient(configCaptor.capture(), anyBoolean()));
             // Assert that skipSslVerification was set to false
-            assertFalse("SSL verification should be enabled", sslVerificationCaptor.getValue());
+            assertFalse("SSL verification should be enabled", configCaptor.getValue().getSkipSslVerification());
         }
     }
 
@@ -407,7 +380,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .url("http://openai.com/mock")
                 .requestBody("hello world")
                 .build();
-            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null);
+            ConnectorClientConfig clientConfig = new ConnectorClientConfig(10, 10, 10, null, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null);
             Connector connector = HttpConnector
                 .builder()
                 .name("test connector")
@@ -418,10 +391,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .build();
             SdkAsyncHttpClient mockClient = mock(SdkAsyncHttpClient.class);
             mockedFactory
-                .when(
-                    () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
-                )
+                .when(() -> MLHttpClientFactory.getAsyncHttpClient(any(ConnectorClientConfig.class), anyBoolean()))
                 .thenReturn(mockClient);
 
             HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
@@ -438,20 +408,10 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                     actionListener
                 );
             verify(actionListener, never()).onFailure(any());
-            ArgumentCaptor<Boolean> sslVerificationCaptor = ArgumentCaptor.forClass(Boolean.class);
-            mockedFactory
-                .verify(
-                    () -> MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            any(Duration.class),
-                            any(Duration.class),
-                            anyInt(),
-                            anyBoolean(),
-                            sslVerificationCaptor.capture()
-                        )
-                );
-            // Assert that skipSslVerification defaults to false when null
-            assertFalse("SSL verification should be enabled when null", sslVerificationCaptor.getValue());
+            ArgumentCaptor<ConnectorClientConfig> configCaptor = ArgumentCaptor.forClass(ConnectorClientConfig.class);
+            mockedFactory.verify(() -> MLHttpClientFactory.getAsyncHttpClient(configCaptor.capture(), anyBoolean()));
+            // Assert that skipSslVerification is null in config (factory defaults null to false)
+            assertNull(configCaptor.getValue().getSkipSslVerification());
         }
     }
 
