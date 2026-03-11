@@ -17,6 +17,7 @@ PUT /_cluster/settings
 
 ## 2. Create connector for Yandex Cloud Embeddings:
 
+### 2d. Create connector for document embedding 
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -26,7 +27,7 @@ POST /_plugins/_ml/connectors/_create
   "version": "1",
   "protocol": "http",
   "parameters": {
-    "modelUri": "emb://<folder_ID>/text-search-<doc|query>/latest",
+    "modelUri": "emb://<folder_ID>/text-search-doc/latest",
     "folder_id":"<folder_ID>"
   },
   "credential": {
@@ -49,14 +50,21 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-Note: Replace all `<placeholders>` in the preceding code snippet with appropriate values, while preserving `${curly braces}` syntax exactly as shown. Short-lived [bearer tokens](https://yandex.cloud/en/docs/iam/concepts/authorization/iam-token) (valid ~12 hours) may be used as an alternative to [API keys](https://yandex.cloud/en/docs/iam/concepts/authorization/api-key). API keys must be granted either `yc.ai.languageModels.execute` or `yc.ai.foundationModels.execute` roles. Also refer to [the guide](https://yandex.cloud/en/docs/ai-studio/security/). Additionally, due to distinct [models](https://yandex.cloud/en/docs/ai-studio/concepts/embeddings) being employed for query processing versus document processing, two dedicated connectors are required. Using these particular pre/post processing functions is crucial.  
-
 Sample response:
 ```json
 {
     "connector_id": "CTEou5oBdUNOOrVArUAU"
 }
 ```
+
+Note: 
+* Replace all `<placeholders>` in the preceding code snippet with appropriate values, while preserving `${curly braces}` syntax exactly as shown. Short-lived [bearer tokens](https://yandex.cloud/en/docs/iam/concepts/authorization/iam-token) (valid ~12 hours) may be used as an alternative to [API keys](https://yandex.cloud/en/docs/iam/concepts/authorization/api-key). API keys must be granted either `yc.ai.languageModels.execute` or `yc.ai.foundationModels.execute` roles. Also refer to [the guide](https://yandex.cloud/en/docs/ai-studio/security/). 
+
+* Using these particular pre/post processing functions is crucial.  
+
+### 2q. Create connector for query embedding
+
+Due to Yandex Cloud using distinct [models](https://yandex.cloud/en/docs/ai-studio/concepts/embeddings) for query processing and document processing, separate connectors are required for each purpose. To create the query processing connector, duplicate the connector definition above and replace `text-search-doc` with `text-search-query`.
 
 ## 3. Register model & deploy model:
 
@@ -94,6 +102,8 @@ Sample response:
   "model_id": "CzEou5oBdUNOOrVA10Db"
 }
 ```
+
+Repeat this step with `connector_id` obtained in the step `2q` to get dedicated `model_id` for query embedding. 
 
 ## 4. Test model inference
 
