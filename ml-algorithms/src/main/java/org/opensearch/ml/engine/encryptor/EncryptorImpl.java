@@ -154,11 +154,10 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public void encrypt(List<String> plainTexts, String tenantId, ActionListener<List<String>> listener) {
-        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
-            encryptTexts(plainTexts, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
+            encryptTexts(plainTexts, tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)), listener);
         }, listener::onFailure);
-        String masterKey = getOrInitMasterKey(effectiveTenantId, initListener);
+        String masterKey = getOrInitMasterKey(tenantId, initListener);
         if (masterKey != null) {
             encryptTexts(plainTexts, masterKey, listener);
         }
@@ -178,11 +177,10 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public void decrypt(List<String> encryptedTexts, String tenantId, ActionListener<List<String>> listener) {
-        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
-            decryptTexts(encryptedTexts, tenantMasterKeys.getIfPresent(effectiveTenantId), listener);
+            decryptTexts(encryptedTexts, tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)), listener);
         }, listener::onFailure);
-        String masterKey = getOrInitMasterKey(effectiveTenantId, initListener);
+        String masterKey = getOrInitMasterKey(tenantId, initListener);
         if (masterKey != null) {
             decryptTexts(encryptedTexts, masterKey, listener);
         }
@@ -213,15 +211,16 @@ public class EncryptorImpl implements Encryptor {
     }
 
     private String getOrInitMasterKey(String tenantId, ActionListener<Boolean> listener) {
-        String masterKey = tenantMasterKeys.getIfPresent(tenantId);
+        String effectiveTenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
+        String masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
         if (masterKey != null) {
             return masterKey;
         }
 
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap
-            .computeIfAbsent(tenantId, k -> new CopyOnWriteArrayList<>());
+            .computeIfAbsent(effectiveTenantId, k -> new CopyOnWriteArrayList<>());
         synchronized (waitingListeners) {
-            masterKey = tenantMasterKeys.getIfPresent(tenantId);
+            masterKey = tenantMasterKeys.getIfPresent(effectiveTenantId);
             if (masterKey != null) {
                 log.debug("Master key generation is handled by other thread for tenant {}", tenantId);
                 return masterKey;
@@ -239,14 +238,18 @@ public class EncryptorImpl implements Encryptor {
         }
 
         log.info("Generating master key for tenant : {}", tenantId);
-        String masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
+        String masterKeyId = MASTER_KEY;
+        if (tenantId != null) {
+            masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
+        }
         mlIndicesHandler.initMLConfigIndex(createInitMLConfigIndexListener(tenantId, masterKeyId));
         return null;
     }
 
     private void handleSuccess(String tenantId, String masterKey) {
-        this.tenantMasterKeys.put(tenantId, masterKey);
-        List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
+        this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
+        List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap
+            .remove(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
         if (waitingListeners != null) {
             log
                 .info(
@@ -262,7 +265,8 @@ public class EncryptorImpl implements Encryptor {
     }
 
     private void handleError(String tenantId, Exception exception) {
-        List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
+        List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap
+            .remove(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
         if (waitingListeners != null) {
             synchronized (waitingListeners) {
                 if (exception != null) {
@@ -383,7 +387,17 @@ public class EncryptorImpl implements Encryptor {
             .index(ML_CONFIG_INDEX)
             .id(masterKeyId)
             .overwriteIfExists(false)
-            .dataObject(Map.of(MASTER_KEY, generatedMasterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli(), TENANT_ID_FIELD, tenantId))
+            .dataObject(
+                Map
+                    .of(
+                        MASTER_KEY,
+                        generatedMasterKey,
+                        CREATE_TIME_FIELD,
+                        Instant.now().toEpochMilli(),
+                        TENANT_ID_FIELD,
+                        Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)
+                    )
+            )
             .build();
     }
 
@@ -441,7 +455,7 @@ public class EncryptorImpl implements Encryptor {
             .builder()
             .index(ML_CONFIG_INDEX)
             .id(masterKeyId)
-            .tenantId(tenantId)
+            .tenantId(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID))
             .fetchSourceContext(fetchSourceContext)
             .build();
     }
