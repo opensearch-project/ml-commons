@@ -495,11 +495,11 @@ public class MLAgent implements ToXContentObject, Writeable {
             .addTag(AGENT_TYPE_FIELD, type != null ? type : TAG_VALUE_UNKNOWN);
 
         if (memory != null && memory.getType() != null) {
-            tags.addTag(TAG_MEMORY_TYPE, memory.getType());
+            tags = tags.addTag(TAG_MEMORY_TYPE, memory.getType());
         }
 
         if (parameters != null && parameters.get(LLM_INTERFACE_FIELD) != null) {
-            tags.addTag(LLM_INTERFACE_FIELD, parameters.get(LLM_INTERFACE_FIELD));
+            tags = tags.addTag(LLM_INTERFACE_FIELD, parameters.get(LLM_INTERFACE_FIELD));
         }
 
         return tags;
