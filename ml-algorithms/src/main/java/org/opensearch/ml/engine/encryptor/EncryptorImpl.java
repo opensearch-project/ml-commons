@@ -455,7 +455,7 @@ public class EncryptorImpl implements Encryptor {
             .builder()
             .index(ML_CONFIG_INDEX)
             .id(masterKeyId)
-            .tenantId(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID))
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
     }
