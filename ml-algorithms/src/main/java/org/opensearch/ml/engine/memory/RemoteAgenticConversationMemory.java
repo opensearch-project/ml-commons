@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -1412,12 +1414,30 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             // Decrypt the connector credentials (for inline connectors, credentials are already plaintext)
             // This populates the decryptedCredential field which AwsConnector methods depend on
-            connector
-                .decrypt(
-                    ConnectorAction.ActionType.EXECUTE.name(),
-                    (cred, tenant) -> cred,  // No-op function - credentials are already plaintext
-                    tenantId
-                );
+            // Use CountDownLatch for synchronous behavior in constructor
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<Exception> decryptError = new AtomicReference<>();
+            ActionListener<Boolean> decryptListener = ActionListener.wrap(r -> { latch.countDown(); }, e -> {
+                log.error("Failed to decrypt credentials in inline connector", e);
+                decryptError.set(e);
+                latch.countDown();
+            });
+
+            // No-op function - credentials are already plaintext, just pass them through
+            connector.decrypt(ConnectorAction.ActionType.EXECUTE.name(), (plainCredentials, tenant, listener) -> {
+                // For inline connectors, credentials are already plaintext, so just pass them through
+                listener.onResponse(plainCredentials);
+            }, tenantId, decryptListener);
+
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                log.error("Interrupted while waiting for credential decryption", e);
+                Thread.currentThread().interrupt();
+            }
+            if (decryptError.get() != null) {
+                throw new MLException("Failed to decrypt credentials, ", decryptError.get());
+            }
 
             return connector;
         }
