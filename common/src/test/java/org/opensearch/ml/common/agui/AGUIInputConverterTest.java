@@ -26,10 +26,12 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.DocumentContent;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
+import org.opensearch.ml.common.input.execute.agent.VideoContent;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -513,7 +515,7 @@ public class AGUIInputConverterTest {
     }
 
     @Test
-    public void testConvertFromAGUIInput_NonImageBinaryContentSkipped() {
+    public void testConvertFromAGUIInput_ApplicationPdfParsedAsDocument() {
         JsonObject aguiInput = new JsonObject();
         aguiInput.addProperty("threadId", "thread-123");
         aguiInput.addProperty("runId", "run-456");
@@ -538,8 +540,13 @@ public class AGUIInputConverterTest {
 
         @SuppressWarnings("unchecked")
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
-        // Non-image binary content should be skipped
-        assertTrue(convertedMessages.get(0).getContent().isEmpty());
+        assertEquals(1, convertedMessages.get(0).getContent().size());
+        ContentBlock block = convertedMessages.get(0).getContent().get(0);
+        assertEquals(ContentType.DOCUMENT, block.getType());
+        assertNotNull(block.getDocument());
+        assertEquals("pdf", block.getDocument().getFormat());
+        assertEquals("pdfdata", block.getDocument().getData());
+        assertEquals(SourceType.BASE64, block.getDocument().getType());
     }
 
     @Test
@@ -976,6 +983,323 @@ public class AGUIInputConverterTest {
         assertNotNull(id1);
         assertNotNull(id2);
         assertFalse("Message IDs should be unique", id1.equals(id2));
+    }
+
+    // ==================== Tests for video and document content ====================
+
+    @Test
+    public void testConvertFromAGUIInput_TextCsvParsedAsDocument() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+
+        JsonArray contentArray = new JsonArray();
+        JsonObject binaryContent = new JsonObject();
+        binaryContent.addProperty("type", "binary");
+        binaryContent.addProperty("mimeType", "text/csv");
+        binaryContent.addProperty("data", "col1,col2\nval1,val2");
+        contentArray.add(binaryContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        ContentBlock block = convertedMessages.get(0).getContent().get(0);
+        assertEquals(ContentType.DOCUMENT, block.getType());
+        assertEquals("csv", block.getDocument().getFormat());
+        assertEquals("col1,col2\nval1,val2", block.getDocument().getData());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_ApplicationJsonParsedAsDocument() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+
+        JsonArray contentArray = new JsonArray();
+        JsonObject binaryContent = new JsonObject();
+        binaryContent.addProperty("type", "binary");
+        binaryContent.addProperty("mimeType", "application/json");
+        binaryContent.addProperty("data", "{\"key\":\"value\"}");
+        contentArray.add(binaryContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        ContentBlock block = convertedMessages.get(0).getContent().get(0);
+        assertEquals(ContentType.DOCUMENT, block.getType());
+        assertEquals("json", block.getDocument().getFormat());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_VideoMp4ParsedAsVideo() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+
+        JsonArray contentArray = new JsonArray();
+        JsonObject binaryContent = new JsonObject();
+        binaryContent.addProperty("type", "binary");
+        binaryContent.addProperty("mimeType", "video/mp4");
+        binaryContent.addProperty("data", "videodata");
+        contentArray.add(binaryContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        ContentBlock block = convertedMessages.get(0).getContent().get(0);
+        assertEquals(ContentType.VIDEO, block.getType());
+        assertNotNull(block.getVideo());
+        assertEquals("mp4", block.getVideo().getFormat());
+        assertEquals("videodata", block.getVideo().getData());
+        assertEquals(SourceType.BASE64, block.getVideo().getType());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_MultimodalWithAllTypes() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+
+        JsonArray contentArray = new JsonArray();
+
+        JsonObject textContent = new JsonObject();
+        textContent.addProperty("type", "text");
+        textContent.addProperty("text", "Analyze these files");
+        contentArray.add(textContent);
+
+        JsonObject imageContent = new JsonObject();
+        imageContent.addProperty("type", "binary");
+        imageContent.addProperty("mimeType", "image/png");
+        imageContent.addProperty("data", "imgdata");
+        contentArray.add(imageContent);
+
+        JsonObject videoContent = new JsonObject();
+        videoContent.addProperty("type", "binary");
+        videoContent.addProperty("mimeType", "video/mp4");
+        videoContent.addProperty("data", "viddata");
+        contentArray.add(videoContent);
+
+        JsonObject docContent = new JsonObject();
+        docContent.addProperty("type", "binary");
+        docContent.addProperty("mimeType", "text/csv");
+        docContent.addProperty("data", "csvdata");
+        contentArray.add(docContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        List<ContentBlock> content = convertedMessages.get(0).getContent();
+        assertEquals(4, content.size());
+        assertEquals(ContentType.TEXT, content.get(0).getType());
+        assertEquals(ContentType.IMAGE, content.get(1).getType());
+        assertEquals(ContentType.VIDEO, content.get(2).getType());
+        assertEquals(ContentType.DOCUMENT, content.get(3).getType());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_UnknownMimeTypeSkipped() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+
+        JsonArray contentArray = new JsonArray();
+        JsonObject binaryContent = new JsonObject();
+        binaryContent.addProperty("type", "binary");
+        binaryContent.addProperty("mimeType", "audio/mpeg");
+        binaryContent.addProperty("data", "audiodata");
+        contentArray.add(binaryContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        assertTrue(convertedMessages.get(0).getContent().isEmpty());
+    }
+
+    @Test
+    public void testConvertToAGUIFormat_VideoContent() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Check this video");
+
+        VideoContent videoContent = new VideoContent();
+        videoContent.setType(SourceType.BASE64);
+        videoContent.setFormat("mp4");
+        videoContent.setData("videodata");
+
+        ContentBlock videoBlock = new ContentBlock();
+        videoBlock.setType(ContentType.VIDEO);
+        videoBlock.setVideo(videoContent);
+
+        Message message = new Message("user", List.of(textBlock, videoBlock));
+
+        List<Map<String, Object>> result = AGUIInputConverter.convertToAGUIFormat(List.of(message));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get(0).get("content");
+        assertEquals(2, content.size());
+        assertEquals("binary", content.get(1).get("type"));
+        assertEquals("video/mp4", content.get(1).get("mimeType"));
+        assertEquals("videodata", content.get(1).get("data"));
+    }
+
+    @Test
+    public void testConvertToAGUIFormat_DocumentContent() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Analyze this");
+
+        DocumentContent documentContent = new DocumentContent();
+        documentContent.setType(SourceType.BASE64);
+        documentContent.setFormat("csv");
+        documentContent.setData("csvdata");
+
+        ContentBlock docBlock = new ContentBlock();
+        docBlock.setType(ContentType.DOCUMENT);
+        docBlock.setDocument(documentContent);
+
+        Message message = new Message("user", List.of(textBlock, docBlock));
+
+        List<Map<String, Object>> result = AGUIInputConverter.convertToAGUIFormat(List.of(message));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get(0).get("content");
+        assertEquals(2, content.size());
+        assertEquals("binary", content.get(1).get("type"));
+        assertEquals("text/csv", content.get(1).get("mimeType"));
+        assertEquals("csvdata", content.get(1).get("data"));
+    }
+
+    @Test
+    public void testConvertToAGUIFormat_DocumentContent_ApplicationMimeType() {
+        DocumentContent documentContent = new DocumentContent();
+        documentContent.setType(SourceType.BASE64);
+        documentContent.setFormat("json");
+        documentContent.setData("jsondata");
+
+        ContentBlock docBlock = new ContentBlock();
+        docBlock.setType(ContentType.DOCUMENT);
+        docBlock.setDocument(documentContent);
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("text");
+
+        Message message = new Message("user", List.of(textBlock, docBlock));
+
+        List<Map<String, Object>> result = AGUIInputConverter.convertToAGUIFormat(List.of(message));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get(0).get("content");
+        assertEquals("application/json", content.get(1).get("mimeType"));
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_RoundTrip_WithVideoAndDocument() {
+        JsonObject aguiInput = new JsonObject();
+        aguiInput.addProperty("threadId", "thread-123");
+        aguiInput.addProperty("runId", "run-456");
+        aguiInput.add("tools", new JsonArray());
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+
+        JsonArray contentArray = new JsonArray();
+
+        JsonObject textContent = new JsonObject();
+        textContent.addProperty("type", "text");
+        textContent.addProperty("text", "Analyze");
+        contentArray.add(textContent);
+
+        JsonObject videoContent = new JsonObject();
+        videoContent.addProperty("type", "binary");
+        videoContent.addProperty("mimeType", "video/mp4");
+        videoContent.addProperty("data", "viddata");
+        contentArray.add(videoContent);
+
+        JsonObject docContent = new JsonObject();
+        docContent.addProperty("type", "binary");
+        docContent.addProperty("mimeType", "text/csv");
+        docContent.addProperty("data", "csvdata");
+        contentArray.add(docContent);
+
+        userMsg.add("content", contentArray);
+        messages.add(userMsg);
+        aguiInput.add("messages", messages);
+
+        // Convert from AGUI → internal
+        AgentMLInput agentMLInput = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
+        @SuppressWarnings("unchecked")
+        List<Message> internalMessages = (List<Message>) agentMLInput.getAgentInput().getInput();
+
+        // Convert back internal → AGUI
+        List<Map<String, Object>> roundTripped = AGUIInputConverter.convertToAGUIFormat(internalMessages);
+
+        assertEquals(1, roundTripped.size());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) roundTripped.get(0).get("content");
+        assertEquals(3, content.size());
+
+        assertEquals("text", content.get(0).get("type"));
+        assertEquals("Analyze", content.get(0).get("text"));
+
+        assertEquals("binary", content.get(1).get("type"));
+        assertEquals("video/mp4", content.get(1).get("mimeType"));
+        assertEquals("viddata", content.get(1).get("data"));
+
+        assertEquals("binary", content.get(2).get("type"));
+        assertEquals("text/csv", content.get(2).get("mimeType"));
+        assertEquals("csvdata", content.get(2).get("data"));
     }
 
     private String buildMinimalAGUIInput(String threadId, String runId) {
