@@ -13,6 +13,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_RE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOKEN_USAGE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
@@ -30,8 +31,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -74,6 +77,9 @@ public class BedrockConverseDeepseekR1FunctionCalling implements FunctionCalling
 
         params.put(LLM_FINISH_REASON_PATH, "_llm_response.stop_reason");
         params.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        // Token usage tracking paths
+        params.put(TOKEN_USAGE_PATH, "$.usage");
     }
 
     @Override
@@ -117,5 +123,31 @@ public class BedrockConverseDeepseekR1FunctionCalling implements FunctionCalling
         }
 
         return List.of(toolMessage);
+    }
+
+    @Override
+    public TokenUsage extractTokenUsage(Map<String, ?> llmResponseDataAsMap) {
+        if (llmResponseDataAsMap == null) {
+            return null;
+        }
+
+        try {
+            Object usageObj = llmResponseDataAsMap.get("usage");
+            if (!(usageObj instanceof Map)) {
+                return null;
+            }
+
+            Map<String, Object> usageMap = (Map<String, Object>) usageObj;
+
+            // Bedrock Deepseek R1 uses standard format
+            return TokenUsage
+                .builder()
+                .inputTokens(AgentUtils.getLongValue(usageMap, "prompt_tokens"))
+                .outputTokens(AgentUtils.getLongValue(usageMap, "completion_tokens"))
+                .totalTokens(AgentUtils.getLongValue(usageMap, "total_tokens"))
+                .build();
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
