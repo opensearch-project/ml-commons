@@ -8,6 +8,7 @@ package org.opensearch.ml.utils;
 import static org.apache.hc.core5.http.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
@@ -37,7 +38,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -69,6 +72,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
@@ -90,6 +94,7 @@ import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelat
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
@@ -746,5 +751,28 @@ public class TestHelper {
         message.put("text", input);
         content.add(message);
         return content;
+    }
+
+    public static String encryptCredentials(List<String> plainTexts, String tenantId, Encryptor encryptor) {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<List<String>> encryptedResults = new AtomicReference<>();
+        AtomicReference<RuntimeException> exceptionAtomicReference = new AtomicReference<>();
+        ActionListener<List<String>> listener = ActionListener.wrap(r -> {
+            latch.countDown();
+            encryptedResults.set(r);
+        }, e -> {
+            latch.countDown();
+            exceptionAtomicReference.set(e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e));
+        });
+        encryptor.encrypt(plainTexts, tenantId, listener);
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            fail("Failed to encrypt credentials in connector, " + e.getMessage());
+        }
+        if (exceptionAtomicReference.get() != null) {
+            throw exceptionAtomicReference.get();
+        }
+        return encryptedResults.get().getFirst();
     }
 }

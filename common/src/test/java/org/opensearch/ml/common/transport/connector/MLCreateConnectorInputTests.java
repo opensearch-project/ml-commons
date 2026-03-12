@@ -92,16 +92,17 @@ public class MLCreateConnectorInputTests {
             preProcessFunction,
             postProcessFunction
         );
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(
-            20,
-            10000,
-            10000,
-            10,
-            10,
-            -1,
-            RetryBackoffPolicy.CONSTANT,
-            null
-        );
+        ConnectorClientConfig connectorClientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(20)
+            .connectionTimeout(10000)
+            .readTimeout(10000)
+            .retryBackoffMillis(10)
+            .retryTimeoutSeconds(10)
+            .maxRetryTimes(-1)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .skipSslVerification(null)
+            .build();
 
         mlCreateConnectorInput = MLCreateConnectorInput
             .builder()

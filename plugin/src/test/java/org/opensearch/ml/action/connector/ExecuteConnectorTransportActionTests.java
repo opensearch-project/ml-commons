@@ -120,9 +120,9 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecute_NoConnectorIndex() {
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
         when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
-            .build());
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argCaptor.capture());
@@ -133,9 +133,9 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
         when(metaData.hasIndex(anyString())).thenReturn(true);
         when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
-            .build());
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -162,9 +162,9 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecute_AccessDenied() {
         when(metaData.hasIndex(anyString())).thenReturn(true);
         when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
-            .build());
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
 
         doAnswer(invocation -> {
@@ -189,9 +189,9 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         Map<String, String> params = new java.util.HashMap<>();
         params.put("connector_action", "CUSTOM_ACTION");
         when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(params, null))
-            .build());
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(params, null))
+                .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
 
@@ -210,9 +210,9 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecute_SuccessfulExecution() {
         when(metaData.hasIndex(anyString())).thenReturn(true);
         when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
-            .build());
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
 
@@ -221,6 +221,12 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(connector);
             return null;
         }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> decryptListener = invocation.getArgument(3);
+            decryptListener.onResponse(true);
+            return null;
+        }).when(connector).decrypt(anyString(), any(), any(), any());
 
         action.doExecute(task, request, actionListener);
 
@@ -232,9 +238,9 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         when(metaData.hasIndex(anyString())).thenReturn(true);
         // Test with null parameters to cover the null check branch
         when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(null, null))
-            .build());
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(null, null))
+                .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
 
@@ -249,4 +255,31 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         verify(connectorAccessControlHelper).getConnector(eq(client), eq("test_connector_id"), any());
     }
 
+    public void testExecute_DecryptFailure() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> decryptListener = invocation.getArgument(3);
+            decryptListener.onFailure(new RuntimeException("Failed to decrypt credentials"));
+            return null;
+        }).when(connector).decrypt(anyString(), any(), any(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue().getMessage().contains("Failed to decrypt credentials"));
+    }
 }

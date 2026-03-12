@@ -37,6 +37,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String MAX_RETRY_TIMES_FIELD = "max_retry_times";
     public static final String RETRY_BACKOFF_POLICY_FIELD = "retry_backoff_policy";
     public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
+    public static final String MUTUAL_TLS_ENABLED_FIELD = "mutual_tls_enabled";
+    public static final String KEYSTORE_TYPE_FIELD = "keystore_type";
+    public static final String TRUSTSTORE_PATH_FIELD = "truststore_path";
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
     public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
@@ -46,7 +49,10 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
     public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
     public static final Boolean SKIP_SSL_VERIFICATION_DEFAULT_VALUE = Boolean.FALSE;
+    public static final Boolean MUTUAL_TLS_ENABLED_DEFAULT_VALUE = Boolean.FALSE;
+    public static final String KEYSTORE_TYPE_DEFAULT_VALUE = "PEM";
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = Version.V_2_19_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
@@ -55,6 +61,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     private Integer maxRetryTimes;
     private RetryBackoffPolicy retryBackoffPolicy;
     private Boolean skipSslVerification;
+    private Boolean mutualTlsEnabled;
+    private String keystoreType;
+    private String truststorePath;
 
     @Builder(toBuilder = true)
     public ConnectorClientConfig(
@@ -65,7 +74,10 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer retryTimeoutSeconds,
         Integer maxRetryTimes,
         RetryBackoffPolicy retryBackoffPolicy,
-        Boolean skipSslVerification
+        Boolean skipSslVerification,
+        Boolean mutualTlsEnabled,
+        String keystoreType,
+        String truststorePath
     ) {
         this.maxConnections = maxConnections;
         this.connectionTimeout = connectionTimeout;
@@ -75,6 +87,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.maxRetryTimes = maxRetryTimes;
         this.retryBackoffPolicy = retryBackoffPolicy;
         this.skipSslVerification = skipSslVerification;
+        this.mutualTlsEnabled = mutualTlsEnabled;
+        this.keystoreType = keystoreType;
+        this.truststorePath = truststorePath;
     }
 
     public ConnectorClientConfig(StreamInput input) throws IOException {
@@ -90,6 +105,11 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 this.retryBackoffPolicy = RetryBackoffPolicy.from(input.readString());
             }
             this.skipSslVerification = input.readOptionalBoolean();
+            if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
+                this.mutualTlsEnabled = input.readOptionalBoolean();
+                this.keystoreType = input.readOptionalString();
+                this.truststorePath = input.readOptionalString();
+            }
         }
     }
 
@@ -102,6 +122,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         this.retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
         this.skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
+        this.mutualTlsEnabled = MUTUAL_TLS_ENABLED_DEFAULT_VALUE;
+        this.keystoreType = KEYSTORE_TYPE_DEFAULT_VALUE;
+        this.truststorePath = null;
     }
 
     @Override
@@ -121,6 +144,11 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
             out.writeOptionalBoolean(skipSslVerification);
+            if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
+                out.writeOptionalBoolean(mutualTlsEnabled);
+                out.writeOptionalString(keystoreType);
+                out.writeOptionalString(truststorePath);
+            }
         }
     }
 
@@ -151,6 +179,15 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         if (skipSslVerification != null) {
             builder.field(SKIP_SSL_VERIFICATION_FIELD, skipSslVerification);
         }
+        if (mutualTlsEnabled != null) {
+            builder.field(MUTUAL_TLS_ENABLED_FIELD, mutualTlsEnabled);
+        }
+        if (keystoreType != null) {
+            builder.field(KEYSTORE_TYPE_FIELD, keystoreType);
+        }
+        if (truststorePath != null) {
+            builder.field(TRUSTSTORE_PATH_FIELD, truststorePath);
+        }
         return builder.endObject();
     }
 
@@ -168,6 +205,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         RetryBackoffPolicy retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
         Boolean skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
+        Boolean mutualTlsEnabled = MUTUAL_TLS_ENABLED_DEFAULT_VALUE;
+        String keystoreType = KEYSTORE_TYPE_DEFAULT_VALUE;
+        String truststorePath = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -199,6 +239,15 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 case SKIP_SSL_VERIFICATION_FIELD:
                     skipSslVerification = parser.booleanValue();
                     break;
+                case MUTUAL_TLS_ENABLED_FIELD:
+                    mutualTlsEnabled = parser.booleanValue();
+                    break;
+                case KEYSTORE_TYPE_FIELD:
+                    keystoreType = parser.text();
+                    break;
+                case TRUSTSTORE_PATH_FIELD:
+                    truststorePath = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -214,6 +263,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             .maxRetryTimes(maxRetryTimes)
             .retryBackoffPolicy(retryBackoffPolicy)
             .skipSslVerification(skipSslVerification)
+            .mutualTlsEnabled(mutualTlsEnabled)
+            .keystoreType(keystoreType)
+            .truststorePath(truststorePath)
             .build();
     }
 }
