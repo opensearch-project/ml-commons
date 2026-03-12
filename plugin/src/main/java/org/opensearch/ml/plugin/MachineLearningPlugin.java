@@ -956,6 +956,10 @@ public class MachineLearningPlugin extends Plugin
         mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
 
+        // Initialize gRPC service factory
+        org.opensearch.ml.grpc.MLGrpcServiceFactory
+            .initialize(mlModelManager, mlPredictTaskRunner, mlExecuteTaskRunner, mlFeatureEnabledSetting);
+
         return ImmutableList
             .of(
                 encryptor,
