@@ -123,6 +123,10 @@ public class PromptTemplate {
             + topologyRules;
     }
 
+    public static final String getPlanExecuteReflectResponseFormat() {
+        return getPlanExecuteReflectResponseFormat(null, null, null);
+    }
+
     public static String DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX =
         "# Investigation Planner Agent\n\nYou are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.\n\n";
 
@@ -150,6 +154,10 @@ public class PromptTemplate {
                 **Bad example:** "Use Tool to sample documents from all indices"
 
                 """;
+    }
+
+    public static String getCommonInstructionWithCustomInstruction() {
+        return getCommonInstructionWithCustomInstruction("");
     }
 
     public static final String EXECUTOR_RESPONSIBILITY =

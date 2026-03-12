@@ -116,8 +116,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private String plannerWithHistoryPromptTemplate;
 
     @VisibleForTesting
-    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX + getCommonInstructionWithCustomInstruction("")
-        + getPlanExecuteReflectResponseFormat(null, null, null) + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
+    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX + getCommonInstructionWithCustomInstruction()
+        + getPlanExecuteReflectResponseFormat() + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 
     @VisibleForTesting
     static final String DEFAULT_EXECUTOR_SYSTEM_PROMPT = EXECUTOR_RESPONSIBILITY;
@@ -267,7 +267,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             this.plannerWithHistoryPromptTemplate = params.get(PLANNER_WITH_HISTORY_TEMPLATE_FIELD);
         }
 
-        params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, getPlanExecuteReflectResponseFormat(null, null, null));
+        params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, getPlanExecuteReflectResponseFormat());
 
         params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
 
