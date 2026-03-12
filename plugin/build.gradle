@@ -76,12 +76,21 @@ opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
     classname 'org.opensearch.ml.plugin.MachineLearningPlugin'
-    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true']
+    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true', 'transport-grpc']
 }
 
 configurations {
     zipArchive
     opensearchPlugin
+}
+
+configurations {
+    runtimeClasspath {
+        exclude group: 'com.google.guava', module: 'guava'
+    }
+    bundlePlugin {
+        exclude group: 'com.google.guava', module: 'guava'
+    }
 }
 
 dependencies {
@@ -90,6 +99,7 @@ dependencies {
     implementation project(':opensearch-ml-algorithms')
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
+    implementation project(':opensearch-ml-grpc')
 
     implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
     implementation group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
@@ -104,6 +114,7 @@ dependencies {
     zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
     compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
     compileOnly group: 'org.opensearch', name:'opensearch-security-spi', version:"${opensearch_build}"
+    compileOnly "org.opensearch.plugin:transport-grpc-spi:3.6.0-SNAPSHOT"
     opensearchPlugin "org.opensearch.plugin:opensearch-job-scheduler:${opensearch_build}@zip"
     opensearchPlugin "org.opensearch.plugin:opensearch-security:${opensearch_build}@zip"
 

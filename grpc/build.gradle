@@ -1,0 +1,68 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+plugins {
+    id 'java'
+    id 'jacoco'
+    id "io.freefair.lombok"
+}
+
+dependencies {
+    implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
+    compileOnly project(':opensearch-ml-algorithms')
+    compileOnly "org.opensearch:opensearch:${opensearch_version}"
+    compileOnly "software.amazon.awssdk:auth:${versions.aws}"
+
+    // gRPC dependencies
+    compileOnly 'io.grpc:grpc-api:1.75.0'
+    compileOnly 'io.grpc:grpc-stub:1.75.0'
+    compileOnly 'io.grpc:grpc-protobuf:1.75.0'
+
+    // gRPC SPI for service registration
+    compileOnly "org.opensearch.plugin:transport-grpc-spi:3.6.0-SNAPSHOT"
+
+    // Proto dependency from local Maven repository
+    // Note: Using explicit 3.6.0 version to match OpenSearch version
+    compileOnly "org.opensearch:opensearch-protobufs:3.6.0-SNAPSHOT"
+
+    testImplementation "org.opensearch.test:framework:${opensearch_version}"
+    testImplementation "org.mockito:mockito-core:5.14.2"
+    testImplementation 'io.grpc:grpc-testing:1.75.0'
+}
+
+lombok {
+    version = "1.18.38"
+}
+
+test {
+    include '**/*Tests.class'
+    systemProperty 'tests.security.manager', 'false'
+}
+
+jacocoTestReport {
+    reports {
+        xml.getRequired().set(true)
+        csv.getRequired().set(false)
+        html.getRequired().set(true)
+    }
+
+    dependsOn test
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.8
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.7
+            }
+        }
+    }
+    dependsOn jacocoTestReport
+}
