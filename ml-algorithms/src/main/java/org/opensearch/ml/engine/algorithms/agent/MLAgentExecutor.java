@@ -1347,6 +1347,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 remoteDataSet.getParameters().putAll(parameters);
             } else {
                 // For old-style AG_UI agents without model field
+                // Prepend context to question if available
+                if (agentType == MLAgentType.AG_UI) {
+                    String context = remoteDataSet.getParameters().get(AGUI_PARAM_CONTEXT);
+                    if (context != null && !context.isEmpty()) {
+                        question = "Context: " + context + "\nQuestion: " + question;
+                    }
+                }
                 remoteDataSet.getParameters().putIfAbsent(QUESTION, question);
             }
         } catch (Exception e) {
