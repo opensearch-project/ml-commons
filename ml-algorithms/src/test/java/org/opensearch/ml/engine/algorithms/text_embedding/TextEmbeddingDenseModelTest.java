@@ -559,7 +559,7 @@ public class TextEmbeddingDenseModelTest {
     public void test_initModelAsync_throwIllegalStateException() {
         exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("Method is not implemented");
-        textEmbeddingDenseModel.initModelAsync(model, new HashMap<>(), encryptor);
+        textEmbeddingDenseModel.initModelAsync(model, new HashMap<>(), encryptor, mock(ActionListener.class));
     }
 
     @Test
