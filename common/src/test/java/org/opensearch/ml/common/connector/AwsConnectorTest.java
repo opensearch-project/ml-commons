@@ -16,17 +16,18 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.BiFunction;
 
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -39,14 +40,10 @@ public class AwsConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
-
-    @Before
-    public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
-    }
+    TriConsumer<List<String>, String, ActionListener<List<String>>> encryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "encrypted: " + x.toLowerCase(Locale.ROOT)).toArray(String[]::new)));
+    TriConsumer<List<String>, String, ActionListener<List<String>>> decryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "decrypted: " + x.toUpperCase(Locale.ROOT)).toArray(String[]::new)));
 
     @Test
     public void constructor_NullCredential() {
@@ -115,8 +112,8 @@ public class AwsConnectorTest {
             .build();
         Assert.assertNotNull(connector);
 
-        connector.encrypt(encryptFunction, null);
-        connector.decrypt(PREDICT.name(), decryptFunction, null);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals(null, connector.getSessionToken());
@@ -159,8 +156,8 @@ public class AwsConnectorTest {
         String url = "https://${parameters.endpoint}/model1";
 
         AwsConnector connector = createAwsConnector(parameters, credential, url);
-        connector.encrypt(encryptFunction, null);
-        connector.decrypt(PREDICT.name(), decryptFunction, null);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());
@@ -180,8 +177,8 @@ public class AwsConnectorTest {
 
         String url = "https://test.com";
         AwsConnector connector = createAwsConnector(null, credential, url);
-        connector.encrypt(encryptFunction, null);
-        connector.decrypt(PREDICT.name(), decryptFunction, null);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());
