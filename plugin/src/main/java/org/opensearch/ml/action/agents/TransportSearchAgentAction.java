@@ -7,7 +7,6 @@ package org.opensearch.ml.action.agents;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
 
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -16,7 +15,6 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
@@ -96,25 +94,7 @@ public class TransportSearchAgentAction extends HandledTransportAction<MLSearchA
                 .tenantId(tenantId)
                 .build();
 
-            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                if (throwable != null) {
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-                    log.error("Failed to search agent", cause);
-                    wrappedListener.onFailure(cause);
-                } else {
-                    try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
-                        log.info("Agent search complete: {}", searchResponse.getHits().getTotalHits());
-                        wrappedListener.onResponse(searchResponse);
-                    } catch (Exception e) {
-                        log.error("Failed to parse model search response", e);
-                        wrappedListener
-                            .onFailure(
-                                new OpenSearchStatusException("Failed to parse model search response", RestStatus.INTERNAL_SERVER_ERROR)
-                            );
-                    }
-                }
-            });
+            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
         } catch (Exception e) {
             log.error("failed to search the agent index", e);
             actionListener.onFailure(e);
