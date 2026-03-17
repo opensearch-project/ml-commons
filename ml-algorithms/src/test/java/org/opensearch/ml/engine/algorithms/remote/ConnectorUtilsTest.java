@@ -63,6 +63,16 @@ import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpMethod;
 
 public class ConnectorUtilsTest {
+    private static final String TEST_MOCK_URL = "http://test.com/mock";
+    private static final String SAGEMAKER_CREATE_TRANSFORM_JOB_URL = "https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob";
+    private static final String OPENAI_BATCHES_URL = "https://api.openai.com/v1/batches";
+    private static final String BEDROCK_BATCH_URL_TEMPLATE = "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job";
+    private static final String BEDROCK_BATCH_URL_RESOLVED = "https://bedrock.us-east-1.amazonaws.com/model-invocation-job";
+    private static final String BEDROCK_RUNTIME_INVOKE_URL = "https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke";
+    private static final String OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
+    private static final String OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
+    private static final String COHERE_BATCHES_URL = "https://api.cohere.ai/v1/batches";
+    private static final String UNSUPPORTED_BATCH_URL = "https://unsupported.server.com/batch";
 
     @Mock
     ScriptService scriptService;
@@ -91,7 +101,7 @@ public class ConnectorUtilsTest {
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url(TEST_MOCK_URL)
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Connector connector = HttpConnector
@@ -311,7 +321,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                .url(SAGEMAKER_CREATE_TRANSFORM_JOB_URL)
                                 .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
                                 .requestBody("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}")
                                 .build()
@@ -347,7 +357,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.openai.com/v1/batches")
+                                .url(OPENAI_BATCHES_URL)
                                 .headers(Map.of("Authorization", "Bearer ${credential.openAI_key}"))
                                 .requestBody("{ \\\"input_file_id\\\": \\\"${parameters.input_file_id}\\\" }")
                                 .build()
@@ -360,7 +370,7 @@ public class ConnectorUtilsTest {
 
         assertEquals(ConnectorAction.ActionType.BATCH_PREDICT_STATUS, result.getActionType());
         assertEquals("GET", result.getMethod());
-        assertEquals("https://api.openai.com/v1/batches/${parameters.id}", result.getUrl());
+        assertEquals(OPENAI_BATCHES_URL + "/${parameters.id}", result.getUrl());
         assertNull(result.getRequestBody());
         assertTrue(result.getHeaders().containsKey("Authorization"));
     }
@@ -382,7 +392,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job")
+                                .url(BEDROCK_BATCH_URL_TEMPLATE)
                                 .requestBody(
                                     "{\\\"inputDataConfig\\\":{\\\"s3InputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.input_s3Uri}\\\"}},\\\"jobName\\\":\\\"${parameters.job_name}\\\",\\\"modelId\\\":\\\"${parameters.model}\\\",\\\"outputDataConfig\\\":{\\\"s3OutputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.output_s3Uri}\\\"}},\\\"roleArn\\\":\\\"${parameters.role_arn}\\\"}"
                                 )
@@ -398,7 +408,7 @@ public class ConnectorUtilsTest {
         assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
         assertEquals("POST", result.getMethod());
         assertEquals(
-            "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job/${parameters.processedJobArn}/stop",
+            BEDROCK_BATCH_URL_TEMPLATE + "/${parameters.processedJobArn}/stop",
             result.getUrl()
         );
         assertNull(result.getRequestBody());
@@ -1028,7 +1038,7 @@ public class ConnectorUtilsTest {
         SdkHttpFullRequest request = SdkHttpFullRequest
             .builder()
             .method(SdkHttpMethod.POST)
-            .uri(URI.create("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke"))
+            .uri(URI.create(BEDROCK_RUNTIME_INVOKE_URL))
             .putHeader("Content-Type", "application/json")
             .contentStreamProvider(RequestBody.fromString("{\"input\":\"hello\"}", StandardCharsets.UTF_8).contentStreamProvider())
             .build();
@@ -1048,7 +1058,7 @@ public class ConnectorUtilsTest {
         SdkHttpFullRequest request = SdkHttpFullRequest
             .builder()
             .method(SdkHttpMethod.POST)
-            .uri(URI.create("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke"))
+            .uri(URI.create(BEDROCK_RUNTIME_INVOKE_URL))
             .putHeader("Content-Type", "application/json")
             .contentStreamProvider(RequestBody.fromString("{\"input\":\"hello\"}", StandardCharsets.UTF_8).contentStreamProvider())
             .build();
@@ -1065,13 +1075,13 @@ public class ConnectorUtilsTest {
     @Test
     public void buildSdkRequest_WithHeaders() {
         Connector connector = mock(Connector.class);
-        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn("https://api.openai.com/v1/embeddings");
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/custom-json", "Authorization", "Bearer token"));
 
         SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
 
-        assertEquals("https://api.openai.com/v1/embeddings", request.getUri().toString());
+        assertEquals(OPENAI_EMBEDDINGS_URL, request.getUri().toString());
         assertEquals("application/custom-json", request.firstMatchingHeader("Content-Type").orElse(null));
         assertEquals("Bearer token", request.firstMatchingHeader("Authorization").orElse(null));
         assertEquals("16", request.firstMatchingHeader("Content-Length").orElse(null));
@@ -1082,7 +1092,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("charset", "ISO-8859-1");
-        when(connector.getActionEndpoint(PREDICT.name(), parameters)).thenReturn("https://api.openai.com/v1/embeddings");
+        when(connector.getActionEndpoint(PREDICT.name(), parameters)).thenReturn(OPENAI_EMBEDDINGS_URL);
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(null);
 
@@ -1094,7 +1104,7 @@ public class ConnectorUtilsTest {
     @Test
     public void buildSdkRequest_CancelBatchPredictWithEmptyPayload() {
         Connector connector = mock(Connector.class);
-        when(connector.getActionEndpoint(CANCEL_BATCH_PREDICT.name(), Map.of())).thenReturn("https://api.openai.com/v1/batches/123/cancel");
+        when(connector.getActionEndpoint(CANCEL_BATCH_PREDICT.name(), Map.of())).thenReturn(OPENAI_BATCHES_URL + "/123/cancel");
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Authorization", "Bearer token"));
 
@@ -1110,7 +1120,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payloadWithNulls =
@@ -1134,7 +1144,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String malformedJson = "{ invalid json }";
@@ -1155,7 +1165,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String jsonWithoutParams = "{\"taskType\":\"SINGLE_EMBEDDING\"}";
@@ -1175,7 +1185,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NonNovaModelSkipsCleaning() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", "gpt-3.5-turbo"));
-        when(connector.getActionEndpoint("predict", Map.of())).thenReturn("https://api.openai.com/v1/chat/completions");
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(OPENAI_CHAT_COMPLETIONS_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payloadWithNulls = "{\"video\":{\"source\":{\"bytes\":null}}}";
@@ -1208,7 +1218,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                .url(SAGEMAKER_CREATE_TRANSFORM_JOB_URL)
                                 .build()
                         )
                 )
@@ -1237,7 +1247,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                .url(SAGEMAKER_CREATE_TRANSFORM_JOB_URL)
                                 .build()
                         )
                 )
@@ -1267,7 +1277,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.openai.com/v1/batches")
+                                .url(OPENAI_BATCHES_URL)
                                 .build()
                         )
                 )
@@ -1278,7 +1288,7 @@ public class ConnectorUtilsTest {
 
         assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
         assertEquals("POST", result.getMethod());
-        assertEquals("https://api.openai.com/v1/batches/${parameters.id}/cancel", result.getUrl());
+        assertEquals(OPENAI_BATCHES_URL + "/${parameters.id}/cancel", result.getUrl());
         assertNull(result.getRequestBody());
     }
 
@@ -1300,7 +1310,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://unsupported.server.com/batch")
+                                .url(UNSUPPORTED_BATCH_URL)
                                 .build()
                         )
                 )
@@ -1328,7 +1338,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://unsupported.server.com/batch")
+                                .url(UNSUPPORTED_BATCH_URL)
                                 .build()
                         )
                 )
@@ -1452,7 +1462,7 @@ public class ConnectorUtilsTest {
     @Test
     public void buildSdkRequest_PostWithEmptyPayload_ThrowsForNonCancelAction() {
         Connector connector = mock(Connector.class);
-        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn("https://api.openai.com/v1/embeddings");
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(null);
 
@@ -1464,7 +1474,7 @@ public class ConnectorUtilsTest {
     @Test
     public void buildSdkRequest_AddsDefaultHeadersWhenMissing() {
         Connector connector = mock(Connector.class);
-        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn("https://api.openai.com/v1/embeddings");
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Authorization", "Bearer token"));
 
@@ -1478,7 +1488,7 @@ public class ConnectorUtilsTest {
     @Test
     public void buildSdkRequest_PreservesExistingContentLengthAndType() {
         Connector connector = mock(Connector.class);
-        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn("https://api.openai.com/v1/embeddings");
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "text/plain", "Content-Length", "999"));
 
@@ -1527,7 +1537,7 @@ public class ConnectorUtilsTest {
                             .builder()
                             .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                             .method("POST")
-                            .url("https://bedrock.us-east-1.amazonaws.com/model-invocation-job")
+                            .url(BEDROCK_BATCH_URL_RESOLVED)
                             .build()
                     )
             )
@@ -1535,7 +1545,7 @@ public class ConnectorUtilsTest {
 
         ConnectorAction result = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
         assertEquals("GET", result.getMethod());
-        assertEquals("https://bedrock.us-east-1.amazonaws.com/model-invocation-job/${parameters.processedJobArn}", result.getUrl());
+        assertEquals(BEDROCK_BATCH_URL_RESOLVED + "/${parameters.processedJobArn}", result.getUrl());
     }
 
     @Test
@@ -1552,7 +1562,7 @@ public class ConnectorUtilsTest {
                             .builder()
                             .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                             .method("POST")
-                            .url("https://api.cohere.ai/v1/batches")
+                            .url(COHERE_BATCHES_URL)
                             .build()
                     )
             )
@@ -1561,9 +1571,9 @@ public class ConnectorUtilsTest {
         ConnectorAction statusAction = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
         ConnectorAction cancelAction = ConnectorUtils.createConnectorAction(connector, CANCEL_BATCH_PREDICT);
         assertEquals("GET", statusAction.getMethod());
-        assertEquals("https://api.cohere.ai/v1/batches/${parameters.id}", statusAction.getUrl());
+        assertEquals(COHERE_BATCHES_URL + "/${parameters.id}", statusAction.getUrl());
         assertEquals("POST", cancelAction.getMethod());
-        assertEquals("https://api.cohere.ai/v1/batches/${parameters.id}/cancel", cancelAction.getUrl());
+        assertEquals(COHERE_BATCHES_URL + "/${parameters.id}/cancel", cancelAction.getUrl());
     }
 
     @Test
@@ -1581,14 +1591,14 @@ public class ConnectorUtilsTest {
                             .builder()
                             .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                             .method("POST")
-                            .url("https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job")
+                            .url(BEDROCK_BATCH_URL_TEMPLATE)
                             .build()
                     )
             )
             .build();
 
         ConnectorAction result = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
-        assertEquals("https://bedrock.us-east-1.amazonaws.com/model-invocation-job/${parameters.processedJobArn}", result.getUrl());
+        assertEquals(BEDROCK_BATCH_URL_RESOLVED + "/${parameters.processedJobArn}", result.getUrl());
     }
 
     @Test
@@ -1596,7 +1606,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"text\":{\"value\":null},\"audio\":{\"source\":{\"bytes\":\"abc\"}}}}";
@@ -1612,7 +1622,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"image\":{\"source\":{\"bytes\":null}},\"text\":{\"value\":\"keep\"}}}";
@@ -1628,7 +1638,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"image\":{},\"text\":{\"value\":\"keep\"}}}";
