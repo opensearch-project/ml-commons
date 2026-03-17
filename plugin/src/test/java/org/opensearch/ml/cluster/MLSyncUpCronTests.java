@@ -161,7 +161,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
+        Assert.assertNotNull(TestHelper.encryptCredentials(List.of("test"), null, encryptor));
         syncUpCron.initMLConfig();
         verify(encryptor, times(1)).setMasterKey(any(), any());
     }
@@ -179,7 +179,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
+        Assert.assertNotNull(TestHelper.encryptCredentials(List.of("test"), null, encryptor));
         syncUpCron.initMLConfig();
         verify(encryptor, times(1)).setMasterKey(any(), any());
     }

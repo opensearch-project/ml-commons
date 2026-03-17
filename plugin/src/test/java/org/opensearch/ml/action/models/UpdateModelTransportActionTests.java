@@ -183,6 +183,11 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(2);
+            listener.onResponse(List.of("mock"));
+            return null;
+        }).when(mlEngine).encrypt(any(), any(), any());
         settings = Settings
             .builder()
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)

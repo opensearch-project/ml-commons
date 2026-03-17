@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine;
 
 import java.util.Map;
-import java.util.concurrent.CompletionStage;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
@@ -59,7 +58,7 @@ public interface Predictable {
         throw new IllegalStateException(METHOD_NOT_IMPLEMENTED_ERROR_MSG);
     }
 
-    default CompletionStage<Boolean> initModelAsync(MLModel model, Map<String, Object> params, Encryptor encryptor) {
+    default void initModelAsync(MLModel model, Map<String, Object> params, Encryptor encryptor, ActionListener<Predictable> listener) {
         throw new IllegalStateException(METHOD_NOT_IMPLEMENTED_ERROR_MSG);
     }
 
