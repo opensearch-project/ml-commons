@@ -357,10 +357,15 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             return null;
         }
         // Check if disabled
+        if (memoryType == MemoryType.LONG_TERM
+            && (this.getLlmId() == null || this.getStrategies() == null || this.getStrategies().isEmpty())) {
+            return null;
+        }
         if (memoryType == MemoryType.SESSIONS && isDisableSession()) {
             return null;
         }
-        if (memoryType == MemoryType.HISTORY && isDisableHistory()) {
+        if (memoryType == MemoryType.HISTORY
+            && (isDisableHistory() || getLlmId() == null || getStrategies() == null || getStrategies().isEmpty())) {
             return null;
         }
         return getFinalMemoryIndexPrefix() + memoryType.getIndexSuffix();
