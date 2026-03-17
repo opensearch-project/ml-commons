@@ -258,15 +258,21 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             connector.addAction(connectorAction);
         }
         // multi-tenancy isn't implemented in batch, so setting null as tenant by default
-        connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, null), null);
-        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
-        connectorExecutor.setScriptService(scriptService);
-        connectorExecutor.setClusterService(clusterService);
-        connectorExecutor.setClient(client);
-        connectorExecutor.setXContentRegistry(xContentRegistry);
-        connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
-            processTaskResponse(taskResponse, actionListener);
-        }, actionListener::onFailure));
+        ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+            RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                .initInstance(connector.getProtocol(), connector, Connector.class);
+            connectorExecutor.setScriptService(scriptService);
+            connectorExecutor.setClusterService(clusterService);
+            connectorExecutor.setClient(client);
+            connectorExecutor.setXContentRegistry(xContentRegistry);
+            connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
+                processTaskResponse(taskResponse, actionListener);
+            }, actionListener::onFailure));
+        }, e -> {
+            log.error("Failed to decrypt credentials in connector", e);
+            actionListener.onFailure(e);
+        });
+        connector.decrypt(CANCEL_BATCH_PREDICT.name(), encryptor::decrypt, null, decryptSuccessfulListener);
     }
 
     private void processTaskResponse(MLTaskResponse taskResponse, ActionListener<MLCancelBatchJobResponse> actionListener) {
