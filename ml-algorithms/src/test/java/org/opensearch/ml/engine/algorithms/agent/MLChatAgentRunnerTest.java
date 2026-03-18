@@ -58,6 +58,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.agent.AgentTokenTracker;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
@@ -1649,6 +1650,33 @@ public class MLChatAgentRunnerTest {
         // Without DISABLE_TRACE=true, trace data MAY be saved for unified interface agents.
         // Verify structured messages WERE saved (unified flow uses this for final answer)
         verify(conversationIndexMemory).saveStructuredMessages(any(), any());
+    }
+
+    @Test
+    public void testFormatFailureMessage_AsSubAgent() {
+        Map<String, String> params = new HashMap<>();
+        params.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "true");
+
+        String result = MLChatAgentRunner.formatFailureMessage(params, "Tool failed");
+        assertEquals("Agent failed to complete the task. Reason: Tool failed", result);
+    }
+
+    @Test
+    public void testFormatFailureMessage_AsStandaloneAgent() {
+        Map<String, String> params = new HashMap<>();
+        params.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "false");
+
+        String result = MLChatAgentRunner.formatFailureMessage(params, "Tool failed");
+        assertEquals("Tool failed", result);
+    }
+
+    @Test
+    public void testFormatFailureMessage_DefaultBehavior() {
+        Map<String, String> params = new HashMap<>();
+        // IS_SUB_AGENT_FIELD not set, should default to false
+
+        String result = MLChatAgentRunner.formatFailureMessage(params, "Tool failed");
+        assertEquals("Tool failed", result);
     }
 
 }

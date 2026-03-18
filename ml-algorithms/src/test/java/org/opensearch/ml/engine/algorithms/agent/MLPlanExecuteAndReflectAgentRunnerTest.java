@@ -1389,4 +1389,33 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             verify(agentActionListener).onResponse(any());
         }
     }
+
+    @Test
+    public void testIsStepExecutionFailure() {
+        assertTrue(mlPlanExecuteAndReflectAgentRunner.isStepExecutionFailure("Agent failed to complete the task. Reason: Tool error"));
+        assertTrue(mlPlanExecuteAndReflectAgentRunner.isStepExecutionFailure("Agent failed to complete the task. Reason: Failed to run the tool SearchTool with the error message Connection timeout."));
+        assertFalse(mlPlanExecuteAndReflectAgentRunner.isStepExecutionFailure("Successful result"));
+        assertFalse(mlPlanExecuteAndReflectAgentRunner.isStepExecutionFailure(null));
+    }
+
+    @Test
+    public void testEnhanceStepResultWithFailureContext() {
+        String failure = "Agent failed to complete the task. Reason: Tool 'SearchTool' execution failed";
+        String enhanced = mlPlanExecuteAndReflectAgentRunner.enhanceStepResultWithFailureContext(failure, "Execute step 1: Search for information");
+
+        assertTrue(enhanced.contains("STEP EXECUTION FAILED"));
+        assertTrue(enhanced.contains("Execute step 1: Search for information"));
+        assertTrue(enhanced.contains(failure));
+        assertTrue(enhanced.contains("Reformulate this step"));
+    }
+
+    @Test
+    public void testEnhanceStepResultWithFailureContext_NoFailure() {
+        String success = "Successfully retrieved search results";
+        String enhanced = mlPlanExecuteAndReflectAgentRunner.enhanceStepResultWithFailureContext(success, "Execute step 1");
+
+        // Should return original result unchanged
+        assertEquals(success, enhanced);
+        assertFalse(enhanced.contains("STEP EXECUTION FAILED"));
+    }
 }
