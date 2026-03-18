@@ -248,6 +248,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception instanceof OpenSearchStatusException);
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
         assertTrue(exception.getMessage().contains("Internal server error"));
+
     }
 
     public void testDeleteMemoryContainer_MultiTenancyEnabled_ValidTenantId() {
