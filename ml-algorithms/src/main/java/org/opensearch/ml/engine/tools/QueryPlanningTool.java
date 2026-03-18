@@ -373,7 +373,25 @@ public class QueryPlanningTool implements WithModelTool {
                 @Override
                 public void onResponse(GetIndexResponse getIndexResponse) {
                     try {
-                        MappingMetadata mapping = getIndexResponse.mappings().get(indexName);
+                        // When indexName is a wildcard pattern or alias, the response keys are
+                        // concrete index names, not the original pattern/alias. Pick the first
+                        // mapping since indices matching a pattern/alias share the same mapping.
+                        Map<String, MappingMetadata> mappings = getIndexResponse.mappings();
+                        if (mappings == null || mappings.isEmpty()) {
+                            listener
+                                .onFailure(
+                                    new IllegalStateException("Failed to extract index mapping: no mappings found for " + indexName)
+                                );
+                            return;
+                        }
+                        if (mappings.size() > 1) {
+                            log
+                                .warn(
+                                    "Note: QPT tool will only fetch the first index's mapping"
+                                        + " which may cause query issues if indices have different mappings."
+                                );
+                        }
+                        MappingMetadata mapping = mappings.values().iterator().next();
                         listener.onResponse(mapping.source().toString());
                     } catch (Exception e) {
                         listener.onFailure(new IllegalStateException("Failed to extract index mapping", e));
