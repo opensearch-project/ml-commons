@@ -1505,6 +1505,56 @@ public class QueryPlanningToolTests {
         assertEquals("tool_model_456", params.get(MODEL_ID_FIELD));
     }
 
+    @SneakyThrows
+    @Test
+    public void testRunWithAliasResolvingToMultipleIndices() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+
+        // Mock getIndex to return mappings keyed by multiple concrete indices (simulating alias resolution)
+        ArgumentCaptor<ActionListener<GetIndexResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getIndex(any(), captor.capture());
+        this.actionListenerCaptor = captor;
+
+        GetIndexResponse multiIndexResponse = mock(GetIndexResponse.class);
+        String mappingSource = "{\"properties\":{\"title\":{\"type\":\"text\"}}}";
+        MappingMetadata mapping1 = new MappingMetadata(
+            "logs_march",
+            XContentHelper.convertToMap(JsonXContent.jsonXContent, mappingSource, true)
+        );
+        MappingMetadata mapping2 = new MappingMetadata(
+            "logs_april",
+            XContentHelper.convertToMap(JsonXContent.jsonXContent, mappingSource, true)
+        );
+        // Alias "logs" resolves to two concrete indices
+        Map<String, MappingMetadata> multiMappings = new java.util.LinkedHashMap<>();
+        multiMappings.put("logs_march", mapping1);
+        multiMappings.put("logs_april", mapping2);
+        when(multiIndexResponse.mappings()).thenReturn(multiMappings);
+
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION_FIELD, "help me find some books related to wind");
+        params.put(INDEX_NAME_FIELD, "logs"); // alias, not a concrete index
+        tool.run(params, listener);
+
+        // Trigger the getIndex response with multiple indices
+        actionListenerCaptor.getValue().onResponse(multiIndexResponse);
+
+        String result = future.get();
+        assertEquals(matchQueryString, result);
+    }
+
     @Test
     public void testFactoryCreate_NoModelIdProvided() {
         Map<String, Object> params = new HashMap<>();
