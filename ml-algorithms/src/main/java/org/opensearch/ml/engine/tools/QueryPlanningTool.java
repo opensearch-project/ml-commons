@@ -375,7 +375,7 @@ public class QueryPlanningTool implements WithModelTool {
                     try {
                         // When indexName is a wildcard pattern or alias, the response keys are
                         // concrete index names, not the original pattern/alias. Pick the first
-                        // mapping since indices matching a pattern/alias share the same mapping.
+                        // mapping since indices matching a pattern/alias generally share the same mapping.
                         Map<String, MappingMetadata> mappings = getIndexResponse.mappings();
                         if (mappings == null || mappings.isEmpty()) {
                             listener
