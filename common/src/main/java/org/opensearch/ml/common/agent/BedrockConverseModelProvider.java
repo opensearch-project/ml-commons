@@ -56,8 +56,17 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     private static final String DEFAULT_REGION = "us-east-1";
 
+    // Cache configuration parameter names
+    private static final String SYSTEM_PROMPT_CACHE_ENABLED = "system_prompt_cache_enabled";
+    private static final String SYSTEM_PROMPT_CACHE_TYPE = "system_prompt_cache_type";
+    private static final String SYSTEM_PROMPT_CACHE_TTL = "system_prompt_cache_ttl";
+
+    // Default cache configuration
+    private static final String DEFAULT_CACHE_TYPE = "default";
+    private static final String DEFAULT_CACHE_TTL = "1h";
+
     private static final String REQUEST_BODY_TEMPLATE =
-        "{\"system\": [{\"text\": \"${parameters.system_prompt}\"}, {\"cachePoint\": {\"type\": \"default\", \"ttl\": \"1h\"}}], "
+        "{\"system\": [{\"text\": \"${parameters.system_prompt}\"}${parameters.cache_point:-}], "
             + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
             + "${parameters.tool_configs:-} }";
 
@@ -92,6 +101,12 @@ public class BedrockConverseModelProvider extends ModelProvider {
             parameters.putAll(modelParameters);
         }
 
+        // Build cache point configuration based on parameters
+        String cachePoint = buildCachePointConfig(parameters);
+        if (cachePoint != null && !cachePoint.isEmpty()) {
+            parameters.put("cache_point", cachePoint);
+        }
+
         Map<String, String> headers = new HashMap<>();
         headers.put("content-type", "application/json");
 
@@ -119,6 +134,26 @@ public class BedrockConverseModelProvider extends ModelProvider {
             .actions(List.of(predictAction))
             .connectorClientConfig(connectorClientConfig)
             .build();
+    }
+
+    /**
+     * Builds the cache point configuration string based on model parameters.
+     * Returns null if caching is disabled or not configured.
+     *
+     * @param parameters the model parameters
+     * @return the cache point JSON string or null if caching is disabled
+     */
+    private String buildCachePointConfig(Map<String, String> parameters) {
+        // Check if caching is enabled (default to true for backward compatibility)
+        boolean cacheEnabled = Boolean.parseBoolean(parameters.getOrDefault(SYSTEM_PROMPT_CACHE_ENABLED, "true"));
+        if (!cacheEnabled) {
+            return null;
+        }
+
+        String cacheType = parameters.getOrDefault(SYSTEM_PROMPT_CACHE_TYPE, DEFAULT_CACHE_TYPE);
+        String cacheTtl = parameters.getOrDefault(SYSTEM_PROMPT_CACHE_TTL, DEFAULT_CACHE_TTL);
+
+        return String.format(", {\"cachePoint\": {\"type\": \"%s\", \"ttl\": \"%s\"}}", cacheType, cacheTtl);
     }
 
     @Override
