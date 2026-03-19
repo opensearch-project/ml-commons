@@ -344,14 +344,7 @@ public class ConnectorUtils {
         SdkHttpMethod method
     ) {
         String charset = parameters.getOrDefault("charset", "UTF-8");
-
-        // Clean empty JSON sections for Bedrock Nova embedding requests
-        Map<String, String> connectorParams = connector.getParameters();
-        String model = connectorParams != null ? connectorParams.get("model") : null;
-        if (payload != null && model != null && model.equals(BEDROCK_NOVA_MODEL)) {
-            payload = cleanBedrockNovaRequest(payload);
-        }
-
+        payload = cleanPayloadIfNeeded(payload, parameters);
         RequestBody requestBody;
         if (payload != null) {
             requestBody = RequestBody.fromString(payload, Charset.forName(charset));
@@ -491,6 +484,14 @@ public class ConnectorUtils {
             .requestBody(requestBody)
             .headers(batchPredictAction.get().getHeaders())
             .build();
+    }
+
+    private static String cleanPayloadIfNeeded(String payload, Map<String, String> parameters) {
+        String model = parameters.get("model");
+        if (payload != null && model != null && model.equals(BEDROCK_NOVA_MODEL)) {
+            return cleanBedrockNovaRequest(payload);
+        }
+        return payload;
     }
 
     private static String cleanBedrockNovaRequest(String json) {

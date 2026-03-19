@@ -6,8 +6,11 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -16,6 +19,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -125,5 +129,24 @@ public class StreamPredictActionListenerTest {
 
         verify(mockChannel).sendResponseBatch(any(MLTaskResponse.class));
         verify(mockChannel).completeStream();
+    }
+
+    @Test
+    public void testHasAgentListener_false() {
+        // Default constructor sets agentListener to null
+        assertFalse(listener.hasAgentListener());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testHasAgentListener_true() {
+        ActionListener<MLTaskResponse> agentListener = mock(ActionListener.class);
+        StreamPredictActionListener<MLTaskResponse, TransportRequest> listenerWithAgent = new StreamPredictActionListener<>(
+            mockChannel,
+            agentListener,
+            "memory-id",
+            "interaction-id"
+        );
+        assertTrue(listenerWithAgent.hasAgentListener());
     }
 }

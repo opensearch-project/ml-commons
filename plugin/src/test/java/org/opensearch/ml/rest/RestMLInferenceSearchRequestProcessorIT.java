@@ -101,9 +101,7 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
         + "        \"content-type\": \"application/json\",\n"
         + "        \"x-amz-content-sha256\": \"required\"\n"
         + "      },\n"
-        + "      \"request_body\": \"{ \\\"inputText\\\": \\\"${parameters.input}\\\" }\",\n"
-        + "      \"pre_process_function\": \"connector.pre_process.bedrock.embedding\",\n"
-        + "      \"post_process_function\": \"connector.post_process.bedrock.embedding\"\n"
+        + "      \"request_body\": \"{ \\\"inputText\\\": \\\"${parameters.input}\\\" }\"\n"
         + "    }\n"
         + "  ]\n"
         + "}";
@@ -149,19 +147,24 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
      * register two remote models and create an index and document before tests
      * @throws Exception
      */
+    private static boolean initialSleepDone = false;
+
     @Before
     public void setup() throws Exception {
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
-        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
+        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, false);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
-        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
+        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, false);
         String bedrockMultiModalEmbeddingModelName = "bedrock multi modal embedding model " + randomAlphaOfLength(5);
         this.bedrockMultiModalEmbeddingModelId = registerRemoteModel(
             bedrockMultiModalEmbeddingModelConnectorEntity,
             bedrockMultiModalEmbeddingModelName,
-            true
+            false
         );
 
         String index_name = "daily_index";
@@ -343,7 +346,7 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
             + "            \"model_id\": \""
             + this.bedrockEmbeddingModelId
             + "\",\n"
-            + "        \"query_template\": \"{\\\"query\\\":{\\\"range\\\":{\\\"diary_embedding_size\\\":{\\\"lte\\\":${modelPrediction}}}}}\",\n"
+            + "        \"query_template\": \"{\\\"query\\\":{\\\"range\\\":{\\\"diary_embedding_size_int\\\":{\\\"lte\\\":${modelPrediction}}}}}\",\n"
             + "        \"input_map\": [\n"
             + "          {\n"
             + "            \"input\": \"query.term.diary_embedding_size.value\"\n"

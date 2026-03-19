@@ -17,6 +17,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.get.GetResponse;
@@ -37,6 +41,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -72,11 +77,13 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     public static final String TYPE = MLMemoryType.REMOTE_AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
+    private static final String MESSAGE_ID_FIELD = "message_id";
     private static final Gson GSON = new Gson();
 
     private final String conversationId;
     private final String memoryContainerId;
     private final String userId;
+    private final AtomicReference<Integer> nextMessageId = new AtomicReference<>();
     private final Connector connector;
     private final RemoteConnectorExecutor executor;
 
@@ -507,6 +514,199 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     @Override
     public void clear() {
         throw new UnsupportedOperationException("clear method is not supported in RemoteAgenticConversationMemory");
+    }
+
+    @Override
+    public void getStructuredMessages(ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> listener) {
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured"));
+            return;
+        }
+
+        // Build search query for structured messages
+        Map<String, Object> query = new HashMap<>();
+        Map<String, Object> bool = new HashMap<>();
+        List<Map<String, Object>> must = new ArrayList<>();
+
+        must.add(Map.of("term", Map.of("namespace." + SESSION_ID_FIELD, conversationId)));
+        must.add(Map.of("term", Map.of("metadata.type", "structured_message")));
+
+        bool.put("must", must);
+        query.put("bool", bool);
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("memory_container_id", memoryContainerId);
+        searchRequest.put("memory_type", "working");
+        searchRequest.put("query", query);
+        searchRequest.put("size", Memory.MAX_MESSAGES_TO_RETRIEVE);
+        searchRequest.put("sort", List.of(Map.of(MESSAGE_ID_FIELD, "asc")));
+
+        executeConnectorAction("search_memories", searchRequest, ActionListener.wrap(response -> {
+            List<org.opensearch.ml.common.input.execute.agent.Message> messages = parseStructuredMessages(response);
+            listener.onResponse(messages);
+        }, e -> {
+            log.error("Failed to retrieve structured messages from remote memory", e);
+            listener.onFailure(e);
+        }));
+    }
+
+    @Override
+    public void saveStructuredMessages(List<org.opensearch.ml.common.input.execute.agent.Message> messages, ActionListener<Void> listener) {
+        if (Strings.isNullOrEmpty(memoryContainerId)) {
+            listener.onFailure(new IllegalStateException("Memory container ID is not configured"));
+            return;
+        }
+
+        if (messages == null || messages.isEmpty()) {
+            listener.onResponse(null);
+            return;
+        }
+
+        Integer startId = this.nextMessageId.getAndSet(null);
+        if (startId != null) {
+            doSaveMessages(messages, startId, listener);
+        } else {
+            getMaxStructuredMessageId(
+                ActionListener.wrap(maxId -> { doSaveMessages(messages, maxId + 1, listener); }, listener::onFailure)
+            );
+        }
+    }
+
+    /**
+     * Query for the current maximum message_id among structured messages for this session.
+     * Returns -1 if no structured messages exist yet.
+     */
+    private void getMaxStructuredMessageId(ActionListener<Integer> listener) {
+        Map<String, Object> query = new HashMap<>();
+        Map<String, Object> bool = new HashMap<>();
+        List<Map<String, Object>> must = new ArrayList<>();
+
+        must.add(Map.of("term", Map.of("namespace." + SESSION_ID_FIELD, conversationId)));
+        must.add(Map.of("term", Map.of("metadata.type", "structured_message")));
+
+        bool.put("must", must);
+        query.put("bool", bool);
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("memory_container_id", memoryContainerId);
+        searchRequest.put("memory_type", "working");
+        searchRequest.put("query", query);
+        searchRequest.put("size", 1);
+        searchRequest.put("sort", List.of(Map.of(MESSAGE_ID_FIELD, "desc")));
+
+        executeConnectorAction("search_memories", searchRequest, ActionListener.wrap(response -> {
+            int maxId = -1;
+            try {
+                SearchResponse searchResponse = parseSearchResponse(response);
+                if (searchResponse.getHits() != null && searchResponse.getHits().getHits().length > 0) {
+                    Object msgIdObj = searchResponse.getHits().getHits()[0].getSourceAsMap().get(MESSAGE_ID_FIELD);
+                    if (msgIdObj instanceof Number) {
+                        maxId = ((Number) msgIdObj).intValue();
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse max message id response", e);
+                listener.onFailure(e);
+                return;
+            }
+            listener.onResponse(maxId);
+        }, e -> {
+            log.error("Failed to query max structured message id from remote", e);
+            listener.onFailure(e);
+        }));
+    }
+
+    /**
+     * Save messages starting from the given startId, assigning messageId(startId + i) to each.
+     */
+    private void doSaveMessages(
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages,
+        int startId,
+        ActionListener<Void> listener
+    ) {
+        if (messages == null || messages.isEmpty()) {
+            listener.onResponse(null);
+            return;
+        }
+
+        AtomicInteger remaining = new AtomicInteger(messages.size());
+        AtomicBoolean hasError = new AtomicBoolean(false);
+
+        for (int i = 0; i < messages.size(); i++) {
+            org.opensearch.ml.common.input.execute.agent.Message message = messages.get(i);
+
+            Map<String, String> namespace = new HashMap<>();
+            namespace.put(SESSION_ID_FIELD, conversationId);
+            if (!Strings.isNullOrEmpty(userId)) {
+                namespace.put("user_id", userId);
+            }
+
+            Map<String, Object> structuredData = new HashMap<>();
+            Map<String, Object> serializableMessage = GSON
+                .fromJson(
+                    org.opensearch.ml.common.utils.StringUtils.toJson(message),
+                    new com.google.gson.reflect.TypeToken<Map<String, Object>>() {
+                    }.getType()
+                );
+            structuredData.put("message", serializableMessage);
+
+            Map<String, String> metadata = new HashMap<>();
+            metadata.put("type", "structured_message");
+            if (message.getRole() != null) {
+                metadata.put("role", message.getRole());
+            }
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("memory_container_id", memoryContainerId);
+            requestBody.put("structured_data_blob", structuredData);
+            requestBody.put("message_id", startId + i);
+            requestBody.put("namespace", namespace);
+            requestBody.put("metadata", metadata);
+            requestBody.put("infer", false);
+
+            int index = i;
+            executeConnectorAction("add_memory", requestBody, ActionListener.wrap(response -> {
+                log.debug("Saved structured message {} of {} to remote session {}", index + 1, messages.size(), conversationId);
+                if (remaining.decrementAndGet() == 0) {
+                    if (hasError.get()) {
+                        listener.onFailure(new RuntimeException("One or more structured messages failed to save"));
+                    } else {
+                        nextMessageId.set(startId + messages.size());
+                        listener.onResponse(null);
+                    }
+                }
+            }, e -> {
+                log.error("Failed to save structured message {} of {} to remote session {}", index + 1, messages.size(), conversationId, e);
+                hasError.set(true);
+                if (remaining.decrementAndGet() == 0) {
+                    listener.onFailure(e);
+                }
+            }));
+        }
+    }
+
+    private List<org.opensearch.ml.common.input.execute.agent.Message> parseStructuredMessages(String response) {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = new ArrayList<>();
+        try {
+            SearchResponse searchResponse = parseSearchResponse(response);
+            if (searchResponse.getHits() != null && searchResponse.getHits().getHits() != null) {
+                for (SearchHit hit : searchResponse.getHits().getHits()) {
+                    Map<String, Object> sourceMap = hit.getSourceAsMap();
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
+                    if (structuredData != null && structuredData.containsKey("message")) {
+                        Object messageObj = structuredData.get("message");
+                        org.opensearch.ml.common.input.execute.agent.Message message = GSON
+                            .fromJson(GSON.toJson(messageObj), org.opensearch.ml.common.input.execute.agent.Message.class);
+                        messages.add(message);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse structured messages response", e);
+            throw new RuntimeException("Failed to parse structured messages response", e);
+        }
+        return messages;
     }
 
     @Override
@@ -1214,12 +1414,30 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             // Decrypt the connector credentials (for inline connectors, credentials are already plaintext)
             // This populates the decryptedCredential field which AwsConnector methods depend on
-            connector
-                .decrypt(
-                    ConnectorAction.ActionType.EXECUTE.name(),
-                    (cred, tenant) -> cred,  // No-op function - credentials are already plaintext
-                    tenantId
-                );
+            // Use CountDownLatch for synchronous behavior in constructor
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<Exception> decryptError = new AtomicReference<>();
+            ActionListener<Boolean> decryptListener = ActionListener.wrap(r -> { latch.countDown(); }, e -> {
+                log.error("Failed to decrypt credentials in inline connector", e);
+                decryptError.set(e);
+                latch.countDown();
+            });
+
+            // No-op function - credentials are already plaintext, just pass them through
+            connector.decrypt(ConnectorAction.ActionType.EXECUTE.name(), (plainCredentials, tenant, listener) -> {
+                // For inline connectors, credentials are already plaintext, so just pass them through
+                listener.onResponse(plainCredentials);
+            }, tenantId, decryptListener);
+
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                log.error("Interrupted while waiting for credential decryption", e);
+                Thread.currentThread().interrupt();
+            }
+            if (decryptError.get() != null) {
+                throw new MLException("Failed to decrypt credentials, ", decryptError.get());
+            }
 
             return connector;
         }

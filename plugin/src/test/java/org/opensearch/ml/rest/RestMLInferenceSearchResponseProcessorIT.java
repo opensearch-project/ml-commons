@@ -75,6 +75,9 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "  \"description\": \"The connector to bedrock Titan embedding model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 200\n"
+        + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
@@ -114,13 +117,16 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 200\n"
+        + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
         + "    \"model\": \""
-        + "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        + "anthropic.claude-3-5-sonnet-20241022-v2:0"
         + "\",\n"
         + "    \"system_prompt\": \"You are a helpful assistant.\",\n"
         + "\"response_filter\": \"$.output.message.content[0].text\""
@@ -148,7 +154,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
         + ".amazonaws.com/model/"
-        + "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        + "anthropic.claude-3-5-sonnet-20241022-v2:0"
         + "/converse\",\n"
         + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.prompt}\\\"}]}] , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
@@ -197,21 +203,26 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
      *
      * @throws Exception if any error occurs during the setup
      */
+    private static boolean initialSleepDone = false;
+
     @Before
     public void setup() throws Exception {
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
-        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
+        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, false);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
-        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
+        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, false);
         String bedrockClaudeModelName = "bedrock claude model " + randomAlphaOfLength(5);
-        this.bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, true);
+        this.bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, false);
         String bedrockMultiModalEmbeddingModelName = "bedrock multi modal embedding model " + randomAlphaOfLength(5);
         this.bedrockMultiModalEmbeddingModelId = registerRemoteModel(
             bedrockMultiModalEmbeddingModelConnectorEntity,
             bedrockMultiModalEmbeddingModelName,
-            true
+            false
         );
 
         String index_name = "daily_index";

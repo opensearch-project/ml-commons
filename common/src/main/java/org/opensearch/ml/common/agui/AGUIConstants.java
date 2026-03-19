@@ -36,8 +36,8 @@ public final class AGUIConstants {
     /** Parameter key for AG-UI run identifier */
     public static final String AGUI_PARAM_RUN_ID = "agui_run_id";
 
-    /** Parameter key for AG-UI messages array */
-    public static final String AGUI_PARAM_MESSAGES = "agui_messages";
+    /** Parameter key for AG-UI load chat history flag */
+    public static final String AGUI_PARAM_LOAD_CHAT_HISTORY = "agui_load_chat_history";
 
     /** Parameter key for AG-UI tools array */
     public static final String AGUI_PARAM_TOOLS = "agui_tools";

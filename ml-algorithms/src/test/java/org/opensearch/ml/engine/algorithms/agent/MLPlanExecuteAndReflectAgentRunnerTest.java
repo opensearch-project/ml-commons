@@ -15,6 +15,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -47,6 +48,7 @@ import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -64,6 +66,8 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.MLTaskUtils;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
@@ -168,6 +172,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(conversationIndexMemory).save(any(), any(), any(), any(), any());
 
+        // Pass null for sdkClient - the null check in setToolsAndRunAgent will skip model resolution
+        // Same pattern as MLChatAgentRunnerTest
         mlPlanExecuteAndReflectAgentRunner = new MLPlanExecuteAndReflectAgentRunner(
             client,
             settings,
@@ -175,7 +181,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             xContentRegistry,
             toolFactories,
             memoryMap,
-            sdkClient,
+            null,
             encryptor,
             null
         );
@@ -854,7 +860,10 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
                 executorParentId,
                 finalResult,
                 input,
-                agentActionListener
+                agentActionListener,
+                null,
+                null,
+                false
             );
 
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -1054,7 +1063,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
 
             mlTaskUtilsMockedStatic
-                .verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), eq(sdkClient), any()));
+                .verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), isNull(), any()));
         }
     }
 
@@ -1254,5 +1263,130 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         verify(agentActionListener).onResponse(any());
+    }
+
+    // ===== Token usage tracking tests =====
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testTokenUsageTracking_withLlmInterface() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        try (MockedStatic<FunctionCallingFactory> factoryMock = mockStatic(FunctionCallingFactory.class)) {
+            FunctionCalling mockFunctionCalling = mock(FunctionCalling.class);
+            TokenUsage mockUsage = TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build();
+            when(mockFunctionCalling.extractTokenUsage(any())).thenReturn(mockUsage);
+            factoryMock.when(() -> FunctionCallingFactory.create(anyString())).thenReturn(mockFunctionCalling);
+
+            // LLM response with only "response" key so parseLLMOutput works
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                ModelTensor modelTensor = ModelTensor
+                    .builder()
+                    .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"final result\"}"))
+                    .build();
+                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+                when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+                listener.onResponse(mlTaskResponse);
+                return null;
+            }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(1);
+                ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
+                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+                when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+                listener.onResponse(mlExecuteTaskResponse);
+                return null;
+            }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+            doAnswer(invocation -> {
+                ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+                listener.onResponse(updateResponse);
+                return null;
+            }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                listener.onResponse("success");
+                return null;
+            }).when(conversationIndexMemory).update(any(), any(), any());
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test question");
+            params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
+            params.put("_llm_interface", "openai/v1/chat/completions");
+            params.put("include_token_usage", "true");
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+            verify(agentActionListener).onResponse(objectCaptor.capture());
+            Object response = objectCaptor.getValue();
+            assertTrue(response instanceof ModelTensorOutput);
+            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
+
+            // Find the token_usage tensor in the output
+            boolean foundTokenUsage = false;
+            for (ModelTensors tensors : modelTensorOutput.getMlModelOutputs()) {
+                for (ModelTensor tensor : tensors.getMlModelTensors()) {
+                    if (AgentTokenTracker.TOKEN_USAGE.equals(tensor.getName())) {
+                        foundTokenUsage = true;
+                        Map<String, Object> tokenData = (Map<String, Object>) tensor.getDataAsMap();
+                        assertNotNull(tokenData.get(AgentTokenTracker.PER_MODEL_USAGE));
+                        assertNotNull(tokenData.get(AgentTokenTracker.PER_TURN_USAGE));
+                    }
+                }
+            }
+            assertTrue("Token usage tensor should be present in output", foundTokenUsage);
+        }
+    }
+
+    @Test
+    public void testTokenUsageTracking_maxStepsZero_summaryWithTokenUsage() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        try (MockedStatic<FunctionCallingFactory> factoryMock = mockStatic(FunctionCallingFactory.class)) {
+            FunctionCalling mockFunctionCalling = mock(FunctionCalling.class);
+            TokenUsage mockUsage = TokenUsage.builder().inputTokens(50L).outputTokens(25L).totalTokens(75L).build();
+            when(mockFunctionCalling.extractTokenUsage(any())).thenReturn(mockUsage);
+            factoryMock.when(() -> FunctionCallingFactory.create(anyString())).thenReturn(mockFunctionCalling);
+
+            // LLM response with only "response" key
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                ModelTensor modelTensor = ModelTensor
+                    .builder()
+                    .dataAsMap(ImmutableMap.of("response", "Summary of completed steps"))
+                    .build();
+                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+                when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+                listener.onResponse(mlTaskResponse);
+                return null;
+            }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+            doAnswer(invocation -> {
+                ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+                listener.onResponse(updateResponse);
+                return null;
+            }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                listener.onResponse("success");
+                return null;
+            }).when(conversationIndexMemory).update(any(), any(), any());
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test");
+            params.put("parent_interaction_id", "pid");
+            params.put("max_steps", "0");
+            params.put("_llm_interface", "openai/v1/chat/completions");
+            params.put("include_token_usage", "true");
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+            verify(agentActionListener).onResponse(any());
+        }
     }
 }

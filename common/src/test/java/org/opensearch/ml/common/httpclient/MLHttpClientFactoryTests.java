@@ -23,4 +23,10 @@ public class MLHttpClientFactoryTests {
         client = MLHttpClientFactory.getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false, true);
         assertNotNull(client);
     }
+
+    @Test
+    public void test_getAsyncHttpClient_withoutSkipSslVerificationValue_success() {
+        SdkAsyncHttpClient client = MLHttpClientFactory.getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false);
+        assertNotNull(client);
+    }
 }

@@ -105,6 +105,7 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.utils.CollectionUtils;
 
 @Log4j2
 public class GetTaskTransportAction extends HandledTransportAction<ActionRequest, MLTaskGetResponse> {
@@ -465,48 +466,47 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connector.addAction(connectorAction);
         }
 
-        final Map<String, String> decryptedCredential = connector.getDecryptedCredential() != null
-            && !connector.getDecryptedCredential().isEmpty()
-                ? connector.getDecryptedCredential()
-                : mlEngine.getConnectorCredential(connector);
-        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
-        connectorExecutor.setScriptService(scriptService);
-        connectorExecutor.setClusterService(clusterService);
-        connectorExecutor.setClient(client);
-        connectorExecutor.setXContentRegistry(xContentRegistry);
-        connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
-            processTaskResponse(
-                mlTask,
-                taskId,
-                isUserInitiatedGetTaskRequest,
-                taskResponse,
-                remoteJob,
-                decryptedCredential,
-                actionListener
-            );
-        }, e -> {
-            // When the request to remote service fails, we will retry the request for next 10 minutes (10 runs).
-            // If it fails even then, we mark it as unreachable in task index and send message to DLQ
-            if (!isUserInitiatedGetTaskRequest) {
-                Map<String, Object> updatedTask = new HashMap<>();
-                Integer numberOfRetries = (Integer) remoteJob.getOrDefault("num_of_retries", 0);
-                remoteJob.put("num_of_retries", ++numberOfRetries);
-                if (numberOfRetries > 10) {
-                    log
-                        .debug(
-                            "Limit exceeded trying to reach the task {} . Marking as UNREACHABLE in task index and removing from further execution",
-                            taskId
-                        );
-                    updatedTask.put(STATE_FIELD, UNREACHABLE);
-                    mlTask.setState(UNREACHABLE);
-                    mlTask.setError(e.getMessage());
-                    updateDLQ(mlTask, decryptedCredential);
+        ActionListener<Map<String, String>> decryptedCredentialFetchListener = ActionListener.wrap(r -> {
+            RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                .initInstance(connector.getProtocol(), connector, Connector.class);
+            connectorExecutor.setScriptService(scriptService);
+            connectorExecutor.setClusterService(clusterService);
+            connectorExecutor.setClient(client);
+            connectorExecutor.setXContentRegistry(xContentRegistry);
+            connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
+                processTaskResponse(mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, r, actionListener);
+            }, e -> {
+                // When the request to remote service fails, we will retry the request for next 10 minutes (10 runs).
+                // If it fails even then, we mark it as unreachable in task index and send message to DLQ
+                if (!isUserInitiatedGetTaskRequest) {
+                    Map<String, Object> updatedTask = new HashMap<>();
+                    Integer numberOfRetries = (Integer) remoteJob.getOrDefault("num_of_retries", 0);
+                    remoteJob.put("num_of_retries", ++numberOfRetries);
+                    if (numberOfRetries > 10) {
+                        log
+                            .debug(
+                                "Limit exceeded trying to reach the task {} . Marking as UNREACHABLE in task index and removing from further execution",
+                                taskId
+                            );
+                        updatedTask.put(STATE_FIELD, UNREACHABLE);
+                        mlTask.setState(UNREACHABLE);
+                        mlTask.setError(e.getMessage());
+                        updateDLQ(mlTask, r);
+                    }
+                    updatedTask.put("remote_job", remoteJob);
+                    mlTaskManager.updateMLTaskDirectly(taskId, updatedTask);
                 }
-                updatedTask.put("remote_job", remoteJob);
-                mlTaskManager.updateMLTaskDirectly(taskId, updatedTask);
-            }
+                actionListener.onFailure(e);
+            }));
+        }, e -> {
+            log.error("Failed to decrypt credentials in connector", e);
             actionListener.onFailure(e);
-        }));
+        });
+        if (CollectionUtils.isNotEmpty(connector.getDecryptedCredential())) {
+            decryptedCredentialFetchListener.onResponse(connector.getDecryptedCredential());
+        } else {
+            mlEngine.getConnectorCredential(connector, decryptedCredentialFetchListener);
+        }
     }
 
     protected void processTaskResponse(

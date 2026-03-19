@@ -22,6 +22,15 @@ public class MLHttpClientFactory {
         Duration connectionTimeout,
         Duration readTimeout,
         int maxConnections,
+        boolean connectorPrivateIpEnabled
+    ) {
+        return getAsyncHttpClient(connectionTimeout, readTimeout, maxConnections, connectorPrivateIpEnabled, false);
+    }
+
+    public static SdkAsyncHttpClient getAsyncHttpClient(
+        Duration connectionTimeout,
+        Duration readTimeout,
+        int maxConnections,
         boolean connectorPrivateIpEnabled,
         boolean skipSslVerification
     ) {
