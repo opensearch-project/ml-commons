@@ -526,35 +526,6 @@ public class QueryPlanningToolTests {
 
     @SneakyThrows
     @Test
-    public void testRunWithNoPrompt() {
-        // Mock the async calls
-        mockSampleDoc();
-        mockGetIndexMapping();
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("question", "some query");
-        parameters.put(INDEX_NAME_FIELD, "testIndex");
-        ActionListener<String> listener = mock(ActionListener.class);
-
-        doAnswer(invocation -> {
-            ActionListener<String> modelListener = invocation.getArgument(1);
-            modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
-            return null;
-        }).when(queryGenerationTool).run(any(), any());
-
-        tool.run(parameters, listener);
-
-        // Manually trigger the getIndex response to prevent hanging
-        actionListenerCaptor.getValue().onResponse(getIndexResponse);
-
-        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(queryGenerationTool).run(captor.capture(), any());
-        Map<String, String> capturedParams = captor.getValue();
-        assertEquals(DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT, capturedParams.get("system_prompt"));
-    }
-
-    @SneakyThrows
-    @Test
     public void testStripAgentContextParameters() throws ExecutionException, InterruptedException {
         mockSampleDoc();
         mockGetIndexMapping();

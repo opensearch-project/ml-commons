@@ -240,9 +240,19 @@ public class QueryPlanningTool implements WithModelTool {
     @SuppressWarnings("unchecked")
     private <T> void executeQueryPlanning(Map<String, String> parameters, ActionListener<T> listener) {
         try {
+
+            // Replace fallback query in system prompt
+            String effectiveFallbackQuery = (fallbackQuery != null) ? fallbackQuery : DEFAULT_QUERY;
+            parameters.put(FALLBACK_QUERY_FIELD, effectiveFallbackQuery);
+
+            String escapedFallbackQuery = gson.toJson(effectiveFallbackQuery);
+            escapedFallbackQuery = escapedFallbackQuery.substring(1, escapedFallbackQuery.length() - 1);
+
+            String systemPrompt = parameters.getOrDefault(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
+            systemPrompt = systemPrompt.replace(QueryPlanningPromptTemplate.FALLBACK_QUERY_PROMPT_PLACEHOLDER, escapedFallbackQuery);
+
             // Execute Query Planning, replace System and User prompt fields
-            parameters
-                .put(SYSTEM_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT));
+            parameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
 
             parameters.put(USER_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_USER_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_USER_PROMPT));
 
@@ -252,9 +262,6 @@ public class QueryPlanningTool implements WithModelTool {
 
             String currentDateTime = getCurrentDateTime(DEFAULT_DATETIME_FORMAT);
             parameters.put(CURRENT_TIME_FIELD, gson.toJson(currentDateTime));
-
-            String effectiveFallbackQuery = (fallbackQuery != null) ? fallbackQuery : DEFAULT_QUERY;
-            parameters.put(FALLBACK_QUERY_FIELD, effectiveFallbackQuery);
 
             // async chain: getIndexMapping -> getSampleDoc -> call model
             getIndexMappingAsync(parameters.get(INDEX_NAME_FIELD), ActionListener.wrap(indexMapping -> {
@@ -271,11 +278,6 @@ public class QueryPlanningTool implements WithModelTool {
                                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                                 String defaultQueryString = substitutor.replace(effectiveFallbackQuery);
                                 listener.onResponse((T) defaultQueryString);
-                            } else if (fallbackQuery != null && queryString.equals(DEFAULT_QUERY)) {
-                                log.debug("Model failed to generate valid JSON, returning configured fallback query");
-                                StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-                                String fallbackQueryString = substitutor.replace(effectiveFallbackQuery);
-                                listener.onResponse((T) fallbackQueryString);
                             } else {
                                 listener.onResponse((T) (outputParser != null ? outputParser.parse(queryString) : queryString));
                             }

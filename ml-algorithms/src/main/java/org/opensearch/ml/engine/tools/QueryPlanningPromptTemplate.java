@@ -3,6 +3,7 @@ package org.opensearch.ml.engine.tools;
 public class QueryPlanningPromptTemplate {
 
     public static final String DEFAULT_QUERY = "{\"size\":10,\"query\":{\"match_all\":{}}}";
+    public static final String FALLBACK_QUERY_PROMPT_PLACEHOLDER = "{{FALLBACK_QUERY}}";
 
     // ==== RULES ====
     public static final String QUERY_TYPE_RULES = "Use only fields present in the provided mapping; never invent names.\n"
@@ -111,7 +112,8 @@ public class QueryPlanningPromptTemplate {
         + "- Do NOT use code fences or markdown: no backticks (`), no ```json, no ```.\n"
         + "- Do NOT wrap in quotes or prose: no single quotes ('), no smart quotes (’ “ ”), no angle brackets (< >), no XML/HTML, no lists, no headers, no ellipses.\n"
         + "- Use valid JSON only: standard double quotes (\") for all keys/strings; no comments; no trailing commas.\n"
-        + "- If the request truly cannot be fulfilled because no remotely relevant fields exist, return EXACTLY the fallback query\n"
+        + "- If the request truly cannot be fulfilled because no remotely relevant fields exist, return EXACTLY:\n"
+        + FALLBACK_QUERY_PROMPT_PLACEHOLDER
         + "\n";
 
     // ==== EXAMPLES ==== (Field selection lines included only where they clarify proxies vs. distractors)
@@ -178,7 +180,7 @@ public class QueryPlanningPromptTemplate {
         + "Input: List satellites with periapsis above 400km.\n"
         + "Mapping: { \"properties\": { \"name\": { \"type\": \"text\" }, \"color\": { \"type\": \"keyword\" } } }\n"
         + "Output: "
-        + DEFAULT_QUERY
+        + FALLBACK_QUERY_PROMPT_PLACEHOLDER
         + "\n";
 
     public static final String EXAMPLE_12 = "Example 12 — neural preferred with safe fallback (merged)\n"
