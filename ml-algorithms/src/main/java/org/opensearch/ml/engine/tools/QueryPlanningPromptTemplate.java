@@ -89,7 +89,7 @@ public class QueryPlanningPromptTemplate {
             + "- Harvest candidates from the question (entities, attributes, constraints).\n"
             + "- From query_fields (that exist) and the index mapping, choose fields that map to those candidates and the user intent—even if only loosely (use reasonable proxies).\n"
             + "- Ignore other fields that don’t help answer the question.\n"
-            + "- Micro Self-Check (silent): verify chosen fields exist; if any don’t, swap to the closest mapped proxy and continue. Only if no remotely relevant fields exist at all, use the default match_all query.\n";
+            + "- Micro Self-Check (silent): verify chosen fields exist; if any don’t, swap to the closest mapped proxy and continue. Only if no remotely relevant fields exist at all, use the default query.\n";
 
     public static final String PROMPT_PREFIX = "==== PURPOSE ====\n"
         + "You are an OpenSearch DSL expert. Convert a natural-language question into a strict JSON OpenSearch query body.\n\n"
@@ -111,8 +111,7 @@ public class QueryPlanningPromptTemplate {
         + "- Do NOT use code fences or markdown: no backticks (`), no ```json, no ```.\n"
         + "- Do NOT wrap in quotes or prose: no single quotes ('), no smart quotes (’ “ ”), no angle brackets (< >), no XML/HTML, no lists, no headers, no ellipses.\n"
         + "- Use valid JSON only: standard double quotes (\") for all keys/strings; no comments; no trailing commas.\n"
-        + "- If the request truly cannot be fulfilled because no remotely relevant fields exist, return EXACTLY:\n"
-        + DEFAULT_QUERY
+        + "- If the request truly cannot be fulfilled because no remotely relevant fields exist, return EXACTLY the fallback query\n"
         + "\n";
 
     // ==== EXAMPLES ==== (Field selection lines included only where they clarify proxies vs. distractors)

@@ -92,11 +92,14 @@ public class QueryPlanningTool implements WithModelTool {
     private static final String TOOL_CONFIGS_FIELD = "tool_configs";
     private static final Set<String> AGENT_CONTEXT_EXCLUDED_PARAMS = Set
         .of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
+    public static final String FALLBACK_QUERY_FIELD = "fallback_query";
 
     @Getter
     private final String generationType;
     @Getter
     private final String searchTemplates;
+    @Getter
+    private final String fallbackQuery;
     @Setter
     @Getter
     private String name = TYPE;
@@ -132,11 +135,18 @@ public class QueryPlanningTool implements WithModelTool {
     @Getter
     private Parser outputParser;
 
-    public QueryPlanningTool(String generationType, MLModelTool queryGenerationTool, Client client, String searchTemplates) {
+    public QueryPlanningTool(
+        String generationType,
+        MLModelTool queryGenerationTool,
+        Client client,
+        String searchTemplates,
+        String fallbackQuery
+    ) {
         this.generationType = generationType;
         this.queryGenerationTool = queryGenerationTool;
         this.client = client;
         this.searchTemplates = searchTemplates;
+        this.fallbackQuery = fallbackQuery;
         this.attributes = new HashMap<>(DEFAULT_ATTRIBUTES);
     }
 
@@ -243,6 +253,9 @@ public class QueryPlanningTool implements WithModelTool {
             String currentDateTime = getCurrentDateTime(DEFAULT_DATETIME_FORMAT);
             parameters.put(CURRENT_TIME_FIELD, gson.toJson(currentDateTime));
 
+            String effectiveFallbackQuery = (fallbackQuery != null) ? fallbackQuery : DEFAULT_QUERY;
+            parameters.put(FALLBACK_QUERY_FIELD, effectiveFallbackQuery);
+
             // async chain: getIndexMapping -> getSampleDoc -> call model
             getIndexMappingAsync(parameters.get(INDEX_NAME_FIELD), ActionListener.wrap(indexMapping -> {
                 parameters.put(INDEX_MAPPING_FIELD, gson.toJson(indexMapping));
@@ -254,10 +267,15 @@ public class QueryPlanningTool implements WithModelTool {
                         try {
                             String queryString = (String) r;
                             if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
-                                log.debug("Model failed to generate the DSL query, returning the Default match all query");
+                                log.debug("Model failed to generate the DSL query, returning the fallback query");
                                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-                                String defaultQueryString = substitutor.replace(DEFAULT_QUERY);
+                                String defaultQueryString = substitutor.replace(effectiveFallbackQuery);
                                 listener.onResponse((T) defaultQueryString);
+                            } else if (fallbackQuery != null && queryString.equals(DEFAULT_QUERY)) {
+                                log.debug("Model failed to generate valid JSON, returning configured fallback query");
+                                StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+                                String fallbackQueryString = substitutor.replace(effectiveFallbackQuery);
+                                listener.onResponse((T) fallbackQueryString);
                             } else {
                                 listener.onResponse((T) (outputParser != null ? outputParser.parse(queryString) : queryString));
                             }
@@ -455,7 +473,9 @@ public class QueryPlanningTool implements WithModelTool {
                 }
             }
 
-            QueryPlanningTool queryPlanningTool = new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates);
+            String fallbackQuery = params.containsKey(FALLBACK_QUERY_FIELD) ? (String) params.get(FALLBACK_QUERY_FIELD) : null;
+
+            QueryPlanningTool queryPlanningTool = new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates, fallbackQuery);
 
             // Create parser with default extract_json processor + any custom processors
             queryPlanningTool.setOutputParser(createParserWithDefaultExtractJson(params));
