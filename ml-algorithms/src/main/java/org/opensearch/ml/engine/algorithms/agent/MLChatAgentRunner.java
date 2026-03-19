@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
@@ -34,6 +35,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResour
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatusCode;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
@@ -75,6 +77,7 @@ import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -338,7 +341,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                 runAgent(mlAgent, params, listener, memory, functionCalling);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                log.error("Failed to get chat history. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
@@ -399,7 +402,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         processUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools);
     }
 
-    private void runReAct(
+    private void resolveModelMetadataAndRunReAct(
         MLAgent mlAgent,
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
@@ -409,11 +412,77 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         Map<String, Tool> backendTools
     ) {
-        LLMSpec llm = mlAgent.getLlm();
+        String agentId = parameters.get(AGENT_ID_FIELD);
         String tenantId = mlAgent.getTenantId();
+        log.info("Starting chat agent execution. agentId={}, tenantId={}", agentId, tenantId);
+
+        LLMSpec llm = mlAgent.getLlm();
+        String llmModelId = llm.getModelId();
         String sessionId = memory != null ? memory.getId() : null;
         boolean usesUnifiedInterface = Boolean.parseBoolean(parameters.getOrDefault(MLAgentExecutor.USES_UNIFIED_INTERFACE, "false"));
         ModelProvider modelProvider = usesUnifiedInterface ? ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider()) : null;
+
+        // Token tracking: create tracker and resolve model metadata before starting ReAct loop.
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        if (Boolean.parseBoolean(parameters.getOrDefault(AgentTokenTracker.IS_SUB_AGENT_FIELD, "false"))) {
+            tokenTracker.setSubAgent(true);
+        }
+
+        // getModelMetadata always calls onResponse (falls back to modelId on failure),
+        // but we handle onFailure defensively in case the contract changes.
+        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(metadata -> {
+            tokenTracker.setModelMetadata(llmModelId, metadata[0], metadata[1]);
+            runReAct(
+                mlAgent,
+                tools,
+                toolSpecMap,
+                parameters,
+                memory,
+                listener,
+                functionCalling,
+                backendTools,
+                tokenTracker,
+                tenantId,
+                usesUnifiedInterface,
+                modelProvider
+            );
+        }, e -> {
+            log.debug("Failed to resolve model metadata for token tracking, proceeding with model ID as fallback", e);
+            tokenTracker.setModelMetadata(llmModelId, llmModelId, llmModelId);
+            runReAct(
+                mlAgent,
+                tools,
+                toolSpecMap,
+                parameters,
+                memory,
+                listener,
+                functionCalling,
+                backendTools,
+                tokenTracker,
+                tenantId,
+                usesUnifiedInterface,
+                modelProvider
+            );
+        }));
+    }
+
+    private void runReAct(
+        MLAgent mlAgent,
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap,
+        Map<String, String> parameters,
+        Memory memory,
+        ActionListener<Object> listener,
+        FunctionCalling functionCalling,
+        Map<String, Tool> backendTools,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean usesUnifiedInterface,
+        ModelProvider modelProvider
+    ) {
+        String agentId = parameters.get(AGENT_ID_FIELD);
+        LLMSpec llm = mlAgent.getLlm();
+        String sessionId = memory != null ? memory.getId() : null;
 
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
@@ -423,6 +492,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String question = tmpParameters.get(MLAgentExecutor.QUESTION);
         String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
         boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
+        boolean includeTokenUsage = Boolean.parseBoolean(tmpParameters.getOrDefault(AgentUtils.INCLUDE_TOKEN_USAGE, "false"));
         boolean traceDisabled = usesUnifiedInterface
             || (tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE)));
 
@@ -470,6 +540,24 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         functionCalling
                     );
 
+                    // Extract per-turn token usage from LLM response
+                    if (functionCalling != null) {
+                        try {
+                            Map<String, ?> dataAsMap = tmpModelTensorOutput
+                                .getMlModelOutputs()
+                                .getFirst()
+                                .getMlModelTensors()
+                                .getFirst()
+                                .getDataAsMap();
+                            TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
+                            if (usage != null) {
+                                tokenTracker.recordTurn(llm.getModelId(), usage);
+                            }
+                        } catch (Exception e) {
+                            log.debug("Failed to extract token usage from LLM response", e);
+                        }
+                    }
+
                     streamingWrapper.fixInteractionRole(interactions);
                     String thought = String.valueOf(modelOutput.get(THOUGHT));
                     String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
@@ -494,7 +582,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             finalAnswer,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            modelProvider
+                            modelProvider,
+                            tokenTracker,
+                            tenantId,
+                            includeTokenUsage
                         );
                         cleanUpResource(tools);
                         return;
@@ -547,7 +638,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tmpParameters,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            modelProvider
+                            modelProvider,
+                            tokenTracker,
+                            functionCalling,
+                            includeTokenUsage
                         );
                         return;
                     }
@@ -557,7 +651,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         // If it's NOT a backend tool, it must be a frontend tool, so break out of the loop
                         boolean isBackendTool = backendTools != null && backendTools.containsKey(action);
 
-                        log.info("AG-UI: Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
+                        log.info("Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
 
                         if (!isBackendTool) {
                             // For frontend tool use, we close the response stream and wait for frontend tool result
@@ -692,7 +786,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tmpParameters,
                             usesUnifiedInterface,
                             new ArrayList<>(interactions),
-                            modelProvider
+                            modelProvider,
+                            tokenTracker,
+                            functionCalling,
+                            includeTokenUsage
                         );
                         return;
                     }
@@ -702,7 +799,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
-                log.error("Failed to run chat agent", e);
+                log.error("Failed to run chat agent. agentId={}, tenantId={}, statusCode={}", agentId, tenantId, extractStatusCode(e), e);
                 listener.onFailure(e);
             });
             if (nextStepListener != null) {
@@ -847,6 +944,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 )
                         );
                 });
+                // Log tool invocation
+                log
+                    .info(
+                        "Tool invoked. toolName={}, agentId={}, tenantId={}",
+                        action,
+                        tmpParameters.get(AGENT_ID_FIELD),
+                        tmpParameters.get(TENANT_ID_FIELD)
+                    );
                 if (tools.get(action) instanceof MLModelTool) {
                     Map<String, String> llmToolTmpParameters = new HashMap<>();
                     llmToolTmpParameters.putAll(tmpParameters);
@@ -862,7 +967,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     updateParametersAcrossTools(tmpParameters, parameters);
                 }
             } catch (Exception e) {
-                log.error("Failed to run tool {}", action, e);
+                log
+                    .error(
+                        "Failed to run tool {}. agentId={}, tenantId={}, statusCode={}",
+                        action,
+                        tmpParameters.get(AGENT_ID_FIELD),
+                        tmpParameters.get(TENANT_ID_FIELD),
+                        extractStatusCode(e),
+                        e
+                    );
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
@@ -930,10 +1043,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String finalAnswer,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        ModelProvider modelProvider
+        ModelProvider modelProvider,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage
     ) {
-        // Send completion chunk for streaming
-        streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
+        // Token tracking: send streaming batch or add to response tensors
+        if (streamingWrapper.isStreaming()) {
+            if (includeTokenUsage) {
+                streamingWrapper.sendTokenUsageBatch(sessionId, parentInteractionId, tokenTracker, tenantId);
+            }
+            streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
+        }
 
         if (memory != null) {
             String copyOfFinalAnswer = finalAnswer;
@@ -953,7 +1074,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             cotModelTensors,
                             additionalInfo,
-                            copyOfFinalAnswer
+                            copyOfFinalAnswer,
+                            tokenTracker,
+                            tenantId,
+                            includeTokenUsage
                         );
                     }, e -> {
                         log.error("Failed to save assistant response as structured message", e);
@@ -962,39 +1086,84 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 );
             } else {
                 // For legacy interface, use traditional saveMessage
-                ActionListener saveTraceListener = ActionListener.wrap(r -> {
-                    memory
-                        .update(
-                            parentInteractionId,
-                            Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
-                            ActionListener.wrap(res -> {
-                                returnFinalResponse(
-                                    sessionId,
-                                    listener,
-                                    parentInteractionId,
-                                    verbose,
-                                    cotModelTensors,
-                                    additionalInfo,
-                                    copyOfFinalAnswer
-                                );
-                            }, e -> { listener.onFailure(e); })
+                if (parentInteractionId == null) {
+                    // No parent interaction (e.g. AG-UI agents skip interaction creation).
+                    // Save the question + answer as a structured message pair instead.
+                    ContentBlock userContent = new ContentBlock();
+                    userContent.setType(ContentType.TEXT);
+                    userContent.setText(question);
+                    Message userMessage = new Message("user", List.of(userContent));
+
+                    ContentBlock assistantContent = new ContentBlock();
+                    assistantContent.setType(ContentType.TEXT);
+                    assistantContent.setText(copyOfFinalAnswer);
+                    Message assistantMessage = new Message("assistant", List.of(assistantContent));
+
+                    memory.saveStructuredMessages(List.of(userMessage, assistantMessage), ActionListener.wrap(v -> {
+                        returnFinalResponse(
+                            sessionId,
+                            listener,
+                            null,
+                            verbose,
+                            cotModelTensors,
+                            additionalInfo,
+                            copyOfFinalAnswer,
+                            tokenTracker,
+                            tenantId,
+                            includeTokenUsage
                         );
-                }, e -> { listener.onFailure(e); });
-                saveMessage(
-                    memory,
-                    question,
-                    finalAnswer,
-                    sessionId,
-                    parentInteractionId,
-                    traceNumber,
-                    true,
-                    traceDisabled,
-                    saveTraceListener
-                );
+                    }, e -> {
+                        log.error("Failed to save structured messages for AG-UI agent", e);
+                        listener.onFailure(e);
+                    }));
+                } else {
+                    ActionListener saveTraceListener = ActionListener.wrap(r -> {
+                        memory
+                            .update(
+                                parentInteractionId,
+                                Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
+                                ActionListener.wrap(res -> {
+                                    returnFinalResponse(
+                                        sessionId,
+                                        listener,
+                                        parentInteractionId,
+                                        verbose,
+                                        cotModelTensors,
+                                        additionalInfo,
+                                        copyOfFinalAnswer,
+                                        tokenTracker,
+                                        tenantId,
+                                        includeTokenUsage
+                                    );
+                                }, e -> { listener.onFailure(e); })
+                            );
+                    }, e -> { listener.onFailure(e); });
+                    saveMessage(
+                        memory,
+                        question,
+                        finalAnswer,
+                        sessionId,
+                        parentInteractionId,
+                        traceNumber,
+                        true,
+                        traceDisabled,
+                        saveTraceListener
+                    );
+                }
             }
         } else {
-            streamingWrapper
-                .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+            returnFinalResponse(
+                sessionId,
+                listener,
+                parentInteractionId,
+                verbose,
+                cotModelTensors,
+                additionalInfo,
+                finalAnswer,
+                tokenTracker,
+                tenantId,
+                includeTokenUsage
+            );
         }
     }
 
@@ -1155,7 +1324,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         List<ModelTensors> cotModelTensors, // AtomicBoolean getFinalAnswer,
         Map<String, Object> additionalInfo,
-        String finalAnswer2
+        String finalAnswer2,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage
     ) {
         cotModelTensors
             .add(
@@ -1174,8 +1346,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 )
         );
         if (verbose) {
+            AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId, includeTokenUsage);
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
         } else {
+            AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
     }
@@ -1199,7 +1373,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> parameters,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        ModelProvider modelProvider
+        ModelProvider modelProvider,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling,
+        boolean includeTokenUsage
     ) {
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             sendTraditionalMaxIterationsResponse(
@@ -1217,7 +1394,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tools,
                 usesUnifiedInterface,
                 toolInteractions,
-                modelProvider
+                modelProvider,
+                tokenTracker,
+                tenantId,
+                includeTokenUsage
             );
         }, listener::onFailure);
 
@@ -1241,7 +1421,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
                         responseListener.onResponse(fallbackResponse);
                     }
-                )
+                ),
+            tokenTracker,
+            functionCalling
         );
     }
 
@@ -1260,7 +1442,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool> tools,
         boolean usesUnifiedInterface,
         List<String> toolInteractions,
-        ModelProvider modelProvider
+        ModelProvider modelProvider,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage
     ) {
         sendFinalAnswer(
             sessionId,
@@ -1276,7 +1461,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
             response,
             usesUnifiedInterface,
             toolInteractions,
-            modelProvider
+            modelProvider,
+            tokenTracker,
+            tenantId,
+            includeTokenUsage
         );
         cleanUpResource(tools);
     }
@@ -1287,7 +1475,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String tenantId,
         String question,
         Map<String, String> parameter,
-        ActionListener<String> listener
+        ActionListener<String> listener,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
     ) {
         if (stepsSummary == null || stepsSummary.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Steps summary cannot be null or empty"));
@@ -1334,13 +1524,37 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tenantId
             );
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
+                // Extract token usage from summary LLM response
+                if (tokenTracker != null && functionCalling != null) {
+                    try {
+                        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+                        Map<String, ?> dataAsMap = output.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
+                        TokenUsage usage = functionCalling.extractTokenUsage(dataAsMap);
+                        if (usage != null) {
+                            tokenTracker.recordTurn(llmSpec.getModelId(), usage);
+                        }
+                    } catch (Exception e) {
+                        log.debug("Failed to extract token usage from summary LLM response", e);
+                    }
+                }
                 String summary = extractSummaryFromResponse(response, summaryParams);
                 if (summary == null || summary.trim().isEmpty()) {
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
                     return;
                 }
                 listener.onResponse(summary);
-            }, listener::onFailure));
+            }, e -> {
+                log
+                    .error(
+                        "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
+                        llmSpec.getModelId(),
+                        summaryParams.get(AGENT_ID_FIELD),
+                        tenantId,
+                        AgentUtils.extractStatusCode(e),
+                        e
+                    );
+                listener.onFailure(e);
+            }));
         } catch (Exception e) {
             listener.onFailure(e);
         }
@@ -1503,9 +1717,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 );
         }
 
-        // Call runReAct with unified tools - both frontend and backend tools will be visible to LLM
+        // Call resolveModelMetadataAndRunReAct with unified tools - both frontend and backend tools will be visible to LLM
         // Pass mlAgent and backendToolsMap so runReAct can distinguish between frontend and backend tools
-        runReAct(mlAgent, unifiedToolsMap, toolSpecMap, params, memory, listener, functionCalling, backendToolsMap);
+        resolveModelMetadataAndRunReAct(mlAgent, unifiedToolsMap, toolSpecMap, params, memory, listener, functionCalling, backendToolsMap);
     }
 
     /**
@@ -1572,5 +1786,4 @@ public class MLChatAgentRunner implements MLAgentRunner {
             listener.onFailure(e);
         }
     }
-
 }

@@ -95,7 +95,29 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             String finalConnectorAction = connectorAction;
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
-                    executeWithConnector(connector, finalConnectorAction, executeConnectorRequest, actionListener, true);
+                    // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
+                    ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+                        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
+                        connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+                        connectorExecutor.setScriptService(scriptService);
+                        connectorExecutor.setClusterService(clusterService);
+                        connectorExecutor.setClient(client);
+                        connectorExecutor.setXContentRegistry(xContentRegistry);
+                        connectorExecutor
+                            .executeAction(finalConnectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
+                                connector.removeCredential();
+                                actionListener.onResponse(taskResponse);
+                            }, e -> {
+                                connector.removeCredential();
+                                actionListener.onFailure(e);
+                            }));
+                    }, e -> {
+                        log.error("Failed to decrypt credentials in connector", e);
+                        connector.removeCredential();
+                        actionListener.onFailure(e);
+                    });
+                    connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
                 }
             }, e -> {
                 log.error("Failed to get connector " + connectorId, e);
@@ -106,40 +128,6 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             }
         } else {
             actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + connectorId));
-        }
-    }
-
-    private void executeWithConnector(
-        Connector connector,
-        String action,
-        MLExecuteConnectorRequest request,
-        ActionListener<MLTaskResponse> listener,
-        boolean decryptWithEncryptor
-    ) {
-        String connectorTenantId = connector.getTenantId();
-        if (decryptWithEncryptor) {
-            connector.decrypt(action, (credential, tenantId) -> encryptor.decrypt(credential, tenantId), connectorTenantId);
-        } else {
-            connector.decrypt(action, (credential, tenantId) -> credential, connectorTenantId);
-        }
-        try {
-            RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
-                .initInstance(connector.getProtocol(), connector, Connector.class);
-            connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
-            connectorExecutor.setScriptService(scriptService);
-            connectorExecutor.setClusterService(clusterService);
-            connectorExecutor.setClient(client);
-            connectorExecutor.setXContentRegistry(xContentRegistry);
-            connectorExecutor.executeAction(action, request.getMlInput(), ActionListener.wrap(response -> {
-                connector.removeCredential();
-                listener.onResponse(response);
-            }, e -> {
-                connector.removeCredential();
-                listener.onFailure(e);
-            }));
-        } catch (Exception e) {
-            connector.removeCredential();
-            listener.onFailure(e);
         }
     }
 

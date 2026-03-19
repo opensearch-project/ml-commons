@@ -130,6 +130,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         private String accumulatedToolName = null;
         private String accumulatedArguments = "";
         private StringBuilder accumulatedContent = new StringBuilder();
+        private final long streamStartTime;
+        private final AtomicBoolean firstTokenReceived;
 
         public HTTPEventSourceListener(
             StreamPredictActionListener<MLTaskResponse, ?> streamActionListener,
@@ -140,6 +142,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             this.llmInterface = llmInterface;
             this.parameters = parameters;
             this.isStreamClosed = new AtomicBoolean(false);
+            this.streamStartTime = System.currentTimeMillis();
+            this.firstTokenReceived = new AtomicBoolean(false);
 
             this.isAGUIAgent = AgentUtils.isAGUIAgent(parameters);
 
@@ -297,6 +301,15 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
             String content = extractPath(dataMap, "$.choices[0].delta.content");
             if (content != null && !content.isEmpty()) {
+                // Log time to first token
+                if (!firstTokenReceived.get()) {
+                    long timeToFirstToken = System.currentTimeMillis() - streamStartTime;
+                    String modelId = parameters != null ? parameters.get("model") : null;
+                    String tenantId = connector != null ? connector.getTenantId() : null;
+                    log.info("First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}", modelId, tenantId, timeToFirstToken);
+                    firstTokenReceived.set(true);
+                }
+
                 if (isAGUIAgent) {
                     accumulatedContent.append(content);
 
