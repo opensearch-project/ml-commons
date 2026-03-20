@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -21,6 +22,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATC
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.BEDROCK_NOVA_MODEL;
 
 import java.io.IOException;
@@ -781,15 +783,9 @@ public class ConnectorUtilsTest {
 
         RemoteInferenceInputDataSet result = ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
         assertNotNull(result);
-        String expectedQuery = org.apache.commons.text.StringEscapeUtils.escapeJson(
-            org.opensearch.ml.common.utils.StringUtils.processTextDoc("query \"with quotes\"")
-        );
-        String expectedFirstDoc = org.apache.commons.text.StringEscapeUtils.escapeJson(
-            org.opensearch.ml.common.utils.StringUtils.processTextDoc("doc1 with \"quotes\"")
-        );
-        String expectedSecondDoc = org.apache.commons.text.StringEscapeUtils.escapeJson(
-            org.opensearch.ml.common.utils.StringUtils.processTextDoc("doc2 with \n newlines")
-        );
+        String expectedQuery = escapeJson(processTextDoc("query \"with quotes\""));
+        String expectedFirstDoc = escapeJson(processTextDoc("doc1 with \"quotes\""));
+        String expectedSecondDoc = escapeJson(processTextDoc("doc2 with \n newlines"));
         assertEquals(expectedQuery, result.getParameters().get("query"));
         assertEquals(expectedFirstDoc, result.getParameters().get("first"));
         assertEquals(expectedSecondDoc, result.getParameters().get("second"));
@@ -859,12 +855,34 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void processOutput_WithMLGuard_ValidationFails() throws IOException {
+    public void processOutput_WithMLGuard_AsNull() throws IOException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
             .method("POST")
             .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        String modelResponse = "{\"result\":\"test response\"}";
+        ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), null);
+        assertEquals(1, tensors.getMlModelTensors().size());
+    }
+
+    @Test
+    public void processOutput_WithMLGuard_ValidationFails() throws IOException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url(TEST_MOCK_URL)
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Connector connector = HttpConnector
