@@ -130,12 +130,11 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                         return;
                                     }
                                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                                        ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
-                                            .runBefore(actionListener, () -> context.restore());
+                                        context.restore();
                                         executeTaskAndReturn(
                                             mlIndexInsightGetRequest,
                                             mlIndexInsightGetRequest.getTenantId(),
-                                            wrappedListener
+                                            actionListener
                                         );
                                     } catch (Exception e) {
                                         log.error("Failed to get index insight", e);
