@@ -129,17 +129,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                             );
                                         return;
                                     }
-                                    try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                                        context.restore();
-                                        executeTaskAndReturn(
-                                            mlIndexInsightGetRequest,
-                                            mlIndexInsightGetRequest.getTenantId(),
-                                            actionListener
-                                        );
-                                    } catch (Exception e) {
-                                        log.error("Failed to get index insight", e);
-                                        actionListener.onFailure(e);
-                                    }
+                                    executeTaskAndReturn(mlIndexInsightGetRequest, mlIndexInsightGetRequest.getTenantId(), actionListener);
                                 } catch (Exception e) {
                                     actionListener.onFailure(e);
                                 }
