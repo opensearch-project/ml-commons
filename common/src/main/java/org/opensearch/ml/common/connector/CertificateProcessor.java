@@ -82,7 +82,7 @@ public class CertificateProcessor {
             KeyManager[] keyManagers = createKeyManagers(keystoreType, decryptedCredentials);
             TrustManager[] trustManagers = createTrustManagers(config, decryptedCredentials);
 
-            SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+            SSLContext sslContext = SSLContext.getInstance("TLS");
             sslContext.init(keyManagers, trustManagers, null);
 
             log.info("Successfully built SSL context for mutual TLS with keystore type: {}", keystoreType);
@@ -269,7 +269,9 @@ public class CertificateProcessor {
         }
 
         // File-based truststore loading is not available
-        throw new MLValidationException("File-based truststore is not available. Please provide CA certificate in PEM format or base64-encoded truststore for now.");
+        throw new MLValidationException(
+            "File-based truststore is not available. Please provide CA certificate in PEM format or base64-encoded truststore for now."
+        );
     }
 
     /**

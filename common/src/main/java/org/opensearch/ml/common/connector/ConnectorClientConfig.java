@@ -185,9 +185,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         if (keystoreType != null) {
             builder.field(KEYSTORE_TYPE_FIELD, keystoreType);
         }
-        if (truststorePath != null) {
-            builder.field(TRUSTSTORE_PATH_FIELD, truststorePath);
-        }
+        // Security: Do not expose truststorePath in API responses to prevent filesystem path disclosure
+        // The truststorePath is only used internally and should not be serialized to XContent
         return builder.endObject();
     }
 
@@ -246,7 +245,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                     keystoreType = parser.text();
                     break;
                 case TRUSTSTORE_PATH_FIELD:
-                    truststorePath = parser.text();
+                    // Security: Skip parsing truststorePath from XContent to prevent path injection
+                    // File-based truststores are not supported in the current implementation
+                    parser.skipChildren();
                     break;
                 default:
                     parser.skipChildren();

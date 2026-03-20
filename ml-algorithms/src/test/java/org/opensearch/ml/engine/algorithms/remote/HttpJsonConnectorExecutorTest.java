@@ -282,7 +282,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
-    @org.junit.Ignore("Temporarily disabled due to IP validation issues - TODO: Fix in separate PR")
     public void invokeRemoteService_SkipSslVerification_True() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
             ConnectorAction predictAction = ConnectorAction
@@ -317,7 +316,17 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            anyBoolean(),
+                            any(),
+                            any(),
+                            any(),
+                            any()
+                        )
                 )
                 .thenReturn(mockClient);
 
@@ -344,7 +353,11 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
-                            sslVerificationCaptor.capture()
+                            sslVerificationCaptor.capture(),
+                            any(),
+                            any(),
+                            any(),
+                            any()
                         )
                 );
             // Assert that skipSslVerification was set to true
@@ -353,7 +366,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
-    @org.junit.Ignore("Temporarily disabled due to IP validation issues - TODO: Fix in separate PR")
     public void invokeRemoteService_SkipSslVerification_False() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
             ConnectorAction predictAction = ConnectorAction
@@ -388,7 +400,17 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            anyBoolean(),
+                            any(),
+                            any(),
+                            any(),
+                            any()
+                        )
                 )
                 .thenReturn(mockClient);
 
@@ -415,7 +437,11 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
-                            sslVerificationCaptor.capture()
+                            sslVerificationCaptor.capture(),
+                            any(),
+                            any(),
+                            any(),
+                            any()
                         )
                 );
             // Assert that skipSslVerification was set to false
@@ -424,7 +450,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
-    @org.junit.Ignore("Temporarily disabled due to IP validation issues - TODO: Fix in separate PR")
+    // @org.junit.Ignore("Temporarily disabled due to IP validation issues ")
     public void invokeRemoteService_SkipSslVerification_Null() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
             ConnectorAction predictAction = ConnectorAction
@@ -459,7 +485,17 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(
+                            any(Duration.class),
+                            any(Duration.class),
+                            anyInt(),
+                            anyBoolean(),
+                            anyBoolean(),
+                            any(),
+                            any(),
+                            any(),
+                            any()
+                        )
                 )
                 .thenReturn(mockClient);
 
@@ -486,7 +522,11 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
-                            sslVerificationCaptor.capture()
+                            sslVerificationCaptor.capture(),
+                            any(),
+                            any(),
+                            any(),
+                            any()
                         )
                 );
             // Assert that skipSslVerification defaults to false when null
