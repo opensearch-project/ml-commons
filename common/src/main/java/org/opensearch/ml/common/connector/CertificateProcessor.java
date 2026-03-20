@@ -268,8 +268,8 @@ public class CertificateProcessor {
             return tmf.getTrustManagers();
         }
 
-        // TODO: Implement file-based truststore loading if truststorePath is provided
-        throw new MLValidationException("File-based truststore is not yet implemented");
+        // File-based truststore loading is not available
+        throw new MLValidationException("File-based truststore is not available. Please provide CA certificate in PEM format or base64-encoded truststore for now.");
     }
 
     /**
