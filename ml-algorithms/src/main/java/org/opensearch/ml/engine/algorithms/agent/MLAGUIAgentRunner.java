@@ -169,9 +169,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             memory.getStructuredMessages(ActionListener.wrap(allMessages -> {
-                List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
-                    ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
-                    : allMessages;
+                List<Message> history = allMessages;
                 streamingWrapper.sendMessagesSnapshot(history, memory.getId(), listener);
             }, e -> {
                 log

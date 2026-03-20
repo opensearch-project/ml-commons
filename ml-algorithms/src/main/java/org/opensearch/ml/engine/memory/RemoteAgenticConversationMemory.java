@@ -63,6 +63,8 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -1225,9 +1227,105 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                     listener.onFailure(e);
                 }));
             } else {
-                // Use existing session/memory ID
-                create(memoryId, memoryContainerId, connector, userId, listener);
+                // Check if session already exists before creating (OpType.CREATE not preserved through outbound)
+                checkSessionExists(memoryId, memoryContainerId, connector, ActionListener.wrap(exists -> {
+                    if (exists) {
+                        create(memoryId, memoryContainerId, connector, userId, listener);
+                    } else {
+                        ensureSessionExistsInRemoteContainer(
+                            name,
+                            memoryId,
+                            memoryContainerId,
+                            connector,
+                            ActionListener.wrap(sessionId -> create(memoryId, memoryContainerId, connector, userId, listener), e -> {
+                                log.warn("Failed to ensure session exists for id {}, proceeding without session document", memoryId, e);
+                                create(memoryId, memoryContainerId, connector, userId, listener);
+                            })
+                        );
+                    }
+                }, e -> {
+                    // Check failed, try creating anyway
+                    ensureSessionExistsInRemoteContainer(
+                        name,
+                        memoryId,
+                        memoryContainerId,
+                        connector,
+                        ActionListener.wrap(sessionId -> create(memoryId, memoryContainerId, connector, userId, listener), e2 -> {
+                            log.warn("Failed to ensure session exists for id {}, proceeding without session document", memoryId, e2);
+                            create(memoryId, memoryContainerId, connector, userId, listener);
+                        })
+                    );
+                }));
             }
+        }
+
+        /**
+         * Ensure a session document exists in the remote container for the given sessionId.
+         * Uses create_session with OpType.CREATE semantics - creates if not exists, no-op if exists.
+         */
+        private void checkSessionExists(String sessionId, String memoryContainerId, Connector connector, ActionListener<Boolean> listener) {
+            RemoteConnectorExecutor executor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
+            executor.setScriptService(scriptService);
+            executor.setClusterService(clusterService);
+            executor.setClient(client);
+            executor.setXContentRegistry(xContentRegistry);
+            executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+
+            Map<String, String> inputParams = new HashMap<>();
+            inputParams.put("memory_container_id", memoryContainerId);
+            inputParams.put("memory_type", "sessions");
+            inputParams.put("body", "{\"query\":{\"ids\":{\"values\":[\"" + sessionId + "\"]}},\"size\":0}");
+
+            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(inputParams).build();
+            MLInput mlInput = MLInput.builder().algorithm(FunctionName.CONNECTOR).inputDataset(inputDataSet).build();
+
+            executor.executeAction("search_memories", mlInput, ActionListener.wrap(response -> {
+                try {
+                    Map<String, ?> dataMap = extractDataFromModelTensorOutput(response);
+                    String output = dataMap != null ? GSON.toJson(dataMap) : response.toString();
+                    JsonObject json = JsonParser.parseString(output).getAsJsonObject();
+                    int total = json.getAsJsonObject("hits").getAsJsonObject("total").get("value").getAsInt();
+                    listener.onResponse(total > 0);
+                } catch (Exception e) {
+                    listener.onResponse(false);
+                }
+            }, e -> listener.onFailure(e)));
+        }
+
+        private void ensureSessionExistsInRemoteContainer(
+            String summary,
+            String sessionId,
+            String memoryContainerId,
+            Connector connector,
+            ActionListener<String> listener
+        ) {
+            RemoteConnectorExecutor executor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
+            executor.setScriptService(scriptService);
+            executor.setClusterService(clusterService);
+            executor.setClient(client);
+            executor.setXContentRegistry(xContentRegistry);
+            executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+
+            Map<String, String> inputParams = new HashMap<>();
+            inputParams.put("memory_container_id", memoryContainerId);
+
+            Map<String, Object> sessionBody = new HashMap<>();
+            if (summary != null) {
+                sessionBody.put("summary", summary);
+            }
+            sessionBody.put("session_id", sessionId);
+            inputParams.put("body", GSON.toJson(sessionBody));
+
+            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(inputParams).build();
+            MLInput mlInput = MLInput.builder().algorithm(FunctionName.CONNECTOR).inputDataset(inputDataSet).build();
+
+            executor.executeAction("create_session", mlInput, ActionListener.wrap(response -> {
+                log.debug("Ensured session exists in remote container, session id: {}", sessionId);
+                listener.onResponse(sessionId);
+            }, e -> {
+                log.warn("Failed to ensure session exists in remote container for id {}", sessionId, e);
+                listener.onFailure(e);
+            }));
         }
 
         /**
