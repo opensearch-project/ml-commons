@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
 import java.io.IOException;
@@ -595,8 +596,8 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_ProcessAgentInput_AGUIAgent_WithContext_LegacyInterface() {
-        // AGUI agent with legacy LLM interface
-        // Context has already been appended by AGUIInputConverter before reaching MLAgentExecutor
+        // AGUI agent with legacy LLM interface (no model field)
+        // Context is passed via AGUI_PARAM_CONTEXT and should be prepended to question
         MLAgent agent = MLAgent
             .builder()
             .name("agui_agent_legacy_context")
@@ -604,10 +605,44 @@ public class MLAgentExecutorTest {
             .llm(LLMSpec.builder().modelId("gpt-4").build())
             .build();
 
-        // Simulate message with context already appended (as done by AGUIInputConverter)
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
-        textBlock.setText("Context:\n- Location: San Francisco\n\nWhat is the weather?");
+        textBlock.setText("What is the weather?");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        // Set context via params (as AGUIInputConverter stores it)
+        Map<String, String> params = new HashMap<>();
+        params.put(AGUI_PARAM_CONTEXT, "[{\"description\":\"Location\",\"value\":\"San Francisco\"}]");
+        agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(params));
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Verify question contains context prepended by the new code path
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        String question = dataset.getParameters().get(QUESTION);
+        Assert.assertNotNull(question);
+        Assert.assertTrue(question.startsWith("Context: "));
+        Assert.assertTrue(question.contains("San Francisco"));
+        Assert.assertTrue(question.contains("Question: "));
+        Assert.assertTrue(question.contains("What is the weather?"));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_NoContext_LegacyInterface() {
+        // AGUI agent with legacy LLM interface, no context param
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_legacy_no_context")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            .build();
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("What is the weather?");
         Message message = new Message("user", Collections.singletonList(textBlock));
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(Collections.singletonList(message));
@@ -615,13 +650,43 @@ public class MLAgentExecutorTest {
 
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
 
-        // Verify question contains context that was already appended
         RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         String question = dataset.getParameters().get(QUESTION);
         Assert.assertNotNull(question);
-        Assert.assertTrue(question.contains("Context:"));
-        Assert.assertTrue(question.contains("San Francisco"));
         Assert.assertTrue(question.contains("What is the weather?"));
+        Assert.assertFalse(question.contains("Context:"));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_AGUIAgent_EmptyContext_LegacyInterface() {
+        // AGUI agent with legacy LLM interface, empty context string
+        MLAgent agent = MLAgent
+            .builder()
+            .name("agui_agent_legacy_bad_context")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            .build();
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("What is the weather?");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        // Empty context should not be prepended
+        Map<String, String> params = new HashMap<>();
+        params.put(AGUI_PARAM_CONTEXT, "");
+        agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(params));
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        String question = dataset.getParameters().get(QUESTION);
+        Assert.assertNotNull(question);
+        Assert.assertTrue(question.contains("What is the weather?"));
+        Assert.assertFalse(question.contains("Context:"));
     }
 
     @Test
