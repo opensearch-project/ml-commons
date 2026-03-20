@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import java.net.http.HttpRequest;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.support.ThreadedActionListener;
@@ -20,12 +21,15 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @Setter
 @Getter
 public abstract class AbstractConnectorExecutor implements RemoteConnectorExecutor {
     private ConnectorClientConfig connectorClientConfig;
+
+    protected final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     public void initialize(Connector connector) {
         if (connector.getConnectorClientConfig() != null) {
@@ -77,5 +81,17 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         return new ThreadedActionListener<>(logger, getClient().threadPool(), "opensearch_ml_predict_remote", actionListener, false);
+    }
+
+    /**
+     * Closes the underlying HTTP client. Safe to call concurrently — NettyNioAsyncHttpClient.close()
+     * gracefully drains in-flight requests before shutting down the event loop group.
+     */
+    @Override
+    public void close() {
+        SdkAsyncHttpClient client = httpClientRef.getAndSet(null);
+        if (client != null) {
+            client.close();
+        }
     }
 }

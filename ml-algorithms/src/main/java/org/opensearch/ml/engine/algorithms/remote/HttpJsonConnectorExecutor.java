@@ -19,7 +19,6 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -78,8 +77,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private MLGuard mlGuard;
     @Setter
     private volatile boolean connectorPrivateIpEnabled;
-
-    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     @Setter
     @Getter
@@ -223,17 +220,5 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 );
         }
         return httpClientRef.get();
-    }
-
-    /**
-     * Closes the underlying HTTP client. Safe to call concurrently — NettyNioAsyncHttpClient.close()
-     * gracefully drains in-flight requests before shutting down the event loop group.
-     */
-    @Override
-    public void close() {
-        SdkAsyncHttpClient client = httpClientRef.getAndSet(null);
-        if (client != null) {
-            client.close();
-        }
     }
 }
