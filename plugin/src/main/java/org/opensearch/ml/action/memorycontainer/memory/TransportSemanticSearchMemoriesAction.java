@@ -93,7 +93,8 @@ public class TransportSemanticSearchMemoriesAction extends HandledTransportActio
                     ownerId,
                     input.getMemoryContainerId(),
                     memoryConfig,
-                    input.getFilter()
+                    input.getFilter(),
+                    input.getK()
                 );
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();

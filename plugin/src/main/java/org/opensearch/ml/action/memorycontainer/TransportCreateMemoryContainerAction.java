@@ -227,7 +227,7 @@ public class TransportCreateMemoryContainerAction extends
             createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
                 if (!configuration.isDisableHistory()) {
                     mlIndicesHandler
-                        .createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success3 -> {
+                        .createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
                             listener.onResponse(longTermMemoryIndexName);
                         }, listener::onFailure));
                 } else {

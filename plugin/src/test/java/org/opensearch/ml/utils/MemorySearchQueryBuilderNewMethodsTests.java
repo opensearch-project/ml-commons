@@ -41,7 +41,7 @@ public class MemorySearchQueryBuilderNewMethodsTests {
     @Test
     public void testBuildSemanticSearchQuery_TextEmbedding() {
         QueryBuilder query = MemorySearchQueryBuilder
-            .buildSemanticSearchQuery("test query", null, null, null, "container-1", textEmbeddingConfig(), null);
+            .buildSemanticSearchQuery("test query", null, null, null, "container-1", textEmbeddingConfig(), null, 10);
         assertNotNull(query);
         // bool query with wrapperQuery must + container filter
         String json = query.toString();
@@ -52,7 +52,7 @@ public class MemorySearchQueryBuilderNewMethodsTests {
     @Test
     public void testBuildSemanticSearchQuery_SparseEncoding() {
         QueryBuilder query = MemorySearchQueryBuilder
-            .buildSemanticSearchQuery("test query", null, null, null, "container-1", sparseEncodingConfig(), null);
+            .buildSemanticSearchQuery("test query", null, null, null, "container-1", sparseEncodingConfig(), null, 10);
         assertNotNull(query);
         String json = query.toString();
         assertTrue(json.contains("container-1"));
@@ -61,7 +61,7 @@ public class MemorySearchQueryBuilderNewMethodsTests {
     @Test
     public void testBuildSemanticSearchQuery_WithNamespace() {
         QueryBuilder query = MemorySearchQueryBuilder
-            .buildSemanticSearchQuery("test", Map.of("user_id", "alice"), null, null, "c1", textEmbeddingConfig(), null);
+            .buildSemanticSearchQuery("test", Map.of("user_id", "alice"), null, null, "c1", textEmbeddingConfig(), null, 10);
         String json = query.toString();
         assertTrue(json.contains("namespace.user_id"));
         assertTrue(json.contains("alice"));
@@ -70,7 +70,7 @@ public class MemorySearchQueryBuilderNewMethodsTests {
     @Test
     public void testBuildSemanticSearchQuery_WithTags() {
         QueryBuilder query = MemorySearchQueryBuilder
-            .buildSemanticSearchQuery("test", null, Map.of("topic", "food"), null, "c1", textEmbeddingConfig(), null);
+            .buildSemanticSearchQuery("test", null, Map.of("topic", "food"), null, "c1", textEmbeddingConfig(), null, 10);
         String json = query.toString();
         assertTrue(json.contains("tags.topic"));
         assertTrue(json.contains("food"));
@@ -79,7 +79,7 @@ public class MemorySearchQueryBuilderNewMethodsTests {
     @Test
     public void testBuildSemanticSearchQuery_WithOwner() {
         QueryBuilder query = MemorySearchQueryBuilder
-            .buildSemanticSearchQuery("test", null, null, "admin", "c1", textEmbeddingConfig(), null);
+            .buildSemanticSearchQuery("test", null, null, "admin", "c1", textEmbeddingConfig(), null, 10);
         String json = query.toString();
         assertTrue(json.contains("owner_id"));
         assertTrue(json.contains("admin"));
@@ -88,7 +88,16 @@ public class MemorySearchQueryBuilderNewMethodsTests {
     @Test
     public void testBuildSemanticSearchQuery_AllFilters() {
         QueryBuilder query = MemorySearchQueryBuilder
-            .buildSemanticSearchQuery("test", Map.of("user_id", "bob"), Map.of("topic", "dev"), "admin", "c1", textEmbeddingConfig(), null);
+            .buildSemanticSearchQuery(
+                "test",
+                Map.of("user_id", "bob"),
+                Map.of("topic", "dev"),
+                "admin",
+                "c1",
+                textEmbeddingConfig(),
+                null,
+                10
+            );
         String json = query.toString();
         assertTrue(json.contains("namespace.user_id"));
         assertTrue(json.contains("tags.topic"));
@@ -129,7 +138,8 @@ public class MemorySearchQueryBuilderNewMethodsTests {
 
     @Test
     public void testBuildHybridSearchQueryString_TextEmbedding() {
-        String query = MemorySearchQueryBuilder.buildHybridSearchQueryString("test query", textEmbeddingConfig());
+        String query = MemorySearchQueryBuilder
+            .buildHybridSearchQueryString("test query", textEmbeddingConfig(), 10, null, null, null, null, null);
         assertTrue(query.contains("hybrid"));
         assertTrue(query.contains("match"));
         assertTrue(query.contains("neural"));
@@ -141,7 +151,8 @@ public class MemorySearchQueryBuilderNewMethodsTests {
 
     @Test
     public void testBuildHybridSearchQueryString_SparseEncoding() {
-        String query = MemorySearchQueryBuilder.buildHybridSearchQueryString("test query", sparseEncodingConfig());
+        String query = MemorySearchQueryBuilder
+            .buildHybridSearchQueryString("test query", sparseEncodingConfig(), 10, null, null, null, null, null);
         assertTrue(query.contains("hybrid"));
         assertTrue(query.contains("match"));
         assertTrue(query.contains("neural_sparse"));
@@ -150,7 +161,8 @@ public class MemorySearchQueryBuilderNewMethodsTests {
 
     @Test
     public void testBuildHybridSearchQueryString_EscapesSpecialChars() {
-        String query = MemorySearchQueryBuilder.buildHybridSearchQueryString("test \"with quotes\"", textEmbeddingConfig());
+        String query = MemorySearchQueryBuilder
+            .buildHybridSearchQueryString("test \"with quotes\"", textEmbeddingConfig(), 10, null, null, null, null, null);
         assertTrue(query.contains("test \\\"with quotes\\\""));
     }
 
@@ -158,7 +170,7 @@ public class MemorySearchQueryBuilderNewMethodsTests {
     public void testBuildSemanticSearchQuery_NullConfig_Throws() {
         assertThrows(
             IllegalStateException.class,
-            () -> MemorySearchQueryBuilder.buildSemanticSearchQuery("test", null, null, null, "c1", null, null)
+            () -> MemorySearchQueryBuilder.buildSemanticSearchQuery("test", null, null, null, "c1", null, null, 10)
         );
     }
 
@@ -167,26 +179,32 @@ public class MemorySearchQueryBuilderNewMethodsTests {
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
         assertThrows(
             IllegalStateException.class,
-            () -> MemorySearchQueryBuilder.buildSemanticSearchQuery("test", null, null, null, "c1", config, null)
+            () -> MemorySearchQueryBuilder.buildSemanticSearchQuery("test", null, null, null, "c1", config, null, 10)
         );
     }
 
     @Test
     public void testBuildHybridSearchQueryString_NullConfig_Throws() {
-        assertThrows(IllegalStateException.class, () -> MemorySearchQueryBuilder.buildHybridSearchQueryString("test", null));
+        assertThrows(
+            IllegalStateException.class,
+            () -> MemorySearchQueryBuilder.buildHybridSearchQueryString("test", null, 10, null, null, null, null, null)
+        );
     }
 
     @Test
     public void testBuildHybridSearchQueryString_NullEmbeddingType_Throws() {
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
-        assertThrows(IllegalStateException.class, () -> MemorySearchQueryBuilder.buildHybridSearchQueryString("test", config));
+        assertThrows(
+            IllegalStateException.class,
+            () -> MemorySearchQueryBuilder.buildHybridSearchQueryString("test", config, 10, null, null, null, null, null)
+        );
     }
 
     @Test
     public void testBuildSemanticSearchQuery_WithFilter() {
         QueryBuilder filter = QueryBuilders.termQuery("strategy_type", "SEMANTIC");
         QueryBuilder query = MemorySearchQueryBuilder
-            .buildSemanticSearchQuery("test", null, null, null, "c1", textEmbeddingConfig(), filter);
+            .buildSemanticSearchQuery("test", null, null, null, "c1", textEmbeddingConfig(), filter, 10);
         assertTrue(query.toString().contains("strategy_type"));
     }
 
@@ -206,7 +224,8 @@ public class MemorySearchQueryBuilderNewMethodsTests {
 
     @Test
     public void testAddFilters_NullOwnerAndContainer() {
-        QueryBuilder query = MemorySearchQueryBuilder.buildSemanticSearchQuery("test", null, null, null, null, textEmbeddingConfig(), null);
+        QueryBuilder query = MemorySearchQueryBuilder
+            .buildSemanticSearchQuery("test", null, null, null, null, textEmbeddingConfig(), null, 10);
         // Should not throw, just no owner/container filters
         assertNotNull(query);
     }

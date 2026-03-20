@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.commons.text.StringEscapeUtils;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
@@ -193,7 +194,8 @@ public class MemorySearchQueryBuilder {
         String ownerId,
         String memoryContainerId,
         MemoryConfiguration memoryConfig,
-        QueryBuilder filter
+        QueryBuilder filter,
+        int k
     ) {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 
@@ -213,6 +215,7 @@ public class MemorySearchQueryBuilder {
                 .startObject(MEMORY_EMBEDDING_FIELD)
                 .field("query_text", query)
                 .field("model_id", memoryConfig.getEmbeddingModelId())
+                .field("k", k)
                 .endObject()
                 .endObject()
                 .endObject()
@@ -250,9 +253,18 @@ public class MemorySearchQueryBuilder {
     }
 
     /**
-     * Builds a hybrid query JSON string combining match + neural for use with wrapperQuery.
+     * Builds a hybrid query JSON string combining match + neural with inline filter for use with wrapperQuery.
      */
-    public static String buildHybridSearchQueryString(String query, MemoryConfiguration memoryConfig) {
+    public static String buildHybridSearchQueryString(
+        String query,
+        MemoryConfiguration memoryConfig,
+        int k,
+        Map<String, String> namespace,
+        Map<String, String> tags,
+        String ownerId,
+        String memoryContainerId,
+        QueryBuilder filter
+    ) {
         if (memoryConfig == null || memoryConfig.getEmbeddingModelType() == null) {
             throw new IllegalStateException("Embedding model type is required for hybrid search");
         }
@@ -261,8 +273,17 @@ public class MemorySearchQueryBuilder {
             throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
         }
         String queryType = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING ? "neural" : "neural_sparse";
+
+        // Build the filter bool query for hybrid.filter
+        BoolQueryBuilder filterQuery = QueryBuilders.boolQuery();
+        addFilters(filterQuery, namespace, tags, ownerId, memoryContainerId);
+        if (filter != null) {
+            filterQuery.filter(filter);
+        }
+        boolean hasFilters = !filterQuery.filter().isEmpty();
+
         try {
-            return XContentBuilder
+            XContentBuilder builder = XContentBuilder
                 .builder(jsonXContent)
                 .startObject()
                 .startObject("hybrid")
@@ -277,13 +298,19 @@ public class MemorySearchQueryBuilder {
                 .startObject(MEMORY_EMBEDDING_FIELD)
                 .field("query_text", query)
                 .field("model_id", memoryConfig.getEmbeddingModelId())
+                .field("k", k)
                 .endObject()
                 .endObject()
                 .endObject()
-                .endArray()
-                .endObject()
-                .endObject()
-                .toString();
+                .endArray();
+
+            // Add filter inside hybrid query (not post_filter)
+            if (hasFilters) {
+                builder.field("filter");
+                filterQuery.toXContent(builder, ToXContent.EMPTY_PARAMS);
+            }
+
+            return builder.endObject().endObject().toString();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to build hybrid search query", e);
         }

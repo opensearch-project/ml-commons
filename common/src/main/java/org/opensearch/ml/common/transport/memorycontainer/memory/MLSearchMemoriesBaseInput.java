@@ -47,6 +47,9 @@ public abstract class MLSearchMemoriesBaseInput implements ToXContentObject, Wri
         if (query == null || query.isBlank()) {
             throw new IllegalArgumentException("query cannot be null or blank");
         }
+        if (k < 1 || k > 10000) {
+            throw new IllegalArgumentException("k must be between 1 and 10000");
+        }
         this.memoryContainerId = memoryContainerId;
         this.query = query;
         this.k = k;

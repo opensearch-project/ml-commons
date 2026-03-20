@@ -21,8 +21,6 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
@@ -84,6 +82,9 @@ public class TransportHybridSearchMemoriesAction extends HandledTransportAction<
         }, actionListener::onFailure));
     }
 
+    // Note: tenantId is not passed to the search call because hybrid search uses client.search()
+    // directly (SearchDataObjectRequest doesn't support the pipeline parameter). Container access
+    // is already validated via tenantId in the getMemoryContainer() call in doExecute().
     private void executeHybridSearch(
         MLHybridSearchMemoriesInput input,
         MLMemoryContainer container,
@@ -94,20 +95,21 @@ public class TransportHybridSearchMemoriesAction extends HandledTransportAction<
             MemoryConfiguration memoryConfig = container.getConfiguration();
             String ownerId = MemorySearchValidationUtils.resolveOwnerId(user, memoryContainerHelper);
 
-            // Build hybrid query (match + neural) via wrapperQuery
-            String hybridQueryString = MemorySearchQueryBuilder.buildHybridSearchQueryString(input.getQuery(), memoryConfig);
-
-            // Build post_filter for namespace/tag/owner/container filtering
-            // (hybrid query cannot be wrapped in bool, so filters go in post_filter)
-            QueryBuilder postFilter = MemorySearchQueryBuilder
-                .buildPostFilter(input.getNamespace(), input.getTags(), ownerId, input.getMemoryContainerId(), input.getFilter());
+            // Build hybrid query (match + neural) with inline filter via wrapperQuery
+            String hybridQueryString = MemorySearchQueryBuilder
+                .buildHybridSearchQueryString(
+                    input.getQuery(),
+                    memoryConfig,
+                    input.getK(),
+                    input.getNamespace(),
+                    input.getTags(),
+                    ownerId,
+                    input.getMemoryContainerId(),
+                    input.getFilter()
+                );
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             searchSourceBuilder.query(QueryBuilders.wrapperQuery(hybridQueryString));
-            // Apply post_filter only when there are actual filter clauses
-            if (postFilter instanceof BoolQueryBuilder boolPostFilter && !boolPostFilter.filter().isEmpty()) {
-                searchSourceBuilder.postFilter(postFilter);
-            }
             searchSourceBuilder.size(input.getK());
             searchSourceBuilder.fetchSource(null, new String[] { "memory_embedding" });
             if (input.getMinScore() != null) {
