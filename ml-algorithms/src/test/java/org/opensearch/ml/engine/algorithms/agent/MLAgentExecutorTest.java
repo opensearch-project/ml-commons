@@ -723,6 +723,8 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_ProcessAgentInput_MessagesInput_ConversationalAgent() {
+        // V1 CONVERSATIONAL agents with unified interface do NOT support MESSAGES input
+        // Only TEXT input is supported. For MESSAGES support, use CONVERSATIONAL_V2.
         MLAgent agent = MLAgent
             .builder()
             .name("test_agent")
@@ -738,13 +740,14 @@ public class MLAgentExecutorTest {
         agentInput.setInput(Collections.singletonList(message));
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
 
-        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+        // Should throw IllegalArgumentException for MESSAGES input
+        IllegalArgumentException exception = Assert.assertThrows(IllegalArgumentException.class, () -> {
+            mlAgentExecutor.processAgentInput(agentMLInput, agent);
+        });
 
-        // Verify dataset was created with processed parameters
-        Assert.assertNotNull(agentMLInput.getInputDataset());
-        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        Assert.assertNotNull(dataset.getParameters());
-        Assert.assertTrue(dataset.getParameters().containsKey(QUESTION));
+        Assert.assertTrue(exception.getMessage().contains("V1 agents with unified agent interface only support TEXT input type"));
+        Assert.assertTrue(exception.getMessage().contains("MESSAGES"));
+        Assert.assertTrue(exception.getMessage().contains("CONVERSATIONAL_V2"));
     }
 
     public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
@@ -1130,6 +1133,13 @@ public class MLAgentExecutorTest {
 
         assertTrue(mlAgentExecutor.supportsStructuredMessages(convAgent));
         assertTrue(mlAgentExecutor.supportsStructuredMessages(aguiAgent));
+    }
+
+    @Test
+    public void test_SupportsStructuredMessages_TrueForConversationalV2() {
+        MLAgent convV2Agent = createTestAgent(MLAgentType.CONVERSATIONAL_V2.name());
+
+        assertTrue(mlAgentExecutor.supportsStructuredMessages(convV2Agent));
     }
 
     @Test

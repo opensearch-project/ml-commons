@@ -372,6 +372,29 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
      * @param json JSON string containing the OpenAI response message
      * @return a unified Message object, or null if the input cannot be parsed
      */
+    @Override
+    public String extractMessageFromResponse(Map<String, ?> responseData) {
+        if (responseData == null) {
+            return null;
+        }
+
+        Object choicesObj = responseData.get("choices");
+        if (choicesObj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<?> choicesList = (List<?>) choicesObj;
+            if (!choicesList.isEmpty() && choicesList.get(0) instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, ?> choiceMap = (Map<String, ?>) choicesList.get(0);
+                Object messageObj = choiceMap.get("message");
+                if (messageObj != null) {
+                    return StringUtils.toJson(messageObj);
+                }
+            }
+        }
+
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public Message parseToUnifiedMessage(String json) {

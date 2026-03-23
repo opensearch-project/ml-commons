@@ -100,7 +100,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
 
         // Check if this agent needs model creation
-        if (mlAgent.getModel() != null) {
+        if (mlAgent.usesUnifiedInterface()) {
             createModelAndRegisterAgent(mlAgent, listener);
             return;
         }
@@ -148,60 +148,14 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void validateAgent(MLAgent agent, ActionListener<MLAgent> listener) {
-        // Validate context management configuration
-        if (agent.hasContextManagementTemplate()) {
-            // Validate context management template access
-            String templateName = agent.getContextManagementTemplateName();
-            agentRegistrationValidator.validateContextManagementTemplateAccess(templateName, ActionListener.wrap(hasAccess -> {
-                if (Boolean.TRUE.equals(hasAccess)) {
-                    listener.onResponse(agent);
-                } else {
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException(
-                                "You don't have permission to use the context management template provided, template name: " + templateName
-                            )
-                        );
-                }
-            }, e -> {
-                log.error("You don't have permission to use the context management template provided, template name: {}", templateName, e);
-                listener.onFailure(e);
-            }));
-        } else if (agent.getInlineContextManagement() != null) {
-            // Validate inline context management configuration
-            try {
-                validateInlineContextManagement(agent);
+        // Use the comprehensive validator that includes V2 memory validation
+        agentRegistrationValidator.validateAgentForRegistration(agent, ActionListener.wrap(isValid -> {
+            if (Boolean.TRUE.equals(isValid)) {
                 listener.onResponse(agent);
-            } catch (Exception e) {
-                listener.onFailure(e);
+            } else {
+                listener.onFailure(new IllegalArgumentException("Agent validation failed"));
             }
-        } else {
-            // No context management configuration - that's fine
-            listener.onResponse(agent);
-        }
-    }
-
-    private void validateInlineContextManagement(MLAgent agent) {
-        if (agent.getInlineContextManagement() == null) {
-            log
-                .error(
-                    "You must provide context management content when creating an agent without providing context management template name!"
-                );
-            throw new IllegalArgumentException(
-                "You must provide context management content when creating an agent without context management template name!"
-            );
-        }
-
-        // Validate inline context management configuration structure
-        if (!agent.getInlineContextManagement().isValid()) {
-            log
-                .error(
-                    "Invalid context management configuration: configuration must have a name and at least one hook with valid context manager configurations"
-                );
-            throw new IllegalArgumentException(
-                "Invalid context management configuration: configuration must have a name and at least one hook with valid context manager configurations"
-            );
-        }
+        }, listener::onFailure));
     }
 
     private void proceedWithAgentRegistration(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {

@@ -431,6 +431,25 @@ public class BedrockConverseModelProvider extends ModelProvider {
      * @param json JSON string containing the Bedrock Converse response message
      * @return a unified Message object, or null if the input cannot be parsed
      */
+    @Override
+    public String extractMessageFromResponse(Map<String, ?> responseData) {
+        if (responseData == null) {
+            return null;
+        }
+
+        Object outputObj = responseData.get("output");
+        if (outputObj instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, ?> outputMap = (Map<String, ?>) outputObj;
+            Object messageObj = outputMap.get("message");
+            if (messageObj != null) {
+                return StringUtils.toJson(messageObj);
+            }
+        }
+
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public Message parseToUnifiedMessage(String json) {
