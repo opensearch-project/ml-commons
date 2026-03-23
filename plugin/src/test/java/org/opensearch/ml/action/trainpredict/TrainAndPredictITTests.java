@@ -8,7 +8,6 @@ package org.opensearch.ml.action.trainpredict;
 import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 
 import org.apache.lucene.tests.util.LuceneTestCase;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -20,16 +19,16 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
+@OpenSearchIntegTestCase.SuiteScopeTestCase
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
 public class TrainAndPredictITTests extends MLCommonsIntegTestCase {
-    private String irisIndexName;
+    private static String irisIndexName;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
+    @Override
+    public void setupSuiteScopeCluster() throws Exception {
         irisIndexName = "iris_data_for_train_and_predict_it";
         loadIrisData(irisIndexName);
     }

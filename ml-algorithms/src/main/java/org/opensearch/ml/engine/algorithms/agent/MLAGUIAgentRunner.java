@@ -5,16 +5,26 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.hooks.HookRegistry;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -76,6 +86,11 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
+        run(mlAgent, params, listener, channel, null);
+    }
+
+    @Override
+    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel, Memory memory) {
         try {
             String llmInterface = params.get(LLM_INTERFACE);
             if (llmInterface == null && mlAgent.getParameters() != null) {
@@ -88,6 +103,12 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             }
 
             params.put("agent_type", "ag_ui");
+
+            // Handle AGUI history-load: empty messages means "load previous conversation"
+            if ("true".equals(params.get(AGUI_PARAM_LOAD_CHAT_HISTORY))) {
+                handleHistoryLoad(mlAgent, params, listener, channel);
+                return;
+            }
 
             MLAgentRunner conversationalRunner = new MLChatAgentRunner(
                 client,
@@ -102,11 +123,66 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             );
 
             // Execute with streaming - events are generated in RestMLExecuteStreamAction
-            conversationalRunner.run(mlAgent, params, listener, channel);
+            conversationalRunner.run(mlAgent, params, listener, channel, memory);
 
         } catch (Exception e) {
-            log.error("Error starting AG-UI agent execution", e);
+            log
+                .error(
+                    "Error starting AG-UI agent execution. agentId={}, tenantId={}",
+                    params.get(AGENT_ID_FIELD),
+                    mlAgent.getTenantId(),
+                    e
+                );
             listener.onFailure(e);
         }
+    }
+
+    private void handleHistoryLoad(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
+        StreamingWrapper streamingWrapper = new StreamingWrapper(channel, client, params);
+
+        if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
+            // No memory configured, send empty snapshot
+            streamingWrapper.sendMessagesSnapshot(List.of(), null, listener);
+            return;
+        }
+
+        int messageHistoryLimit = getMessageHistoryLimit(params);
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
+        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
+        String appType = mlAgent.getAppType();
+        String title = params.get(MLAgentExecutor.QUESTION);
+
+        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
+        log.debug("MLAGUIAgentRunner history-load setting up memory, params: {}", sanitizeForLogging(memoryParams));
+
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
+        if (memoryParams != null && memoryParams.containsKey(ENDPOINT_FIELD)) {
+            memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+        } else {
+            memoryFactory = memoryFactoryMap.get(memoryType);
+        }
+
+        if (memoryFactory == null) {
+            listener.onFailure(new IllegalArgumentException("Memory factory not found for type: " + memoryType));
+            return;
+        }
+
+        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
+            memory.getStructuredMessages(ActionListener.wrap(allMessages -> {
+                List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
+                    ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
+                    : allMessages;
+                streamingWrapper.sendMessagesSnapshot(history, memory.getId(), listener);
+            }, e -> {
+                log
+                    .error(
+                        "Failed to load history for AGUI snapshot. agentId={}, tenantId={}",
+                        params.get(AGENT_ID_FIELD),
+                        mlAgent.getTenantId(),
+                        e
+                    );
+                listener.onFailure(e);
+            }));
+        }, listener::onFailure));
     }
 }

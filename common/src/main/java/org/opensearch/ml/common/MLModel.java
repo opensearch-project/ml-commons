@@ -934,7 +934,7 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_TYPE, modelType);
 
         if ((serviceProvider.equals(TAG_VALUE_UNKNOWN) || model.equals(TAG_VALUE_UNKNOWN)) && !url.equals(TAG_VALUE_UNKNOWN)) {
-            tags.addTag(TAG_URL, url);
+            tags = tags.addTag(TAG_URL, url);
         }
 
         return tags;
@@ -1107,7 +1107,7 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_TYPE, modelType);
 
         if (this.modelFormat != null) {
-            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
+            tags = tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
         }
 
         return tags;
@@ -1138,7 +1138,7 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_TYPE, modelType);
 
         if (this.modelFormat != null) {
-            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
+            tags = tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
         }
 
         return tags;

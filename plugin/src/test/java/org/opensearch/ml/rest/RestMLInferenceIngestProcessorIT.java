@@ -108,14 +108,19 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         + "  ]\n"
         + "}";
 
+    private static boolean initialSleepDone = false;
+
     @Before
-    public void setup() throws IOException, InterruptedException {
+    public void setup() throws Exception {
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
-        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
+        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, false);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
-        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
+        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, false);
     }
 
     public void testMLInferenceProcessorWithObjectFieldType() throws Exception {
@@ -160,7 +165,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         createPipelineProcessor(createPipelineRequestBody, "diary_embedding_pipeline");
         createIndex(index_name, createIndexRequestBody);
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         uploadDocument(index_name, "1", uploadDocumentRequestBody);
@@ -245,7 +250,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         String index_name = "book_index";
         createPipelineProcessor(createPipelineRequestBody, "embedding_pipeline");
         createIndex(index_name, createIndexRequestBody);
-        if (OPENAI_KEY == null) {
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         uploadDocument(index_name, "1", uploadDocumentRequestBody);

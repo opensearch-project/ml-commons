@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.function_calling;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 
 /**
@@ -47,5 +48,16 @@ public interface FunctionCalling {
      */
     default Map<String, ?> filterToFirstToolCall(Map<String, ?> dataAsMap, Map<String, String> parameters) {
         return dataAsMap;
+    }
+
+    /**
+     * Extracts token usage information from the LLM response.
+     * Each implementation knows its own response format and field names.
+     *
+     * @param llmResponseDataAsMap the full LLM response data map
+     * @return TokenUsage object with token counts, or null if extraction fails or is not supported
+     */
+    default TokenUsage extractTokenUsage(Map<String, ?> llmResponseDataAsMap) {
+        return null; // Default: no token tracking
     }
 }

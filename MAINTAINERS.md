@@ -14,6 +14,7 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | Sicheng Song         | [b4sjoo](https://github.com/b4sjoo)                 | Amazon    |
 | Mingshi Liu          | [mingshl](https://github.com/mingshl)               | Amazon    |
 | Pavan Yekbote        | [pyek-bot](https://github.com/pyek-bot)             | Amazon    |
+| Rithin Pullela       | [rithin-pullela-aws](https://github.com/rithin-pullela-aws)             | Amazon    |
 | Xinyuan Lu           | [xinyual](https://github.com/xinyual)               | Amazon    |
 | Xun Zhang            | [Zhangxunmt](https://github.com/Zhangxunmt)         | Amazon    |
 | Yaliang Wu           | [ylwu-amzn](https://github.com/ylwu-amzn)           | Amazon    |

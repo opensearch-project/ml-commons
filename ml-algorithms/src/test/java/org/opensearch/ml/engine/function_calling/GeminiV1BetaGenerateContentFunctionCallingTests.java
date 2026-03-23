@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.function_calling;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
@@ -22,6 +22,7 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -51,7 +52,7 @@ public class GeminiV1BetaGenerateContentFunctionCallingTests {
     public void configure() {
         Map<String, String> parameters = new HashMap<>();
         functionCalling.configure(parameters);
-        Assert.assertEquals(15, parameters.size());
+        Assert.assertEquals(16, parameters.size()); // Updated for token_usage_path
         Assert.assertEquals(GEMINI_TOOL_TEMPLATE, parameters.get("tool_template"));
     }
 
@@ -178,5 +179,54 @@ public class GeminiV1BetaGenerateContentFunctionCallingTests {
         assertEquals(2, resultParts.size());
         assertEquals("Some text", ((Map<?, ?>) resultParts.get(0)).get("text"));
         assertEquals("tool1", ((Map<?, ?>) ((Map<?, ?>) resultParts.get(1)).get("functionCall")).get("name"));
+    }
+
+    @Test
+    public void extractTokenUsage_allFields() {
+        Map<String, Object> usageMap = new HashMap<>();
+        usageMap.put("promptTokenCount", 100);
+        usageMap.put("candidatesTokenCount", 50);
+        usageMap.put("totalTokenCount", 150);
+        usageMap.put("cachedContentInputTokenCount", 10);
+        usageMap.put("thoughtsTokenCount", 5);
+        Map<String, Object> response = new HashMap<>();
+        response.put("usageMetadata", usageMap);
+
+        TokenUsage result = functionCalling.extractTokenUsage(response);
+
+        Assert.assertNotNull(result);
+        Assert.assertEquals(Long.valueOf(100), result.getInputTokens());
+        Assert.assertEquals(Long.valueOf(50), result.getOutputTokens());
+        Assert.assertEquals(Long.valueOf(150), result.getTotalTokens());
+        Assert.assertEquals(Long.valueOf(10), result.getCacheReadInputTokens());
+        Assert.assertEquals(Long.valueOf(5), result.getReasoningTokens());
+    }
+
+    @Test
+    public void extractTokenUsage_nullInput() {
+        Assert.assertNull(functionCalling.extractTokenUsage(null));
+    }
+
+    @Test
+    public void extractTokenUsage_missingUsageMetadataKey() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("other", "data")));
+    }
+
+    @Test
+    public void extractTokenUsage_usageMetadataNotMap() {
+        Assert.assertNull(functionCalling.extractTokenUsage(Map.of("usageMetadata", "not_a_map")));
+    }
+
+    @Test
+    public void extractTokenUsage_exceptionDuringExtraction() {
+        Map<String, Object> badUsageMap = new HashMap<>() {
+            @Override
+            public Object get(Object key) {
+                throw new RuntimeException("Simulated error");
+            }
+        };
+        Map<String, Object> response = new HashMap<>();
+        response.put("usageMetadata", badUsageMap);
+        Assert.assertNull(functionCalling.extractTokenUsage(response));
     }
 }

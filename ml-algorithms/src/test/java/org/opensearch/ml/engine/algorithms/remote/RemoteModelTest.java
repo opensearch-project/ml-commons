@@ -8,7 +8,10 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -21,7 +24,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -45,12 +47,16 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 
 import com.google.common.collect.ImmutableMap;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class RemoteModelTest extends MLStaticMockBase {
 
     @Mock
@@ -78,7 +84,11 @@ public class RemoteModelTest extends MLStaticMockBase {
         remoteModel = new RemoteModel();
 
         encryptor = mock(Encryptor.class);
-        when(encryptor.decrypt(any(), any())).thenReturn("test_api_key");
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("test_api_key");
+            return null;
+        }).when(encryptor).decrypt(any(), any(), isA(ActionListener.class));
         when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(true));
     }
 
@@ -131,17 +141,15 @@ public class RemoteModelTest extends MLStaticMockBase {
     private void asyncPredict_ModelDeployed_WrongInput(String expExceptionMessage) {
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
-        boolean initModelResult = remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
-        assertTrue(initModelResult);
-        ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
-        remoteModel.asyncPredict(mlInput, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assert argumentCaptor.getValue() instanceof RuntimeException;
-        assertEquals(expExceptionMessage, argumentCaptor.getValue().getMessage());
+        ActionListener<Predictable> listener = createPredictableListener(() -> {
+            ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
+            remoteModel.asyncPredict(mlInput, actionListener);
+            ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+            verify(actionListener).onFailure(argumentCaptor.capture());
+            assert argumentCaptor.getValue() instanceof RuntimeException;
+            assertEquals(expExceptionMessage, argumentCaptor.getValue().getMessage());
+        });
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
     }
 
     @Test
@@ -178,26 +186,25 @@ public class RemoteModelTest extends MLStaticMockBase {
             loader
                 .when(() -> MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class))
                 .thenReturn(remoteConnectorExecutor);
-            remoteModel
-                .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-                .toCompletableFuture()
-                .join();
-            remoteModel.asyncPredict(mlInput, actionListener, channel);
-            ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-            verify(actionListener).onFailure(argumentCaptor.capture());
-            assert expExceptionClass.isInstance(argumentCaptor.getValue());
-            assertEquals(expExceptionMessage, argumentCaptor.getValue().getMessage());
+            ActionListener<Predictable> listener = createPredictableListener(() -> {
+                remoteModel.asyncPredict(mlInput, actionListener, channel);
+                ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+                verify(actionListener).onFailure(argumentCaptor.capture());
+                assert expExceptionClass.isInstance(argumentCaptor.getValue());
+                assertEquals(expExceptionMessage, argumentCaptor.getValue().getMessage());
+            });
+            remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
         }
     }
 
     @Test
     public void initModelAsync_Failure_With_RuntimeException() {
-        initModelAsync_Failure_With_Throwable(new IllegalArgumentException("Tag mismatch!"), CompletionException.class, "Tag mismatch!");
+        initModelAsync_Failure_With_Throwable(new IllegalArgumentException("Tag mismatch!"), MLException.class, "Tag mismatch!");
     }
 
     @Test
     public void initModelAsync_Failure_With_Throwable() {
-        initModelAsync_Failure_With_Throwable(new Error("Decryption Error!"), CompletionException.class, "Decryption Error!");
+        initModelAsync_Failure_With_Throwable(new Error("Decryption Error!"), MLException.class, "Decryption Error!");
     }
 
     private void initModelAsync_Failure_With_Throwable(
@@ -205,46 +212,44 @@ public class RemoteModelTest extends MLStaticMockBase {
         Class<? extends Throwable> expExcepClass,
         String expExceptionMessage
     ) {
-        exceptionRule.expect(expExcepClass);
-        exceptionRule.expectMessage(expExceptionMessage);
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        doThrow(actualException).when(encryptor).decrypt(any(), any());
-        remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
+        doThrow(actualException).when(encryptor).decrypt(any(), any(), isA(ActionListener.class));
+        ActionListener<Predictable> listener = mock(ActionListener.class);
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assert expExcepClass.isInstance(argumentCaptor.getValue());
+        assertTrue(argumentCaptor.getValue().getMessage().contains(expExceptionMessage));
     }
 
     @Test
     public void initModelAsync_NullHeader() {
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
-        Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
-        assertNull(decryptedHeaders);
+        ActionListener<Predictable> listener = createPredictableListener(() -> {
+            Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
+            assertNull(decryptedHeaders);
+        });
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
     }
 
     @Test
     public void initModelAsync_WithHeader() {
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
-        Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
-        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
-        Assert.assertNotNull(executor);
-        assertNull(decryptedHeaders);
-        Assert.assertNotNull(executor.getConnector().getDecryptedHeaders());
-        assertEquals(1, executor.getConnector().getDecryptedHeaders().size());
-        assertEquals("Bearer test_api_key", executor.getConnector().getDecryptedHeaders().get("Authorization"));
-        remoteModel.close();
-        assertNull(remoteModel.getConnectorExecutor());
+        ActionListener<Predictable> listener = createPredictableListener(() -> {
+            Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
+            RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+            Assert.assertNotNull(executor);
+            assertNull(decryptedHeaders);
+            Assert.assertNotNull(executor.getConnector().getDecryptedHeaders());
+            assertEquals(1, executor.getConnector().getDecryptedHeaders().size());
+            assertEquals("Bearer test_api_key", executor.getConnector().getDecryptedHeaders().get("Authorization"));
+            remoteModel.close();
+            assertNull(remoteModel.getConnectorExecutor());
+        });
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
     }
 
     @Test
@@ -252,14 +257,13 @@ public class RemoteModelTest extends MLStaticMockBase {
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
         when(mlModel.getTenantId()).thenReturn("tenantId");
-        remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
-        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
-        remoteModel.close();
-        assertNull(connector.getTenantId());
-        assertEquals("tenantId", executor.getConnector().getTenantId());
+        ActionListener<Predictable> listener = createPredictableListener(() -> {
+            RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+            remoteModel.close();
+            assertNull(connector.getTenantId());
+            assertEquals("tenantId", executor.getConnector().getTenantId());
+        });
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
     }
 
     @Test
@@ -267,13 +271,12 @@ public class RemoteModelTest extends MLStaticMockBase {
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
         when(mlModel.getTenantId()).thenReturn(null);
-        remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
-        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
-        assertNull(connector.getTenantId());
-        assertNull(executor.getConnector().getTenantId());
+        ActionListener<Predictable> listener = createPredictableListener(() -> {
+            RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+            assertNull(connector.getTenantId());
+            assertNull(executor.getConnector().getTenantId());
+        });
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
     }
 
     @Test
@@ -282,13 +285,12 @@ public class RemoteModelTest extends MLStaticMockBase {
         connector.setTenantId("connectorTenantId");
         when(mlModel.getConnector()).thenReturn(connector);
         when(mlModel.getTenantId()).thenReturn(null);
-        remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
-        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
-        assertEquals("connectorTenantId", connector.getTenantId());
-        assertEquals("connectorTenantId", executor.getConnector().getTenantId());
+        ActionListener<Predictable> listener = createPredictableListener(() -> {
+            RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+            assertEquals("connectorTenantId", connector.getTenantId());
+            assertEquals("connectorTenantId", executor.getConnector().getTenantId());
+        });
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
     }
 
     @Test
@@ -297,13 +299,12 @@ public class RemoteModelTest extends MLStaticMockBase {
         connector.setTenantId("connectorTenantId");
         when(mlModel.getConnector()).thenReturn(connector);
         when(mlModel.getTenantId()).thenReturn("modelTenantId");
-        remoteModel
-            .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
-            .toCompletableFuture()
-            .join();
-        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
-        assertEquals("connectorTenantId", connector.getTenantId());
-        assertEquals("connectorTenantId", executor.getConnector().getTenantId());
+        ActionListener<Predictable> listener = createPredictableListener(() -> {
+            RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+            assertEquals("connectorTenantId", connector.getTenantId());
+            assertEquals("connectorTenantId", executor.getConnector().getTenantId());
+        });
+        remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
     }
 
     private Connector createConnector(Map<String, String> headers) {
@@ -324,6 +325,11 @@ public class RemoteModelTest extends MLStaticMockBase {
             .actions(Arrays.asList(predictAction))
             .build();
         return connector;
+    }
+
+    private ActionListener<Predictable> createPredictableListener(Runnable runnable) {
+        ActionListener<Predictable> listener = ActionListener.wrap(r -> { runnable.run(); }, e -> { fail("Failed to init remote model"); });
+        return listener;
     }
 
 }

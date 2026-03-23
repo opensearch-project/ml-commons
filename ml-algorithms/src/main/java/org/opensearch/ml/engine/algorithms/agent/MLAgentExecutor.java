@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
@@ -15,6 +16,8 @@ import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
@@ -22,14 +25,16 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REM
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatusCode;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.NEW_CHAT_HISTORY;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -60,6 +65,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManager;
 import org.opensearch.ml.common.contextmanager.ContextManagerHookProvider;
@@ -104,6 +110,8 @@ import org.opensearch.transport.client.Client;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -122,6 +130,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final String ERROR_MESSAGE = "error_message";
     public static final String CONTEXT_MANAGEMENT_PROCESSED = "context_management_processed";
+    public static final String USES_UNIFIED_INTERFACE = "uses_unified_interface";
 
     private Client client;
     private SdkClient sdkClient;
@@ -208,10 +217,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                             if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
-                                log.error("Failed to get Agent index", cause);
+                                log.error("Failed to get Agent index. agentId={}, tenantId={}", agentId, tenantId, cause);
                                 listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                             } else {
-                                log.error("Failed to get ML Agent {}", agentId, cause);
+                                log.error("Failed to get ML Agent. agentId={}, tenantId={}", agentId, tenantId, cause);
                                 listener.onFailure(cause);
                             }
                         } else {
@@ -251,6 +260,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
                                             .getInputDataset();
                                         Map<String, String> requestParameters = inputDataSet.getParameters();
+
+                                        // Add agentId to parameters for logging in agent runners
+                                        inputDataSet.getParameters().put(AGENT_ID_FIELD, agentId);
 
                                         mlAgent = applyMemoryContainerOverride(mlAgent, inputDataSet, agentId);
                                         final MLAgent finalMlAgent = mlAgent;
@@ -363,7 +375,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                     agentMLInput
                                                                 );
                                                             }, e -> {
-                                                                log.error("Failed to get existing interaction for regeneration", e);
+                                                                log
+                                                                    .error(
+                                                                        "Failed to get existing interaction for regeneration. agentId={}, tenantId={}",
+                                                                        agentId,
+                                                                        tenantId,
+                                                                        e
+                                                                    );
                                                                 listener.onFailure(e);
                                                             })
                                                         );
@@ -384,7 +402,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     );
                                                 }
                                             }, ex -> {
-                                                log.error("Failed to read conversation memory", ex);
+                                                log
+                                                    .error(
+                                                        "Failed to read conversation memory. agentId={}, tenantId={}",
+                                                        agentId,
+                                                        tenantId,
+                                                        ex
+                                                    );
                                                 listener.onFailure(ex);
                                             }));
                                         } else {
@@ -434,10 +458,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         listener,
                                                                         createdMemory,
                                                                         channel,
-                                                                        hookRegistry
+                                                                        hookRegistry,
+                                                                        null
                                                                     ),
                                                                     ex -> {
-                                                                        log.error("Failed to find memory with memory_id: {}", memoryId, ex);
+                                                                        log
+                                                                            .error(
+                                                                                "Failed to find memory with memory_id: {}. agentId={}, tenantId={}",
+                                                                                memoryId,
+                                                                                agentId,
+                                                                                tenantId,
+                                                                                ex
+                                                                            );
                                                                         listener.onFailure(ex);
                                                                     }
                                                                 )
@@ -457,11 +489,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 listener,
                                                 null,
                                                 channel,
-                                                hookRegistry
+                                                hookRegistry,
+                                                null
                                             );
                                         }
                                     } catch (Exception e) {
-                                        log.error("Failed to parse ml agent {}", agentId, e);
+                                        log.error("Failed to parse ml agent. agentId={}, tenantId={}", agentId, tenantId, e);
                                         listener.onFailure(e);
                                     }
                                 } else {
@@ -474,7 +507,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         );
                                 }
                             } catch (Exception e) {
-                                log.error("Failed to get agent", e);
+                                log.error("Failed to get agent. agentId={}, tenantId={}", agentId, tenantId, e);
                                 listener.onFailure(e);
                             }
                         }
@@ -512,55 +545,70 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String question = inputDataSet.getParameters().get(QUESTION);
         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
 
-        // Store message pairs if input is of type MESSAGES, then create parent interaction
-        if (agentMLInput.getAgentInput() != null && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES) {
-            storeMessagesInMemory(
-                memory,
-                (List<Message>) agentMLInput.getAgentInput().getInput(),
-                appType,
-                ActionListener
-                    .<Void>wrap(
-                        v -> createParentInteractionAndExecute(
-                            tenantId,
-                            memory,
-                            appType,
-                            question,
-                            regenerateInteractionId,
-                            inputDataSet,
-                            mlTask,
-                            isAsync,
-                            mlAgent,
-                            outputs,
-                            modelTensors,
-                            listener,
-                            channel,
-                            hookRegistry
-                        ),
-                        ex -> {
-                            log.error("Failed to store message pairs in memory", ex);
-                            listener.onFailure(ex);
-                        }
-                    )
-            );
-        } else {
-            // No messages to store, proceed directly to create parent interaction
-            createParentInteractionAndExecute(
-                tenantId,
-                memory,
-                appType,
-                question,
-                regenerateInteractionId,
+        // Convert all unified interface input types to List<Message>
+        List<Message> inputMessages = null;
+        if (agentMLInput.getAgentInput() != null) {
+            InputType inputType = agentMLInput.getAgentInput().getInputType();
+            switch (inputType) {
+                case MESSAGES:
+                    @SuppressWarnings("unchecked")
+                    List<Message> messages = (List<Message>) agentMLInput.getAgentInput().getInput();
+                    inputMessages = messages;
+                    break;
+                case CONTENT_BLOCKS:
+                    @SuppressWarnings("unchecked")
+                    List<ContentBlock> blocks = (List<ContentBlock>) agentMLInput.getAgentInput().getInput();
+                    inputMessages = List.of(new Message("user", blocks));
+                    break;
+                case TEXT:
+                    String text = (String) agentMLInput.getAgentInput().getInput();
+                    ContentBlock textBlock = new ContentBlock();
+                    textBlock.setType(ContentType.TEXT);
+                    textBlock.setText(text);
+                    inputMessages = List.of(new Message("user", List.of(textBlock)));
+                    break;
+            }
+        }
+
+        // For unified interface requests with structured message support, or AGUI history-load,
+        // skip parent interaction creation. The pair-based memory format handles ordering internally.
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+        if ((inputMessages != null && supportsStructuredMessages(mlAgent)) || (agentType == MLAgentType.AG_UI && inputMessages == null)) {
+            executeAgent(
                 inputDataSet,
+                tenantId,
                 mlTask,
                 isAsync,
+                memory.getId(),
                 mlAgent,
                 outputs,
                 modelTensors,
                 listener,
+                memory,
                 channel,
-                hookRegistry
+                hookRegistry,
+                inputMessages
             );
+            return;
         }
+
+        createParentInteractionAndExecute(
+            tenantId,
+            memory,
+            appType,
+            question,
+            regenerateInteractionId,
+            inputDataSet,
+            mlTask,
+            isAsync,
+            mlAgent,
+            outputs,
+            modelTensors,
+            listener,
+            channel,
+            hookRegistry,
+            inputMessages
+        );
     }
 
     /**
@@ -580,7 +628,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener,
         TransportChannel channel,
-        HookRegistry hookRegistry
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
     ) {
         // Create root interaction ID for the current question
         ConversationIndexMessage msg = ConversationIndexMessage
@@ -613,10 +662,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     listener,
                                     memory,
                                     channel,
-                                    hookRegistry
+                                    hookRegistry,
+                                    inputMessages
                                 ),
                                 e -> {
-                                    log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
+                                    log
+                                        .error(
+                                            "Failed to regenerate for interaction {}. agentId={}, tenantId={}",
+                                            regenerateInteractionId,
+                                            inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                                            tenantId,
+                                            e
+                                        );
                                     listener.onFailure(e);
                                 }
                             )
@@ -634,11 +691,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     listener,
                     memory,
                     channel,
-                    hookRegistry
+                    hookRegistry,
+                    inputMessages
                 );
             }
         }, ex -> {
-            log.error("Failed to create parent interaction", ex);
+            log
+                .error(
+                    "Failed to create parent interaction. agentId={}, tenantId={}",
+                    inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                    tenantId,
+                    ex
+                );
             listener.onFailure(ex);
         }));
     }
@@ -653,6 +717,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      */
     private void processContextManagement(MLAgent mlAgent, HookRegistry hookRegistry, RemoteInferenceInputDataSet inputDataSet) {
         try {
+            // Check if context management was already processed (by MLExecuteTaskRunner for runtime overrides)
+            String contextManagementProcessed = inputDataSet.getParameters().get(CONTEXT_MANAGEMENT_PROCESSED);
+            if ("true".equals(contextManagementProcessed)) {
+                log.info("Context management already processed by MLExecuteTaskRunner, skipping agent's stored config");
+                return;
+            }
+
             // Check if context_management is already specified in runtime parameters
             String runtimeContextManagement = inputDataSet.getParameters().get(CONTEXT_MANAGEMENT_NAME_FIELD);
             if (runtimeContextManagement != null && !runtimeContextManagement.trim().isEmpty()) {
@@ -723,155 +794,81 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    @VisibleForTesting
-    void storeMessagesInMemory(Memory memory, List<Message> messages, String appType, ActionListener<Void> listener) {
-        // Parse backwards to extract historical conversation pairs, skipping trailing user messages
-        // (which will be stored later with the agent's response)
-        List<ConversationIndexMessage> messagePairs = new ArrayList<>();
-        StringBuilder userTextBuilder = new StringBuilder();
-        StringBuilder assistantTextBuilder = new StringBuilder();
-        boolean skippingTrailingUsers = true;
-        String currentRole = null;
-
-        // Process messages backwards
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message message = messages.get(i);
-
-            if (message == null || message.getRole() == null) {
-                continue;
-            }
-
-            String role = message.getRole().toLowerCase();
-
-            // Skip non-user/assistant roles
-            if (!role.equals("user") && !role.equals("assistant")) {
-                continue;
-            }
-
-            // Skip trailing user messages (they'll be stored with agent's response)
-            if (skippingTrailingUsers && role.equals("user")) {
-                continue;
-            }
-
-            // Once we hit an assistant, stop skipping
-            if (skippingTrailingUsers && role.equals("assistant")) {
-                skippingTrailingUsers = false;
-                log.info("Stopped skipping at assistant message at index {}", i);
-            }
-
-            // Detect role change from user to assistant (going backwards)
-            if (currentRole != null && currentRole.equals("user") && role.equals("assistant")) {
-                // Save the accumulated pair
-                String userText = userTextBuilder.toString().trim();
-                String assistantText = assistantTextBuilder.toString().trim();
-
-                if (!userText.isEmpty() && !assistantText.isEmpty()) {
-                    ConversationIndexMessage msg = ConversationIndexMessage
-                        .conversationIndexMessageBuilder()
-                        .type(appType)
-                        .question(userText)
-                        .response(assistantText)
-                        .finalAnswer(true)
-                        .sessionId(memory.getId())
-                        .build();
-
-                    messagePairs.add(msg);
-                }
-
-                // Clear buffers for next pair
-                userTextBuilder.setLength(0);
-                assistantTextBuilder.setLength(0);
-            }
-
-            // Accumulate text based on role (prepending since we're going backwards)
-            if (role.equals("user")) {
-                String text = extractTextFromMessage(message);
-                if (!text.isEmpty()) {
-                    if (userTextBuilder.length() > 0) {
-                        userTextBuilder.insert(0, "\n");
-                    }
-                    userTextBuilder.insert(0, text);
-                }
-            } else if (role.equals("assistant")) {
-                String text = extractTextFromMessage(message);
-                if (!text.isEmpty()) {
-                    if (assistantTextBuilder.length() > 0) {
-                        assistantTextBuilder.insert(0, "\n");
-                    }
-                    assistantTextBuilder.insert(0, text);
-                }
-            }
-
-            currentRole = role;
-        }
-
-        // Save any remaining pair
-        String userText = userTextBuilder.toString().trim();
-        String assistantText = assistantTextBuilder.toString().trim();
-
-        if (!userText.isEmpty() && !assistantText.isEmpty()) {
-            ConversationIndexMessage msg = ConversationIndexMessage
-                .conversationIndexMessageBuilder()
-                .type(appType)
-                .question(userText)
-                .response(assistantText)
-                .finalAnswer(true)
-                .sessionId(memory.getId())
-                .build();
-
-            messagePairs.add(msg);
-        }
-
-        // Reverse the list to maintain chronological order
-        Collections.reverse(messagePairs);
-
-        // If no pairs to save, complete immediately
-        if (messagePairs.isEmpty()) {
-            listener.onResponse(null);
-            return;
-        }
-
-        // Save all pairs to memory sequentially using iterative approach
-        saveMessagePairsSequentially(memory, messagePairs, listener);
-    }
-
     /**
-     * Iteratively saves message pairs to memory in sequence.
-     * Each save waits for the previous one to complete before proceeding.
+     * Performs initial memory operations for unified interface agents:
+     * 1. Gets structured message history
+     * 2. Saves input messages
+     * 3. Appends AGUI context if applicable
+     * 4. Formats history for the LLM
+     * 5. Invokes continuation when done
      */
     @VisibleForTesting
-    void saveMessagePairsSequentially(Memory memory, List<ConversationIndexMessage> messagePairs, ActionListener<Void> finalListener) {
-        saveNextMessagePair(memory, messagePairs, 0, finalListener);
-    }
+    void performInitialMemoryOperations(
+        Memory memory,
+        List<Message> inputMessages,
+        Map<String, String> params,
+        MLAgent mlAgent,
+        ActionListener<?> listener,
+        Runnable continuation
+    ) {
+        int messageHistoryLimit = getMessageHistoryLimit(params);
 
-    /**
-     * Helper method to save a single message pair and chain to the next one.
-     * This creates a chain of listeners without recursion by building each listener
-     * at the point of invocation.
-     */
-    @VisibleForTesting
-    void saveNextMessagePair(Memory memory, List<ConversationIndexMessage> messagePairs, int index, ActionListener<Void> finalListener) {
-        if (index >= messagePairs.size()) {
-            // All pairs saved, complete
-            finalListener.onResponse(null);
-            return;
-        }
+        memory.getStructuredMessages(ActionListener.wrap(result -> {
+            @SuppressWarnings("unchecked")
+            List<Message> allMessages = (List<Message>) result;
 
-        ConversationIndexMessage msg = messagePairs.get(index);
+            // Apply history limit
+            List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
+                ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
+                : allMessages;
 
-        // Create the listener for this save operation
-        ActionListener<CreateInteractionResponse> saveListener = ActionListener.wrap(interaction -> {
-            log.info("Stored message pair {} of {} in memory with interaction ID: {}", index + 1, messagePairs.size(), interaction.getId());
-            // Save next pair
-            saveNextMessagePair(memory, messagePairs, index + 1, finalListener);
-        }, ex -> {
-            log.error("Failed to store message pair {} of {} in memory", index + 1, messagePairs.size(), ex);
-            // Continue with next pair even on failure
-            saveNextMessagePair(memory, messagePairs, index + 1, finalListener);
-        });
+            // Save input messages — memory auto-resolves the next message ID
+            memory.saveStructuredMessages(inputMessages, ActionListener.wrap(v -> {
+                try {
+                    ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+                    MLAgentType agentType = MLAgentType.from(mlAgent.getType());
 
-        // Execute the save operation with the listener
-        memory.save(msg, null, null, null, saveListener);
+                    // Append AGUI context to current input for this LLM call (not persisted in memory)
+                    if (agentType == MLAgentType.AG_UI) {
+                        String contextJson = params.get(AGUI_PARAM_CONTEXT);
+                        if (contextJson != null) {
+                            JsonArray contextArray = JsonParser.parseString(contextJson).getAsJsonArray();
+                            AGUIInputConverter.appendContextToLatestUserMessage(inputMessages, contextArray);
+                            // Re-format current input with context included
+                            String updatedBody = modelProvider.mapMessages(inputMessages, agentType).get("body");
+                            if (updatedBody != null) {
+                                params.put("body", updatedBody);
+                            }
+                        }
+                    }
+
+                    if (!history.isEmpty()) {
+                        // Format history messages using the model provider for API-compatible output
+                        String formattedHistory = modelProvider.mapMessages(history, agentType).get("body");
+                        if (formattedHistory != null && !formattedHistory.isEmpty()) {
+                            params.put(NEW_CHAT_HISTORY, formattedHistory + ", ");
+                        }
+                    }
+
+                    continuation.run();
+                } catch (Exception ex) {
+                    log
+                        .error(
+                            "Failed during memory post-processing. agentId={}, tenantId={}",
+                            params.get(AGENT_ID_FIELD),
+                            mlAgent.getTenantId(),
+                            ex
+                        );
+                    listener.onFailure(ex);
+                }
+            }, e -> {
+                log.error("Failed to save input messages. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
+                listener.onFailure(e);
+            }));
+        }, e -> {
+            log.error("Failed to get history. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
+            listener.onFailure(e);
+        }));
     }
 
     private void executeAgent(
@@ -886,7 +883,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         ActionListener<Output> listener,
         Memory memory,
         TransportChannel channel,
-        HookRegistry hookRegistry
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
@@ -903,6 +901,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent, hookRegistry);
         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
+
+        boolean usesUnifiedInterface = "true".equals(inputDataSet.getParameters().get(USES_UNIFIED_INTERFACE));
 
         // If async is true, index ML task and return the taskID. Also add memoryID to
         // the task if it exists
@@ -930,6 +930,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(
                     mlTask,
+                    mlAgent.getType(),
+                    inputDataSet.getParameters().get(AGENT_ID_FIELD),
                     tenantId,
                     outputs,
                     modelTensors,
@@ -938,13 +940,39 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
                 inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
                 try {
-                    mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                    if (usesUnifiedInterface && inputMessages != null && memory != null && supportsStructuredMessages(mlAgent)) {
+                        performInitialMemoryOperations(
+                            memory,
+                            inputMessages,
+                            inputDataSet.getParameters(),
+                            mlAgent,
+                            agentActionListener,
+                            () -> {
+                                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
+                            }
+                        );
+                    } else {
+                        mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                    }
                 } catch (Exception e) {
-                    log.error("Failed to run agent", e);
+                    log
+                        .error(
+                            "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
+                            inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                            tenantId,
+                            extractStatusCode(e),
+                            e
+                        );
                     agentActionListener.onFailure(e);
                 }
             }, e -> {
-                log.error("Failed to create task for agent async execution", e);
+                log
+                    .error(
+                        "Failed to create task for agent async execution. agentId={}, tenantId={}",
+                        inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                        tenantId,
+                        e
+                    );
                 listener.onFailure(e);
             }));
         } else {
@@ -953,13 +981,35 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 outputs,
                 modelTensors,
                 mlAgent.getType(),
+                inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                tenantId,
                 parentInteractionId,
                 memory
             );
             try {
-                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                if (usesUnifiedInterface && inputMessages != null && memory != null && supportsStructuredMessages(mlAgent)) {
+                    performInitialMemoryOperations(
+                        memory,
+                        inputMessages,
+                        inputDataSet.getParameters(),
+                        mlAgent,
+                        agentActionListener,
+                        () -> {
+                            mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
+                        }
+                    );
+                } else {
+                    mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                }
             } catch (Exception e) {
-                log.error("Failed to run agent", e);
+                log
+                    .error(
+                        "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
+                        inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                        tenantId,
+                        extractStatusCode(e),
+                        e
+                    );
                 agentActionListener.onFailure(e);
             }
         }
@@ -971,10 +1021,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String agentType,
+        String agentId,
+        String tenantId,
         String parentInteractionId,
         Memory memory
     ) {
+        long startTime = System.currentTimeMillis();
         return ActionListener.wrap(output -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            log
+                .info(
+                    "Agent execution completed successfully. agentType={}, agentId={}, tenantId={}, latencyMs={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs
+                );
             if (output != null) {
                 processOutput(output, modelTensors);
                 listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
@@ -982,7 +1044,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener.onResponse(null);
             }
         }, ex -> {
-            log.error("Failed to run {} agent", agentType, ex);
+            long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
+            // CENTRAL AGENT FAILURE LOG - All agent execution failures flow through here
+            log
+                .error(
+                    "Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}, error={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    statusCode,
+                    ex.getMessage(),
+                    ex
+                );
             updateInteractionWithFailure(parentInteractionId, memory, ex.getMessage());
             listener.onFailure(ex);
         });
@@ -990,17 +1065,30 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     private ActionListener<Object> createAsyncTaskUpdater(
         MLTask mlTask,
+        String agentType,
+        String agentId,
         String tenantId,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String parentInteractionId,
         Memory memory
     ) {
+        long startTime = System.currentTimeMillis();
         String taskId = mlTask.getTaskId();
         Map<String, Object> agentResponse = new HashMap<>();
         Map<String, Object> updatedTask = new HashMap<>();
 
         return ActionListener.wrap(output -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            log
+                .info(
+                    "Agent execution completed successfully. agentType={}, agentId={}, tenantId={}, latencyMs={}, taskId={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    taskId
+                );
             if (output != null) {
                 processOutput(output, modelTensors);
                 agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
@@ -1024,6 +1112,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     )
             );
         }, ex -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
+            // CENTRAL AGENT FAILURE LOG - All async agent execution failures flow through here
+            log
+                .error(
+                    "Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}, error={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    statusCode,
+                    ex.getMessage(),
+                    ex
+                );
             agentResponse.put(ERROR_MESSAGE, ex.getMessage());
 
             updatedTask.put(RESPONSE_FIELD, agentResponse);
@@ -1106,7 +1208,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     toolFactories,
                     memoryFactoryMap,
                     sdkClient,
-                    encryptor
+                    encryptor,
+                    hookRegistry
                 );
             default:
                 throw new IllegalArgumentException("Unsupported agent type");
@@ -1198,14 +1301,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             return;
         }
 
+        // AGUI history-load: no question extraction needed, MLAGUIAgentRunner handles it
+        if (agentMLInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            RemoteInferenceInputDataSet ds = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+            if (ds.getParameters() != null && "true".equals(ds.getParameters().get(AGUI_PARAM_LOAD_CHAT_HISTORY))) {
+                return;
+            }
+        }
+
         if (agentMLInput.getAgentInput() != null
             && agentMLInput.getAgentInput().getInputType() == InputType.MESSAGES
             && MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
             throw new IllegalArgumentException("Messages input is not supported for Plan Execute and Reflect Agent.");
         }
 
-        // If legacy question input is provided, parse to new standard input
-        if (agentMLInput.getInputDataset() != null) {
+        // If legacy question input is provided and no structured input exists, parse to new standard input
+        if (agentMLInput.getAgentInput() == null && agentMLInput.getInputDataset() != null) {
             RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
             if (remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
                 AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
@@ -1227,6 +1338,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             // For agent with revamped interface, use ModelProvider to map the entire AgentInput
             if (mlAgent.getModel() != null) {
+                remoteDataSet.getParameters().put(USES_UNIFIED_INTERFACE, "true");
                 ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
                 Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
 
@@ -1235,6 +1347,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 remoteDataSet.getParameters().putAll(parameters);
             } else {
                 // For old-style AG_UI agents without model field
+                // Prepend context to question if available
+                if (agentType == MLAgentType.AG_UI) {
+                    String context = remoteDataSet.getParameters().get(AGUI_PARAM_CONTEXT);
+                    if (context != null && !context.isEmpty()) {
+                        question = "Context: " + context + "\nQuestion: " + question;
+                    }
+                }
                 remoteDataSet.getParameters().putIfAbsent(QUESTION, question);
             }
         } catch (Exception e) {
@@ -1290,23 +1409,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         return mlAgent;
     }
 
-    /**
-     * Helper method to extract text from a message's content blocks.
-     */
     @VisibleForTesting
-    String extractTextFromMessage(Message message) {
-        if (message == null || message.getContent() == null) {
-            return "";
-        }
-
-        StringBuilder textBuilder = new StringBuilder();
-        for (ContentBlock block : message.getContent()) {
-            if (block.getType() == ContentType.TEXT && block.getText() != null) {
-                textBuilder.append(block.getText().trim());
-                textBuilder.append("\n");
-            }
-        }
-
-        return textBuilder.toString().trim();
+    boolean supportsStructuredMessages(MLAgent mlAgent) {
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+        return agentType == MLAgentType.CONVERSATIONAL || agentType == MLAgentType.AG_UI;
     }
 }

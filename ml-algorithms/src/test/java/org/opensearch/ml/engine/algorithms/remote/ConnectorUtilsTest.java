@@ -1138,8 +1138,9 @@ public class ConnectorUtilsTest {
     @Test
     public void buildSdkRequest_NovaModelCleansJson() throws IOException {
         Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getParameters()).thenReturn(parameters);
+        when(connector.getActionEndpoint("predict", parameters))
             .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
@@ -1147,7 +1148,7 @@ public class ConnectorUtilsTest {
             "{\"singleEmbeddingParams\":{\"text\":{\"value\":\"hello\"},\"video\":{\"source\":{\"bytes\":null}},\"audio\":{\"source\":{\"bytes\":null}}}}";
 
         SdkHttpFullRequest request = ConnectorUtils
-            .buildSdkRequest("predict", connector, Map.of(), payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
+            .buildSdkRequest("predict", connector, parameters, payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
 
         // Verify request was created successfully
         assertNotNull(request);
@@ -1624,13 +1625,13 @@ public class ConnectorUtilsTest {
     @Test
     public void testBuildSdkRequest_NovaRemovesTextWhenValueNull() throws IOException {
         Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getActionEndpoint("predict", parameters))
             .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"text\":{\"value\":null},\"audio\":{\"source\":{\"bytes\":\"abc\"}}}}";
-        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, Map.of(), payload, SdkHttpMethod.POST);
+        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, parameters, payload, SdkHttpMethod.POST);
         String actualPayload = readPayload(request);
 
         assertFalse(actualPayload.contains("\"text\""));
@@ -1640,13 +1641,13 @@ public class ConnectorUtilsTest {
     @Test
     public void testBuildSdkRequest_NovaRemovesImageWhenBytesNull() throws IOException {
         Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getActionEndpoint("predict", parameters))
             .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"image\":{\"source\":{\"bytes\":null}},\"text\":{\"value\":\"keep\"}}}";
-        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, Map.of(), payload, SdkHttpMethod.POST);
+        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, parameters, payload, SdkHttpMethod.POST);
         String actualPayload = readPayload(request);
 
         assertFalse(actualPayload.contains("\"image\""));
@@ -1656,13 +1657,13 @@ public class ConnectorUtilsTest {
     @Test
     public void testBuildSdkRequest_NovaKeepsImageWhenSourceMissing() throws IOException {
         Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getActionEndpoint("predict", parameters))
             .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"image\":{},\"text\":{\"value\":\"keep\"}}}";
-        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, Map.of(), payload, SdkHttpMethod.POST);
+        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, parameters, payload, SdkHttpMethod.POST);
         String actualPayload = readPayload(request);
 
         assertTrue(actualPayload.contains("\"image\""));

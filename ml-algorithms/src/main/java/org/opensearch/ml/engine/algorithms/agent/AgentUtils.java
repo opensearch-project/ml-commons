@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENDPOINT_FIELD;
@@ -65,6 +66,7 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -80,6 +82,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -87,8 +90,12 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
@@ -97,6 +104,7 @@ import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExec
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -124,6 +132,7 @@ public class AgentUtils {
     public static final String PROMPT_CHAT_HISTORY_PREFIX = "prompt.chat_history_prefix";
     public static final String DISABLE_TRACE = "disable_trace";
     public static final String VERBOSE = "verbose";
+    public static final String INCLUDE_TOKEN_USAGE = "include_token_usage";
     public static final String LLM_GEN_INPUT = "llm_generated_input";
 
     public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
@@ -140,6 +149,7 @@ public class AgentUtils {
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
     public static final String TOOL_CALLS_TOOL_INPUT = "tool_calls.tool_input";
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
+    public static final String TOKEN_USAGE_PATH = "token_usage_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
     private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
@@ -853,31 +863,35 @@ public class AgentUtils {
                     toolListener.onResponse(Collections.emptyList());
                     return;
                 }
-                connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
+                ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+                    List<MLToolSpec> mcpToolSpecs;
+                    if (client == null) {
+                        throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
+                    }
 
-                List<MLToolSpec> mcpToolSpecs;
-                if (client == null) {
-                    throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
-                }
-
-                if (connector instanceof McpConnector) {
-                    McpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                        .initInstance(connector.getProtocol(), connector, Connector.class);
-                    connectorExecutor.setClient(client);
-                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                    toolListener.onResponse(mcpToolSpecs);
-                    return;
-                }
-                if (connector instanceof McpStreamableHttpConnector) {
-                    McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                        .initInstance(connector.getProtocol(), connector, Connector.class);
-                    connectorExecutor.setClient(client);
-                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                    toolListener.onResponse(mcpToolSpecs);
-                    return;
-                }
-                log.error("Unsupported connector type for connector: " + connectorId);
-                toolListener.onResponse(Collections.emptyList());
+                    if (connector instanceof McpConnector) {
+                        McpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
+                        connectorExecutor.setClient(client);
+                        mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                        toolListener.onResponse(mcpToolSpecs);
+                        return;
+                    }
+                    if (connector instanceof McpStreamableHttpConnector) {
+                        McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
+                        connectorExecutor.setClient(client);
+                        mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                        toolListener.onResponse(mcpToolSpecs);
+                        return;
+                    }
+                    log.error("Unsupported connector type for connector: " + connectorId);
+                    toolListener.onResponse(Collections.emptyList());
+                }, e -> {
+                    log.error("Failed to decrypt credentials in connector", e);
+                    toolListener.onFailure(e);
+                });
+                connector.decrypt("", encryptor::decrypt, tenantId, decryptSuccessfulListener);
             } catch (Exception e) {
                 log.error("Failed to get tools from connector: " + connectorId, e);
                 toolListener.onResponse(Collections.emptyList());
@@ -1277,6 +1291,420 @@ public class AgentUtils {
             return agentType == MLAgentType.AG_UI;
         } catch (IllegalArgumentException e) {
             return false;
+        }
+    }
+
+    /**
+     * Extract text content from a message's content blocks.
+     *
+     * @param message The message to extract text from
+     * @return The concatenated text content, trimmed
+     */
+    public static String extractTextFromMessage(Message message) {
+        if (message == null || message.getContent() == null) {
+            return "";
+        }
+
+        StringBuilder textBuilder = new StringBuilder();
+        for (ContentBlock block : message.getContent()) {
+            if (block.getType() == ContentType.TEXT && block.getText() != null) {
+                textBuilder.append(block.getText().trim());
+                textBuilder.append("\n");
+            }
+        }
+
+        return textBuilder.toString().trim();
+    }
+
+    /**
+     * Extract user-assistant message pairs from a list of structured messages.
+     * Processes messages backwards to detect Q&A pairs, skipping trailing user messages,
+     * then reverses the result to maintain chronological order.
+     *
+     * @param messages The list of structured messages to process
+     * @param sessionId The session/conversation ID for the pairs
+     * @param appType The application type to set on each pair (may be null)
+     * @return A list of ConversationIndexMessage pairs in chronological order
+     */
+    public static List<ConversationIndexMessage> extractMessagePairs(List<Message> messages, String sessionId, String appType) {
+        if (messages == null || messages.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<ConversationIndexMessage> messagePairs = new ArrayList<>();
+
+        StringBuilder userTextBuilder = new StringBuilder();
+        StringBuilder assistantTextBuilder = new StringBuilder();
+        boolean skippingTrailingUsers = true;
+        String currentRole = null;
+
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message message = messages.get(i);
+
+            if (message == null || message.getRole() == null) {
+                continue;
+            }
+
+            String role = message.getRole().toLowerCase();
+
+            // Skip non-user/assistant roles
+            if (!role.equals("user") && !role.equals("assistant")) {
+                continue;
+            }
+
+            // Skip trailing user messages
+            if (skippingTrailingUsers && role.equals("user")) {
+                continue;
+            }
+
+            if (skippingTrailingUsers && role.equals("assistant")) {
+                skippingTrailingUsers = false;
+            }
+
+            // Detect role change from user to assistant (going backwards)
+            if (currentRole != null && currentRole.equals("user") && role.equals("assistant")) {
+                // Save the accumulated pair
+                String userText = userTextBuilder.toString().trim();
+                String assistantText = assistantTextBuilder.toString().trim();
+
+                if (!userText.isEmpty() && !assistantText.isEmpty()) {
+                    ConversationIndexMessage msg = ConversationIndexMessage
+                        .conversationIndexMessageBuilder()
+                        .type(appType)
+                        .question(userText)
+                        .response(assistantText)
+                        .finalAnswer(true)
+                        .sessionId(sessionId)
+                        .build();
+
+                    messagePairs.add(msg);
+                }
+
+                // Clear buffers for next pair
+                userTextBuilder.setLength(0);
+                assistantTextBuilder.setLength(0);
+            }
+
+            // Extract text
+            String text = extractTextFromMessage(message);
+
+            // Accumulate text based on role (prepending since we're going backwards)
+            if (role.equals("user")) {
+                if (!text.isEmpty()) {
+                    if (userTextBuilder.length() > 0) {
+                        userTextBuilder.insert(0, "\n");
+                    }
+                    userTextBuilder.insert(0, text);
+                }
+            } else if (role.equals("assistant")) {
+                if (!text.isEmpty()) {
+                    if (assistantTextBuilder.length() > 0) {
+                        assistantTextBuilder.insert(0, "\n");
+                    }
+                    assistantTextBuilder.insert(0, text);
+                }
+            }
+
+            currentRole = role;
+        }
+
+        // Save any remaining pair
+        String userText = userTextBuilder.toString().trim();
+        String assistantText = assistantTextBuilder.toString().trim();
+
+        if (!userText.isEmpty() && !assistantText.isEmpty()) {
+            ConversationIndexMessage msg = ConversationIndexMessage
+                .conversationIndexMessageBuilder()
+                .type(appType)
+                .question(userText)
+                .response(assistantText)
+                .finalAnswer(true)
+                .sessionId(sessionId)
+                .build();
+
+            messagePairs.add(msg);
+        }
+
+        // Reverse to maintain chronological order
+        Collections.reverse(messagePairs);
+
+        return messagePairs;
+    }
+
+    /**
+     * Extracts HTTP status code from exception if available.
+     * Returns the status code as a string if the exception is an OpenSearchException,
+     * otherwise returns "unknown".
+     *
+     * @param e the exception to extract status code from
+     * @return status code as string or "unknown"
+     */
+    public static String extractStatusCode(Exception e) {
+        if (e instanceof OpenSearchException) {
+            return String.valueOf(((OpenSearchException) e).status().getStatus());
+        }
+        return "unknown";
+    }
+
+    public static void getModel(
+        String modelId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        ActionListener<MLModel> listener
+    ) {
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_MODEL_INDEX)
+            .id(modelId)
+            .tenantId(tenantId)
+            .build();
+
+        try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                log.debug("Completed Get Model Request, id:{}", modelId);
+                ctx.restore();
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                        log.error("Failed to get model index", cause);
+                        listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                    } else {
+                        log.error("Failed to get ML model {}", modelId, cause);
+                        listener.onFailure(cause);
+                    }
+                } else {
+                    try {
+                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        if (gr != null && gr.isExists()) {
+                            try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, gr.getSourceAsBytesRef())) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                MLModel mlModel = MLModel.parse(parser, null);
+                                listener.onResponse(mlModel);
+                            } catch (Exception e) {
+                                log.error("Failed to parse model:{}", modelId);
+                                listener.onFailure(e);
+                            }
+                        } else {
+                            listener.onFailure(new OpenSearchStatusException("Failed to find model:" + modelId, RestStatus.NOT_FOUND));
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Extracts a Long value from a map, handling both Number and String types
+     *
+     * @param map the map to extract from
+     * @param fieldName the field name
+     * @return Long value or null if extraction fails
+     */
+    public static Long getLongValue(Map<String, Object> map, String fieldName) {
+        Object value = map.get(fieldName);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Long.parseLong((String) value);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the model endpoint URL from an MLModel.
+     * If the model has an inline connector, uses it directly.
+     * If the model has a connector ID, fetches the connector first.
+     * Then resolves the endpoint URL using connector parameters.
+     *
+     * @param mlModel the MLModel to resolve URL from
+     * @param tenantId the tenant ID
+     * @param sdkClient the SDK client for async operations
+     * @param client the OpenSearch client for thread context
+     * @param listener the action listener to handle the resolved URL
+     */
+    public static void resolveModelUrl(
+        MLModel mlModel,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        ActionListener<String> listener
+    ) {
+        // Check if model has inline connector
+        if (mlModel.getConnector() != null) {
+            try {
+                String url = extractUrlFromConnector(mlModel.getConnector());
+                listener.onResponse(url);
+            } catch (Exception e) {
+                log.debug("Failed to resolve URL from inline connector", e);
+                listener.onFailure(e);
+            }
+            return;
+        }
+
+        // Check if model has connector ID
+        if (mlModel.getConnectorId() != null) {
+            getConnector(mlModel.getConnectorId(), tenantId, sdkClient, client, ActionListener.wrap(connector -> {
+                try {
+                    String url = extractUrlFromConnector(connector);
+                    listener.onResponse(url);
+                } catch (Exception e) {
+                    log.debug("Failed to resolve URL from connector ID", e);
+                    listener.onFailure(e);
+                }
+            }, listener::onFailure));
+            return;
+        }
+
+        // No connector available
+        listener.onFailure(new IllegalStateException("Model has neither connector nor connector ID"));
+    }
+
+    /**
+     * Extracts the endpoint URL from a connector using its parameters.
+     *
+     * @param connector the connector to extract URL from
+     * @return the resolved endpoint URL
+     */
+    private static String extractUrlFromConnector(Connector connector) {
+        if (connector == null) {
+            throw new IllegalArgumentException("Connector cannot be null");
+        }
+
+        Map<String, String> parameters = connector.getParameters();
+        if (parameters == null) {
+            parameters = Map.of();
+        }
+
+        // Get the predict endpoint URL
+        String endpoint = connector.getActionEndpoint("predict", parameters);
+        if (endpoint == null || endpoint.isEmpty()) {
+            throw new IllegalStateException("Connector has no predict endpoint");
+        }
+
+        return endpoint;
+    }
+
+    /**
+     * Resolves model metadata (name and URL) for token tracking.
+     * Combines getModel + resolveModelUrl into a single call that never fails —
+     * always returns best-effort data with fallbacks.
+     *
+     * @param modelId the model ID
+     * @param tenantId the tenant ID
+     * @param sdkClient the SDK client (may be null)
+     * @param client the OpenSearch client
+     * @param xContentRegistry the content registry for parsing
+     * @param listener receives String[]{url, name} — never called with onFailure
+     */
+    public static void getModelMetadata(
+        String modelId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        ActionListener<String[]> listener
+    ) {
+        // Primarily for test compatibility — sdkClient may be null in unit tests.
+        // TODO: Update tests to mock this
+        if (sdkClient == null) {
+            listener.onResponse(new String[] { modelId, modelId });
+            return;
+        }
+
+        getModel(modelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(mlModel -> {
+            String modelName = mlModel.getName();
+            resolveModelUrl(
+                mlModel,
+                tenantId,
+                sdkClient,
+                client,
+                ActionListener.wrap(url -> { listener.onResponse(new String[] { url, modelName }); }, e -> {
+                    log.debug("Failed to resolve model URL, using model ID as fallback", e);
+                    listener.onResponse(new String[] { modelId, modelName });
+                })
+            );
+        }, e -> {
+            log.debug("Failed to fetch model for URL resolution, using model ID as fallback", e);
+            listener.onResponse(new String[] { modelId, modelId });
+        }));
+    }
+
+    /**
+     * Adds a token usage tensor to the response and logs per-model usage.
+     * Shared utility used by both MLChatAgentRunner and MLPlanExecuteAndReflectAgentRunner.
+     *
+     * @param modelTensors the response tensor list to add to
+     * @param tokenTracker the token tracker (may be null)
+     * @param tenantId the tenant ID for logging (may be null)
+     * @param includeTokenUsage whether to include the token usage tensor in the response;
+     *                          sub-agents always include the tensor regardless of this flag
+     *                          so the parent agent can merge their usage
+     */
+    public static void addTokenUsageTensor(
+        List<ModelTensors> modelTensors,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage
+    ) {
+        if (tokenTracker == null || !tokenTracker.hasUsage()) {
+            return;
+        }
+
+        Map<String, Object> tokenUsageMap = tokenTracker.toOutputMap();
+
+        // Sub-agents always include the tensor so the parent can merge their usage
+        if (includeTokenUsage || tokenTracker.isSubAgent()) {
+            modelTensors
+                .add(
+                    ModelTensors
+                        .builder()
+                        .mlModelTensors(List.of(ModelTensor.builder().name(AgentTokenTracker.TOKEN_USAGE).dataAsMap(tokenUsageMap).build()))
+                        .build()
+                );
+        }
+
+        logTokenUsageDetails(tokenTracker, tokenUsageMap, tenantId);
+    }
+
+    /**
+     * Logs structured per-model token usage for analytics/monitoring.
+     * Skips logging for sub-agents since the parent agent logs the merged totals.
+     *
+     * @param tokenTracker the token tracker
+     * @param tokenUsageMap the pre-computed output map from the tracker
+     * @param tenantId the tenant ID for logging (may be null)
+     */
+    @SuppressWarnings("unchecked")
+    public static void logTokenUsageDetails(AgentTokenTracker tokenTracker, Map<String, Object> tokenUsageMap, String tenantId) {
+        if (tokenTracker == null || tokenUsageMap == null) {
+            return;
+        }
+
+        // Skip logging for sub-agents — the parent agent logs the merged totals
+        if (tokenTracker.isSubAgent()) {
+            return;
+        }
+
+        Object perModelObj = tokenUsageMap.get(AgentTokenTracker.PER_MODEL_USAGE);
+        if (perModelObj instanceof List) {
+            List<Map<String, Object>> perModelUsage = (List<Map<String, Object>>) perModelObj;
+            long eventTime = System.currentTimeMillis();
+            for (Map<String, Object> modelUsage : perModelUsage) {
+                Map<String, Object> logEntry = new java.util.LinkedHashMap<>();
+                logEntry.put("tenantId", tenantId);
+                logEntry.put("model_usage", modelUsage);
+                logEntry.put("eventTime", eventTime);
+                log.info("{}", StringUtils.toJson(logEntry));
+            }
         }
     }
 }

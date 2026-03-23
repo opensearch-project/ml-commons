@@ -186,10 +186,48 @@ public class StreamingWrapperTest {
     }
 
     @Test
-    public void testSendFinalResponseStreaming() {
-        streamingWrapper.sendFinalResponse("session1", listener, "parent1", true, null, null, "answer");
+    public void testSendTokenUsageBatchStreaming() throws Exception {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
 
-        verify(listener).onResponse("Streaming completed");
+        streamingWrapper.sendTokenUsageBatch("session1", "parent1", tokenTracker, "tenant1");
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(channel).sendResponseBatch(responseCaptor.capture());
+
+        ModelTensorOutput tokenOutput = (ModelTensorOutput) responseCaptor.getValue().getOutput();
+        List<ModelTensor> tokenTensors = tokenOutput.getMlModelOutputs().get(0).getMlModelTensors();
+
+        boolean foundTokenUsage = false;
+        for (ModelTensor tensor : tokenTensors) {
+            if (AgentTokenTracker.TOKEN_USAGE.equals(tensor.getName()) && tensor.getDataAsMap() != null) {
+                foundTokenUsage = true;
+                Map<String, ?> dataMap = tensor.getDataAsMap();
+                assertTrue("Token usage should contain per_model_usage", dataMap.containsKey(AgentTokenTracker.PER_MODEL_USAGE));
+            }
+        }
+        assertTrue("Token usage chunk should be sent in streaming mode", foundTokenUsage);
+    }
+
+    @Test
+    public void testSendTokenUsageBatchNonStreaming_isNoOp() {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        nonStreamingWrapper.sendTokenUsageBatch("session1", "parent1", tokenTracker, "tenant1");
+
+        // Non-streaming wrapper should not send anything
+        verify(channel, org.mockito.Mockito.never()).sendResponseBatch(any());
     }
 
     @Test
@@ -260,5 +298,103 @@ public class StreamingWrapperTest {
         assertEquals("test-parent", parentTensor.getResult());
         assertTrue((Boolean) responseTensor.getDataAsMap().get("is_last"));
 
+    }
+
+    @Test
+    public void testIsStreaming() {
+        assertTrue(streamingWrapper.isStreaming());
+        assertFalse(nonStreamingWrapper.isStreaming());
+    }
+
+    @Test
+    public void testSendTokenUsageBatch_nullTracker() {
+        streamingWrapper.sendTokenUsageBatch("session1", "parent1", null, "tenant1");
+        verify(channel, never()).sendResponseBatch(any());
+    }
+
+    @Test
+    public void testSendTokenUsageBatch_emptyTracker() {
+        AgentTokenTracker emptyTracker = new AgentTokenTracker();
+        streamingWrapper.sendTokenUsageBatch("session1", "parent1", emptyTracker, "tenant1");
+        verify(channel, never()).sendResponseBatch(any());
+    }
+
+    @Test
+    public void testSendTokenUsageBatch_nullSessionId() throws Exception {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        streamingWrapper.sendTokenUsageBatch(null, "parent1", tokenTracker, "tenant1");
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(channel).sendResponseBatch(responseCaptor.capture());
+
+        ModelTensorOutput tokenOutput = (ModelTensorOutput) responseCaptor.getValue().getOutput();
+        List<ModelTensor> tokenTensors = tokenOutput.getMlModelOutputs().get(0).getMlModelTensors();
+
+        // Should not contain memory_id tensor when sessionId is null
+        boolean foundMemoryId = tokenTensors.stream().anyMatch(t -> "memory_id".equals(t.getName()));
+        assertFalse(foundMemoryId);
+    }
+
+    @Test
+    public void testSendTokenUsageBatch_nullParentInteractionId() throws Exception {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        streamingWrapper.sendTokenUsageBatch("session1", null, tokenTracker, "tenant1");
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(channel).sendResponseBatch(responseCaptor.capture());
+
+        ModelTensorOutput tokenOutput = (ModelTensorOutput) responseCaptor.getValue().getOutput();
+        List<ModelTensor> tokenTensors = tokenOutput.getMlModelOutputs().get(0).getMlModelTensors();
+
+        // Should not contain parent_interaction_id tensor
+        boolean foundParentId = tokenTensors.stream().anyMatch(t -> "parent_interaction_id".equals(t.getName()));
+        assertFalse(foundParentId);
+    }
+
+    @Test
+    public void testSendTokenUsageBatch_withException() throws Exception {
+        AgentTokenTracker tokenTracker = new AgentTokenTracker();
+        tokenTracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tokenTracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        doThrow(new RuntimeException("Channel error")).when(channel).sendResponseBatch(any());
+
+        // Should not throw exception, just log error
+        streamingWrapper.sendTokenUsageBatch("session1", "parent1", tokenTracker, "tenant1");
+
+        verify(channel).sendResponseBatch(any());
+    }
+
+    @Test
+    public void testSendCompletionChunk_nullSessionAndParent() throws Exception {
+        streamingWrapper.sendCompletionChunk(null, null);
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(channel).sendResponseBatch(responseCaptor.capture());
+
+        ModelTensorOutput output = (ModelTensorOutput) responseCaptor.getValue().getOutput();
+        List<ModelTensor> tensors = output.getMlModelOutputs().get(0).getMlModelTensors();
+
+        // Should only have the response tensor, no memory_id or parent_interaction_id
+        assertEquals(1, tensors.size());
+        assertEquals("response", tensors.get(0).getName());
     }
 }

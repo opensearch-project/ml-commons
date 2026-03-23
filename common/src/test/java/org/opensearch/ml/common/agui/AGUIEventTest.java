@@ -360,6 +360,67 @@ public class AGUIEventTest {
     }
 
     @Test
+    public void testCustomEvent_Constructor() {
+        Map<String, Object> value = new HashMap<>();
+        value.put("input_tokens", 100);
+        value.put("output_tokens", 50);
+
+        CustomEvent event = new CustomEvent("token_usage", value);
+
+        assertEquals(CustomEvent.TYPE, event.getType());
+        assertEquals("token_usage", event.getName());
+        assertNotNull(event.getValue());
+        assertNotNull(event.getTimestamp());
+    }
+
+    @Test
+    public void testCustomEvent_NullValue() {
+        CustomEvent event = new CustomEvent("token_usage", null);
+
+        assertEquals(CustomEvent.TYPE, event.getType());
+        assertEquals("token_usage", event.getName());
+        assertEquals(null, event.getValue());
+    }
+
+    @Test
+    public void testCustomEvent_ToJsonString() {
+        Map<String, Object> value = new HashMap<>();
+        value.put("input_tokens", 100);
+        value.put("output_tokens", 50);
+
+        CustomEvent event = new CustomEvent("token_usage", value);
+        String json = event.toJsonString();
+
+        assertNotNull(json);
+        assertTrue(json.contains("Custom"));
+        assertTrue(json.contains("token_usage"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCustomEvent_Serialization() throws IOException {
+        Map<String, Object> value = new HashMap<>();
+        value.put("input_tokens", 100);
+        value.put("output_tokens", 50);
+
+        CustomEvent original = new CustomEvent("token_usage", value);
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        CustomEvent deserialized = new CustomEvent(input);
+
+        assertEquals(original.getType(), deserialized.getType());
+        assertEquals(original.getName(), deserialized.getName());
+        assertNotNull(deserialized.getValue());
+        assertEquals(
+            ((Map<String, Object>) original.getValue()).get("input_tokens"),
+            ((Map<String, Object>) deserialized.getValue()).get("input_tokens")
+        );
+    }
+
+    @Test
     public void testMessagesSnapshotEvent_Constructor() {
         List<Object> messages = new ArrayList<>();
         Map<String, String> message1 = new HashMap<>();

@@ -331,6 +331,70 @@ public class RemoteAgenticConversationMemoryTest {
         );
     }
 
+    // ==================== Tests for getStructuredMessages ====================
+
+    @Test
+    public void testGetStructuredMessagesWithoutMemoryContainerId() {
+        RemoteAgenticConversationMemory memory = createTestMemoryWithoutContainerId();
+
+        ActionListener<List<org.opensearch.ml.common.input.execute.agent.Message>> testListener = ActionListener.wrap(messages -> {
+            throw new RuntimeException("Should have failed without memory container ID");
+        }, e -> {
+            assertTrue(e instanceof IllegalStateException);
+            assertTrue(e.getMessage().contains("Memory container ID is not configured"));
+        });
+
+        memory.getStructuredMessages(testListener);
+    }
+
+    // ==================== Tests for saveStructuredMessages ====================
+
+    @Test
+    public void testSaveStructuredMessagesWithoutMemoryContainerId() {
+        RemoteAgenticConversationMemory memory = createTestMemoryWithoutContainerId();
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock textBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        textBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        textBlock.setText("Hello");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            List.of(textBlock)
+        );
+
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            throw new RuntimeException("Should have failed without memory container ID");
+        }, e -> {
+            assertTrue(e instanceof IllegalStateException);
+            assertTrue(e.getMessage().contains("Memory container ID is not configured"));
+        });
+
+        memory.saveStructuredMessages(List.of(message), testListener);
+    }
+
+    @Test
+    public void testSaveStructuredMessages_NullMessages() {
+        RemoteAgenticConversationMemory memory = createTestMemory();
+
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            // Expected - null messages should complete successfully
+        }, e -> { throw new RuntimeException("Should not fail with null messages", e); });
+
+        memory.saveStructuredMessages(null, testListener);
+    }
+
+    @Test
+    public void testSaveStructuredMessages_EmptyMessages() {
+        RemoteAgenticConversationMemory memory = createTestMemory();
+
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            // Expected - empty messages should complete successfully
+        }, e -> { throw new RuntimeException("Should not fail with empty messages", e); });
+
+        memory.saveStructuredMessages(List.of(), testListener);
+    }
+
+    // Helper methods
     private Connector createMockConnector() {
         return HttpConnector
             .builder()

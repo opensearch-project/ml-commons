@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.agent;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,12 +22,14 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
 
 /**
@@ -348,5 +351,79 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
                 throw new IllegalArgumentException("Unsupported image source type. Supported types: " + supportedTypes);
             }
         };
+    }
+
+    /**
+     * Parses an OpenAI chat completions response message into a unified Message object.
+     * Handles three message types:
+     *
+     * 1. Assistant text response:
+     *    {"role": "assistant", "content": "Here is the result..."}
+     *
+     * 2. Assistant tool call request:
+     *    {"role": "assistant", "content": null, "tool_calls": [
+     *      {"id": "call_abc123", "type": "function",
+     *       "function": {"name": "get_weather", "arguments": "{\"location\":\"Seattle\"}"}}
+     *    ]}
+     *
+     * 3. Tool result message:
+     *    {"role": "tool", "tool_call_id": "call_abc123", "content": "72°F, sunny"}
+     *
+     * @param json JSON string containing the OpenAI response message
+     * @return a unified Message object, or null if the input cannot be parsed
+     */
+    @SuppressWarnings("unchecked")
+    @Override
+    public Message parseToUnifiedMessage(String json) {
+        Map<String, Object> parsed = StringUtils.fromJson(json, "response");
+        if (parsed == null) {
+            return null;
+        }
+
+        String role = (String) parsed.get("role");
+        List<ContentBlock> textBlocks = new ArrayList<>();
+        List<ToolCall> parsedToolCalls = new ArrayList<>();
+
+        // OpenAI content can be a string or null
+        Object contentObj = parsed.get("content");
+        if (contentObj instanceof String contentStr && !contentStr.isEmpty()) {
+            ContentBlock block = new ContentBlock();
+            block.setType(ContentType.TEXT);
+            block.setText(contentStr);
+            textBlocks.add(block);
+        }
+
+        // Assistant messages with tool_calls
+        List<Map<String, Object>> toolCallsList = (List<Map<String, Object>>) parsed.get("tool_calls");
+        if (toolCallsList != null) {
+            for (Map<String, Object> tc : toolCallsList) {
+                String id = tc.get("id") != null ? String.valueOf(tc.get("id")) : "";
+                String type = tc.get("type") != null ? String.valueOf(tc.get("type")) : "function";
+                Map<String, Object> function = (Map<String, Object>) tc.get("function");
+                if (function != null) {
+                    String name = String.valueOf(function.getOrDefault("name", ""));
+                    String arguments = function.get("arguments") != null ? String.valueOf(function.get("arguments")) : "{}";
+                    parsedToolCalls.add(new ToolCall(id, type, new ToolCall.ToolFunction(name, arguments)));
+                }
+            }
+        }
+
+        // Tool result messages with tool_call_id (role=tool, content=string)
+        String toolCallId = (String) parsed.get("tool_call_id");
+
+        if (textBlocks.isEmpty() && parsedToolCalls.isEmpty() && toolCallId == null) {
+            return null;
+        }
+
+        Message msg = new Message();
+        msg.setRole(role != null ? role : "assistant");
+        msg.setContent(textBlocks.isEmpty() ? null : textBlocks);
+        if (!parsedToolCalls.isEmpty()) {
+            msg.setToolCalls(parsedToolCalls);
+        }
+        if (toolCallId != null) {
+            msg.setToolCallId(toolCallId);
+        }
+        return msg;
     }
 }

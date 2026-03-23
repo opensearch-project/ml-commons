@@ -120,23 +120,29 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                     if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
-                            connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
-                            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                            connector.setLastUpdateTime(Instant.now());
-                            UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
-                                .builder()
-                                .index(ML_CONNECTOR_INDEX)
-                                .id(connectorId)
-                                .tenantId(tenantId)
-                                .dataObject(connector)
-                                .build();
-                            try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
-                                updateUndeployedConnector(
-                                    connectorId,
-                                    updateDataObjectRequest,
-                                    ActionListener.runBefore(listener, innerContext::restore)
-                                );
-                            }
+                            connector.update(mlUpdateConnectorAction.getUpdateContent());
+                            ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
+                                connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+                                connector.setLastUpdateTime(Instant.now());
+                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                    .builder()
+                                    .index(ML_CONNECTOR_INDEX)
+                                    .id(connectorId)
+                                    .tenantId(tenantId)
+                                    .dataObject(connector)
+                                    .build();
+                                try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
+                                    updateUndeployedConnector(
+                                        connectorId,
+                                        updateDataObjectRequest,
+                                        ActionListener.runBefore(listener, innerContext::restore)
+                                    );
+                                }
+                            }, e -> {
+                                log.error("Failed to encrypt credentials in connector", e);
+                                listener.onFailure(e);
+                            });
+                            connector.encrypt(mlEngine::encrypt, tenantId, encryptCredentialListener);
                         } else {
                             listener
                                 .onFailure(

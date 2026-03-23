@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.connector;
 
-import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.connector.RetryBackoffPolicy.CONSTANT;
 
@@ -16,17 +15,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.BiFunction;
 
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -40,17 +39,13 @@ public class McpStreamableHttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
+    TriConsumer<List<String>, String, ActionListener<List<String>>> encryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "encrypted: " + x.toLowerCase(Locale.ROOT)).toArray(String[]::new)));
+    TriConsumer<List<String>, String, ActionListener<List<String>>> decryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "decrypted: " + x.toUpperCase(Locale.ROOT)).toArray(String[]::new)));
 
     String TEST_CONNECTOR_JSON_STRING =
         "{\"name\":\"test_mcp_streamable_http_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp streamable http connector\",\"protocol\":\"mcp_streamable_http\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"endpoint\":\"/custom/endpoint\"}}";
-
-    @Before
-    public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
-    }
 
     @Test
     public void constructor_InvalidProtocol() {
@@ -101,7 +96,7 @@ public class McpStreamableHttpConnectorTest {
         Assert.assertEquals(AccessMode.PUBLIC, connector.getAccess());
         Assert.assertEquals("https://test.com", connector.getUrl());
         Assert.assertEquals("/custom/endpoint", connector.getParameters().get("endpoint"));
-        connector.decrypt(PREDICT.name(), decryptFunction, null);
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -120,7 +115,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void decrypt() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        connector.decrypt("", decryptFunction, null);
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -137,7 +132,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void encrypt() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        connector.encrypt(encryptFunction, null);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
         Map<String, String> credential = connector.getCredential();
         Assert.assertEquals(1, credential.size());
         Assert.assertEquals("encrypted: test_key_value", credential.get("key"));
@@ -217,7 +212,8 @@ public class McpStreamableHttpConnectorTest {
             .build();
 
         // Call the update method
-        connector.update(updateInput, encryptFunction);
+        connector.update(updateInput);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
 
         // Assertions
         Assert.assertEquals(updatedName, connector.getName());
@@ -239,7 +235,7 @@ public class McpStreamableHttpConnectorTest {
         Assert.assertNotEquals(initialCredential, currentCredential);
 
         // Check decrypted credentials and headers (need to explicitly decrypt after update)
-        connector.decrypt("", decryptFunction, null); // Use decrypt function from setUp
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertNotNull(decryptedCredential);
         Assert.assertEquals(1, decryptedCredential.size());
@@ -267,7 +263,8 @@ public class McpStreamableHttpConnectorTest {
 
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("MCP Connector url is blank");
-        connector.update(updateInput, encryptFunction);
+        connector.update(updateInput);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
     }
 
     public static McpStreamableHttpConnector createMcpStreamableHttpConnector() {
