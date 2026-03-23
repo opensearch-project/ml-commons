@@ -856,6 +856,7 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processOutput_WithMLGuard_AsNull() throws IOException {
+        // Test MLGuard validation failure path - just test that null MLGuard works
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -871,6 +872,7 @@ public class ConnectorUtilsTest {
             .actions(Arrays.asList(predictAction))
             .build();
 
+        // Test with null MLGuard (should pass validation)
         String modelResponse = "{\"result\":\"test response\"}";
         ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), null);
         assertEquals(1, tensors.getMlModelTensors().size());
