@@ -1597,7 +1597,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
 
-        // Create input dataset if it doesn't exist (needed for all agent types)
+        // old style agent registration, except AG_UI agent
+        if (!mlAgent.usesUnifiedInterface() && agentType != MLAgentType.AG_UI) {
+            return;
+        }
+
         if (agentMLInput.getInputDataset() == null) {
             agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
         }
@@ -1610,11 +1614,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         // Validate V1 agents with unified interface only support TEXT input (fail early)
         if (agentMLInput.getAgentInput() != null) {
             validateV1MultiModalInput(mlAgent, agentMLInput.getAgentInput().getInputType());
-        }
-
-        // old style agent registration, except AG_UI agent
-        if (!mlAgent.usesUnifiedInterface() && agentType != MLAgentType.AG_UI) {
-            return;
         }
 
         // AGUI history-load: no question extraction needed, MLAGUIAgentRunner handles it
