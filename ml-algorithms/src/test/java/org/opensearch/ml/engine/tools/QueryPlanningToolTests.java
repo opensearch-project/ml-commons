@@ -1556,6 +1556,31 @@ public class QueryPlanningToolTests {
     }
 
     @Test
+    public void testGetIndexMapping_NullMappingsFails() throws ExecutionException, InterruptedException {
+        ArgumentCaptor<ActionListener<GetIndexResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getIndex(any(), captor.capture());
+
+        GetIndexResponse response = mock(GetIndexResponse.class);
+        when(response.mappings()).thenReturn(null);
+
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+
+        CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION_FIELD, "q");
+        params.put(INDEX_NAME_FIELD, "testIndex");
+
+        tool.run(params, listener);
+        captor.getValue().onResponse(response);
+
+        ExecutionException ex = assertThrows(ExecutionException.class, () -> future.get());
+        assertTrue(ex.getCause() instanceof IllegalStateException);
+        assertEquals("Failed to extract index mapping: no mappings found for testIndex", ex.getCause().getMessage());
+    }
+
+    @Test
     public void testFactoryCreate_NoModelIdProvided() {
         Map<String, Object> params = new HashMap<>();
 
