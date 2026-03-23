@@ -298,6 +298,14 @@ public class MLAgentExecutorTest {
     }
 
     @Test
+    public void testGetAgentRunnerWithConversationalV2Agent() {
+        MLAgent agent = createTestAgent(MLAgentType.CONVERSATIONAL_V2.name());
+        MLAgentRunner runner = mlAgentExecutor.getAgentRunner(agent, null);
+        assertNotNull(runner);
+        assertTrue(runner instanceof MLChatAgentRunnerV2);
+    }
+
+    @Test
     public void testGetAgentRunnerWithUnsupportedAgentType() {
         // Create a mock MLAgent instead of using the constructor that validates
         MLAgent agent = mock(MLAgent.class);

@@ -1645,6 +1645,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
 
             // For agent with revamped interface, use ModelProvider to map the entire AgentInput
+            String question = null;
             if (mlAgent.usesUnifiedInterface()) {
                 remoteDataSet.getParameters().put(USES_UNIFIED_INTERFACE, "true");
                 ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
@@ -1653,12 +1654,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 // Extract question text for prompt template usage
                 // Both V1 and V2 unified agents support all input types (TEXT, CONTENT_BLOCKS, MESSAGES)
                 // through ModelProvider.mapAgentInput(), so use AgentInputProcessor to extract text
-                String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
+                question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
                 parameters.put(QUESTION, question);
 
                 remoteDataSet.getParameters().putAll(parameters);
             } else {
                 // For old-style AG_UI agents without model field
+                // Extract question text from AgentInput
+                question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
+
                 // Prepend context to question if available
                 if (agentType == MLAgentType.AG_UI) {
                     String context = remoteDataSet.getParameters().get(AGUI_PARAM_CONTEXT);
