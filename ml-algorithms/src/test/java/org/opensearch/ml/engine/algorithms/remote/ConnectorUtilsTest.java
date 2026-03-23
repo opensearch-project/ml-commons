@@ -410,10 +410,7 @@ public class ConnectorUtilsTest {
 
         assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
         assertEquals("POST", result.getMethod());
-        assertEquals(
-            BEDROCK_BATCH_URL_TEMPLATE + "/${parameters.processedJobArn}/stop",
-            result.getUrl()
-        );
+        assertEquals(BEDROCK_BATCH_URL_TEMPLATE + "/${parameters.processedJobArn}/stop", result.getUrl());
         assertNull(result.getRequestBody());
     }
 
@@ -784,7 +781,8 @@ public class ConnectorUtilsTest {
             .actions(Arrays.asList(predictAction))
             .build();
 
-        RemoteInferenceInputDataSet result = ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
+        RemoteInferenceInputDataSet result = ConnectorUtils
+            .processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
         assertNotNull(result);
         Map<String, Object> scriptParams = scriptParamsRef.get();
         assertNotNull(scriptParams);
@@ -933,7 +931,8 @@ public class ConnectorUtilsTest {
         when(mlGuard.validate(any(), any(), any())).thenReturn(true);
 
         String modelResponse = "{\"result\":\"test response\"}";
-        ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), mlGuard);
+        ModelTensors tensors = ConnectorUtils
+            .processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), mlGuard);
         assertEquals(1, tensors.getMlModelTensors().size());
         verify(mlGuard).validate(eq(modelResponse), eq(MLGuard.Type.OUTPUT), any());
     }
@@ -1105,9 +1104,11 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
-        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/custom-json", "Authorization", "Bearer token"));
+        when(connector.getDecryptedHeaders())
+            .thenReturn(Map.of("Content-Type", "application/custom-json", "Authorization", "Bearer token"));
 
-        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
 
         assertEquals(OPENAI_EMBEDDINGS_URL, request.getUri().toString());
         assertEquals("application/custom-json", request.firstMatchingHeader("Content-Type").orElse(null));
@@ -1148,8 +1149,7 @@ public class ConnectorUtilsTest {
         Connector connector = mock(Connector.class);
         Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
         when(connector.getParameters()).thenReturn(parameters);
-        when(connector.getActionEndpoint("predict", parameters))
-            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payloadWithNulls =
@@ -1172,8 +1172,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NovaMalformedJson() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String malformedJson = "{ invalid json }";
@@ -1193,8 +1192,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NovaMissingSingleEmbeddingParams() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String jsonWithoutParams = "{\"taskType\":\"SINGLE_EMBEDDING\"}";
@@ -1435,7 +1433,13 @@ public class ConnectorUtilsTest {
     public void processInput_ActionMissing_Throws() {
         RemoteInferenceInputDataSet dataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("input", "test")).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Collections.emptyList()).build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Collections.emptyList())
+            .build();
 
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("no PREDICT action found");
@@ -1507,7 +1511,8 @@ public class ConnectorUtilsTest {
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Authorization", "Bearer token"));
 
-        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
 
         assertEquals("application/json", request.firstMatchingHeader("Content-Type").orElse(null));
         assertEquals("16", request.firstMatchingHeader("Content-Length").orElse(null));
@@ -1521,7 +1526,8 @@ public class ConnectorUtilsTest {
         when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "text/plain", "Content-Length", "999"));
 
-        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
 
         assertEquals("text/plain", request.firstMatchingHeader("Content-Type").orElse(null));
         assertEquals("999", request.firstMatchingHeader("Content-Length").orElse(null));
@@ -1634,8 +1640,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NovaRemovesTextWhenValueNull() throws IOException {
         Connector connector = mock(Connector.class);
         Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
-        when(connector.getActionEndpoint("predict", parameters))
-            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"text\":{\"value\":null},\"audio\":{\"source\":{\"bytes\":\"abc\"}}}}";
@@ -1650,8 +1655,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NovaRemovesImageWhenBytesNull() throws IOException {
         Connector connector = mock(Connector.class);
         Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
-        when(connector.getActionEndpoint("predict", parameters))
-            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"image\":{\"source\":{\"bytes\":null}},\"text\":{\"value\":\"keep\"}}}";
@@ -1666,8 +1670,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NovaKeepsImageWhenSourceMissing() throws IOException {
         Connector connector = mock(Connector.class);
         Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
-        when(connector.getActionEndpoint("predict", parameters))
-            .thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payload = "{\"singleEmbeddingParams\":{\"image\":{},\"text\":{\"value\":\"keep\"}}}";
