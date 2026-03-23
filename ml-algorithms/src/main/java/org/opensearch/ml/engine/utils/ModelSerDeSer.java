@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.util.Base64;
 
 import org.apache.commons.io.serialization.ValidatingObjectInputStream;
@@ -89,7 +90,16 @@ public class ModelSerDeSer {
     public static Object deserialize(byte[] modelBin) {
         try (
             ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
-            ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream)
+            ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream) {
+                @Override
+                protected Class<?> resolveClass(ObjectStreamClass desc) throws IOException, ClassNotFoundException {
+                    try {
+                        return super.resolveClass(desc);
+                    } catch (ClassNotFoundException e) {
+                        return Class.forName(desc.getName(), false, ModelSerDeSer.class.getClassLoader());
+                    }
+                }
+            }
         ) {
             // Validate the model class type to avoid deserialization attack.
             validatingObjectInputStream.accept(ACCEPT_CLASS_PATTERNS).reject(REJECT_CLASS_PATTERNS);
