@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -741,9 +742,11 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processInput_TextSimilarityInputDataSet() {
+        AtomicReference<Map<String, Object>> scriptParamsRef = new AtomicReference<>();
         when(scriptService.compile(any(), any())).thenAnswer(invocation -> new TemplateScript.Factory() {
             @Override
             public TemplateScript newInstance(Map<String, Object> params) {
+                scriptParamsRef.set(params);
                 return new TemplateScript(params) {
                     @Override
                     public String execute() {
@@ -783,6 +786,11 @@ public class ConnectorUtilsTest {
 
         RemoteInferenceInputDataSet result = ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
         assertNotNull(result);
+        Map<String, Object> scriptParams = scriptParamsRef.get();
+        assertNotNull(scriptParams);
+        assertEquals(processTextDoc("query \"with quotes\""), scriptParams.get("query_text"));
+        assertEquals(processTextDoc("doc1 with \"quotes\""), ((List<String>) scriptParams.get("text_docs")).get(0));
+        assertEquals(processTextDoc("doc2 with \n newlines"), ((List<String>) scriptParams.get("text_docs")).get(1));
         String expectedQuery = escapeJson(processTextDoc("query \"with quotes\""));
         String expectedFirstDoc = escapeJson(processTextDoc("doc1 with \"quotes\""));
         String expectedSecondDoc = escapeJson(processTextDoc("doc2 with \n newlines"));
@@ -861,7 +869,7 @@ public class ConnectorUtilsTest {
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url(TEST_MOCK_URL)
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Connector connector = HttpConnector
@@ -910,7 +918,7 @@ public class ConnectorUtilsTest {
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url(TEST_MOCK_URL)
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Connector connector = HttpConnector
