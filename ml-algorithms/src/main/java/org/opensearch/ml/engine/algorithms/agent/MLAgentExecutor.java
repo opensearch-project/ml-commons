@@ -1511,15 +1511,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     hookRegistry
                 );
             case CONVERSATIONAL_V2:
-                return new MLChatAgentRunnerV2(
-                    client,
-                    settings,
-                    clusterService,
-                    xContentRegistry,
-                    toolFactories,
-                    sdkClient,
-                    encryptor
-                );
+                return new MLChatAgentRunnerV2(client, settings, clusterService, xContentRegistry, toolFactories, sdkClient, encryptor);
             default:
                 throw new IllegalArgumentException("Unsupported agent type");
         }

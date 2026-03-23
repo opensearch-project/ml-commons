@@ -9,7 +9,6 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,13 +21,9 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLMemoryType;
-import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
-import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
@@ -352,13 +347,7 @@ public class AbstractV2AgentRunnerTest {
         Map<String, String> params = new HashMap<>();
 
         // Act
-        AgentV2Output result = runner.buildStandardizedOutput(
-            assistantMessage,
-            "memory-123",
-            "end_turn",
-            tokenUsage,
-            params
-        );
+        AgentV2Output result = runner.buildStandardizedOutput(assistantMessage, "memory-123", "end_turn", tokenUsage, params);
 
         // Assert
         assertNotNull(result);
@@ -464,9 +453,8 @@ public class AbstractV2AgentRunnerTest {
         }).when(memory).saveStructuredMessages(anyList(), any());
 
         // Act
-        ActionListener<Void> testListener = ActionListener.wrap(response -> fail("Should not succeed"), e -> {
-            assertEquals(expectedException, e);
-        });
+        ActionListener<Void> testListener = ActionListener
+            .wrap(response -> fail("Should not succeed"), e -> { assertEquals(expectedException, e); });
 
         runner.saveAssistantMessage(memory, assistantMessage, testListener);
 

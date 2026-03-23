@@ -37,8 +37,6 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
-import com.google.gson.Gson;
-
 import lombok.extern.log4j.Log4j2;
 
 /**
