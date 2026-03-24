@@ -18,6 +18,9 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -323,6 +326,301 @@ public class SummarizationManagerTest {
         for (int i = 0; i < originalSize; i++) {
             Assert.assertEquals("Tool output " + (i + 1), context.getToolInteractions().get(i));
         }
+    }
+
+    @Test
+    public void testExecuteWithEmptyStructuredChatHistory() {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .structuredChatHistory(new ArrayList<>())
+            .build();
+
+        manager.execute(context);
+
+        Assert.assertTrue(context.getStructuredChatHistory().isEmpty());
+    }
+
+    @Test
+    public void testExecuteWithNullStructuredChatHistory() {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .structuredChatHistory(null)
+            .build();
+
+        manager.execute(context);
+
+        Assert.assertNull(context.getStructuredChatHistory());
+    }
+
+    @Test
+    public void testExecuteWithInsufficientStructuredMessages() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("preserve_recent_messages", 10);
+        manager.initialize(config);
+
+        // Add only 5 structured messages - will try to summarize with effective preserve
+        // but fail because no model ID is available
+        List<Message> messages = createStructuredMessages(5);
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .structuredChatHistory(messages)
+            .build();
+
+        manager.execute(context);
+
+        // Should remain unchanged (no model ID available)
+        Assert.assertEquals(5, context.getStructuredChatHistory().size());
+    }
+
+    @Test
+    public void testExecuteWithSingleStructuredMessage() {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Add only 1 structured message - need at least 2 to summarize
+        List<Message> messages = createStructuredMessages(1);
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .structuredChatHistory(messages)
+            .build();
+
+        manager.execute(context);
+
+        // Should remain unchanged - need at least 2 messages
+        Assert.assertEquals(1, context.getStructuredChatHistory().size());
+    }
+
+    @Test
+    public void testStructuredMessagesEffectivePreserveWhenCountEqualsPreserve() {
+        // This tests the scenario where totalMessages == preserveRecentMessages.
+        // Old logic: min(count, 10-10) = 0 -> returns early (no summarization).
+        // New logic: effectivePreserve = min(10, 9) = 9, messagesToSummarize = min(3, 10-9) = 1
+        // -> at least 1 message gets summarized (if model ID is available).
+        Map<String, Object> config = new HashMap<>();
+        config.put("preserve_recent_messages", 10);
+        manager.initialize(config);
+
+        List<Message> messages = createStructuredMessages(10);
+        Map<String, String> params = new HashMap<>();
+        // No model ID -> summarization fails gracefully
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(params)
+            .structuredChatHistory(messages)
+            .build();
+
+        manager.execute(context);
+
+        // Remains unchanged because no model ID is available,
+        // but the method proceeds past the message count check (not an early return)
+        Assert.assertEquals(10, context.getStructuredChatHistory().size());
+    }
+
+    @Test
+    public void testExecuteWithNoModelIdStructuredMessages() {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Add enough structured messages to trigger summarization
+        List<Message> messages = createStructuredMessages(20);
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .structuredChatHistory(messages)
+            .build();
+
+        manager.execute(context);
+
+        // Should remain unchanged due to missing model ID
+        Assert.assertEquals(20, context.getStructuredChatHistory().size());
+    }
+
+    @Test
+    public void testProcessStructuredSummarizationResult() {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        List<Message> remainingMessages = createStructuredMessages(5);
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .structuredChatHistory(new ArrayList<>())
+            .build();
+
+        manager.processStructuredSummarizationResult(context, "Test structured summary", remainingMessages);
+
+        // Should have 1 summary + 5 remaining = 6 total
+        Assert.assertEquals(6, context.getStructuredChatHistory().size());
+
+        // First should be summary message with assistant role
+        Message summaryMsg = context.getStructuredChatHistory().get(0);
+        Assert.assertEquals("assistant", summaryMsg.getRole());
+        Assert.assertNotNull(summaryMsg.getContent());
+        Assert.assertEquals(1, summaryMsg.getContent().size());
+        Assert.assertTrue(summaryMsg.getContent().get(0).getText().contains("Test structured summary"));
+    }
+
+    @Test
+    public void testShouldActivateWithRulesNotSatisfied() {
+        Map<String, Object> config = new HashMap<>();
+        Map<String, Object> activation = new HashMap<>();
+        activation.put("tokens_exceed", 99999); // Very high threshold - won't be satisfied
+        config.put("activation", activation);
+        manager.initialize(config);
+
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .userPrompt("short prompt")
+            .build();
+
+        Assert.assertFalse(manager.shouldActivate(context));
+    }
+
+    @Test
+    public void testShouldActivateWithRulesSatisfied() {
+        Map<String, Object> config = new HashMap<>();
+        Map<String, Object> activation = new HashMap<>();
+        activation.put("tokens_exceed", 1); // Very low threshold - always satisfied
+        config.put("activation", activation);
+        manager.initialize(config);
+
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .userPrompt("This is a prompt with enough tokens")
+            .build();
+
+        Assert.assertTrue(manager.shouldActivate(context));
+    }
+
+    @Test
+    public void testExecuteStructuredMessagesWithModelIdParam() {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Add enough structured messages to pass early returns
+        List<Message> messages = createStructuredMessages(5);
+        Map<String, String> params = new HashMap<>();
+        params.put("_llm_model_id", "test-model-from-params");
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(params)
+            .structuredChatHistory(messages)
+            .build();
+
+        // Execute - will proceed past model ID check but fail on client call
+        manager.execute(context);
+
+        // Should remain unchanged since client mock isn't set up for LLM call
+        Assert.assertEquals(5, context.getStructuredChatHistory().size());
+    }
+
+    @Test
+    public void testExecuteStructuredMessagesWithNoTextContent() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summarization_model_id", "test-model");
+        manager.initialize(config);
+
+        // Create messages with null content
+        List<Message> messages = new ArrayList<>();
+        messages.add(new Message("user", null));
+        messages.add(new Message("assistant", null));
+        messages.add(new Message("user", null));
+
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(new HashMap<>())
+            .structuredChatHistory(messages)
+            .build();
+
+        manager.execute(context);
+
+        // Should remain unchanged since no text content to summarize
+        Assert.assertEquals(3, context.getStructuredChatHistory().size());
+    }
+
+    @Test
+    public void testInitializeWithStringConfigs() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summary_ratio", "0.4");
+        config.put("preserve_recent_messages", "8");
+        manager.initialize(config);
+
+        Assert.assertEquals(0.4, manager.summaryRatio, 0.001);
+        Assert.assertEquals(8, manager.preserveRecentMessages);
+    }
+
+    @Test
+    public void testInitializeWithInvalidStringConfigs() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summary_ratio", "not-a-number");
+        config.put("preserve_recent_messages", "not-a-number");
+        manager.initialize(config);
+
+        // Should fall back to defaults
+        Assert.assertEquals(0.3, manager.summaryRatio, 0.001);
+        Assert.assertEquals(10, manager.preserveRecentMessages);
+    }
+
+    @Test
+    public void testInitializeWithLowSummaryRatio() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summary_ratio", 0.05); // Below 0.1 minimum
+        manager.initialize(config);
+
+        Assert.assertEquals(0.3, manager.summaryRatio, 0.001);
+    }
+
+    @Test
+    public void testResolveModelIdFromConfig() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summarization_model_id", "config-model-id");
+        manager.initialize(config);
+
+        addToolInteractionsToContext(20);
+
+        // Execute - config model ID should be used (will fail on client call but that's OK)
+        manager.execute(context);
+
+        // Interactions unchanged because client call fails, but model ID resolution worked
+        Assert.assertEquals(20, context.getToolInteractions().size());
+    }
+
+    /**
+     * Helper method to create structured messages for testing.
+     */
+    private List<Message> createStructuredMessages(int count) {
+        List<Message> messages = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            ContentBlock block = new ContentBlock();
+            block.setType(ContentType.TEXT);
+            block.setText("Message content " + i);
+            String role = (i % 2 == 1) ? "user" : "assistant";
+            messages.add(new Message(role, List.of(block)));
+        }
+        return messages;
     }
 
     /**

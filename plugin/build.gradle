@@ -283,19 +283,13 @@ integTest {
 
 // Resolve plugin zips
 ext.resolvePluginFile = { pluginId ->
-    return new Callable<RegularFile>() {
-        @Override
-        RegularFile call() throws Exception {
-            return new RegularFile() {
-                @Override
-                File getAsFile() {
-                    return configurations.opensearchPlugin.resolvedConfiguration.resolvedArtifacts
-                            .find { ResolvedArtifact f -> f.name.startsWith(pluginId) }
-                            .file
-                }
-            }
-        }
-    }
+    return { ->
+        layout.file(provider {
+            configurations.opensearchPlugin.resolvedConfiguration.resolvedArtifacts
+                    .find { ResolvedArtifact f -> f.name.startsWith(pluginId) }
+                    .file
+        }).get()
+    } as Callable<RegularFile>
 }
 
 def jobSchedulerFile  = resolvePluginFile("opensearch-job-scheduler")
@@ -342,28 +336,8 @@ testClusters.integTest {
             throw new GradleException("arrow-flight-rpc plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:arrow-flight-rpc:assemble")
         }
 
-        plugin(provider(new Callable<RegularFile>() {
-            @Override
-            RegularFile call() throws Exception {
-                return new RegularFile() {
-                    @Override
-                    File getAsFile() {
-                        return transportPlugin
-                    }
-                }
-            }
-        }))
-        plugin(provider(new Callable<RegularFile>() {
-            @Override
-            RegularFile call() throws Exception {
-                return new RegularFile() {
-                    @Override
-                    File getAsFile() {
-                        return arrowPlugin
-                    }
-                }
-            }
-        }))
+        plugin(layout.file(provider { transportPlugin }))
+        plugin(layout.file(provider { arrowPlugin }))
     }
 
     configureClusterPlugins(delegate, jobSchedulerFile, securityPluginFile, securityEnabled)
@@ -425,18 +399,7 @@ def configureClusterPlugins(cluster, jobSchedZip, securityZip, securityEnabled) 
 }
 
 testClusters.yamlRestTest {
-
-    plugin(provider(new Callable<RegularFile>(){
-        @Override
-        RegularFile call() throws Exception {
-            return new RegularFile() {
-                @Override
-                File getAsFile() {
-                    return configurations.zipArchive.asFileTree.getSingleFile()
-                }
-            }
-        }
-    }))
+    plugin(layout.file(provider { configurations.zipArchive.asFileTree.getSingleFile() }))
 }
 
 task integTestRemote(type: RestIntegTestTask) {
@@ -830,28 +793,20 @@ String opensearchMlPlugin = "opensearch-ml-" + project.version + ".zip"
             testDistribution = "ARCHIVE"
             versions = [bwcShortVersion, opensearch_version]
             numberOfNodes = 3
-            plugin(provider(new Callable<RegularFile>() {
-                @Override
-                RegularFile call() throws Exception {
-                    return new RegularFile() {
-                        @Override
-                        File getAsFile() {
-                            File bwcDir = new File('./plugin/' + bwcFilePath)
-                            if (!bwcDir.exists()) {
-                                bwcDir.mkdirs()
-                            }
-                            File dir = new File('./plugin/' + bwcFilePath + bwcVersion)
-                            if (!dir.exists()) {
-                                dir.mkdirs()
-                            }
-                            File f = new File(dir, bwcMlPlugin)
-                            if (!f.exists()) {
-                                new URL(bwcRemoteFile).withInputStream{ ins -> f.withOutputStream{ it << ins }}
-                            }
-                            return fileTree(bwcFilePath + bwcVersion).getSingleFile()
-                        }
-                    }
+            plugin(layout.file(provider {
+                File bwcDir = new File('./plugin/' + bwcFilePath)
+                if (!bwcDir.exists()) {
+                    bwcDir.mkdirs()
                 }
+                File dir = new File('./plugin/' + bwcFilePath + bwcVersion)
+                if (!dir.exists()) {
+                    dir.mkdirs()
+                }
+                File f = new File(dir, bwcMlPlugin)
+                if (!f.exists()) {
+                    new URL(bwcRemoteFile).withInputStream{ ins -> f.withOutputStream{ it << ins }}
+                }
+                fileTree(bwcFilePath + bwcVersion).getSingleFile()
             }))
             setting 'path.repo', "${buildDir}/cluster/shared/repo/${baseName}"
             setting 'http.content_type.required', 'true'
@@ -860,21 +815,13 @@ String opensearchMlPlugin = "opensearch-ml-" + project.version + ".zip"
 }
 
 List<Provider<RegularFile>> plugins = [
-        provider(new Callable<RegularFile>() {
-            @Override
-            RegularFile call() throws Exception {
-                return new RegularFile() {
-                    @Override
-                    File getAsFile() {
-                        project.mkdir "$bwcFilePath/$project.version"
-                        copy {
-                            from "$buildDir/distributions/$opensearchMlPlugin"
-                            into "$bwcFilePath/$project.version"
-                        }
-                        return fileTree(bwcFilePath + project.version).getSingleFile()
-                    }
-                }
+        layout.file(provider {
+            project.mkdir "$bwcFilePath/$project.version"
+            copy {
+                from "$buildDir/distributions/$opensearchMlPlugin"
+                into "$bwcFilePath/$project.version"
             }
+            fileTree(bwcFilePath + project.version).getSingleFile()
         })
 ]
 
