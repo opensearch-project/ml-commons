@@ -7,6 +7,8 @@ package org.opensearch.ml.action.agent;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
+import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 
@@ -39,7 +41,15 @@ public class MLAgentRegistrationValidator {
         try {
             log.debug("Starting agent registration validation for agent: {}", agent.getName());
 
-            // First, perform basic context management configuration validation
+            // Validate V2 agent memory configuration
+            String memoryError = validateV2AgentMemory(agent);
+            if (memoryError != null) {
+                log.error("Agent registration validation failed - memory configuration error: {}", memoryError);
+                listener.onFailure(new IllegalArgumentException(memoryError));
+                return;
+            }
+
+            // Validate context management configuration
             String configError = validateContextManagementConfiguration(agent);
             if (configError != null) {
                 log.error("Agent registration validation failed - configuration error: {}", configError);
@@ -64,6 +74,54 @@ public class MLAgentRegistrationValidator {
         } catch (Exception e) {
             log.error("Unexpected error during agent registration validation", e);
             listener.onFailure(new IllegalArgumentException("Agent validation failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Validates V2 agent memory configuration.
+     * V2 agents (CONVERSATIONAL_V2) cannot use conversation_index memory.
+     *
+     * @param agent the ML agent to validate
+     * @return validation error message if invalid, null if valid
+     */
+    private String validateV2AgentMemory(MLAgent agent) {
+        try {
+            MLAgentType agentType = MLAgentType.from(agent.getType());
+
+            // Check if this is a V2 agent
+            if (agentType.isV2()) {
+                // V2 agents must have memory configured
+                if (agent.getMemory() == null) {
+                    return "V2 agents (CONVERSATIONAL_V2) require memory configuration. "
+                        + "Please configure 'memory' with type 'agentic_memory' or 'remote_agentic_memory'.";
+                }
+
+                // V2 agents cannot use conversation_index
+                String memoryType = agent.getMemory().getType();
+                if (MLMemoryType.CONVERSATION_INDEX.name().equalsIgnoreCase(memoryType)) {
+                    return String
+                        .format(
+                            "V2 agents (CONVERSATIONAL_V2) are not compatible with conversation_index memory. "
+                                + "Found memory type: %s. Please use 'agentic_memory' or 'remote_agentic_memory' instead.",
+                            memoryType
+                        );
+                }
+
+                // Validate memory type is agentic
+                MLMemoryType parsedMemoryType = MLMemoryType.from(memoryType);
+                if (parsedMemoryType != MLMemoryType.AGENTIC_MEMORY && parsedMemoryType != MLMemoryType.REMOTE_AGENTIC_MEMORY) {
+                    return String
+                        .format(
+                            "V2 agents (CONVERSATIONAL_V2) only support agentic_memory or remote_agentic_memory. " + "Found: %s",
+                            memoryType
+                        );
+                }
+            }
+
+            return null; // Valid
+        } catch (Exception e) {
+            log.error("Error during V2 agent memory validation", e);
+            return "Failed to validate agent memory configuration: " + e.getMessage();
         }
     }
 
@@ -101,11 +159,23 @@ public class MLAgentRegistrationValidator {
     /**
      * Validates context management configuration structure and requirements.
      * This method performs comprehensive validation of context management settings.
-     * 
+     *
      * @param agent the ML agent to validate
      * @return validation error message if invalid, null if valid
      */
     public String validateContextManagementConfiguration(MLAgent agent) {
+        // V2 agents do not support context management
+        try {
+            MLAgentType agentType = MLAgentType.from(agent.getType());
+            if (agentType.isV2() && (agent.getContextManagementName() != null || agent.getContextManagement() != null)) {
+                return "V2 agents (CONVERSATIONAL_V2) do not support context management. "
+                    + "Context management (context_management or context_management_name) is only supported for V1 agents. "
+                    + "Please remove the context management configuration from your V2 agent.";
+            }
+        } catch (Exception e) {
+            log.error("Error checking agent type for context management validation", e);
+        }
+
         // Check for conflicting configuration (both name and inline config specified)
         if (agent.getContextManagementName() != null && agent.getContextManagement() != null) {
             return "Cannot specify both context_management_name and context_management";
@@ -190,7 +260,7 @@ public class MLAgentRegistrationValidator {
     ) {
         // Define valid hook names
         java.util.Set<String> validHookNames = java.util.Set
-            .of("PRE_TOOL", "POST_TOOL", "PRE_LLM", "POST_LLM", "PRE_EXECUTION", "POST_EXECUTION");
+            .of("PRE_TOOL", "POST_TOOL", "PRE_LLM", "POST_LLM", "PRE_EXECUTION", "POST_EXECUTION", "POST_MEMORY");
 
         for (java.util.Map.Entry<String, java.util.List<org.opensearch.ml.common.contextmanager.ContextManagerConfig>> entry : hooks
             .entrySet()) {

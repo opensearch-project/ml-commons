@@ -75,6 +75,15 @@ public abstract class ModelProvider {
     public abstract Map<String, String> mapMessages(List<Message> messages, MLAgentType type);
 
     /**
+     * Extracts the message portion from a full LLM response.
+     * Each provider knows its own response format (e.g., Bedrock: output.message, OpenAI: choices[0].message).
+     *
+     * @param responseData the full LLM response data map
+     * @return JSON string of just the message portion, or null if extraction fails
+     */
+    public abstract String extractMessageFromResponse(Map<String, ?> responseData);
+
+    /**
      * Parses an provider-specific format response message JSON string into a unified Message object.
      *
      * @param json JSON string in the provider's native message format

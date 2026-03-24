@@ -20,7 +20,6 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -77,14 +76,12 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
 
-    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+    @Setter
+    private volatile boolean connectorPrivateIpEnabled;
 
     @Setter
     @Getter
     private StreamTransportService streamTransportService;
-
-    @Setter
-    private volatile boolean connectorPrivateIpEnabled;
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);

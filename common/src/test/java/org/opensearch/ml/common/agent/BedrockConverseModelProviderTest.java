@@ -1086,4 +1086,111 @@ public class BedrockConverseModelProviderTest {
         Message result = provider.parseToUnifiedMessage(json);
         assertNull(result);
     }
+
+    // ==================== Tests for extractMessageFromResponse ====================
+
+    @Test
+    public void testExtractMessageFromResponse_ValidBedrockResponse() {
+        // Arrange
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", "assistant");
+        List<Map<String, String>> content = new ArrayList<>();
+        Map<String, String> textBlock = new HashMap<>();
+        textBlock.put("text", "Hello world");
+        content.add(textBlock);
+        message.put("content", content);
+
+        Map<String, Object> output = new HashMap<>();
+        output.put("message", message);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("output", output);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.contains("\"role\":\"assistant\""));
+        assertTrue(result.contains("\"content\""));
+        assertTrue(result.contains("Hello world"));
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_NullResponseData() {
+        // Act
+        String result = provider.extractMessageFromResponse(null);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_MissingOutput() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_MissingMessage() {
+        // Arrange
+        Map<String, Object> output = new HashMap<>();
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("output", output);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_OutputNotMap() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("output", "not a map");
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_WithToolUse() {
+        // Arrange
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", "assistant");
+        List<Map<String, Object>> content = new ArrayList<>();
+        Map<String, Object> toolUse = new HashMap<>();
+        Map<String, Object> toolUseData = new HashMap<>();
+        toolUseData.put("toolUseId", "tc_1");
+        toolUseData.put("name", "search");
+        toolUseData.put("input", Map.of("query", "test"));
+        toolUse.put("toolUse", toolUseData);
+        content.add(toolUse);
+        message.put("content", content);
+
+        Map<String, Object> output = new HashMap<>();
+        output.put("message", message);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("output", output);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.contains("\"role\":\"assistant\""));
+        assertTrue(result.contains("toolUse"));
+    }
 }

@@ -81,7 +81,7 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
         }
 
         // Check if unified agent API is being used but not enabled
-        if (mlAgent.getModel() != null && !mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()) {
+        if (mlAgent.usesUnifiedInterface() && !mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()) {
             throw new IllegalArgumentException(
                 "Unified agent API is not enabled. To enable, please update the setting plugins.ml_commons.unified_agent_api_enabled"
             );

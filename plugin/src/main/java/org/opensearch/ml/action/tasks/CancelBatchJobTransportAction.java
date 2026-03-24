@@ -266,8 +266,12 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
             connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
+                connectorExecutor.close();
                 processTaskResponse(taskResponse, actionListener);
-            }, actionListener::onFailure));
+            }, e -> {
+                connectorExecutor.close();
+                actionListener.onFailure(e);
+            }));
         }, e -> {
             log.error("Failed to decrypt credentials in connector", e);
             actionListener.onFailure(e);

@@ -68,6 +68,7 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManager;
+import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.contextmanager.ContextManagerHookProvider;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
@@ -84,13 +85,16 @@ import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.model.ModelProviderFactory;
 import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.Output;
+import org.opensearch.ml.common.output.execute.agent.AgentV2Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.Executable;
+import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.algorithms.contextmanager.ContextManagerFactory;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -797,10 +801,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     /**
      * Performs initial memory operations for unified interface agents:
      * 1. Gets structured message history
-     * 2. Saves input messages
-     * 3. Appends AGUI context if applicable
-     * 4. Formats history for the LLM
-     * 5. Invokes continuation when done
+     * 2. Applies POST_MEMORY hook for context management (summarization, sliding window, etc.)
+     * 3. Saves input messages
+     * 4. Appends AGUI context if applicable
+     * 5. Formats history for the LLM
+     * 6. Invokes continuation when done
      */
     @VisibleForTesting
     void performInitialMemoryOperations(
@@ -809,18 +814,27 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         Map<String, String> params,
         MLAgent mlAgent,
         ActionListener<?> listener,
-        Runnable continuation
+        Runnable continuation,
+        HookRegistry hookRegistry
     ) {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
+        // TODO: Scalability improvement - getStructuredMessages fetches ALL messages then slices in-memory.
+        // For conversations with thousands of messages, this is inefficient. Should add Memory.getStructuredMessages(limit)
+        // to push limit down to database query level (e.g., OpenSearch query with size parameter).
         memory.getStructuredMessages(ActionListener.wrap(result -> {
             @SuppressWarnings("unchecked")
             List<Message> allMessages = (List<Message>) result;
 
             // Apply history limit
-            List<Message> history = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
+            List<Message> limitedHistory = messageHistoryLimit > 0 && allMessages.size() > messageHistoryLimit
                 ? allMessages.subList(allMessages.size() - messageHistoryLimit, allMessages.size())
                 : allMessages;
+
+            AgentContextUtil.ensureLlmModelId(mlAgent, params);
+
+            // Emit POST_MEMORY hook to allow context managers to modify retrieved structured history
+            List<Message> history = processPostStructuredMemoryHook(params, limitedHistory, memory, hookRegistry);
 
             // Save input messages — memory auto-resolves the next message ID
             memory.saveStructuredMessages(inputMessages, ActionListener.wrap(v -> {
@@ -844,9 +858,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
                     if (!history.isEmpty()) {
                         // Format history messages using the model provider for API-compatible output
-                        String formattedHistory = modelProvider.mapMessages(history, agentType).get("body");
+                        Map<String, String> historyParams = modelProvider.mapMessages(history, agentType);
+                        String formattedHistory = historyParams.get("body");
                         if (formattedHistory != null && !formattedHistory.isEmpty()) {
                             params.put(NEW_CHAT_HISTORY, formattedHistory + ", ");
+                        }
+                        // Copy NO_ESCAPE_PARAMS to ensure _chat_history is not double-escaped
+                        if (historyParams.containsKey(ToolUtils.NO_ESCAPE_PARAMS)) {
+                            String existingNoEscape = params.get(ToolUtils.NO_ESCAPE_PARAMS);
+                            String historyNoEscape = historyParams.get(ToolUtils.NO_ESCAPE_PARAMS);
+                            if (existingNoEscape != null && !existingNoEscape.isEmpty()) {
+                                // Merge with existing NO_ESCAPE_PARAMS (avoid duplicates)
+                                String merged = existingNoEscape + "," + historyNoEscape;
+                                params.put(ToolUtils.NO_ESCAPE_PARAMS, merged);
+                            } else {
+                                params.put(ToolUtils.NO_ESCAPE_PARAMS, historyNoEscape);
+                            }
                         }
                     }
 
@@ -886,6 +913,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         HookRegistry hookRegistry,
         List<Message> inputMessages
     ) {
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+
+        // V2 agents follow pure message-centric execution path
+        // TODO: Refactor to separate MLAgentExecutorV2 class for cleaner separation
+        if (agentType.isV2() && inputMessages != null && memory != null) {
+            executeV2Agent(inputDataSet, tenantId, mlTask, isAsync, mlAgent, listener, memory, channel, hookRegistry, inputMessages);
+            return;
+        }
+
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
@@ -949,7 +985,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             agentActionListener,
                             () -> {
                                 mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
-                            }
+                            },
+                            hookRegistry
                         );
                     } else {
                         mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
@@ -996,7 +1033,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         agentActionListener,
                         () -> {
                             mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel, memory);
-                        }
+                        },
+                        hookRegistry
                     );
                 } else {
                     mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
@@ -1013,6 +1051,115 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 agentActionListener.onFailure(e);
             }
         }
+    }
+
+    /**
+     * Execute V2 agent with pure message-centric flow.
+     * V2 agents work exclusively with List<Message> objects.
+     * Executor handles memory operations (fetch history, save input, apply limits).
+     * Runner receives complete conversation and executes agent logic.
+     *
+     * TODO: Extract to separate MLAgentExecutorV2 class for cleaner separation
+     */
+    private void executeV2Agent(
+        RemoteInferenceInputDataSet inputDataSet,
+        String tenantId,
+        MLTask mlTask,
+        boolean isAsync,
+        MLAgent mlAgent,
+        ActionListener<Output> listener,
+        Memory memory,
+        TransportChannel channel,
+        HookRegistry hookRegistry,
+        List<Message> inputMessages
+    ) {
+        String agentId = inputDataSet.getParameters().get(AGENT_ID_FIELD);
+        Map<String, String> params = new HashMap<>(inputDataSet.getParameters());
+
+        // Get runner (routes to MLChatAgentRunnerV2Refactored for CONVERSATIONAL_V2)
+        MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent, hookRegistry);
+
+        // Executor handles memory operations (fetch history, save input, apply limits)
+        // Then passes complete conversation to runner for execution
+        int messageHistoryLimit = getMessageHistoryLimit(params);
+
+        // TODO: Scalability improvement - getStructuredMessages fetches ALL messages then slices in-memory.
+        // For conversations with thousands of messages, this is inefficient. Should add Memory.getStructuredMessages(limit)
+        // to push limit down to database query level (e.g., OpenSearch query with size parameter).
+        memory.getStructuredMessages(ActionListener.wrap(historyObj -> {
+            @SuppressWarnings("unchecked")
+            List<Message> allHistory = (List<Message>) historyObj;
+
+            // Apply history limit (window-based: keep last N messages)
+            List<Message> history = messageHistoryLimit > 0 && allHistory.size() > messageHistoryLimit
+                ? allHistory.subList(allHistory.size() - messageHistoryLimit, allHistory.size())
+                : allHistory;
+
+            log.debug("Retrieved {} messages from history (limit={}). agentId={}", history.size(), messageHistoryLimit, agentId);
+
+            // Save input messages to memory
+            memory.saveStructuredMessages(inputMessages, ActionListener.wrap(v -> {
+                log.debug("Saved {} input messages to memory. agentId={}", inputMessages.size(), agentId);
+
+                // Build full conversation (history + new input)
+                List<Message> fullConversation = new ArrayList<>(history);
+                fullConversation.addAll(inputMessages);
+
+                log.debug("Full conversation has {} messages. agentId={}", fullConversation.size(), agentId);
+
+                if (isAsync) {
+                    // Async execution: index task, run in background
+                    Map<String, Object> agentResponse = new HashMap<>();
+                    agentResponse.put(MEMORY_ID, memory.getId());
+                    mlTask.setResponse(agentResponse);
+                    mlTask.setAsync(true);
+
+                    indexMLTask(mlTask, ActionListener.wrap(indexResponse -> {
+                        String taskId = indexResponse.getId();
+                        mlTask.setTaskId(taskId);
+                        params.put(TASK_ID_FIELD, taskId);
+
+                        MLTaskOutput outputBuilder = MLTaskOutput
+                            .builder()
+                            .taskId(taskId)
+                            .status(MLTaskState.RUNNING.toString())
+                            .response(agentResponse)
+                            .build();
+                        listener.onResponse(outputBuilder);
+
+                        ActionListener<Object> taskUpdater = createV2AsyncTaskUpdater(mlTask, mlAgent.getType(), agentId, tenantId);
+
+                        try {
+                            mlAgentRunner.runV2(mlAgent, params, taskUpdater, channel, memory, fullConversation);
+                        } catch (Exception e) {
+                            log.error("Agent execution failed. agentId={}, tenantId={}", agentId, tenantId, e);
+                            taskUpdater.onFailure(e);
+                        }
+                    }, listener::onFailure));
+                } else {
+                    // Sync execution
+                    ActionListener<Object> agentActionListener = createV2AgentActionListener(
+                        listener,
+                        mlAgent.getType(),
+                        agentId,
+                        tenantId
+                    );
+
+                    try {
+                        mlAgentRunner.runV2(mlAgent, params, agentActionListener, channel, memory, fullConversation);
+                    } catch (Exception e) {
+                        log.error("Agent execution failed. agentId={}, tenantId={}", agentId, tenantId, e);
+                        agentActionListener.onFailure(e);
+                    }
+                }
+            }, e -> {
+                log.error("Failed to save input messages. agentId={}, tenantId={}", agentId, tenantId, e);
+                listener.onFailure(e);
+            }));
+        }, e -> {
+            log.error("Failed to retrieve message history. agentId={}, tenantId={}", agentId, tenantId, e);
+            listener.onFailure(e);
+        }));
     }
 
     @SuppressWarnings("removal")
@@ -1038,9 +1185,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     latencyMs
                 );
             if (output != null) {
-                processOutput(output, modelTensors);
-                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
+                // V2 agents return AgentV2Output directly without wrapping
+                if (output instanceof AgentV2Output) {
+                    listener.onResponse((AgentV2Output) output);
+                } else {
+                    processOutput(output, modelTensors);
+                    listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
+                }
             } else {
+                log.debug("Agent output is null, returning null response");
                 listener.onResponse(null);
             }
         }, ex -> {
@@ -1059,6 +1212,53 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     ex
                 );
             updateInteractionWithFailure(parentInteractionId, memory, ex.getMessage());
+            listener.onFailure(ex);
+        });
+    }
+
+    /**
+     * Create action listener for V2 agents (sync execution).
+     * V2 agents return AgentV2Output directly without ModelTensorOutput wrapping.
+     */
+    private ActionListener<Object> createV2AgentActionListener(
+        ActionListener<Output> listener,
+        String agentType,
+        String agentId,
+        String tenantId
+    ) {
+        long startTime = System.currentTimeMillis();
+        return ActionListener.wrap(output -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            log
+                .info(
+                    "Agent execution completed. agentType={}, agentId={}, tenantId={}, latencyMs={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs
+                );
+
+            if (output instanceof AgentV2Output) {
+                listener.onResponse((AgentV2Output) output);
+            } else {
+                String errorMsg = "V2 agent must return AgentV2Output but returned: "
+                    + (output != null ? output.getClass().getName() : "null");
+                log.error(errorMsg);
+                listener.onFailure(new IllegalStateException(errorMsg));
+            }
+        }, ex -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
+            log
+                .error(
+                    "Agent execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    statusCode,
+                    ex
+                );
             listener.onFailure(ex);
         });
     }
@@ -1090,8 +1290,25 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     taskId
                 );
             if (output != null) {
-                processOutput(output, modelTensors);
-                agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
+                // V2 agents return AgentV2Output - serialize directly to response
+                if (output instanceof AgentV2Output) {
+                    AgentV2Output v2Output = (AgentV2Output) output;
+                    if (v2Output.getStopReason() != null) {
+                        agentResponse.put(AgentV2Output.STOP_REASON_FIELD, v2Output.getStopReason());
+                    }
+                    if (v2Output.getMessage() != null) {
+                        agentResponse.put(AgentV2Output.MESSAGE_FIELD, v2Output.getMessage());
+                    }
+                    if (v2Output.getMemoryId() != null) {
+                        agentResponse.put(AgentV2Output.MEMORY_ID_FIELD, v2Output.getMemoryId());
+                    }
+                    if (v2Output.getMetrics() != null && !v2Output.getMetrics().isEmpty()) {
+                        agentResponse.put(AgentV2Output.METRICS_FIELD, v2Output.getMetrics());
+                    }
+                } else {
+                    processOutput(output, modelTensors);
+                    agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
+                }
             } else {
                 agentResponse.put(ERROR_MESSAGE, "No output found from agent execution");
             }
@@ -1146,6 +1363,103 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             );
 
             updateInteractionWithFailure(parentInteractionId, memory, ex.getMessage());
+        });
+    }
+
+    /**
+     * Create action listener for V2 agents (async execution).
+     * Updates ML task with AgentV2Output when complete.
+     */
+    private ActionListener<Object> createV2AsyncTaskUpdater(MLTask mlTask, String agentType, String agentId, String tenantId) {
+        long startTime = System.currentTimeMillis();
+        String taskId = mlTask.getTaskId();
+        Map<String, Object> agentResponse = new HashMap<>();
+        Map<String, Object> updatedTask = new HashMap<>();
+
+        return ActionListener.wrap(output -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            log
+                .info(
+                    "Agent async execution completed. agentType={}, agentId={}, tenantId={}, latencyMs={}, taskId={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    taskId
+                );
+
+            if (output instanceof AgentV2Output) {
+                AgentV2Output v2Output = (AgentV2Output) output;
+                if (v2Output.getStopReason() != null) {
+                    agentResponse.put(AgentV2Output.STOP_REASON_FIELD, v2Output.getStopReason());
+                }
+                if (v2Output.getMessage() != null) {
+                    agentResponse.put(AgentV2Output.MESSAGE_FIELD, v2Output.getMessage());
+                }
+                if (v2Output.getMemoryId() != null) {
+                    agentResponse.put(AgentV2Output.MEMORY_ID_FIELD, v2Output.getMemoryId());
+                }
+                if (v2Output.getMetrics() != null && !v2Output.getMetrics().isEmpty()) {
+                    agentResponse.put(AgentV2Output.METRICS_FIELD, v2Output.getMetrics());
+                }
+
+                mlTask.setResponse(agentResponse);
+                updatedTask.put(RESPONSE_FIELD, agentResponse);
+                updatedTask.put(STATE_FIELD, MLTaskState.COMPLETED);
+            } else {
+                // Programming error: V2 agent must return AgentV2Output
+                String errorMsg = "V2 agent must return AgentV2Output but returned: "
+                    + (output != null ? output.getClass().getName() : "null");
+                log.error(errorMsg);
+                agentResponse.put(ERROR_MESSAGE, errorMsg);
+                mlTask.setResponse(agentResponse);
+                updatedTask.put(RESPONSE_FIELD, agentResponse);
+                updatedTask.put(STATE_FIELD, MLTaskState.FAILED);
+            }
+
+            updateMLTaskDirectly(
+                taskId,
+                tenantId,
+                updatedTask,
+                client,
+                sdkClient,
+                ActionListener
+                    .wrap(
+                        response -> log.info("Updated ML task {} with agent results", taskId),
+                        e -> log.error("Failed to update ML task {} with agent results", taskId, e)
+                    )
+            );
+        }, ex -> {
+            long latencyMs = System.currentTimeMillis() - startTime;
+            String statusCode = extractStatusCode(ex);
+            log
+                .error(
+                    "Agent async execution failed. agentType={}, agentId={}, tenantId={}, latencyMs={}, statusCode={}",
+                    agentType,
+                    agentId,
+                    tenantId,
+                    latencyMs,
+                    statusCode,
+                    ex
+                );
+
+            agentResponse.put(ERROR_MESSAGE, ex.getMessage());
+            updatedTask.put(RESPONSE_FIELD, agentResponse);
+            updatedTask.put(STATE_FIELD, MLTaskState.FAILED);
+            mlTask.setResponse(agentResponse);
+
+            updateMLTaskDirectly(
+                taskId,
+                tenantId,
+                updatedTask,
+                client,
+                sdkClient,
+                ActionListener
+                    .wrap(
+                        response -> log.info("Updated ML task {} with agent failure", taskId),
+                        e -> log.error("Failed to update ML task {} with failure", taskId, e)
+                    )
+            );
         });
     }
 
@@ -1211,6 +1525,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     encryptor,
                     hookRegistry
                 );
+            case CONVERSATIONAL_V2:
+                return new MLChatAgentRunnerV2(client, settings, clusterService, xContentRegistry, toolFactories, sdkClient, encryptor);
             default:
                 throw new IllegalArgumentException("Unsupported agent type");
         }
@@ -1297,8 +1613,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
 
         // old style agent registration, except AG_UI agent
-        if (mlAgent.getModel() == null && agentType != MLAgentType.AG_UI) {
+        if (!mlAgent.usesUnifiedInterface() && agentType != MLAgentType.AG_UI) {
             return;
+        }
+
+        if (agentMLInput.getInputDataset() == null) {
+            agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
+        }
+
+        // No processing required for V2, native support for Messages
+        if (agentType.isV2()) {
+            return;
+        }
+
+        // Validate V1 agents with unified interface only support TEXT input (fail early)
+        if (agentMLInput.getAgentInput() != null) {
+            validateV1MultiModalInput(mlAgent, agentMLInput.getAgentInput().getInputType());
         }
 
         // AGUI history-load: no question extraction needed, MLAGUIAgentRunner handles it
@@ -1325,28 +1655,28 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
 
         try {
-            // Extract the question text for prompt template and memory storage
-            String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
-
-            // create input dataset if it doesn't exist
-            if (agentMLInput.getInputDataset() == null) {
-                agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
-            }
-
             // Set parameters to processed params
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
 
             // For agent with revamped interface, use ModelProvider to map the entire AgentInput
-            if (mlAgent.getModel() != null) {
+            String question = null;
+            if (mlAgent.usesUnifiedInterface()) {
                 remoteDataSet.getParameters().put(USES_UNIFIED_INTERFACE, "true");
                 ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
                 Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput(), agentType);
 
+                // Extract question text for prompt template usage
+                // Both V1 and V2 unified agents support all input types (TEXT, CONTENT_BLOCKS, MESSAGES)
+                // through ModelProvider.mapAgentInput(), so use AgentInputProcessor to extract text
+                question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
                 parameters.put(QUESTION, question);
 
                 remoteDataSet.getParameters().putAll(parameters);
             } else {
                 // For old-style AG_UI agents without model field
+                // Extract question text from AgentInput
+                question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
+
                 // Prepend context to question if available
                 if (agentType == MLAgentType.AG_UI) {
                     String context = remoteDataSet.getParameters().get(AGUI_PARAM_CONTEXT);
@@ -1359,6 +1689,47 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         } catch (Exception e) {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
             throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Validates that V1 agents using unified interface only support TEXT input.
+     * V2 agents and AG_UI agents support all input types (TEXT, CONTENT_BLOCKS, MESSAGES).
+     * This validation is performed early in processAgentInput() to fail fast.
+     *
+     * @param mlAgent the agent being executed
+     * @param inputType the input type provided
+     * @throws IllegalArgumentException if V1 agent (except AG_UI) with unified interface receives non-TEXT input
+     */
+    private void validateV1MultiModalInput(MLAgent mlAgent, InputType inputType) {
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
+
+        // V2 agents support all input types
+        if (agentType.isV2()) {
+            return;
+        }
+
+        // Non-unified interface agents don't need validation
+        if (!mlAgent.usesUnifiedInterface()) {
+            return;
+        }
+
+        // AG_UI agents support all input types for UI interactions
+        if (agentType == MLAgentType.AG_UI) {
+            return;
+        }
+
+        // V1 agents (except AG_UI) with unified interface only support TEXT input
+        if (inputType == InputType.CONTENT_BLOCKS || inputType == InputType.MESSAGES) {
+            throw new IllegalArgumentException(
+                String
+                    .format(
+                        "V1 agents with unified agent interface only support TEXT input type. "
+                            + "Found input type: %s. Please use TEXT input (e.g., {\"input\": \"your text here\"}), "
+                            + "or upgrade to CONVERSATIONAL_V2 agent type for multi-modal support (CONTENT_BLOCKS, MESSAGES).",
+                        inputType
+                    )
+            );
         }
     }
 
@@ -1412,6 +1783,45 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     @VisibleForTesting
     boolean supportsStructuredMessages(MLAgent mlAgent) {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
-        return agentType == MLAgentType.CONVERSATIONAL || agentType == MLAgentType.AG_UI;
+        return agentType == MLAgentType.CONVERSATIONAL || agentType == MLAgentType.CONVERSATIONAL_V2 || agentType == MLAgentType.AG_UI;
     }
+
+    /**
+     * Process POST_MEMORY hook for structured messages and return the (potentially modified) list.
+     * Context managers like SlidingWindowManager or SummarizationManager can modify
+     * the retrieved structured chat history before it is formatted into the prompt.
+     */
+    private List<Message> processPostStructuredMemoryHook(
+        Map<String, String> params,
+        List<Message> retrievedStructuredHistory,
+        Memory memory,
+        HookRegistry hookRegistry
+    ) {
+        log
+            .debug(
+                "processPostStructuredMemoryHook called with {} messages, hookRegistry: {}",
+                retrievedStructuredHistory.size(),
+                hookRegistry != null ? "present" : "null"
+            );
+
+        if (hookRegistry != null && !retrievedStructuredHistory.isEmpty()) {
+            int originalSize = retrievedStructuredHistory.size();
+            ContextManagerContext contextAfterEvent = AgentContextUtil
+                .emitPostStructuredMemoryHook(params, retrievedStructuredHistory, null, hookRegistry);
+
+            log.debug("POST_MEMORY hook emitted, estimated token count: {}", contextAfterEvent.getEstimatedTokenCount());
+
+            List<Message> updatedHistory = contextAfterEvent.getStructuredChatHistory();
+            // Use size comparison — more robust than List.equals() which relies on
+            // Message.equals() and can miss in-place mutations of shared references.
+            if (updatedHistory != null && updatedHistory.size() != originalSize) {
+                log.info("POST_MEMORY hook modified structured history: {} -> {} messages", originalSize, updatedHistory.size());
+                return updatedHistory;
+            } else {
+                log.debug("POST_MEMORY hook did not modify structured history");
+            }
+        }
+        return retrievedStructuredHistory;
+    }
+
 }

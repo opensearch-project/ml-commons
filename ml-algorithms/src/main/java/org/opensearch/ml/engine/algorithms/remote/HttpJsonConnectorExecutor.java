@@ -19,7 +19,6 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
