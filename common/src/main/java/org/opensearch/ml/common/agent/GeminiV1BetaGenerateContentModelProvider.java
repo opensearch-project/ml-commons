@@ -298,6 +298,27 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
     }
 
     @Override
+    public String extractMessageFromResponse(Map<String, ?> responseData) {
+        if (responseData == null) {
+            return null;
+        }
+
+        Object candidatesObj = responseData.get("candidates");
+        if (candidatesObj instanceof List) {
+            List<?> candidatesList = (List<?>) candidatesObj;
+            if (!candidatesList.isEmpty() && candidatesList.get(0) instanceof Map) {
+                Map<String, ?> candidateMap = (Map<String, ?>) candidatesList.get(0);
+                Object contentObj = candidateMap.get("content");
+                if (contentObj != null) {
+                    return org.opensearch.ml.common.utils.StringUtils.toJson(contentObj);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    @Override
     public Message parseToUnifiedMessage(String json) {
         throw new UnsupportedOperationException("parseToUnifiedMessage is not yet supported for Gemini model provider");
     }
