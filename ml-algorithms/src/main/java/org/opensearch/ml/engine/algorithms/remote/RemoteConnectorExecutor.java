@@ -62,7 +62,10 @@ import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
 
-public interface RemoteConnectorExecutor {
+public interface RemoteConnectorExecutor extends AutoCloseable {
+
+    @Override
+    default void close() {}
 
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
     String SKIP_SSL_VERIFICATION = "skip_ssl_verification";
