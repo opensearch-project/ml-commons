@@ -92,11 +92,14 @@ public class QueryPlanningTool implements WithModelTool {
     private static final String TOOL_CONFIGS_FIELD = "tool_configs";
     private static final Set<String> AGENT_CONTEXT_EXCLUDED_PARAMS = Set
         .of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
+    public static final String FALLBACK_QUERY_FIELD = "fallback_query";
 
     @Getter
     private final String generationType;
     @Getter
     private final String searchTemplates;
+    @Getter
+    private final String fallbackQuery;
     @Setter
     @Getter
     private String name = TYPE;
@@ -132,11 +135,18 @@ public class QueryPlanningTool implements WithModelTool {
     @Getter
     private Parser outputParser;
 
-    public QueryPlanningTool(String generationType, MLModelTool queryGenerationTool, Client client, String searchTemplates) {
+    public QueryPlanningTool(
+        String generationType,
+        MLModelTool queryGenerationTool,
+        Client client,
+        String searchTemplates,
+        String fallbackQuery
+    ) {
         this.generationType = generationType;
         this.queryGenerationTool = queryGenerationTool;
         this.client = client;
         this.searchTemplates = searchTemplates;
+        this.fallbackQuery = fallbackQuery;
         this.attributes = new HashMap<>(DEFAULT_ATTRIBUTES);
     }
 
@@ -230,9 +240,19 @@ public class QueryPlanningTool implements WithModelTool {
     @SuppressWarnings("unchecked")
     private <T> void executeQueryPlanning(Map<String, String> parameters, ActionListener<T> listener) {
         try {
+
+            // Replace fallback query in system prompt
+            String effectiveFallbackQuery = (fallbackQuery != null) ? fallbackQuery : DEFAULT_QUERY;
+            parameters.put(FALLBACK_QUERY_FIELD, effectiveFallbackQuery);
+
+            String escapedFallbackQuery = gson.toJson(effectiveFallbackQuery);
+            escapedFallbackQuery = escapedFallbackQuery.substring(1, escapedFallbackQuery.length() - 1);
+
+            String systemPrompt = parameters.getOrDefault(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
+            systemPrompt = systemPrompt.replace(QueryPlanningPromptTemplate.FALLBACK_QUERY_PROMPT_PLACEHOLDER, escapedFallbackQuery);
+
             // Execute Query Planning, replace System and User prompt fields
-            parameters
-                .put(SYSTEM_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT));
+            parameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
 
             parameters.put(USER_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_USER_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_USER_PROMPT));
 
@@ -254,9 +274,9 @@ public class QueryPlanningTool implements WithModelTool {
                         try {
                             String queryString = (String) r;
                             if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
-                                log.debug("Model failed to generate the DSL query, returning the Default match all query");
+                                log.debug("Model failed to generate the DSL query, returning the fallback query");
                                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-                                String defaultQueryString = substitutor.replace(DEFAULT_QUERY);
+                                String defaultQueryString = substitutor.replace(effectiveFallbackQuery);
                                 listener.onResponse((T) defaultQueryString);
                             } else {
                                 listener.onResponse((T) (outputParser != null ? outputParser.parse(queryString) : queryString));
@@ -455,7 +475,9 @@ public class QueryPlanningTool implements WithModelTool {
                 }
             }
 
-            QueryPlanningTool queryPlanningTool = new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates);
+            String fallbackQuery = params.containsKey(FALLBACK_QUERY_FIELD) ? (String) params.get(FALLBACK_QUERY_FIELD) : null;
+
+            QueryPlanningTool queryPlanningTool = new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates, fallbackQuery);
 
             // Create parser with default extract_json processor + any custom processors
             queryPlanningTool.setOutputParser(createParserWithDefaultExtractJson(params));
