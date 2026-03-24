@@ -1241,7 +1241,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             if (output instanceof AgentV2Output) {
                 listener.onResponse((AgentV2Output) output);
             } else {
-                String errorMsg = "V2 agent must return AgentV2Output but returned: " + (output != null ? output.getClass().getName() : "null");
+                String errorMsg = "V2 agent must return AgentV2Output but returned: "
+                    + (output != null ? output.getClass().getName() : "null");
                 log.error(errorMsg);
                 listener.onFailure(new IllegalStateException(errorMsg));
             }
@@ -1407,7 +1408,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 updatedTask.put(STATE_FIELD, MLTaskState.COMPLETED);
             } else {
                 // Programming error: V2 agent must return AgentV2Output
-                String errorMsg = "V2 agent must return AgentV2Output but returned: " + (output != null ? output.getClass().getName() : "null");
+                String errorMsg = "V2 agent must return AgentV2Output but returned: "
+                    + (output != null ? output.getClass().getName() : "null");
                 log.error(errorMsg);
                 agentResponse.put(ERROR_MESSAGE, errorMsg);
                 mlTask.setResponse(agentResponse);

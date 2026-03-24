@@ -569,7 +569,13 @@ public class MLAgentRegistrationValidatorTests extends TestCase {
     public void testValidateAgentForRegistration_V2Agent_WithContextManagementName() throws InterruptedException {
         MLMemorySpec memory = new MLMemorySpec("agentic_memory", null, null, null);
 
-        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).contextManagementName("template").build();
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type("CONVERSATIONAL_V2")
+            .memory(memory)
+            .contextManagementName("template")
+            .build();
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Boolean> result = new AtomicReference<>();
@@ -604,7 +610,13 @@ public class MLAgentRegistrationValidatorTests extends TestCase {
         hooks.put("POST_TOOL", List.of(new ContextManagerConfig("ToolsOutputTruncateManager", null, null)));
         ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("inline_template").hooks(hooks).build();
 
-        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).contextManagement(contextManagement).build();
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type("CONVERSATIONAL_V2")
+            .memory(memory)
+            .contextManagement(contextManagement)
+            .build();
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Boolean> result = new AtomicReference<>();
@@ -669,12 +681,17 @@ public class MLAgentRegistrationValidatorTests extends TestCase {
     @Test
     public void testValidateAgentForRegistration_KnownContextManagerTypes() throws InterruptedException {
         Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
-        hooks.put("POST_TOOL", List.of(
-            new ContextManagerConfig("ToolsOutputTruncateManager", null, null),
-            new ContextManagerConfig("SummarizationManager", null, null),
-            new ContextManagerConfig("MemoryManager", null, null),
-            new ContextManagerConfig("ConversationManager", null, null)
-        ));
+        hooks
+            .put(
+                "POST_TOOL",
+                List
+                    .of(
+                        new ContextManagerConfig("ToolsOutputTruncateManager", null, null),
+                        new ContextManagerConfig("SummarizationManager", null, null),
+                        new ContextManagerConfig("MemoryManager", null, null),
+                        new ContextManagerConfig("ConversationManager", null, null)
+                    )
+            );
 
         ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("test_template").hooks(hooks).build();
 
