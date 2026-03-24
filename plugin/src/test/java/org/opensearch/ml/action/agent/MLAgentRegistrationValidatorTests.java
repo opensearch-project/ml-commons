@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManagerConfig;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -409,5 +410,333 @@ public class MLAgentRegistrationValidatorTests extends TestCase {
         } catch (IllegalArgumentException e) {
             assertEquals("Invalid context management configuration", e.getMessage());
         }
+    }
+
+    // ========== V2 Agent Memory Validation Tests ==========
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_NoMemory() throws InterruptedException {
+        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) require memory configuration"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_ConversationIndexMemory() throws InterruptedException {
+        MLMemorySpec memory = new MLMemorySpec("conversation_index", null, null, null);
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) are not compatible with conversation_index memory"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_InvalidMemoryType() throws InterruptedException {
+        MLMemorySpec memory = new MLMemorySpec("invalid_memory_type", null, null, null);
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("Failed to validate agent memory configuration"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_ValidAgenticMemory() throws InterruptedException {
+        MLMemorySpec memory = new MLMemorySpec("agentic_memory", null, null, null);
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_ValidRemoteAgenticMemory() throws InterruptedException {
+        MLMemorySpec memory = new MLMemorySpec("remote_agentic_memory", null, null, null);
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
+    }
+
+    // ========== V2 Agent Context Management Tests ==========
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithContextManagementName() throws InterruptedException {
+        MLMemorySpec memory = new MLMemorySpec("agentic_memory", null, null, null);
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).contextManagementName("template").build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) do not support context management"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithContextManagementInline() throws InterruptedException {
+        MLMemorySpec memory = new MLMemorySpec("agentic_memory", null, null, null);
+
+        Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
+        hooks.put("POST_TOOL", List.of(new ContextManagerConfig("ToolsOutputTruncateManager", null, null)));
+        ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("inline_template").hooks(hooks).build();
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("CONVERSATIONAL_V2").memory(memory).contextManagement(contextManagement).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) do not support context management"));
+    }
+
+    // ========== Inline Context Management Configuration Validation Tests ==========
+
+    @Test
+    public void testValidateAgentForRegistration_UnknownContextManagerType() throws InterruptedException {
+        Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
+        // Unknown type should be allowed for extensibility
+        hooks.put("POST_TOOL", List.of(new ContextManagerConfig("UnknownCustomManager", null, null)));
+
+        ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("test_template").hooks(hooks).build();
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("flow").contextManagement(contextManagement).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_KnownContextManagerTypes() throws InterruptedException {
+        Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
+        hooks.put("POST_TOOL", List.of(
+            new ContextManagerConfig("ToolsOutputTruncateManager", null, null),
+            new ContextManagerConfig("SummarizationManager", null, null),
+            new ContextManagerConfig("MemoryManager", null, null),
+            new ContextManagerConfig("ConversationManager", null, null)
+        ));
+
+        ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("test_template").hooks(hooks).build();
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("flow").contextManagement(contextManagement).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_MultipleHooks() throws InterruptedException {
+        Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
+        hooks.put("PRE_TOOL", List.of(new ContextManagerConfig("MemoryManager", null, null)));
+        hooks.put("POST_TOOL", List.of(new ContextManagerConfig("ToolsOutputTruncateManager", null, null)));
+        hooks.put("PRE_LLM", List.of(new ContextManagerConfig("SummarizationManager", null, null)));
+        hooks.put("POST_LLM", List.of(new ContextManagerConfig("ConversationManager", null, null)));
+        hooks.put("PRE_EXECUTION", List.of(new ContextManagerConfig("MemoryManager", null, null)));
+        hooks.put("POST_EXECUTION", List.of(new ContextManagerConfig("SummarizationManager", null, null)));
+
+        ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("test_template").hooks(hooks).build();
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("flow").contextManagement(contextManagement).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
     }
 }

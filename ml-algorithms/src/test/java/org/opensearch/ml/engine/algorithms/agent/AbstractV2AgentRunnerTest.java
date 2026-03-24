@@ -562,20 +562,17 @@ public class AbstractV2AgentRunnerTest {
     @Test
     public void testFormatToolResults_Success() {
         // Arrange
-        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
-
-        // Mock LLMMessage returned by functionCalling.supply()
+        // Mock LLMMessage (no longer need to mock functionCalling.supply since we pass llmMessages directly)
         org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
         when(llmMsg.getRole()).thenReturn("user");
         when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
-        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
 
         Message expectedMessage = new Message();
         expectedMessage.setRole("user");
         when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}")).thenReturn(expectedMessage);
 
         // Act
-        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
+        List<Message> result = runner.formatToolResults(List.of(llmMsg), modelProvider);
 
         // Assert
         assertEquals(1, result.size());
@@ -585,18 +582,15 @@ public class AbstractV2AgentRunnerTest {
     @Test
     public void testFormatToolResults_ParsingFailure() {
         // Arrange
-        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
-
-        // Mock LLMMessage returned by functionCalling.supply()
+        // Mock LLMMessage (no longer need to mock functionCalling.supply since we pass llmMessages directly)
         org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
         when(llmMsg.getRole()).thenReturn("user");
         when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
-        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
 
         when(modelProvider.parseToUnifiedMessage(anyString())).thenThrow(new RuntimeException("Parse failed"));
 
         // Act
-        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
+        List<Message> result = runner.formatToolResults(List.of(llmMsg), modelProvider);
 
         // Assert
         assertEquals(0, result.size()); // Should skip failed parsing
@@ -647,59 +641,6 @@ public class AbstractV2AgentRunnerTest {
         assertEquals(2, result.size()); // Should skip the invalid one
         assertEquals("assistant", result.get(0).getRole());
         assertEquals("user", result.get(1).getRole());
-    }
-
-    // ==================== Tests for saveAssistantMessage ====================
-
-    @Test
-    public void testSaveAssistantMessage_Success() {
-        // Arrange
-        Message assistantMessage = new Message();
-        assistantMessage.setRole("assistant");
-
-        doAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            ActionListener<Void> listener = invocation.getArgument(1);
-            listener.onResponse(null);
-            return null;
-        }).when(memory).saveStructuredMessages(anyList(), any());
-
-        // Act
-        ActionListener<Void> testListener = ActionListener.wrap(response -> {
-            // Success
-        }, e -> fail("Should not fail"));
-
-        runner.saveAssistantMessage(memory, assistantMessage, testListener);
-
-        // Assert
-        verify(memory).saveStructuredMessages(argThat(messages -> {
-            assertEquals(1, messages.size());
-            assertEquals("assistant", ((Message) messages.get(0)).getRole());
-            return true;
-        }), any());
-    }
-
-    @Test
-    public void testSaveAssistantMessage_Failure() {
-        // Arrange
-        Message assistantMessage = new Message();
-        Exception expectedException = new RuntimeException("Save failed");
-
-        doAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            ActionListener<Void> listener = invocation.getArgument(1);
-            listener.onFailure(expectedException);
-            return null;
-        }).when(memory).saveStructuredMessages(anyList(), any());
-
-        // Act
-        ActionListener<Void> testListener = ActionListener
-            .wrap(response -> fail("Should not succeed"), e -> { assertEquals(expectedException, e); });
-
-        runner.saveAssistantMessage(memory, assistantMessage, testListener);
-
-        // Assert
-        verify(memory).saveStructuredMessages(anyList(), any());
     }
 
     // ==================== Tests for unsupported V1 methods ====================

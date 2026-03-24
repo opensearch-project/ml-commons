@@ -819,6 +819,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     ) {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
+        // TODO: Scalability improvement - getStructuredMessages fetches ALL messages then slices in-memory.
+        // For conversations with thousands of messages, this is inefficient. Should add Memory.getStructuredMessages(limit)
+        // to push limit down to database query level (e.g., OpenSearch query with size parameter).
         memory.getStructuredMessages(ActionListener.wrap(result -> {
             @SuppressWarnings("unchecked")
             List<Message> allMessages = (List<Message>) result;
@@ -1080,6 +1083,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         // Then passes complete conversation to runner for execution
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
+        // TODO: Scalability improvement - getStructuredMessages fetches ALL messages then slices in-memory.
+        // For conversations with thousands of messages, this is inefficient. Should add Memory.getStructuredMessages(limit)
+        // to push limit down to database query level (e.g., OpenSearch query with size parameter).
         memory.getStructuredMessages(ActionListener.wrap(historyObj -> {
             @SuppressWarnings("unchecked")
             List<Message> allHistory = (List<Message>) historyObj;
@@ -1235,8 +1241,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             if (output instanceof AgentV2Output) {
                 listener.onResponse((AgentV2Output) output);
             } else {
-                log.error("Agent returned unexpected output type: {}", output != null ? output.getClass() : "null");
-                listener.onResponse(null);
+                String errorMsg = "V2 agent must return AgentV2Output but returned: " + (output != null ? output.getClass().getName() : "null");
+                log.error(errorMsg);
+                listener.onFailure(new IllegalStateException(errorMsg));
             }
         }, ex -> {
             long latencyMs = System.currentTimeMillis() - startTime;
@@ -1394,13 +1401,19 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 if (v2Output.getMetrics() != null && !v2Output.getMetrics().isEmpty()) {
                     agentResponse.put(AgentV2Output.METRICS_FIELD, v2Output.getMetrics());
                 }
-            } else {
-                agentResponse.put(ERROR_MESSAGE, "No output found from V2 agent execution");
-            }
 
-            mlTask.setResponse(agentResponse);
-            updatedTask.put(RESPONSE_FIELD, agentResponse);
-            updatedTask.put(STATE_FIELD, MLTaskState.COMPLETED);
+                mlTask.setResponse(agentResponse);
+                updatedTask.put(RESPONSE_FIELD, agentResponse);
+                updatedTask.put(STATE_FIELD, MLTaskState.COMPLETED);
+            } else {
+                // Programming error: V2 agent must return AgentV2Output
+                String errorMsg = "V2 agent must return AgentV2Output but returned: " + (output != null ? output.getClass().getName() : "null");
+                log.error(errorMsg);
+                agentResponse.put(ERROR_MESSAGE, errorMsg);
+                mlTask.setResponse(agentResponse);
+                updatedTask.put(RESPONSE_FIELD, agentResponse);
+                updatedTask.put(STATE_FIELD, MLTaskState.FAILED);
+            }
 
             updateMLTaskDirectly(
                 taskId,

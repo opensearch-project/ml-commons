@@ -171,17 +171,6 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     }
 
     /**
-     * Save assistant message to memory.
-     *
-     * @param memory Memory instance
-     * @param message Assistant message to save
-     * @param listener Listener for save completion
-     */
-    protected final void saveAssistantMessage(Memory memory, Message message, ActionListener<Void> listener) {
-        memory.saveStructuredMessages(List.of(message), listener);
-    }
-
-    /**
      * Execute tools sequentially with error handling using pre-created tools.
      * Tools are executed one by one, and errors in individual tools don't stop execution.
      * Tools should be created once and reused across iterations for performance.
@@ -335,7 +324,7 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         ModelProvider modelProvider
     ) {
         Map<String, String> llmParams = new HashMap<>(params);
-        MLAgentType agentType = MLAgentType.CONVERSATIONAL_V2;
+        MLAgentType agentType = MLAgentType.from(mlAgent.getType());
         Map<String, String> formatted = modelProvider.mapMessages(messages, agentType);
 
         llmParams.putAll(formatted);
@@ -423,22 +412,18 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
 
     /**
      * Format tool results as messages for the conversation history.
-     * Parses provider-specific JSON from functionCalling.supply() into unified Messages.
+     * Parses provider-specific JSON from LLMMessages into unified Messages.
      * These Messages are added to the conversation for the next LLM call.
      * Override if agent needs custom tool result formatting.
      *
-     * @param toolResults Tool execution results
-     * @param functionCalling Function calling interface
+     * @param llmMessages LLM messages from functionCalling.supply() (avoids duplicate calls)
      * @param modelProvider Model provider for parsing provider-specific JSON
      * @return Parsed Messages ready to add to conversation
      */
     protected List<Message> formatToolResults(
-        List<Map<String, Object>> toolResults,
-        FunctionCalling functionCalling,
+        List<org.opensearch.ml.engine.function_calling.LLMMessage> llmMessages,
         ModelProvider modelProvider
     ) {
-        var llmMessages = functionCalling.supply(toolResults);
-
         List<Message> messages = new ArrayList<>();
         for (var llmMsg : llmMessages) {
             String messageJson = llmMsg.getResponse();

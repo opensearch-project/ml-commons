@@ -276,8 +276,10 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
 
                     // Execute tools and continue loop using base class method with pre-created tools
                     executeToolsSequentially(toolsMap, toolCalls, ActionListener.wrap(toolResults -> {
-                        // Get raw JSON strings for persistence (before parsing)
+                        // Call supply() once to get LLM-formatted messages
                         var llmMessages = functionCalling.supply(toolResults);
+
+                        // Store raw JSON strings for persistence (before parsing)
                         for (var llmMsg : llmMessages) {
                             String messageJson = llmMsg.getResponse();
                             if (messageJson != null && !messageJson.isEmpty()) {
@@ -285,8 +287,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                             }
                         }
 
-                        // Format tool results as parsed Messages for conversation
-                        List<Message> toolResultMessages = formatToolResults(toolResults, functionCalling, modelProvider);
+                        // Format tool results as parsed Messages for conversation (reuse llmMessages to avoid duplicate supply() call)
+                        List<Message> toolResultMessages = formatToolResults(llmMessages, modelProvider);
                         messages.addAll(toolResultMessages);
 
                         // Continue ReAct loop

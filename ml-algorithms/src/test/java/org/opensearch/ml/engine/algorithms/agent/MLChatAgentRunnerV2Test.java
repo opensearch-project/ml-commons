@@ -84,6 +84,7 @@ public class MLChatAgentRunnerV2Test {
         runner = new MLChatAgentRunnerV2(client, settings, clusterService, xContentRegistry, toolFactories, sdkClient, encryptor);
 
         // Setup basic agent configuration
+        when(mlAgent.getType()).thenReturn("conversational_v2");
         when(mlAgent.getLlm()).thenReturn(llmSpec);
         when(llmSpec.getModelId()).thenReturn("test-model-id");
         when(mlAgent.getTenantId()).thenReturn("test-tenant");
