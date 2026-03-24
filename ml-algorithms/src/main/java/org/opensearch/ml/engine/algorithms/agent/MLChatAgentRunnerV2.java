@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -20,6 +21,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.Message;
@@ -77,57 +79,67 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         ModelProvider modelProvider,
         ActionListener<AgentLogicResult> listener
     ) {
-        // Execute chat-specific ReAct loop
-        executeReActLoop(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
-    }
-
-    /**
-     * Execute ReAct loop with function calling.
-     * Sequential tool execution only (Phase 1 - no parallel tools).
-     *
-     * @param mlAgent the agent configuration
-     * @param params execution parameters
-     * @param conversationHistory the full conversation history (history + new input)
-     * @param functionCalling configured function calling interface
-     * @param modelProvider model provider for formatting
-     * @param listener listener for AgentLogicResult containing final assistant message and stop reason
-     */
-    private void executeReActLoop(
-        MLAgent mlAgent,
-        Map<String, String> params,
-        List<Message> conversationHistory,
-        FunctionCalling functionCalling,
-        ModelProvider modelProvider,
-        ActionListener<AgentLogicResult> listener
-    ) {
         String agentId = params.get(AGENT_ID_FIELD);
         int maxIterations = getMaxIterations(params);
-
-        log
-            .debug(
-                "Starting ReAct loop with {} conversation messages. agentId={}, maxIterations={}",
-                conversationHistory.size(),
-                agentId,
-                maxIterations
-            );
-
         // Create mutable list for ReAct iterations (will append tool results)
         List<Message> messages = new ArrayList<>(conversationHistory);
         AtomicInteger iteration = new AtomicInteger(0);
         TokenUsage[] accumulatedTokenUsage = new TokenUsage[1];
+        List<String> toolInteractionJsonList = new ArrayList<>(); // Track tool interaction JSON strings for persistence (like V1)
 
-        // Execute first LLM call
-        executeLLMCall(
-            mlAgent,
-            params,
-            messages,
-            modelProvider,
-            functionCalling,
-            iteration,
-            maxIterations,
-            accumulatedTokenUsage,
-            listener
-        );
+        // Create tools once and reuse across all ReAct iterations (performance optimization)
+        // Load ML tools first
+        List<MLToolSpec> mlToolSpecs = AgentUtils.getMlToolSpecs(mlAgent, params);
+        Map<String, Tool> toolsMap = new HashMap<>();
+        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+
+        // Load MCP tools asynchronously, then create all tools
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
+            mlToolSpecs.addAll(mcpTools);
+            try {
+                AgentUtils.createTools(toolFactories, params, mlToolSpecs, toolsMap, toolSpecMap, mlAgent);
+            } catch (Exception ex) {
+                log.warn("Failed to create some tools, continuing with available tools. agentId={}", agentId, ex);
+            }
+
+            // Execute first LLM call with pre-created tools
+            executeLLMCall(
+                mlAgent,
+                params,
+                messages,
+                modelProvider,
+                functionCalling,
+                iteration,
+                maxIterations,
+                accumulatedTokenUsage,
+                toolsMap,
+                toolInteractionJsonList,
+                listener
+            );
+        }, e -> {
+            // Continue without MCP tools if they fail
+            log.warn("MCP tools failed to load, continuing with backend tools only. agentId={}", agentId, e);
+            try {
+                AgentUtils.createTools(toolFactories, params, mlToolSpecs, toolsMap, toolSpecMap, mlAgent);
+            } catch (Exception ex) {
+                log.warn("Failed to create some tools, continuing with available tools. agentId={}", agentId, ex);
+            }
+
+            // Execute first LLM call with pre-created tools
+            executeLLMCall(
+                mlAgent,
+                params,
+                messages,
+                modelProvider,
+                functionCalling,
+                iteration,
+                maxIterations,
+                accumulatedTokenUsage,
+                toolsMap,
+                toolInteractionJsonList,
+                listener
+            );
+        }));
     }
 
     /**
@@ -135,6 +147,9 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
      * This method recursively calls itself to continue the ReAct loop until:
      * - No tool calls are returned (end_turn)
      * - Max iterations reached (max_iterations)
+     *
+     * @param toolsMap Pre-created tools to reuse across iterations (performance optimization)
+     * @param toolInteractionJsonList List to accumulate tool interaction JSON strings for persistence (like V1)
      */
     private void executeLLMCall(
         MLAgent mlAgent,
@@ -145,17 +160,28 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         AtomicInteger iteration,
         int maxIterations,
         TokenUsage[] accumulatedTokenUsage,
+        Map<String, Tool> toolsMap,
+        List<String> toolInteractionJsonList,
         ActionListener<AgentLogicResult> listener
     ) {
         String agentId = params.get(AGENT_ID_FIELD);
         String tenantId = mlAgent.getTenantId();
         int currentIteration = iteration.getAndIncrement();
 
-        log.debug("ReAct iteration {}. agentId={}", currentIteration, agentId);
-
         try {
             // Build LLM request parameters using base class method
             Map<String, String> llmParams = buildLLMParams(mlAgent, params, messages, modelProvider);
+
+            // Add tools to LLM params for function calling (populates _tools parameter for connector template)
+            if (!toolsMap.isEmpty()) {
+                // Re-configure functionCalling with llmParams to ensure TOOL_TEMPLATE is set
+                // This is needed because addToolsToPrompt checks for TOOL_TEMPLATE to determine
+                // whether to use function calling format or plain text format
+                functionCalling.configure(llmParams);
+
+                List<String> toolNames = new ArrayList<>(toolsMap.keySet());
+                AgentUtils.addToolsToFunctionCalling(toolsMap, llmParams, toolNames, "");
+            }
 
             // Execute LLM call
             LLMSpec llmSpec = mlAgent.getLlm();
@@ -180,39 +206,55 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                         accumulatedTokenUsage[0] = accumulatedTokenUsage[0] == null
                             ? currentTokenUsage
                             : accumulatedTokenUsage[0].addTokens(currentTokenUsage);
-                        log
-                            .debug(
-                                "Token usage for iteration {}: input={}, output={}, total={}",
-                                currentIteration,
-                                currentTokenUsage.getInputTokens(),
-                                currentTokenUsage.getOutputTokens(),
-                                currentTokenUsage.getEffectiveTotalTokens()
-                            );
                     }
 
                     // Parse response for tool calls
                     List<Map<String, String>> toolCalls = functionCalling.handle(output, params);
 
                     // Extract assistant message from response using base class method
-                    Message assistantMessage = extractAssistantMessage(output, toolCalls, modelProvider);
+                    Message assistantMessage = extractAssistantMessage(output, modelProvider);
                     messages.add(assistantMessage);
 
                     // Check if we should continue the loop
                     if (toolCalls == null || toolCalls.isEmpty()) {
                         // No tool calls - return final answer
-                        log
-                            .debug(
-                                "ReAct loop complete (no tool calls). agentId={}, iterations={}, totalTokens={}",
-                                agentId,
-                                currentIteration + 1,
-                                accumulatedTokenUsage[0] != null ? accumulatedTokenUsage[0].getEffectiveTotalTokens() : 0
+                        // Parse tool interaction JSON strings to Messages for persistence
+                        List<Message> toolInteractionMessages = toolInteractionJsonList.isEmpty()
+                            ? null
+                            : parseToolInteractionsForPersistence(toolInteractionJsonList, modelProvider);
+
+                        listener
+                            .onResponse(
+                                new AgentLogicResult(
+                                    assistantMessage,
+                                    STOP_REASON_END_TURN,
+                                    accumulatedTokenUsage[0],
+                                    toolInteractionMessages
+                                )
                             );
-                        listener.onResponse(new AgentLogicResult(assistantMessage, STOP_REASON_END_TURN, accumulatedTokenUsage[0]));
                         return;
+                    }
+
+                    // Track assistant message JSON with tool calls for persistence (like V1)
+                    // Extract message JSON from LLM response
+                    try {
+                        var tensor = output.getMlModelOutputs().getFirst().getMlModelTensors().getFirst();
+                        Map<String, ?> dataAsMap = tensor.getDataAsMap();
+                        String messageJson = modelProvider.extractMessageFromResponse(dataAsMap);
+                        if (messageJson != null) {
+                            toolInteractionJsonList.add(messageJson);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to extract message JSON for persistence. agentId={}", agentId, e);
                     }
 
                     if (currentIteration >= maxIterations - 1) {
                         // Max iterations reached
+                        // Parse tool interaction JSON strings to Messages for persistence
+                        List<Message> toolInteractionMessages = toolInteractionJsonList.isEmpty()
+                            ? null
+                            : parseToolInteractionsForPersistence(toolInteractionJsonList, modelProvider);
+
                         log
                             .warn(
                                 "ReAct loop stopped (max iterations). agentId={}, maxIterations={}, totalTokens={}",
@@ -220,14 +262,31 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                                 maxIterations,
                                 accumulatedTokenUsage[0] != null ? accumulatedTokenUsage[0].getEffectiveTotalTokens() : 0
                             );
-                        listener.onResponse(new AgentLogicResult(assistantMessage, STOP_REASON_MAX_ITERATIONS, accumulatedTokenUsage[0]));
+                        listener
+                            .onResponse(
+                                new AgentLogicResult(
+                                    assistantMessage,
+                                    STOP_REASON_MAX_ITERATIONS,
+                                    accumulatedTokenUsage[0],
+                                    toolInteractionMessages
+                                )
+                            );
                         return;
                     }
 
-                    // Execute tools and continue loop using base class method
-                    executeToolsSequentially(mlAgent, params, toolCalls, ActionListener.wrap(toolResults -> {
-                        // Format tool results as messages using base class method
-                        List<Message> toolResultMessages = formatToolResults(toolResults, functionCalling);
+                    // Execute tools and continue loop using base class method with pre-created tools
+                    executeToolsSequentially(toolsMap, toolCalls, ActionListener.wrap(toolResults -> {
+                        // Get raw JSON strings for persistence (before parsing)
+                        var llmMessages = functionCalling.supply(toolResults);
+                        for (var llmMsg : llmMessages) {
+                            String messageJson = llmMsg.getResponse();
+                            if (messageJson != null && !messageJson.isEmpty()) {
+                                toolInteractionJsonList.add(messageJson);
+                            }
+                        }
+
+                        // Format tool results as parsed Messages for conversation
+                        List<Message> toolResultMessages = formatToolResults(toolResults, functionCalling, modelProvider);
                         messages.addAll(toolResultMessages);
 
                         // Continue ReAct loop
@@ -240,6 +299,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                             iteration,
                             maxIterations,
                             accumulatedTokenUsage,
+                            toolsMap,
+                            toolInteractionJsonList,
                             listener
                         );
                     }, e -> {

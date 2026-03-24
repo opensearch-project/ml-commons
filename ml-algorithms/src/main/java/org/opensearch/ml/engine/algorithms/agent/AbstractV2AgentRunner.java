@@ -19,10 +19,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agent.TokenUsage;
-import org.opensearch.ml.common.input.execute.agent.ContentBlock;
-import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.model.ModelProvider;
@@ -163,6 +160,14 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
                 "V2 agents require the 'model' field to be configured. " + "Use simplified registration with the 'model' block."
             );
         }
+
+        if (mlAgent.hasContextManagement()) {
+            throw new IllegalStateException(
+                "V2 agents do not support context management. "
+                    + "Context management (context_management or context_management_name) is only supported for V1 agents. "
+                    + "Please remove the context management configuration from your V2 agent."
+            );
+        }
     }
 
     /**
@@ -177,43 +182,21 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     }
 
     /**
-     * Execute tools sequentially with error handling.
+     * Execute tools sequentially with error handling using pre-created tools.
      * Tools are executed one by one, and errors in individual tools don't stop execution.
+     * Tools should be created once and reused across iterations for performance.
      *
-     * @param mlAgent Agent configuration
-     * @param params Execution parameters
+     * @param toolsMap Pre-created tools (performance optimization - avoids recreating tools on each iteration)
      * @param toolCalls Tool calls to execute
      * @param listener Listener for tool results
      */
     protected final void executeToolsSequentially(
-        MLAgent mlAgent,
-        Map<String, String> params,
+        Map<String, Tool> toolsMap,
         List<Map<String, String>> toolCalls,
         ActionListener<List<Map<String, Object>>> listener
     ) {
-        String agentId = params.get(AGENT_ID_FIELD);
-        log.debug("Executing {} tool calls sequentially. agentId={}", toolCalls.size(), agentId);
-
-        // Load tools from ML tool specs
-        List<MLToolSpec> mlToolSpecs = AgentUtils.getMlToolSpecs(mlAgent, params);
-        Map<String, Tool> toolsMap = new HashMap<>();
-        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-
-        // Load MCP tools if configured, then create all tools
-        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
-            mlToolSpecs.addAll(mcpTools);
-            AgentUtils.createTools(toolFactories, params, mlToolSpecs, toolsMap, toolSpecMap, mlAgent);
-
-            // Execute tools one by one
-            List<Map<String, Object>> results = new ArrayList<>();
-            executeToolCallsSequentially(toolsMap, toolCalls, results, 0, listener);
-        }, e -> {
-            // Continue without MCP tools if they fail
-            log.debug("MCP tools failed to load, continuing with backend tools only. agentId={}", agentId, e);
-            AgentUtils.createTools(toolFactories, params, mlToolSpecs, toolsMap, toolSpecMap, mlAgent);
-            List<Map<String, Object>> results = new ArrayList<>();
-            executeToolCallsSequentially(toolsMap, toolCalls, results, 0, listener);
-        }));
+        List<Map<String, Object>> results = new ArrayList<>();
+        executeToolCallsSequentially(toolsMap, toolCalls, results, 0, listener);
     }
 
     /**
@@ -233,9 +216,9 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         }
 
         Map<String, String> toolCall = toolCalls.get(index);
-        String toolName = toolCall.get("name");
-        String toolInput = toolCall.get("arguments");
-        String toolCallId = toolCall.get("id");
+        String toolName = toolCall.get("tool_name");
+        String toolInput = toolCall.get("tool_input");
+        String toolCallId = toolCall.get("tool_call_id");
 
         Tool tool = toolsMap.get(toolName);
         if (tool == null) {
@@ -250,11 +233,10 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
 
         Map<String, String> toolParams = new HashMap<>();
         toolParams.put("input", toolInput);
-
         tool.run(toolParams, ActionListener.wrap(output -> {
             Map<String, Object> result = new HashMap<>();
             result.put("tool_call_id", toolCallId);
-            result.put("tool_result", output);
+            result.put("tool_result", Map.of("text", output));
             results.add(result);
             executeToolCallsSequentially(toolsMap, toolCalls, results, index + 1, listener);
         }, e -> {
@@ -338,7 +320,7 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     /**
      * Build LLM request parameters.
      * Default implementation uses ModelProvider for message formatting.
-     * Override if agent needs custom parameter handling.
+     * Override if agent needs to add tools or custom parameter handling.
      *
      * @param mlAgent Agent configuration
      * @param params Execution parameters
@@ -393,12 +375,11 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
      * Override if agent needs custom message extraction logic.
      *
      * @param output LLM output
-     * @param toolCalls Tool calls (may be null)
      * @param modelProvider Model provider that knows its own response format
      * @return Assistant message
      * @throws IllegalStateException if message cannot be extracted from valid LLM output
      */
-    protected Message extractAssistantMessage(ModelTensorOutput output, List<Map<String, String>> toolCalls, ModelProvider modelProvider) {
+    protected Message extractAssistantMessage(ModelTensorOutput output, ModelProvider modelProvider) {
         if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
             throw new IllegalStateException("LLM output is null or empty - cannot extract assistant message");
         }
@@ -441,37 +422,67 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     }
 
     /**
-     * Format tool results as messages.
-     * Default implementation uses FunctionCalling.supply().
+     * Format tool results as messages for the conversation history.
+     * Parses provider-specific JSON from functionCalling.supply() into unified Messages.
+     * These Messages are added to the conversation for the next LLM call.
      * Override if agent needs custom tool result formatting.
      *
      * @param toolResults Tool execution results
      * @param functionCalling Function calling interface
-     * @return Messages representing tool results
+     * @param modelProvider Model provider for parsing provider-specific JSON
+     * @return Parsed Messages ready to add to conversation
      */
-    protected List<Message> formatToolResults(List<Map<String, Object>> toolResults, FunctionCalling functionCalling) {
+    protected List<Message> formatToolResults(
+        List<Map<String, Object>> toolResults,
+        FunctionCalling functionCalling,
+        ModelProvider modelProvider
+    ) {
         var llmMessages = functionCalling.supply(toolResults);
 
         List<Message> messages = new ArrayList<>();
         for (var llmMsg : llmMessages) {
-            Message message = new Message();
-            message.setRole(llmMsg.getRole());
-
-            // Convert content to ContentBlocks
-            // LLMMessage.getResponse() provides the formatted text content
-            String content = llmMsg.getResponse();
-            if (content != null && !content.isEmpty()) {
-                ContentBlock contentBlock = new ContentBlock();
-                contentBlock.setType(ContentType.TEXT);
-                contentBlock.setText(content);
-                message.setContent(List.of(contentBlock));
+            String messageJson = llmMsg.getResponse();
+            if (messageJson != null && !messageJson.isEmpty()) {
+                try {
+                    // Parse the complete provider-specific message (includes role + content with toolResult structure)
+                    Message message = modelProvider.parseToUnifiedMessage(messageJson);
+                    if (message != null) {
+                        messages.add(message);
+                    } else {
+                        log.warn("ModelProvider returned null when parsing tool result JSON: {}", messageJson);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse tool result JSON: {}", messageJson, e);
+                }
             } else {
-                message.setContent(List.of());
+                log.warn("Tool result message has empty response");
             }
-
-            messages.add(message);
         }
 
+        return messages;
+    }
+
+    /**
+     * Parse tool interaction JSON strings to unified Messages for persistence.
+     * This is called when saving tool traces to memory.
+     * Matches V1 agent approach (see MLChatAgentRunner.saveAssistantResponseAsStructuredMessage).
+     *
+     * @param toolInteractionJsonList List of provider-specific tool interaction JSON strings
+     * @param modelProvider Model provider for parsing
+     * @return List of parsed Messages
+     */
+    protected List<Message> parseToolInteractionsForPersistence(List<String> toolInteractionJsonList, ModelProvider modelProvider) {
+        List<Message> messages = new ArrayList<>();
+        for (String interactionJson : toolInteractionJsonList) {
+            try {
+                Message msg = modelProvider.parseToUnifiedMessage(interactionJson);
+                if (msg != null) {
+                    messages.add(msg);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse tool interaction message for persistence: {}", interactionJson, e);
+            }
+        }
         return messages;
     }
 
@@ -482,11 +493,13 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         public final Message assistantMessage;
         public final String stopReason;
         public final TokenUsage tokenUsage;
+        public final List<Message> toolInteractionMessages;
 
-        public AgentLogicResult(Message assistantMessage, String stopReason, TokenUsage tokenUsage) {
+        public AgentLogicResult(Message assistantMessage, String stopReason, TokenUsage tokenUsage, List<Message> toolInteractionMessages) {
             this.assistantMessage = assistantMessage;
             this.stopReason = stopReason;
             this.tokenUsage = tokenUsage;
+            this.toolInteractionMessages = toolInteractionMessages;
         }
     }
 
@@ -567,8 +580,16 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
             // Step 3: Execute agent-specific logic (ABSTRACT METHOD)
             executeAgentLogic(mlAgent, params, fullConversation, functionCalling, modelProvider, ActionListener.wrap(result -> {
 
-                // Step 4: Save assistant message to memory
-                saveAssistantMessage(memory, result.assistantMessage, ActionListener.wrap(saveV -> {
+                // Step 4: Save tool interactions (if any) and assistant message to memory
+                // Build list of messages to save: tool interactions + final assistant message
+                List<Message> messagesToSave = new ArrayList<>();
+                if (result.toolInteractionMessages != null && !result.toolInteractionMessages.isEmpty()) {
+                    messagesToSave.addAll(result.toolInteractionMessages);
+                    log.debug("Saving {} tool interaction messages. agentId={}", result.toolInteractionMessages.size(), agentId);
+                }
+                messagesToSave.add(result.assistantMessage);
+
+                memory.saveStructuredMessages(messagesToSave, ActionListener.wrap(saveV -> {
 
                     // Step 5: Build and return standardized output
                     AgentV2Output output = buildStandardizedOutput(
@@ -578,13 +599,12 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
                         result.tokenUsage,
                         params
                     );
-
                     listener.onResponse(output);
                 }, listener::onFailure));
             }, listener::onFailure));
 
         } catch (Exception e) {
-            log.error("V2 agent execution failed. agentId={}, tenantId={}", agentId, tenantId, e);
+            log.error("Agent execution failed. agentId={}, tenantId={}", agentId, tenantId, e);
             listener.onFailure(e);
         }
     }

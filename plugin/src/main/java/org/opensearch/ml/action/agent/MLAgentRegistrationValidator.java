@@ -159,11 +159,23 @@ public class MLAgentRegistrationValidator {
     /**
      * Validates context management configuration structure and requirements.
      * This method performs comprehensive validation of context management settings.
-     * 
+     *
      * @param agent the ML agent to validate
      * @return validation error message if invalid, null if valid
      */
     public String validateContextManagementConfiguration(MLAgent agent) {
+        // V2 agents do not support context management
+        try {
+            MLAgentType agentType = MLAgentType.from(agent.getType());
+            if (agentType.isV2() && (agent.getContextManagementName() != null || agent.getContextManagement() != null)) {
+                return "V2 agents (CONVERSATIONAL_V2) do not support context management. "
+                    + "Context management (context_management or context_management_name) is only supported for V1 agents. "
+                    + "Please remove the context management configuration from your V2 agent.";
+            }
+        } catch (Exception e) {
+            log.error("Error checking agent type for context management validation", e);
+        }
+
         // Check for conflicting configuration (both name and inline config specified)
         if (agent.getContextManagementName() != null && agent.getContextManagement() != null) {
             return "Cannot specify both context_management_name and context_management";

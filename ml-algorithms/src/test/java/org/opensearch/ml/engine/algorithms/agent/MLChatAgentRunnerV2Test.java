@@ -201,7 +201,7 @@ public class MLChatAgentRunnerV2Test {
     }
 
     @Test
-    public void testExecuteAgentLogic_ToolExecutionFailure() {
+    public void testExecuteAgentLogic_TracksToolInteractions() {
         // Arrange
         Map<String, String> params = new HashMap<>();
         params.put("agent_id", "test-agent");
@@ -214,27 +214,34 @@ public class MLChatAgentRunnerV2Test {
         when(toolFactories.get("test-tool")).thenReturn(toolFactory);
         when(toolFactory.create(anyMap())).thenReturn(tool);
 
-        // Mock tool execution failure
-        Exception toolException = new RuntimeException("Tool execution failed");
+        // Mock tool execution
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
-            listener.onFailure(toolException);
+            listener.onResponse("Tool output");
             return null;
         }).when(tool).run(anyMap(), any());
 
-        // Mock LLM response with tool call
-        mockLLMResponseWithToolCall();
+        // Mock two LLM calls: first with tool call, second without (final answer)
+        mockLLMResponseWithToolCallThenFinalAnswer();
 
         // Mock ModelProvider
         when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+        when(modelProvider.extractMessageFromResponse(any())).thenReturn("{\"role\":\"assistant\",\"content\":[]}");
 
         ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
 
         // Act
         runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
 
-        // Assert - should handle tool failure gracefully and pass error to tool result
-        verify(listener, timeout(5000)).onFailure(any(Exception.class));
+        // Assert
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> resultCaptor = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(resultCaptor.capture());
+
+        AbstractV2AgentRunner.AgentLogicResult result = resultCaptor.getValue();
+        assertNotNull(result);
+        assertNotNull(result.toolInteractionMessages);
+        assertTrue(result.toolInteractionMessages.size() > 0); // Should have tracked tool interactions
     }
 
     // ==================== Helper Methods ====================
@@ -339,6 +346,78 @@ public class MLChatAgentRunnerV2Test {
             MLTaskResponse response = MLTaskResponse.builder().output(output).build();
 
             listener.onResponse(response);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    private void mockLLMResponseWithToolCallThenFinalAnswer() {
+        final boolean[] firstCall = { true };
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+
+            if (firstCall[0]) {
+                // First call: return tool call
+                firstCall[0] = false;
+
+                Message assistantMessage = new Message();
+                assistantMessage.setRole("assistant");
+                ContentBlock block = new ContentBlock();
+                block.setType(ContentType.TEXT);
+                block.setText("Let me check that.");
+                assistantMessage.setContent(List.of(block));
+
+                String messageJson = "{\"role\":\"assistant\",\"content\":[{\"toolUse\":{\"name\":\"test-tool\"}}]}";
+                when(modelProvider.extractMessageFromResponse(any())).thenReturn(messageJson);
+                when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(assistantMessage);
+
+                // Mock function calling to return tool call
+                List<Map<String, String>> toolCalls = List
+                    .of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+                when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(toolCalls);
+
+                // Mock supply for tool results
+                org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(
+                    org.opensearch.ml.engine.function_calling.LLMMessage.class
+                );
+                when(llmMsg.getRole()).thenReturn("user");
+                when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
+                when(functionCalling.supply(anyList())).thenReturn(List.of(llmMsg));
+
+                Message toolResultMsg = new Message();
+                toolResultMsg.setRole("user");
+                when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}"))
+                    .thenReturn(toolResultMsg);
+
+                ModelTensor tensor = ModelTensor.builder().dataAsMap(Map.of("response", "test")).build();
+                ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+                ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+                MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+                listener.onResponse(response);
+            } else {
+                // Second call: return final answer with no tool calls
+                Message assistantMessage = new Message();
+                assistantMessage.setRole("assistant");
+                ContentBlock block = new ContentBlock();
+                block.setType(ContentType.TEXT);
+                block.setText("The answer is...");
+                assistantMessage.setContent(List.of(block));
+
+                String messageJson = "{\"role\":\"assistant\",\"content\":[{\"text\":\"The answer is...\"}]}";
+                when(modelProvider.extractMessageFromResponse(any())).thenReturn(messageJson);
+                when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(assistantMessage);
+
+                // No tool calls this time
+                when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(null);
+
+                ModelTensor tensor = ModelTensor.builder().dataAsMap(Map.of("response", "test")).build();
+                ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+                ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+                MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+                listener.onResponse(response);
+            }
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
     }

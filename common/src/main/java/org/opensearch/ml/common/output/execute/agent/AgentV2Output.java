@@ -36,7 +36,6 @@ public class AgentV2Output extends MLOutput {
 
     public static final String STOP_REASON_FIELD = "stop_reason";
     public static final String MESSAGE_FIELD = "message";
-    public static final String SESSION_ID_FIELD = "session_id";
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String METRICS_FIELD = "metrics";
 

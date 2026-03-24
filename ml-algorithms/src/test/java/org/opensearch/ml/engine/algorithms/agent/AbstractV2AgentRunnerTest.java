@@ -186,6 +186,25 @@ public class AbstractV2AgentRunnerTest {
         }
     }
 
+    @Test
+    public void testValidateV2Agent_WithContextManagement() {
+        // Arrange
+        when(memory.getType()).thenReturn(MLMemoryType.AGENTIC_MEMORY.name());
+        MLAgentModelSpec modelSpec = new MLAgentModelSpec("model-123", "bedrock", null, null);
+        when(mlAgent.getModel()).thenReturn(modelSpec);
+        when(mlAgent.usesUnifiedInterface()).thenReturn(true);
+        when(mlAgent.hasContextManagement()).thenReturn(true);  // Has context management configured
+
+        // Act & Assert
+        try {
+            runner.validateV2Agent(mlAgent, memory);
+            fail("Should throw IllegalStateException for V2 agent with context management");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("V2 agents do not support context management"));
+            assertTrue(e.getMessage().contains("only supported for V1 agents"));
+        }
+    }
+
     // ==================== Tests for getMaxIterations ====================
 
     @Test
@@ -407,6 +426,227 @@ public class AbstractV2AgentRunnerTest {
         Map<String, Object> totalUsage = (Map<String, Object>) result.getMetrics().get("total_usage");
         assertEquals(20L, totalUsage.get("cacheReadInputTokens"));
         assertEquals(30L, totalUsage.get("cacheCreationInputTokens"));
+    }
+
+    // ==================== Tests for executeToolsSequentially ====================
+
+    @Test
+    public void testExecuteToolsSequentially_Success() {
+        // Arrange
+        Map<String, Tool> toolsMap = new HashMap<>();
+        Tool mockTool = mock(Tool.class);
+        toolsMap.put("test-tool", mockTool);
+
+        List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse("Tool output");
+            return null;
+        }).when(mockTool).run(any(), any());
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+
+        // Act
+        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+
+        // Assert
+        verify(testListener, timeout(1000)).onResponse(argThat(results -> {
+            assertEquals(1, results.size());
+            assertEquals("call-1", results.get(0).get("tool_call_id"));
+            Map<String, Object> toolResult = (Map<String, Object>) results.get(0).get("tool_result");
+            assertEquals("Tool output", toolResult.get("text"));
+            return true;
+        }));
+    }
+
+    @Test
+    public void testExecuteToolsSequentially_ToolNotFound() {
+        // Arrange
+        Map<String, Tool> toolsMap = new HashMap<>();
+
+        List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "missing-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+
+        // Act
+        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+
+        // Assert
+        verify(testListener, timeout(1000)).onResponse(argThat(results -> {
+            assertEquals(1, results.size());
+            assertEquals("call-1", results.get(0).get("tool_call_id"));
+            Map<String, Object> toolResult = (Map<String, Object>) results.get(0).get("tool_result");
+            assertTrue(toolResult.get("error").toString().contains("Tool not found"));
+            return true;
+        }));
+    }
+
+    @Test
+    public void testExecuteToolsSequentially_ToolExecutionFailure() {
+        // Arrange
+        Map<String, Tool> toolsMap = new HashMap<>();
+        Tool mockTool = mock(Tool.class);
+        toolsMap.put("test-tool", mockTool);
+
+        List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Tool failed"));
+            return null;
+        }).when(mockTool).run(any(), any());
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+
+        // Act
+        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+
+        // Assert
+        verify(testListener, timeout(1000)).onResponse(argThat(results -> {
+            assertEquals(1, results.size());
+            assertEquals("call-1", results.get(0).get("tool_call_id"));
+            Map<String, Object> toolResult = (Map<String, Object>) results.get(0).get("tool_result");
+            assertEquals("Tool failed", toolResult.get("error"));
+            return true;
+        }));
+    }
+
+    @Test
+    public void testExecuteToolsSequentially_MultipleTools() {
+        // Arrange
+        Map<String, Tool> toolsMap = new HashMap<>();
+        Tool mockTool1 = mock(Tool.class);
+        Tool mockTool2 = mock(Tool.class);
+        toolsMap.put("tool-1", mockTool1);
+        toolsMap.put("tool-2", mockTool2);
+
+        List<Map<String, String>> toolCalls = List
+            .of(
+                Map.of("tool_name", "tool-1", "tool_input", "{}", "tool_call_id", "call-1"),
+                Map.of("tool_name", "tool-2", "tool_input", "{}", "tool_call_id", "call-2")
+            );
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse("Output 1");
+            return null;
+        }).when(mockTool1).run(any(), any());
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse("Output 2");
+            return null;
+        }).when(mockTool2).run(any(), any());
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+
+        // Act
+        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+
+        // Assert
+        verify(testListener, timeout(1000)).onResponse(argThat(results -> {
+            assertEquals(2, results.size());
+            assertEquals("call-1", results.get(0).get("tool_call_id"));
+            assertEquals("call-2", results.get(1).get("tool_call_id"));
+            return true;
+        }));
+    }
+
+    // ==================== Tests for formatToolResults ====================
+
+    @Test
+    public void testFormatToolResults_Success() {
+        // Arrange
+        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
+
+        // Mock LLMMessage returned by functionCalling.supply()
+        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
+        when(llmMsg.getRole()).thenReturn("user");
+        when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
+        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
+
+        Message expectedMessage = new Message();
+        expectedMessage.setRole("user");
+        when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}")).thenReturn(expectedMessage);
+
+        // Act
+        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
+
+        // Assert
+        assertEquals(1, result.size());
+        assertEquals("user", result.get(0).getRole());
+    }
+
+    @Test
+    public void testFormatToolResults_ParsingFailure() {
+        // Arrange
+        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
+
+        // Mock LLMMessage returned by functionCalling.supply()
+        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
+        when(llmMsg.getRole()).thenReturn("user");
+        when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
+        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
+
+        when(modelProvider.parseToUnifiedMessage(anyString())).thenThrow(new RuntimeException("Parse failed"));
+
+        // Act
+        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
+
+        // Assert
+        assertEquals(0, result.size()); // Should skip failed parsing
+    }
+
+    // ==================== Tests for parseToolInteractionsForPersistence ====================
+
+    @Test
+    public void testParseToolInteractionsForPersistence_Success() {
+        // Arrange
+        List<String> jsonList = List.of("{\"role\":\"assistant\",\"content\":[]}", "{\"role\":\"user\",\"content\":[]}");
+
+        Message message1 = new Message();
+        message1.setRole("assistant");
+        Message message2 = new Message();
+        message2.setRole("user");
+
+        when(modelProvider.parseToUnifiedMessage("{\"role\":\"assistant\",\"content\":[]}")).thenReturn(message1);
+        when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[]}")).thenReturn(message2);
+
+        // Act
+        List<Message> result = runner.parseToolInteractionsForPersistence(jsonList, modelProvider);
+
+        // Assert
+        assertEquals(2, result.size());
+        assertEquals("assistant", result.get(0).getRole());
+        assertEquals("user", result.get(1).getRole());
+    }
+
+    @Test
+    public void testParseToolInteractionsForPersistence_SkipsFailures() {
+        // Arrange
+        List<String> jsonList = List.of("{\"role\":\"assistant\",\"content\":[]}", "invalid-json", "{\"role\":\"user\",\"content\":[]}");
+
+        Message message1 = new Message();
+        message1.setRole("assistant");
+        Message message2 = new Message();
+        message2.setRole("user");
+
+        when(modelProvider.parseToUnifiedMessage("{\"role\":\"assistant\",\"content\":[]}")).thenReturn(message1);
+        when(modelProvider.parseToUnifiedMessage("invalid-json")).thenThrow(new RuntimeException("Parse failed"));
+        when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[]}")).thenReturn(message2);
+
+        // Act
+        List<Message> result = runner.parseToolInteractionsForPersistence(jsonList, modelProvider);
+
+        // Assert
+        assertEquals(2, result.size()); // Should skip the invalid one
+        assertEquals("assistant", result.get(0).getRole());
+        assertEquals("user", result.get(1).getRole());
     }
 
     // ==================== Tests for saveAssistantMessage ====================
