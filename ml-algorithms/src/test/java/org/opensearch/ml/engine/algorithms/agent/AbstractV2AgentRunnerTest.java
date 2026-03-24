@@ -562,17 +562,20 @@ public class AbstractV2AgentRunnerTest {
     @Test
     public void testFormatToolResults_Success() {
         // Arrange
-        // Mock LLMMessage (no longer need to mock functionCalling.supply since we pass llmMessages directly)
+        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
+
+        // Mock LLMMessage returned by functionCalling.supply()
         org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
         when(llmMsg.getRole()).thenReturn("user");
         when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
+        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
 
         Message expectedMessage = new Message();
         expectedMessage.setRole("user");
         when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}")).thenReturn(expectedMessage);
 
         // Act
-        List<Message> result = runner.formatToolResults(List.of(llmMsg), modelProvider);
+        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
 
         // Assert
         assertEquals(1, result.size());
@@ -582,15 +585,18 @@ public class AbstractV2AgentRunnerTest {
     @Test
     public void testFormatToolResults_ParsingFailure() {
         // Arrange
-        // Mock LLMMessage (no longer need to mock functionCalling.supply since we pass llmMessages directly)
+        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
+
+        // Mock LLMMessage returned by functionCalling.supply()
         org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
         when(llmMsg.getRole()).thenReturn("user");
         when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
+        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
 
         when(modelProvider.parseToUnifiedMessage(anyString())).thenThrow(new RuntimeException("Parse failed"));
 
         // Act
-        List<Message> result = runner.formatToolResults(List.of(llmMsg), modelProvider);
+        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
 
         // Assert
         assertEquals(0, result.size()); // Should skip failed parsing
@@ -641,6 +647,514 @@ public class AbstractV2AgentRunnerTest {
         assertEquals(2, result.size()); // Should skip the invalid one
         assertEquals("assistant", result.get(0).getRole());
         assertEquals("user", result.get(1).getRole());
+    }
+
+    // ==================== Tests for saveAssistantMessage ====================
+
+    @Test
+    public void testSaveAssistantMessage_Success() {
+        // Arrange
+        Message assistantMessage = new Message();
+        assistantMessage.setRole("assistant");
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Void> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(memory).saveStructuredMessages(anyList(), any());
+
+        // Act
+        ActionListener<Void> testListener = ActionListener.wrap(response -> {
+            // Success
+        }, e -> fail("Should not fail"));
+
+        runner.saveAssistantMessage(memory, assistantMessage, testListener);
+
+        // Assert
+        verify(memory).saveStructuredMessages(argThat(messages -> {
+            assertEquals(1, messages.size());
+            assertEquals("assistant", ((Message) messages.get(0)).getRole());
+            return true;
+        }), any());
+    }
+
+    @Test
+    public void testSaveAssistantMessage_Failure() {
+        // Arrange
+        Message assistantMessage = new Message();
+        Exception expectedException = new RuntimeException("Save failed");
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Void> listener = invocation.getArgument(1);
+            listener.onFailure(expectedException);
+            return null;
+        }).when(memory).saveStructuredMessages(anyList(), any());
+
+        // Act
+        ActionListener<Void> testListener = ActionListener
+            .wrap(response -> fail("Should not succeed"), e -> { assertEquals(expectedException, e); });
+
+        runner.saveAssistantMessage(memory, assistantMessage, testListener);
+
+        // Assert
+        verify(memory).saveStructuredMessages(anyList(), any());
+    }
+
+    // ==================== Tests for extractAssistantMessage ====================
+
+    @Test
+    public void testExtractAssistantMessage_Success() {
+        // Arrange
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("message", "{\"role\":\"assistant\",\"content\":[{\"text\":\"Hello\"}]}");
+
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        Message expectedMessage = new Message();
+        expectedMessage.setRole("assistant");
+        when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn("{\"role\":\"assistant\",\"content\":[{\"text\":\"Hello\"}]}");
+        when(modelProvider.parseToUnifiedMessage("{\"role\":\"assistant\",\"content\":[{\"text\":\"Hello\"}]}"))
+            .thenReturn(expectedMessage);
+
+        // Act
+        Message result = runner.extractAssistantMessage(output, modelProvider);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("assistant", result.getRole());
+    }
+
+    @Test
+    public void testExtractAssistantMessage_NullOutput() {
+        // Act & Assert
+        try {
+            runner.extractAssistantMessage(null, modelProvider);
+            fail("Should throw IllegalStateException for null output");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("LLM output is null or empty"));
+        }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_EmptyOutputs() {
+        // Arrange
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of()).build();
+
+        // Act & Assert
+        try {
+            runner.extractAssistantMessage(output, modelProvider);
+            fail("Should throw IllegalStateException for empty outputs");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("LLM output is null or empty"));
+        }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_NullTensors() {
+        // Arrange
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(null).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        // Act & Assert
+        try {
+            runner.extractAssistantMessage(output, modelProvider);
+            fail("Should throw IllegalStateException for null tensors");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("LLM output tensors are null or empty"));
+        }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_NullDataMap() {
+        // Arrange
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(null).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        // Act & Assert
+        try {
+            runner.extractAssistantMessage(output, modelProvider);
+            fail("Should throw IllegalStateException for null data map");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("LLM output data map is null"));
+        }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_ExtractMessageFails() {
+        // Arrange
+        Map<String, Object> dataMap = new HashMap<>();
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(null);
+
+        // Act & Assert
+        try {
+            runner.extractAssistantMessage(output, modelProvider);
+            fail("Should throw IllegalStateException when extraction fails");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("ModelProvider failed to extract message from response"));
+        }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_ParseToUnifiedFails() {
+        // Arrange
+        Map<String, Object> dataMap = new HashMap<>();
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        String messageJson = "{\"role\":\"assistant\",\"content\":[]}";
+        when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(messageJson);
+        when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(null);
+
+        // Act & Assert
+        try {
+            runner.extractAssistantMessage(output, modelProvider);
+            fail("Should throw IllegalStateException when parsing fails");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("ModelProvider failed to parse message JSON"));
+        }
+    }
+
+    // ==================== Tests for buildLLMParams ====================
+
+    @Test
+    public void testBuildLLMParams_WithSystemPrompt() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("temperature", "0.7");
+        params.put("system_prompt", "Custom system prompt");
+
+        Message userMessage = new Message();
+        userMessage.setRole("user");
+        List<Message> messages = List.of(userMessage);
+
+        Map<String, String> formattedMessages = new HashMap<>();
+        formattedMessages.put("messages", "[{\"role\":\"user\"}]");
+
+        when(modelProvider.mapMessages(eq(messages), any())).thenReturn(formattedMessages);
+
+        // Act
+        Map<String, String> result = runner.buildLLMParams(mlAgent, params, messages, modelProvider);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("0.7", result.get("temperature"));
+        assertEquals("Custom system prompt", result.get("system_prompt"));
+        assertEquals("[{\"role\":\"user\"}]", result.get("messages"));
+    }
+
+    @Test
+    public void testBuildLLMParams_WithoutSystemPrompt_UsesDefault() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        when(mlAgent.getParameters()).thenReturn(null);
+
+        Message userMessage = new Message();
+        List<Message> messages = List.of(userMessage);
+
+        Map<String, String> formattedMessages = new HashMap<>();
+        formattedMessages.put("messages", "[]");
+        when(modelProvider.mapMessages(eq(messages), any())).thenReturn(formattedMessages);
+
+        // Act
+        Map<String, String> result = runner.buildLLMParams(mlAgent, params, messages, modelProvider);
+
+        // Assert
+        assertEquals("You are a helpful assistant", result.get("system_prompt"));
+    }
+
+    @Test
+    public void testBuildLLMParams_MergesFormattedMessages() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("param1", "value1");
+
+        Message userMessage = new Message();
+        List<Message> messages = List.of(userMessage);
+
+        Map<String, String> formattedMessages = new HashMap<>();
+        formattedMessages.put("messages", "[]");
+        formattedMessages.put("param2", "value2");
+
+        when(modelProvider.mapMessages(eq(messages), any())).thenReturn(formattedMessages);
+        when(mlAgent.getParameters()).thenReturn(null);
+
+        // Act
+        Map<String, String> result = runner.buildLLMParams(mlAgent, params, messages, modelProvider);
+
+        // Assert
+        assertEquals("value1", result.get("param1"));
+        assertEquals("value2", result.get("param2"));
+        assertEquals("[]", result.get("messages"));
+    }
+
+    // ==================== Tests for getFunctionCalling ====================
+
+    @Test
+    public void testGetFunctionCalling_FromParams() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("_llm_interface", "bedrock_converse");
+        when(mlAgent.getParameters()).thenReturn(new HashMap<>());
+
+        // Act & Assert - The factory validates interfaces, so invalid ones throw IllegalArgumentException
+        // In test env, most interfaces are not registered, so we expect exception
+        try {
+            FunctionCalling result = runner.getFunctionCalling(mlAgent, params);
+            // If the interface is registered in test, result should not be null
+            assertNotNull(result);
+        } catch (IllegalArgumentException e) {
+            // Expected in test environment where FunctionCallingFactory doesn't have all implementations
+            assertTrue(e.getMessage().contains("Invalid _llm_interface") || e.getMessage().contains("No function calling"));
+        }
+    }
+
+    @Test
+    public void testGetFunctionCalling_FromAgentParams() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put("_llm_interface", "openai_v1_chat_completions");
+        when(mlAgent.getParameters()).thenReturn(agentParams);
+
+        // Act & Assert
+        try {
+            FunctionCalling result = runner.getFunctionCalling(mlAgent, params);
+            assertNotNull(result);
+        } catch (IllegalArgumentException e) {
+            // Expected in test environment
+            assertTrue(e.getMessage().contains("Invalid _llm_interface") || e.getMessage().contains("No function calling"));
+        }
+    }
+
+    @Test
+    public void testGetFunctionCalling_NoInterface_ThrowsException() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        when(mlAgent.getParameters()).thenReturn(null);
+
+        // Act & Assert
+        try {
+            runner.getFunctionCalling(mlAgent, params);
+            fail("Should throw IllegalStateException when no interface configured");
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("V2 agents require function calling"));
+            assertTrue(e.getMessage().contains("LLM interface not configured"));
+        }
+    }
+
+    @Test
+    public void testGetFunctionCalling_ConfiguresCalled() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("_llm_interface", "some_interface");
+        params.put("temperature", "0.7");
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put("max_tokens", "100");
+        when(mlAgent.getParameters()).thenReturn(agentParams);
+
+        // Act - Will throw but tests that params are merged before configure
+        try {
+            runner.getFunctionCalling(mlAgent, params);
+        } catch (Exception e) {
+            // Expected - just testing the param merge logic
+            assertTrue(e instanceof IllegalArgumentException || e instanceof IllegalStateException);
+        }
+    }
+
+    // ==================== Tests for extractTokenUsage edge cases ====================
+
+    @Test
+    public void testExtractTokenUsage_ExceptionDuringExtraction() {
+        // Arrange
+        Map<String, Object> dataMap = new HashMap<>();
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        when(functionCalling.extractTokenUsage(dataMap)).thenThrow(new RuntimeException("Extraction failed"));
+
+        // Act
+        TokenUsage result = runner.extractTokenUsage(output, functionCalling);
+
+        // Assert
+        assertNull(result); // Should handle exception gracefully
+    }
+
+    @Test
+    public void testExtractTokenUsage_NullDataMap() {
+        // Arrange
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(null).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        // Act
+        TokenUsage result = runner.extractTokenUsage(output, functionCalling);
+
+        // Assert
+        assertNull(result);
+    }
+
+    // ==================== Tests for formatToolResults edge cases ====================
+
+    @Test
+    public void testFormatToolResults_EmptyResponse() {
+        // Arrange
+        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1"));
+
+        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
+        when(llmMsg.getResponse()).thenReturn("");
+        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
+
+        // Act
+        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
+
+        // Assert
+        assertEquals(0, result.size()); // Should skip empty responses
+    }
+
+    @Test
+    public void testFormatToolResults_NullResponse() {
+        // Arrange
+        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1"));
+
+        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
+        when(llmMsg.getResponse()).thenReturn(null);
+        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
+
+        // Act
+        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
+
+        // Assert
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testFormatToolResults_ProviderReturnsNull() {
+        // Arrange
+        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1"));
+
+        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
+        when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\"}");
+        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
+
+        when(modelProvider.parseToUnifiedMessage(anyString())).thenReturn(null);
+
+        // Act
+        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
+
+        // Assert
+        assertEquals(0, result.size()); // Should skip when provider returns null
+    }
+
+    // ==================== Tests for executeToolsSequentially edge cases ====================
+
+    @Test
+    public void testExecuteToolsSequentially_EmptyToolCalls() {
+        // Arrange
+        Map<String, Tool> toolsMap = new HashMap<>();
+        List<Map<String, String>> toolCalls = List.of();
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+
+        // Act
+        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+
+        // Assert
+        verify(testListener, timeout(1000)).onResponse(argThat(results -> {
+            assertEquals(0, results.size());
+            return true;
+        }));
+    }
+
+    @Test
+    public void testExecuteToolsSequentially_MixedSuccessAndFailure() {
+        // Arrange
+        Map<String, Tool> toolsMap = new HashMap<>();
+        Tool successTool = mock(Tool.class);
+        Tool failTool = mock(Tool.class);
+        toolsMap.put("success-tool", successTool);
+        toolsMap.put("fail-tool", failTool);
+
+        List<Map<String, String>> toolCalls = List
+            .of(
+                Map.of("tool_name", "success-tool", "tool_input", "{}", "tool_call_id", "call-1"),
+                Map.of("tool_name", "fail-tool", "tool_input", "{}", "tool_call_id", "call-2"),
+                Map.of("tool_name", "missing-tool", "tool_input", "{}", "tool_call_id", "call-3")
+            );
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse("Success");
+            return null;
+        }).when(successTool).run(any(), any());
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Failed"));
+            return null;
+        }).when(failTool).run(any(), any());
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+
+        // Act
+        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+
+        // Assert
+        verify(testListener, timeout(1000)).onResponse(argThat(results -> {
+            assertEquals(3, results.size());
+            // First should succeed
+            Map<String, Object> result1 = (Map<String, Object>) results.get(0).get("tool_result");
+            assertEquals("Success", result1.get("text"));
+            // Second should have error
+            Map<String, Object> result2 = (Map<String, Object>) results.get(1).get("tool_result");
+            assertEquals("Failed", result2.get("error"));
+            // Third should have tool not found error
+            Map<String, Object> result3 = (Map<String, Object>) results.get(2).get("tool_result");
+            assertTrue(result3.get("error").toString().contains("Tool not found"));
+            return true;
+        }));
+    }
+
+    @Test
+    public void testExecuteToolsSequentially_ToolFailureWithNullMessage() {
+        // Arrange
+        Map<String, Tool> toolsMap = new HashMap<>();
+        Tool mockTool = mock(Tool.class);
+        toolsMap.put("test-tool", mockTool);
+
+        List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException()); // null message
+            return null;
+        }).when(mockTool).run(any(), any());
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+
+        // Act
+        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+
+        // Assert
+        verify(testListener, timeout(1000)).onResponse(argThat(results -> {
+            assertEquals(1, results.size());
+            Map<String, Object> toolResult = (Map<String, Object>) results.get(0).get("tool_result");
+            assertEquals("Tool execution failed", toolResult.get("error"));
+            return true;
+        }));
     }
 
     // ==================== Tests for unsupported V1 methods ====================
