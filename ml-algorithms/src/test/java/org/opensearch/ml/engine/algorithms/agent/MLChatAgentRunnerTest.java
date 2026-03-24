@@ -1645,11 +1645,8 @@ public class MLChatAgentRunnerTest {
         // Verify agent completes successfully
         verify(agentActionListener).onResponse(objectCaptor.capture());
 
-        // Verify trace data was NOT saved to memory (4-arg version used by saveTraceData)
-        verify(conversationIndexMemory, never()).save(any(), any(), any(Integer.class), anyString());
-        // Verify trace data was NOT saved to memory (5-arg version used by saveMessage)
-        verify(conversationIndexMemory, never()).save(any(), any(), any(Integer.class), anyString(), any());
-
+        // Tracing is now controlled solely by DISABLE_TRACE parameter.
+        // Without DISABLE_TRACE=true, trace data MAY be saved for unified interface agents.
         // Verify structured messages WERE saved (unified flow uses this for final answer)
         verify(conversationIndexMemory).saveStructuredMessages(any(), any());
     }
