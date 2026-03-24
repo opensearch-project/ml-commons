@@ -410,26 +410,14 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     /**
-     * Parses a Bedrock Converse response message into a unified Message object.
-     * Handles three content item types within the "content" array:
+     * Extracts the message JSON from a Bedrock Converse API response.
+     * Navigates the response structure to retrieve the message object at output.message.
      *
-     * 1. Text response:
-     *    {"role": "assistant", "content": [{"text": "Here is the result..."}]}
+     * Expected response structure:
+     * {"output": {"message": {"role": "assistant", "content": [...]}}}
      *
-     * 2. Tool call request:
-     *    {"role": "assistant", "content": [
-     *      {"toolUse": {"toolUseId": "tool_abc123", "name": "get_weather",
-     *       "input": {"location": "Seattle"}}}
-     *    ]}
-     *
-     * 3. Tool result (stored as role=user by Bedrock, mapped to role=tool for unified format):
-     *    {"role": "user", "content": [
-     *      {"toolResult": {"toolUseId": "tool_abc123",
-     *       "content": [{"text": "72°F, sunny"}]}}
-     *    ]}
-     *
-     * @param json JSON string containing the Bedrock Converse response message
-     * @return a unified Message object, or null if the input cannot be parsed
+     * @param responseData Map containing the Bedrock Converse API response data
+     * @return JSON string representation of the message object, or null if not found
      */
     @Override
     public String extractMessageFromResponse(Map<String, ?> responseData) {
