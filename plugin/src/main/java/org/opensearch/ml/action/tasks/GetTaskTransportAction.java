@@ -474,8 +474,10 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
             connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
+                connectorExecutor.close();
                 processTaskResponse(mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, r, actionListener);
             }, e -> {
+                connectorExecutor.close();
                 // When the request to remote service fails, we will retry the request for next 10 minutes (10 runs).
                 // If it fails even then, we mark it as unreachable in task index and send message to DLQ
                 if (!isUserInitiatedGetTaskRequest) {
