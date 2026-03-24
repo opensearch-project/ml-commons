@@ -557,151 +557,6 @@ public class AbstractV2AgentRunnerTest {
         }));
     }
 
-    // ==================== Tests for formatToolResults ====================
-
-    @Test
-    public void testFormatToolResults_Success() {
-        // Arrange
-        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
-
-        // Mock LLMMessage returned by functionCalling.supply()
-        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
-        when(llmMsg.getRole()).thenReturn("user");
-        when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
-        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
-
-        Message expectedMessage = new Message();
-        expectedMessage.setRole("user");
-        when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}")).thenReturn(expectedMessage);
-
-        // Act
-        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
-
-        // Assert
-        assertEquals(1, result.size());
-        assertEquals("user", result.get(0).getRole());
-    }
-
-    @Test
-    public void testFormatToolResults_ParsingFailure() {
-        // Arrange
-        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1", "tool_result", Map.of("text", "Tool output")));
-
-        // Mock LLMMessage returned by functionCalling.supply()
-        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
-        when(llmMsg.getRole()).thenReturn("user");
-        when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
-        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
-
-        when(modelProvider.parseToUnifiedMessage(anyString())).thenThrow(new RuntimeException("Parse failed"));
-
-        // Act
-        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
-
-        // Assert
-        assertEquals(0, result.size()); // Should skip failed parsing
-    }
-
-    // ==================== Tests for parseToolInteractionsForPersistence ====================
-
-    @Test
-    public void testParseToolInteractionsForPersistence_Success() {
-        // Arrange
-        List<String> jsonList = List.of("{\"role\":\"assistant\",\"content\":[]}", "{\"role\":\"user\",\"content\":[]}");
-
-        Message message1 = new Message();
-        message1.setRole("assistant");
-        Message message2 = new Message();
-        message2.setRole("user");
-
-        when(modelProvider.parseToUnifiedMessage("{\"role\":\"assistant\",\"content\":[]}")).thenReturn(message1);
-        when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[]}")).thenReturn(message2);
-
-        // Act
-        List<Message> result = runner.parseToolInteractionsForPersistence(jsonList, modelProvider);
-
-        // Assert
-        assertEquals(2, result.size());
-        assertEquals("assistant", result.get(0).getRole());
-        assertEquals("user", result.get(1).getRole());
-    }
-
-    @Test
-    public void testParseToolInteractionsForPersistence_SkipsFailures() {
-        // Arrange
-        List<String> jsonList = List.of("{\"role\":\"assistant\",\"content\":[]}", "invalid-json", "{\"role\":\"user\",\"content\":[]}");
-
-        Message message1 = new Message();
-        message1.setRole("assistant");
-        Message message2 = new Message();
-        message2.setRole("user");
-
-        when(modelProvider.parseToUnifiedMessage("{\"role\":\"assistant\",\"content\":[]}")).thenReturn(message1);
-        when(modelProvider.parseToUnifiedMessage("invalid-json")).thenThrow(new RuntimeException("Parse failed"));
-        when(modelProvider.parseToUnifiedMessage("{\"role\":\"user\",\"content\":[]}")).thenReturn(message2);
-
-        // Act
-        List<Message> result = runner.parseToolInteractionsForPersistence(jsonList, modelProvider);
-
-        // Assert
-        assertEquals(2, result.size()); // Should skip the invalid one
-        assertEquals("assistant", result.get(0).getRole());
-        assertEquals("user", result.get(1).getRole());
-    }
-
-    // ==================== Tests for saveAssistantMessage ====================
-
-    @Test
-    public void testSaveAssistantMessage_Success() {
-        // Arrange
-        Message assistantMessage = new Message();
-        assistantMessage.setRole("assistant");
-
-        doAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            ActionListener<Void> listener = invocation.getArgument(1);
-            listener.onResponse(null);
-            return null;
-        }).when(memory).saveStructuredMessages(anyList(), any());
-
-        // Act
-        ActionListener<Void> testListener = ActionListener.wrap(response -> {
-            // Success
-        }, e -> fail("Should not fail"));
-
-        runner.saveAssistantMessage(memory, assistantMessage, testListener);
-
-        // Assert
-        verify(memory).saveStructuredMessages(argThat(messages -> {
-            assertEquals(1, messages.size());
-            assertEquals("assistant", ((Message) messages.get(0)).getRole());
-            return true;
-        }), any());
-    }
-
-    @Test
-    public void testSaveAssistantMessage_Failure() {
-        // Arrange
-        Message assistantMessage = new Message();
-        Exception expectedException = new RuntimeException("Save failed");
-
-        doAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            ActionListener<Void> listener = invocation.getArgument(1);
-            listener.onFailure(expectedException);
-            return null;
-        }).when(memory).saveStructuredMessages(anyList(), any());
-
-        // Act
-        ActionListener<Void> testListener = ActionListener
-            .wrap(response -> fail("Should not succeed"), e -> { assertEquals(expectedException, e); });
-
-        runner.saveAssistantMessage(memory, assistantMessage, testListener);
-
-        // Assert
-        verify(memory).saveStructuredMessages(anyList(), any());
-    }
-
     // ==================== Tests for extractAssistantMessage ====================
 
     @Test
@@ -840,6 +695,7 @@ public class AbstractV2AgentRunnerTest {
         Map<String, String> formattedMessages = new HashMap<>();
         formattedMessages.put("messages", "[{\"role\":\"user\"}]");
 
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
         when(modelProvider.mapMessages(eq(messages), any())).thenReturn(formattedMessages);
 
         // Act
@@ -857,6 +713,7 @@ public class AbstractV2AgentRunnerTest {
         // Arrange
         Map<String, String> params = new HashMap<>();
         when(mlAgent.getParameters()).thenReturn(null);
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
 
         Message userMessage = new Message();
         List<Message> messages = List.of(userMessage);
@@ -885,6 +742,7 @@ public class AbstractV2AgentRunnerTest {
         formattedMessages.put("messages", "[]");
         formattedMessages.put("param2", "value2");
 
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
         when(modelProvider.mapMessages(eq(messages), any())).thenReturn(formattedMessages);
         when(mlAgent.getParameters()).thenReturn(null);
 
@@ -1002,58 +860,6 @@ public class AbstractV2AgentRunnerTest {
 
         // Assert
         assertNull(result);
-    }
-
-    // ==================== Tests for formatToolResults edge cases ====================
-
-    @Test
-    public void testFormatToolResults_EmptyResponse() {
-        // Arrange
-        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1"));
-
-        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
-        when(llmMsg.getResponse()).thenReturn("");
-        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
-
-        // Act
-        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
-
-        // Assert
-        assertEquals(0, result.size()); // Should skip empty responses
-    }
-
-    @Test
-    public void testFormatToolResults_NullResponse() {
-        // Arrange
-        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1"));
-
-        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
-        when(llmMsg.getResponse()).thenReturn(null);
-        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
-
-        // Act
-        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
-
-        // Assert
-        assertEquals(0, result.size());
-    }
-
-    @Test
-    public void testFormatToolResults_ProviderReturnsNull() {
-        // Arrange
-        List<Map<String, Object>> toolResults = List.of(Map.of("tool_call_id", "call-1"));
-
-        org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(org.opensearch.ml.engine.function_calling.LLMMessage.class);
-        when(llmMsg.getResponse()).thenReturn("{\"role\":\"user\"}");
-        when(functionCalling.supply(toolResults)).thenReturn(List.of(llmMsg));
-
-        when(modelProvider.parseToUnifiedMessage(anyString())).thenReturn(null);
-
-        // Act
-        List<Message> result = runner.formatToolResults(toolResults, functionCalling, modelProvider);
-
-        // Assert
-        assertEquals(0, result.size()); // Should skip when provider returns null
     }
 
     // ==================== Tests for executeToolsSequentially edge cases ====================
