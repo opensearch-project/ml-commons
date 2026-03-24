@@ -101,7 +101,11 @@ public class MLRegisterAgentRequest extends ActionRequest {
 
     private boolean isValidHookName(String hookName) {
         // Define valid hook names based on the system's supported hooks
-        return hookName.equals("POST_TOOL") || hookName.equals("PRE_LLM") || hookName.equals("PRE_TOOL") || hookName.equals("POST_LLM");
+        return hookName.equals("POST_TOOL")
+            || hookName.equals("PRE_LLM")
+            || hookName.equals("PRE_TOOL")
+            || hookName.equals("POST_LLM")
+            || hookName.equals("POST_MEMORY");
     }
 
     @Override
