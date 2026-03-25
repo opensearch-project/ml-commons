@@ -1300,8 +1300,11 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                     }
                 } catch (Exception e) {
                     listener.onFailure(e);
+                } finally {
+                    executor.close();
                 }
             }, e -> {
+                executor.close();
                 log.error("Failed to create session via remote connector", e);
                 listener.onFailure(e);
             }));

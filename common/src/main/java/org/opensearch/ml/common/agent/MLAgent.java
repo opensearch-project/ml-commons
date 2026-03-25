@@ -506,6 +506,16 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     /**
+     * Check if this agent uses the unified agent interface.
+     * Unified interface agents have the 'model' field configured and use simplified registration.
+     *
+     * @return true if agent was registered with unified interface (has model field)
+     */
+    public boolean usesUnifiedInterface() {
+        return model != null;
+    }
+
+    /**
      * Check if this agent has context management configuration
      * @return true if agent has either context management name or inline configuration
      */

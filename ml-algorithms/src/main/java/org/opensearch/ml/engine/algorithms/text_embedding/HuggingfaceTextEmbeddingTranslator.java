@@ -122,6 +122,9 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
             case "cls":
                 embeddings = embeddings.get(0);
                 break;
+            case "lasttoken":
+                embeddings = lastTokenPool(embeddings, inputAttentionMask);
+                break;
             case "none":
                 // No pooling - use pre-pooled output as-is
                 break;
@@ -167,6 +170,18 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
         NDArray maskSum = inputAttentionMask.sum(AXIS);
         NDArray embeddingSum = embeddings.mul(inputAttentionMask).sum(AXIS);
         return embeddingSum.div(maskSum);
+    }
+
+    private NDArray lastTokenPool(NDArray embeddings, NDArray inputAttentionMask) {
+        // Sum attention mask to get count of real tokens
+        long tokenCount = (long) inputAttentionMask.sum().toFloatArray()[0];
+        // Last token index (0-based)
+        long lastTokenIdx = tokenCount - 1;
+        // Handle edge case
+        if (lastTokenIdx < 0) {
+            lastTokenIdx = 0;
+        }
+        return embeddings.get(lastTokenIdx);
     }
 
     /**
@@ -240,9 +255,10 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
                 && !"cls".equals(poolingMode)
                 && !"mean_sqrt_len".equals(poolingMode)
                 && !"weightedmean".equals(poolingMode)
+                && !"lasttoken".equals(poolingMode)
                 && !"none".equals(poolingMode)) {
                 throw new IllegalArgumentException(
-                    "Invalid pooling model, must be one of [mean, max, cls, mean_sqrt_len, weightedmean, none]."
+                    "Invalid pooling model, must be one of [mean, max, cls, mean_sqrt_len, weightedmean, lasttoken, none]."
                 );
             }
             this.pooling = poolingMode;

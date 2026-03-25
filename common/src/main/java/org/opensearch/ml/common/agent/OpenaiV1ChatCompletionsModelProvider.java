@@ -354,24 +354,38 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
     }
 
     /**
-     * Parses an OpenAI chat completions response message into a unified Message object.
-     * Handles three message types:
+     * Extracts the message JSON from an OpenAI Chat Completions API response.
+     * Navigates the response structure to retrieve the message object at choices[0].message.
      *
-     * 1. Assistant text response:
-     *    {"role": "assistant", "content": "Here is the result..."}
+     * Expected response structure:
+     * {"choices": [{"message": {"role": "assistant", "content": "..."}}]}
      *
-     * 2. Assistant tool call request:
-     *    {"role": "assistant", "content": null, "tool_calls": [
-     *      {"id": "call_abc123", "type": "function",
-     *       "function": {"name": "get_weather", "arguments": "{\"location\":\"Seattle\"}"}}
-     *    ]}
-     *
-     * 3. Tool result message:
-     *    {"role": "tool", "tool_call_id": "call_abc123", "content": "72°F, sunny"}
-     *
-     * @param json JSON string containing the OpenAI response message
-     * @return a unified Message object, or null if the input cannot be parsed
+     * @param responseData Map containing the OpenAI Chat Completions API response data
+     * @return JSON string representation of the message object, or null if not found
      */
+    @Override
+    public String extractMessageFromResponse(Map<String, ?> responseData) {
+        if (responseData == null) {
+            return null;
+        }
+
+        Object choicesObj = responseData.get("choices");
+        if (choicesObj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<?> choicesList = (List<?>) choicesObj;
+            if (!choicesList.isEmpty() && choicesList.get(0) instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, ?> choiceMap = (Map<String, ?>) choicesList.get(0);
+                Object messageObj = choiceMap.get("message");
+                if (messageObj != null) {
+                    return StringUtils.toJson(messageObj);
+                }
+            }
+        }
+
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public Message parseToUnifiedMessage(String json) {

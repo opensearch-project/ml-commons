@@ -7,6 +7,8 @@ package org.opensearch.ml.engine.algorithms.contextmanager;
 
 import java.util.List;
 
+import org.opensearch.ml.common.input.execute.agent.Message;
+
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -64,6 +66,62 @@ public class ContextManagerUtils {
             }
         }
 
+        return safePoint;
+    }
+
+    /**
+     * Find a safe cut point in structured messages to avoid breaking tool-call/tool-result pairs.
+     *
+     * In structured messages, tool pairs look like:
+     *   assistant message with toolCalls [{id: "tooluse_xxx"}]  →  tool message with toolCallId "tooluse_xxx"
+     * Cutting between them would cause the LLM to reject the payload.
+     *
+     * Starting from targetPoint, this scans forward until the cut position:
+     *   1. Is NOT a tool result message (role="tool" with toolCallId)
+     *   2. Is NOT immediately after an assistant message with toolCalls (which needs its tool result)
+     *
+     * @param messages List of structured Message objects
+     * @param targetPoint The desired cut point
+     * @return Safe cut point that keeps tool pairs together
+     */
+    public static int findSafeCutPointForStructuredMessages(List<Message> messages, int targetPoint) {
+        if (targetPoint <= 0) {
+            return 0;
+        }
+        if (targetPoint >= messages.size()) {
+            return messages.size();
+        }
+
+        int safePoint = targetPoint;
+
+        while (safePoint < messages.size()) {
+            try {
+                Message message = messages.get(safePoint);
+
+                // If this message is a tool result, we can't start here — the preceding
+                // assistant tool-call message would be orphaned in the summarized portion.
+                boolean isToolResult = "tool".equals(message.getRole()) && message.getToolCallId() != null;
+
+                // If the previous message is an assistant with tool calls, cutting here
+                // would separate the tool-call from its result.
+                boolean prevHasToolCalls = false;
+                if (safePoint > 0) {
+                    Message prev = messages.get(safePoint - 1);
+                    prevHasToolCalls = "assistant".equals(prev.getRole()) && prev.getToolCalls() != null && !prev.getToolCalls().isEmpty();
+                }
+
+                if (isToolResult || prevHasToolCalls) {
+                    safePoint++;
+                } else {
+                    break;
+                }
+            } catch (Exception e) {
+                log.warn("Error checking structured message at index {}: {}", safePoint, e.getMessage());
+                safePoint++;
+            }
+        }
+
+        log.debug("Safe cut point for structured messages: target={}, safe={}", targetPoint, safePoint);
         return safePoint;
     }
 }
