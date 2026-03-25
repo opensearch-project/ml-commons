@@ -295,7 +295,7 @@ POST /_plugins/_ml/models/zwla5YUB1qmVrJFlwzXJ/_unload
 Without [`sentence-transformers`](https://pypi.org/project/sentence-transformers/) installed, you can trace this model `AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')`.
 But model traced this way doesn't include post-processing. So user have to specify post-process logic with `pooling_mode` and `normalize_result`.
 
-Supported pooling method: `mean`, `mean_sqrt_len`, `max`, `weightedmean`, `cls`, `lasttoken`.
+Supported pooling method: `mean`, `mean_sqrt_len`, `max`, `weightedmean`, `cls`, `lasttoken`, `none`.
 
 The only difference is the uploading model input, for load/predict/profile/unload model, you can refer to ["1.1 trace sentence transformers model"](#11-trace-sentence-transformers-model).
 
@@ -322,7 +322,7 @@ POST /_plugins/_ml/models/_upload
 User can export Pytorch model to ONNX, then upload and run it with ml-commons APIs.
 This example ONNX model also needs to specify post-process logic with `pooling_mode` and `normalize_result`.
 
-Supported pooling method: `mean`, `mean_sqrt_len`, `max`, `weightedmean`, `cls`, `lasttoken`.
+Supported pooling method: `mean`, `mean_sqrt_len`, `max`, `weightedmean`, `cls`, `lasttoken`, `none`.
 
 ### Pooling Methods
 
@@ -334,6 +334,7 @@ Supported pooling method: `mean`, `mean_sqrt_len`, `max`, `weightedmean`, `cls`,
 | `weightedmean` | Weighted average where later tokens have higher weights |
 | `cls` | Uses the first token (CLS token) embedding |
 | `lasttoken` | Uses the last non-padding token's embedding. Useful for decoder-only models where the final token captures cumulative context |
+| `none` | Uses pre-pooled output from model directly without additional pooling computation. Use when model already provides pooled embeddings (e.g., `sentence_embedding` or `pooler_output`). Avoids redundant pooling and matches original model behavior |
 
 The only difference is the uploading model input, for load/predict/profile/unload model, you can refer to ["1.1 trace sentence transformers model"](#11-trace-sentence-transformers-model).
 
