@@ -1726,7 +1726,20 @@ public class AgentUtils {
     }
 
     public static void logAgentExecutionFailure(String agentType, String agentId, String tenantId, long latencyMs, String statusCode) {
-        logMetric(true, "AgentExecutionFailure", "agentType", agentType, "agentId", agentId, "tenantId", tenantId, "latencyMs", latencyMs, "statusCode", statusCode);
+        logMetric(
+            true,
+            "AgentExecutionFailure",
+            "agentType",
+            agentType,
+            "agentId",
+            agentId,
+            "tenantId",
+            tenantId,
+            "latencyMs",
+            latencyMs,
+            "statusCode",
+            statusCode
+        );
     }
 
     public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs) {
@@ -1734,7 +1747,20 @@ public class AgentUtils {
     }
 
     public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs, String taskId) {
-        logMetric(false, "AgentExecutionLatency", "agentType", agentType, "agentId", agentId, "tenantId", tenantId, "latencyMs", latencyMs, "taskId", taskId);
+        logMetric(
+            false,
+            "AgentExecutionLatency",
+            "agentType",
+            agentType,
+            "agentId",
+            agentId,
+            "tenantId",
+            tenantId,
+            "latencyMs",
+            latencyMs,
+            "taskId",
+            taskId
+        );
     }
 
     public static void logToolInvocation(String toolName, String agentId, String tenantId) {

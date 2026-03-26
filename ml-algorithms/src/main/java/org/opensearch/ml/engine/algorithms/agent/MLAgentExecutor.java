@@ -396,7 +396,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         tenantId,
                                                                         e
                                                                     );
-                                                                logAgentExecutionFailure(finalMlAgent.getType(), agentId, tenantId, 0, extractStatusCode(e));
+                                                                logAgentExecutionFailure(
+                                                                    finalMlAgent.getType(),
+                                                                    agentId,
+                                                                    tenantId,
+                                                                    0,
+                                                                    extractStatusCode(e)
+                                                                );
                                                                 listener.onFailure(e);
                                                             })
                                                         );
@@ -424,7 +430,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                         tenantId,
                                                         ex
                                                     );
-                                                logAgentExecutionFailure(finalMlAgent.getType(), agentId, tenantId, 0, extractStatusCode(ex));
+                                                logAgentExecutionFailure(
+                                                    finalMlAgent.getType(),
+                                                    agentId,
+                                                    tenantId,
+                                                    0,
+                                                    extractStatusCode(ex)
+                                                );
                                                 listener.onFailure(ex);
                                             }));
                                         } else {
@@ -486,7 +498,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                                 tenantId,
                                                                                 ex
                                                                             );
-                                                                        logAgentExecutionFailure(finalMlAgent.getType(), agentId, tenantId, 0, extractStatusCode(ex));
+                                                                        logAgentExecutionFailure(
+                                                                            finalMlAgent.getType(),
+                                                                            agentId,
+                                                                            tenantId,
+                                                                            0,
+                                                                            extractStatusCode(ex)
+                                                                        );
                                                                         listener.onFailure(ex);
                                                                     }
                                                                 )
@@ -906,7 +924,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     listener.onFailure(ex);
                 }
             }, e -> {
-                log.error("Failed to save input messages. agentId={}, tenantId={}", params.get(AGENT_ID_LOG_FIELD), mlAgent.getTenantId(), e);
+                log
+                    .error(
+                        "Failed to save input messages. agentId={}, tenantId={}",
+                        params.get(AGENT_ID_LOG_FIELD),
+                        mlAgent.getTenantId(),
+                        e
+                    );
                 listener.onFailure(e);
             }));
         }, e -> {
@@ -1028,7 +1052,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         tenantId,
                         e
                     );
-                logAgentExecutionFailure(mlAgent.getType(), inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD), tenantId, 0, extractStatusCode(e));
+                logAgentExecutionFailure(
+                    mlAgent.getType(),
+                    inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
+                    tenantId,
+                    0,
+                    extractStatusCode(e)
+                );
                 listener.onFailure(e);
             }));
         } else {
