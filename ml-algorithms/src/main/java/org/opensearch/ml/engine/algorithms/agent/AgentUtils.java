@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1707,5 +1708,48 @@ public class AgentUtils {
                 log.info("{}", StringUtils.toJson(logEntry));
             }
         }
+    }
+
+    // ---- Structured metric logging methods for CloudWatch metric filter extraction ----
+
+    private static void logMetric(boolean isError, String metricType, Object... kvPairs) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("metric_type", metricType);
+        for (int i = 0; i < kvPairs.length; i += 2) {
+            m.put((String) kvPairs[i], kvPairs[i + 1]);
+        }
+        if (isError) {
+            log.error(toJson(m));
+        } else {
+            log.info(toJson(m));
+        }
+    }
+
+    public static void logAgentExecutionFailure(String agentType, String agentId, String tenantId, long latencyMs, String statusCode) {
+        logMetric(true, "AgentExecutionFailure", "agentType", agentType, "agentId", agentId, "tenantId", tenantId, "latencyMs", latencyMs, "statusCode", statusCode);
+    }
+
+    public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs) {
+        logMetric(false, "AgentExecutionLatency", "agentType", agentType, "agentId", agentId, "tenantId", tenantId, "latencyMs", latencyMs);
+    }
+
+    public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs, String taskId) {
+        logMetric(false, "AgentExecutionLatency", "agentType", agentType, "agentId", agentId, "tenantId", tenantId, "latencyMs", latencyMs, "taskId", taskId);
+    }
+
+    public static void logToolInvocation(String toolName, String agentId, String tenantId) {
+        logMetric(false, "ToolInvocation", "toolName", toolName, "agentId", agentId, "tenantId", tenantId);
+    }
+
+    public static void logToolFailure(String toolName, String agentId, String tenantId, String statusCode) {
+        logMetric(true, "ToolFailure", "toolName", toolName, "agentId", agentId, "tenantId", tenantId, "statusCode", statusCode);
+    }
+
+    public static void logModelInvocationFailure(String modelId, String agentId, String tenantId, String statusCode) {
+        logMetric(true, "ModelInvocationFailure", "modelId", modelId, "agentId", agentId, "tenantId", tenantId, "statusCode", statusCode);
+    }
+
+    public static void logTimeToFirstToken(String modelId, String tenantId, long timeToFirstTokenMs) {
+        logMetric(false, "TimeToFirstToken", "modelId", modelId, "tenantId", tenantId, "timeToFirstTokenMs", timeToFirstTokenMs);
     }
 }
