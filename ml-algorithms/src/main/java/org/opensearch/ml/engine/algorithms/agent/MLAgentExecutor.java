@@ -224,7 +224,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                             if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
                                 log.error("Failed to get Agent index. agentId={}, tenantId={}", agentId, tenantId, cause);
-                                logAgentExecutionFailure("unknown", agentId, tenantId, 0, "404");
+                                logAgentExecutionFailure("unknown", agentId, tenantId, 0, String.valueOf(RestStatus.NOT_FOUND.getStatus()));
                                 listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                             } else {
                                 log.error("Failed to get ML Agent. agentId={}, tenantId={}", agentId, tenantId, cause);
@@ -254,7 +254,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             ? agentMLInput.getHookRegistry()
                                             : new HookRegistry();
                                         if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
-                                            logAgentExecutionFailure(mlAgent.getType(), agentId, tenantId, 0, "403");
+                                            logAgentExecutionFailure(
+                                                mlAgent.getType(),
+                                                agentId,
+                                                tenantId,
+                                                0,
+                                                String.valueOf(RestStatus.FORBIDDEN.getStatus())
+                                            );
                                             listener
                                                 .onFailure(
                                                     new OpenSearchStatusException(
@@ -287,7 +293,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 ? requestParameters.get(MEMORY_CONFIGURATION_FIELD)
                                                 : null;
                                             if (usesRemoteMemory || !Strings.isNullOrEmpty(memoryConfig)) {
-                                                logAgentExecutionFailure(finalMlAgent.getType(), agentId, tenantId, 0, "403");
+                                                logAgentExecutionFailure(
+                                                    finalMlAgent.getType(),
+                                                    agentId,
+                                                    tenantId,
+                                                    0,
+                                                    String.valueOf(RestStatus.FORBIDDEN.getStatus())
+                                                );
                                                 listener
                                                     .onFailure(
                                                         new OpenSearchStatusException(
@@ -349,7 +361,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 memoryFactory = memoryFactoryMap.get(MLMemoryType.from(memorySpec.getType()).name());
                                             }
                                             if (memoryFactory == null) {
-                                                logAgentExecutionFailure(finalMlAgent.getType(), agentId, tenantId, 0, "400");
+                                                logAgentExecutionFailure(
+                                                    finalMlAgent.getType(),
+                                                    agentId,
+                                                    tenantId,
+                                                    0,
+                                                    String.valueOf(RestStatus.BAD_REQUEST.getStatus())
+                                                );
                                                 listener
                                                     .onFailure(
                                                         new IllegalArgumentException(
@@ -534,7 +552,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         listener.onFailure(e);
                                     }
                                 } else {
-                                    logAgentExecutionFailure("unknown", agentId, tenantId, 0, "404");
+                                    logAgentExecutionFailure(
+                                        "unknown",
+                                        agentId,
+                                        tenantId,
+                                        0,
+                                        String.valueOf(RestStatus.NOT_FOUND.getStatus())
+                                    );
                                     listener
                                         .onFailure(
                                             new OpenSearchStatusException(
@@ -552,7 +576,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     });
             }
         } else {
-            logAgentExecutionFailure("unknown", agentId, tenantId, 0, "404");
+            logAgentExecutionFailure("unknown", agentId, tenantId, 0, String.valueOf(RestStatus.NOT_FOUND.getStatus()));
             listener.onFailure(new ResourceNotFoundException("Agent index not found"));
         }
     }
@@ -959,7 +983,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
-            logAgentExecutionFailure(mlAgent.getType(), inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD), tenantId, 0, "403");
+            logAgentExecutionFailure(
+                mlAgent.getType(),
+                inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
+                tenantId,
+                0,
+                String.valueOf(RestStatus.FORBIDDEN.getStatus())
+            );
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
         }

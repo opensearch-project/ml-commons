@@ -1715,8 +1715,11 @@ public class AgentUtils {
     private static void logMetric(boolean isError, String metricType, Object... kvPairs) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("metric_type", metricType);
-        for (int i = 0; i < kvPairs.length; i += 2) {
-            m.put((String) kvPairs[i], kvPairs[i + 1]);
+        if (kvPairs.length % 2 != 0) {
+            log.warn("logMetric called with odd number of kvPairs for metric_type={}, dropping last unpaired key", metricType);
+        }
+        for (int i = 0; i + 1 < kvPairs.length; i += 2) {
+            m.put(String.valueOf(kvPairs[i]), kvPairs[i + 1]);
         }
         if (isError) {
             log.error(toJson(m));
@@ -1725,6 +1728,15 @@ public class AgentUtils {
         }
     }
 
+    /**
+     * Logs a structured metric for an agent execution failure. Emitted at ERROR level.
+     *
+     * @param agentType  the agent type (e.g. CONVERSATIONAL, PLAN_EXECUTE_AND_REFLECT), or "unknown" if unavailable
+     * @param agentId    the executing agent's ID
+     * @param tenantId   the tenant ID
+     * @param latencyMs  elapsed time in milliseconds before the failure occurred (0 if not measured)
+     * @param statusCode the HTTP status code string describing the failure reason
+     */
     public static void logAgentExecutionFailure(String agentType, String agentId, String tenantId, long latencyMs, String statusCode) {
         logMetric(
             true,
@@ -1742,10 +1754,27 @@ public class AgentUtils {
         );
     }
 
+    /**
+     * Logs a structured metric for agent execution latency on success. Emitted at INFO level.
+     *
+     * @param agentType the agent type
+     * @param agentId   the executing agent's ID
+     * @param tenantId  the tenant ID
+     * @param latencyMs elapsed time in milliseconds for the execution
+     */
     public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs) {
         logMetric(false, "AgentExecutionLatency", "agentType", agentType, "agentId", agentId, "tenantId", tenantId, "latencyMs", latencyMs);
     }
 
+    /**
+     * Logs a structured metric for agent execution latency on success, including the async task ID. Emitted at INFO level.
+     *
+     * @param agentType the agent type
+     * @param agentId   the executing agent's ID
+     * @param tenantId  the tenant ID
+     * @param latencyMs elapsed time in milliseconds for the execution
+     * @param taskId    the async ML task ID
+     */
     public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs, String taskId) {
         logMetric(
             false,
@@ -1763,18 +1792,48 @@ public class AgentUtils {
         );
     }
 
+    /**
+     * Logs a structured metric for a successful tool invocation. Emitted at INFO level.
+     *
+     * @param toolName the name of the tool that was invoked
+     * @param agentId  the executing agent's ID
+     * @param tenantId the tenant ID
+     */
     public static void logToolInvocation(String toolName, String agentId, String tenantId) {
         logMetric(false, "ToolInvocation", "toolName", toolName, "agentId", agentId, "tenantId", tenantId);
     }
 
+    /**
+     * Logs a structured metric for a tool execution failure. Emitted at ERROR level.
+     *
+     * @param toolName   the name of the tool that failed
+     * @param agentId    the executing agent's ID
+     * @param tenantId   the tenant ID
+     * @param statusCode the HTTP status code string describing the failure
+     */
     public static void logToolFailure(String toolName, String agentId, String tenantId, String statusCode) {
         logMetric(true, "ToolFailure", "toolName", toolName, "agentId", agentId, "tenantId", tenantId, "statusCode", statusCode);
     }
 
+    /**
+     * Logs a structured metric for an LLM model invocation failure. Emitted at ERROR level.
+     *
+     * @param modelId    the model ID that failed
+     * @param agentId    the executing agent's ID
+     * @param tenantId   the tenant ID
+     * @param statusCode the HTTP status code string describing the failure
+     */
     public static void logModelInvocationFailure(String modelId, String agentId, String tenantId, String statusCode) {
         logMetric(true, "ModelInvocationFailure", "modelId", modelId, "agentId", agentId, "tenantId", tenantId, "statusCode", statusCode);
     }
 
+    /**
+     * Logs a structured metric for time-to-first-token from a streaming model response. Emitted at INFO level.
+     *
+     * @param modelId           the model ID
+     * @param tenantId          the tenant ID
+     * @param timeToFirstTokenMs elapsed time in milliseconds until the first token was received
+     */
     public static void logTimeToFirstToken(String modelId, String tenantId, long timeToFirstTokenMs) {
         logMetric(false, "TimeToFirstToken", "modelId", modelId, "tenantId", tenantId, "timeToFirstTokenMs", timeToFirstTokenMs);
     }
