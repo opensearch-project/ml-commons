@@ -36,14 +36,14 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructTool
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatusCode;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logModelInvocationFailure;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolFailure;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolInvocation;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolNames;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logModelInvocationFailure;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolFailure;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolInvocation;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseFrontendTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
@@ -832,7 +832,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
-                log.error("Failed to run chat agent. agentId={}, tenantId={}, statusCode={}", parameters.get(AGENT_ID_LOG_FIELD), tenantId, extractStatusCode(e), e);
+                log
+                    .error(
+                        "Failed to run chat agent. agentId={}, tenantId={}, statusCode={}",
+                        parameters.get(AGENT_ID_LOG_FIELD),
+                        tenantId,
+                        extractStatusCode(e),
+                        e
+                    );
                 listener.onFailure(e);
             });
             if (nextStepListener != null) {
@@ -1588,7 +1595,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         AgentUtils.extractStatusCode(e),
                         e
                     );
-                logModelInvocationFailure(llmSpec.getModelId(), summaryParams.get(AGENT_ID_LOG_FIELD), tenantId, AgentUtils.extractStatusCode(e));
+                logModelInvocationFailure(
+                    llmSpec.getModelId(),
+                    summaryParams.get(AGENT_ID_LOG_FIELD),
+                    tenantId,
+                    AgentUtils.extractStatusCode(e)
+                );
                 listener.onFailure(e);
             }));
         } catch (Exception e) {

@@ -24,10 +24,10 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResour
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatusCode;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logModelInvocationFailure;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logModelInvocationFailure;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
@@ -723,7 +723,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     );
                 }, e -> {
                     String tenantIdLog = allParams.get(TENANT_ID_FIELD);
-                    log.error("Failed to execute ReAct agent. agentId={}, tenantId={}", allParams.get(CommonValue.AGENT_ID_LOG_FIELD), tenantIdLog, e);
+                    log
+                        .error(
+                            "Failed to execute ReAct agent. agentId={}, tenantId={}",
+                            allParams.get(CommonValue.AGENT_ID_LOG_FIELD),
+                            tenantIdLog,
+                            e
+                        );
                     finalListener.onFailure(e);
                 }));
             }
@@ -737,7 +743,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     extractStatusCode(e),
                     e
                 );
-            logModelInvocationFailure(llm.getModelId(), allParams.get(AGENT_ID_LOG_FIELD), allParams.get(TENANT_ID_FIELD), extractStatusCode(e));
+            logModelInvocationFailure(
+                llm.getModelId(),
+                allParams.get(AGENT_ID_LOG_FIELD),
+                allParams.get(TENANT_ID_FIELD),
+                extractStatusCode(e)
+            );
             finalListener.onFailure(e);
         });
 
@@ -1087,7 +1098,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         extractStatusCode(e),
                         e
                     );
-                logModelInvocationFailure(llmSpec.getModelId(), summaryParams.get(AGENT_ID_LOG_FIELD), summaryParams.get(TENANT_ID_FIELD), extractStatusCode(e));
+                logModelInvocationFailure(
+                    llmSpec.getModelId(),
+                    summaryParams.get(AGENT_ID_LOG_FIELD),
+                    summaryParams.get(TENANT_ID_FIELD),
+                    extractStatusCode(e)
+                );
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
