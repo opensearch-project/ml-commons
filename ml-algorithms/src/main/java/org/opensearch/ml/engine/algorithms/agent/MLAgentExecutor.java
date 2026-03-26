@@ -915,17 +915,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     ) {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
 
-        // V2 agents follow pure message-centric execution path
-        // TODO: Refactor to separate MLAgentExecutorV2 class for cleaner separation
-        if (agentType.isV2() && inputMessages != null && memory != null) {
-            executeV2Agent(inputDataSet, tenantId, mlTask, isAsync, mlAgent, listener, memory, channel, hookRegistry, inputMessages);
-            return;
-        }
-
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
+            return;
+        }
+
+        // V2 agents follow pure message-centric execution path
+        // TODO: Refactor to separate MLAgentExecutorV2 class for cleaner separation
+        if (agentType.isV2() && inputMessages != null && memory != null) {
+            executeV2Agent(inputDataSet, tenantId, mlTask, isAsync, mlAgent, listener, memory, channel, hookRegistry, inputMessages);
             return;
         }
 
