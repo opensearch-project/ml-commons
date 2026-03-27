@@ -87,7 +87,16 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
     /** {@inheritDoc} */
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
-        NDArray embeddings = list.get(0);
+        NDArray embeddings;
+
+        // NONE pooling mode uses pre-pooled output directly if available
+        if (this.poolingMode == TextEmbeddingModelConfig.PoolingMode.NONE && list.size() > 1) {
+            // Use the second output (sentence_embedding) which is pre-pooled
+            embeddings = list.get(1);
+        } else {
+            // Use first output (token_embeddings) for explicit pooling
+            embeddings = list.get(0);
+        }
         int shapeLength = embeddings.getShape().getShape().length;
         if (shapeLength == 3) {
             embeddings = embeddings.get(0);
@@ -111,6 +120,12 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
                 break;
             case CLS:
                 embeddings = embeddings.get(0);
+                break;
+            case LAST_TOKEN:
+                embeddings = lastTokenPool(embeddings, inputAttentionMask);
+                break;
+            case NONE:
+                // No pooling - use pre-pooled output as-is
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported pooling method");
@@ -170,6 +185,18 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         NDArray maskSum = attentionMask.sum(AXIS);
         NDArray embeddingSum = embeddings.mul(attentionMask).sum(AXIS);
         return embeddingSum.div(maskSum);
+    }
+
+    private NDArray lastTokenPool(NDArray embeddings, NDArray attentionMask) {
+        // Sum attention mask to get count of real tokens
+        long tokenCount = attentionMask.sum().toLongArray()[0];
+        // Last token index (0-based)
+        long lastTokenIdx = tokenCount - 1;
+        // Handle edge case
+        if (lastTokenIdx < 0) {
+            lastTokenIdx = 0;
+        }
+        return embeddings.get(lastTokenIdx);
     }
 
     @Override

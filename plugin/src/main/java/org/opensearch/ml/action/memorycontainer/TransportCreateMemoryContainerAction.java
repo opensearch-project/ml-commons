@@ -225,7 +225,6 @@ public class TransportCreateMemoryContainerAction extends
             // Return the actual index name that was created
             // Create the memory data index with appropriate mapping
             createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
-                // Return the actual index name that was created
                 if (!configuration.isDisableHistory()) {
                     mlIndicesHandler
                         .createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
@@ -234,7 +233,6 @@ public class TransportCreateMemoryContainerAction extends
                 } else {
                     listener.onResponse(longTermMemoryIndexName);
                 }
-
             }, listener::onFailure));
         }, listener::onFailure));
     }

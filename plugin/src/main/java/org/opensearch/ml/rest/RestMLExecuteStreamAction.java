@@ -55,6 +55,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.http.HttpChunk;
 import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
@@ -168,6 +169,19 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         // Validate agent and model synchronously before starting stream
         MLAgent agent = validateAndGetAgent(agentId, client);
+
+        // V2 agents do not support streaming
+        MLAgentType agentType = MLAgentType.from(agent.getType());
+        if (agentType.isV2()) {
+            throw new OpenSearchStatusException(
+                "V2 agents (CONVERSATIONAL_V2) do not support streaming. "
+                    + "Please use the non-streaming execute endpoint: POST /_plugins/_ml/agents/"
+                    + agentId
+                    + "/_execute",
+                RestStatus.BAD_REQUEST
+            );
+        }
+
         if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
             if (!isModelValid(agent.getLlm().getModelId(), request, client)) {
                 throw new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND);
