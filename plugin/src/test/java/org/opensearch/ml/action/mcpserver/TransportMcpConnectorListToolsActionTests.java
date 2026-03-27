@@ -245,4 +245,110 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         assertTrue(info.getArguments().containsKey("limit"));
         assertEquals("tenant-abc", request.getTenantId());
     }
+
+    @Test
+    public void testDoExecute_InputSchemaAttributesNull_ReturnsEmptyArguments() {
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("ToolNullAttrs").description("Desc").attributes(null).build();
+        transportAction.setToolSpecsToReturn(List.of(toolSpec));
+
+        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
+        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
+        verify(listener).onResponse(captor.capture());
+        McpToolInfo info = captor.getValue().getTools().get(0);
+        assertNotNull(info.getArguments());
+        assertTrue(info.getArguments().isEmpty());
+    }
+
+    @Test
+    public void testDoExecute_InputSchemaMissingOrInvalid_ReturnsEmptyArguments() {
+        MLToolSpec missingSchema = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("ToolMissingSchema")
+            .description("Desc")
+            .attributes(Collections.singletonMap("other_field", "{}"))
+            .build();
+        MLToolSpec invalidSchema = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("ToolInvalidSchema")
+            .description("Desc")
+            .attributes(Collections.singletonMap("input_schema", "{not-valid-json"))
+            .build();
+        MLToolSpec nullSchema = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("ToolNullSchema")
+            .description("Desc")
+            .attributes(Collections.singletonMap("input_schema", "null"))
+            .build();
+
+        transportAction.setToolSpecsToReturn(List.of(missingSchema, invalidSchema, nullSchema));
+
+        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
+        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
+        verify(listener).onResponse(captor.capture());
+        List<McpToolInfo> tools = captor.getValue().getTools();
+        assertEquals(3, tools.size());
+        assertTrue(tools.get(0).getArguments().isEmpty());
+        assertTrue(tools.get(1).getArguments().isEmpty());
+        assertTrue(tools.get(2).getArguments().isEmpty());
+    }
+
+    @Test
+    public void testDoExecute_InputSchemaPropertiesNotMap_ReturnsEmptyArguments() {
+        String inputSchema = "{\"type\":\"object\",\"properties\":\"not-a-map\"}";
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("ToolPropertiesNotMap")
+            .description("Desc")
+            .attributes(Collections.singletonMap("input_schema", inputSchema))
+            .build();
+        transportAction.setToolSpecsToReturn(List.of(toolSpec));
+
+        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
+        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
+        verify(listener).onResponse(captor.capture());
+        McpToolInfo info = captor.getValue().getTools().get(0);
+        assertTrue(info.getArguments().isEmpty());
+    }
+
+    @Test
+    public void testDoExecute_InputSchemaPropertyTypeFallbackToObject() {
+        String inputSchema = "{\"type\":\"object\",\"properties\":{\"raw\":\"string\",\"config\":{},\"name\":{\"type\":null}}}";
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("ToolTypeFallback")
+            .description("Desc")
+            .attributes(Collections.singletonMap("input_schema", inputSchema))
+            .build();
+        transportAction.setToolSpecsToReturn(List.of(toolSpec));
+
+        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
+        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
+        verify(listener).onResponse(captor.capture());
+        Map<String, String> arguments = captor.getValue().getTools().get(0).getArguments();
+        assertEquals(3, arguments.size());
+        assertEquals("object", arguments.get("raw"));
+        assertEquals("object", arguments.get("config"));
+        assertEquals("object", arguments.get("name"));
+    }
 }
