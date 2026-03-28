@@ -404,7 +404,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).index(any(), any());
 
-        mlTaskManager.startStatsCollectorJob();
+        mlTaskManager.indexStatsCollectorJob(true);
 
         ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         verify(client).index(indexRequestCaptor.capture(), any());
@@ -429,7 +429,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).index(any(), any());
 
-        mlTaskManager.startStatsCollectorJob();
+        mlTaskManager.indexStatsCollectorJob(true);
 
         verify(client).index(any(), any());
     }
@@ -468,5 +468,25 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
         mlTaskManager.updateMLTaskDirectly("task_id", updatedFields, listener);
         verify(listener).onResponse(any(UpdateResponse.class));
+    }
+
+    public void testOnStaticMetricCollectionEnabledChanged() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.onStaticMetricCollectionEnabledChanged(true);
+        verify(mlTaskManager).indexStatsCollectorJob(true);
+
+        mlTaskManager.onStaticMetricCollectionEnabledChanged(false);
+        verify(mlTaskManager).indexStatsCollectorJob(false);
     }
 }

@@ -93,6 +93,10 @@ public class MLJobRunner implements ScheduledJobRunner {
             throw new IllegalArgumentException("Job parameters is invalid.");
         }
 
+        if (!jobParameter.isEnabled()) {
+            throw new IllegalStateException(String.format("Attempted to run disabled job of type: %s", jobParameter.getJobType().name()));
+        }
+
         switch (jobParameter.getJobType()) {
             case STATS_COLLECTOR:
                 MLStatsJobProcessor

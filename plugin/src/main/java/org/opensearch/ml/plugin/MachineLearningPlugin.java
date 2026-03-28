@@ -632,6 +632,7 @@ public class MachineLearningPlugin extends Plugin
         modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
         connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
         mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
+        mlFeatureEnabledSetting.addListener(mlTaskManager);
         mlModelManager = new MLModelManager(
             clusterService,
             scriptService,
