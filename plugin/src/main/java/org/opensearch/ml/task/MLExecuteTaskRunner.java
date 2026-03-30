@@ -170,6 +170,18 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     protected void executeTask(MLExecuteTaskRequest request, ActionListener<MLExecuteTaskResponse> listener) {
         TransportChannel channel = request.getStreamingChannel();
         String threadPoolName = (channel != null) ? STREAM_EXECUTE_THREAD_POOL : EXECUTE_THREAD_POOL;
+
+        // Wrap listener to complete the stream transport channel when execution finishes.
+        // Without this, nextResponse() in RestMLExecuteStreamAction blocks forever and leaks
+        // a STREAM_EXECUTE_THREAD_POOL thread per streaming request.
+        ActionListener<MLExecuteTaskResponse> wrappedListener = (channel != null) ? ActionListener.runAfter(listener, () -> {
+            try {
+                channel.completeStream();
+            } catch (Exception e) {
+                log.debug("Failed to complete stream channel", e);
+            }
+        }) : listener;
+
         threadPool.executor(threadPoolName).execute(() -> {
             try {
                 mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
@@ -187,14 +199,14 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                     getEffectiveContextManagementNameAsync(agentInput, ActionListener.wrap(contextManagementName -> {
                         if (contextManagementName != null && !contextManagementName.trim().isEmpty()) {
                             // Execute agent with context management
-                            executeAgentWithContextManagement(request, contextManagementName, channel, listener);
+                            executeAgentWithContextManagement(request, contextManagementName, channel, wrappedListener);
                         } else {
                             // Continue with normal execution
-                            continueNormalExecution(request, channel, listener);
+                            continueNormalExecution(request, channel, wrappedListener);
                         }
                     }, e -> {
                         log.debug("Failed to get context management name, continuing with normal execution: {}", e.getMessage());
-                        continueNormalExecution(request, channel, listener);
+                        continueNormalExecution(request, channel, wrappedListener);
                     }));
                     return;
                 }
@@ -202,7 +214,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 if (FunctionName.METRICS_CORRELATION.equals(functionName)) {
                     if (!isPythonModelEnabled) {
                         Exception exception = new IllegalArgumentException("This algorithm is not enabled from settings");
-                        listener.onFailure(exception);
+                        wrappedListener.onFailure(exception);
                         return;
                     }
                 }
@@ -211,17 +223,17 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 try {
                     mlEngine.execute(input, ActionListener.wrap(output -> {
                         MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
-                        listener.onResponse(response);
-                    }, e -> { listener.onFailure(e); }), channel);
+                        wrappedListener.onResponse(response);
+                    }, e -> { wrappedListener.onFailure(e); }), channel);
                 } catch (Exception e) {
                     log.error("Failed to execute ML function", e);
-                    listener.onFailure(e);
+                    wrappedListener.onFailure(e);
                 }
             } catch (Exception e) {
                 mlStats
                     .createCounterStatIfAbsent(request.getFunctionName(), ActionName.EXECUTE, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
                     .increment();
-                listener.onFailure(e);
+                wrappedListener.onFailure(e);
             } finally {
                 mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
             }
