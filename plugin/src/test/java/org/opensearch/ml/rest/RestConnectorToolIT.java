@@ -31,7 +31,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
 
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
-    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET = "anthropic.claude-3-5-sonnet-20240620-v1:0";
+    private static final String BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5 = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
     private String bedrockClaudeConnectorId;
     private String bedrockClaudeConnectorIdForPredict;
@@ -52,8 +52,8 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
 
     private String createBedrockClaudeConnector(String action) throws IOException, InterruptedException {
         String bedrockClaudeConnectorEntity = "{\n"
-            + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
-            + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
+            + "  \"name\": \"Bedrock Connector: claude haiku 4.5\",\n"
+            + "  \"description\": \"The connector to bedrock claude haiku 4.5 model\",\n"
             + "  \"version\": 1,\n"
             + "  \"protocol\": \"aws_sigv4\",\n"
             + "  \"parameters\": {\n"
@@ -62,7 +62,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
             + "\",\n"
             + "    \"service_name\": \"bedrock\",\n"
             + "    \"model\": \""
-            + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+            + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5
             + "\",\n"
             + "    \"system_prompt\": \"You are a helpful assistant.\",\n"
             + "\"response_filter\": \"$.output.message.content[0].text\""
@@ -90,9 +90,9 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
             + "            \"url\": \"https://bedrock-runtime."
             + GITHUB_CI_AWS_REGION
             + ".amazonaws.com/model/"
-            + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+            + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5
             + "/converse\",\n"
-            + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.messages}\\\"}]}] , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
+            + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.messages}\\\"}]}] , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"maxTokens\\\": 1000} }\"\n"
             + "        }\n"
             + "    ]\n"
             + "}";
