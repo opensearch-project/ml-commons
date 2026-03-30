@@ -59,6 +59,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1287,7 +1288,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
      * adds a standardized prefix so the parent agent can detect and handle failures appropriately.
      *
      * @param parameters Agent parameters containing IS_SUB_AGENT_FIELD
-     * @param failureMessage The failure message
+     * @param failureMessage The failure message (can be null)
      * @return Formatted failure message with prefix if sub-agent, otherwise original message
      */
     @VisibleForTesting
@@ -1295,7 +1296,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean isSubAgent = Boolean.parseBoolean(parameters.getOrDefault(AgentTokenTracker.IS_SUB_AGENT_FIELD, "false"));
 
         if (isSubAgent) {
-            return "Agent failed to complete the task. Reason: " + failureMessage;
+            return PromptTemplate.SUB_AGENT_FAILURE_PREFIX + Objects.toString(failureMessage, "Unknown error");
         }
 
         return failureMessage;

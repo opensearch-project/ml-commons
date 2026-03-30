@@ -857,8 +857,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         allParams.put(field, String.join(", ", steps));
     }
 
-    private static final String AGENT_FAILURE_PREFIX = "Agent failed to complete the task. Reason: ";
-
     /**
      * Detects if a step result indicates a failure from the executor agent.
      *
@@ -867,7 +865,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
      */
     @VisibleForTesting
     boolean isStepExecutionFailure(String stepResult) {
-        return stepResult != null && stepResult.startsWith(AGENT_FAILURE_PREFIX);
+        return stepResult != null && stepResult.startsWith(PromptTemplate.SUB_AGENT_FAILURE_PREFIX);
     }
 
     /**
