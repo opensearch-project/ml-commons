@@ -18,6 +18,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -32,6 +33,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String MAX_CONNECTION_FIELD = "max_connection";
     public static final String CONNECTION_TIMEOUT_FIELD = "connection_timeout";
     public static final String READ_TIMEOUT_FIELD = "read_timeout";
+    public static final String CONNECTION_ACQUISITION_TIMEOUT_FIELD = "connection_acquisition_timeout";
     public static final String RETRY_BACKOFF_MILLIS_FIELD = "retry_backoff_millis";
     public static final String RETRY_TIMEOUT_SECONDS_FIELD = "retry_timeout_seconds";
     public static final String MAX_RETRY_TIMES_FIELD = "max_retry_times";
@@ -41,15 +43,18 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
     public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
     public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
+    public static final Integer CONNECTION_ACQUISITION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(10000);
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
     public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
     public static final Boolean SKIP_SSL_VERIFICATION_DEFAULT_VALUE = Boolean.FALSE;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONNECTION_ACQUISITION_TIMEOUT = CommonValue.VERSION_3_6_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
+    private Integer connectionAcquisitionTimeout;
     private Integer retryBackoffMillis;
     private Integer retryTimeoutSeconds;
     private Integer maxRetryTimes;
@@ -61,6 +66,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer maxConnections,
         Integer connectionTimeout,
         Integer readTimeout,
+        Integer connectionAcquisitionTimeout,
         Integer retryBackoffMillis,
         Integer retryTimeoutSeconds,
         Integer maxRetryTimes,
@@ -70,6 +76,10 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.maxConnections = maxConnections;
         this.connectionTimeout = connectionTimeout;
         this.readTimeout = readTimeout;
+        this.connectionAcquisitionTimeout = connectionAcquisitionTimeout;
+        if (connectionAcquisitionTimeout != null && connectionAcquisitionTimeout <= 0) {
+            throw new IllegalArgumentException("connection_acquisition_timeout must be positive, got: " + connectionAcquisitionTimeout);
+        }
         this.retryBackoffMillis = retryBackoffMillis;
         this.retryTimeoutSeconds = retryTimeoutSeconds;
         this.maxRetryTimes = maxRetryTimes;
@@ -90,6 +100,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 this.retryBackoffPolicy = RetryBackoffPolicy.from(input.readString());
             }
             this.skipSslVerification = input.readOptionalBoolean();
+        }
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONNECTION_ACQUISITION_TIMEOUT)) {
+            this.connectionAcquisitionTimeout = input.readOptionalInt();
         }
     }
 
@@ -122,6 +135,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             }
             out.writeOptionalBoolean(skipSslVerification);
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONNECTION_ACQUISITION_TIMEOUT)) {
+            out.writeOptionalInt(connectionAcquisitionTimeout);
+        }
     }
 
     @Override
@@ -135,6 +151,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         }
         if (readTimeout != null) {
             builder.field(READ_TIMEOUT_FIELD, readTimeout);
+        }
+        if (connectionAcquisitionTimeout != null) {
+            builder.field(CONNECTION_ACQUISITION_TIMEOUT_FIELD, connectionAcquisitionTimeout);
         }
         if (retryBackoffMillis != null) {
             builder.field(RETRY_BACKOFF_MILLIS_FIELD, retryBackoffMillis);
@@ -163,6 +182,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer maxConnections = MAX_CONNECTION_DEFAULT_VALUE;
         Integer connectionTimeout = CONNECTION_TIMEOUT_DEFAULT_VALUE;
         Integer readTimeout = READ_TIMEOUT_DEFAULT_VALUE;
+        Integer connectionAcquisitionTimeout = null;
         Integer retryBackoffMillis = RETRY_BACKOFF_MILLIS_DEFAULT_VALUE;
         Integer retryTimeoutSeconds = RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE;
         Integer maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
@@ -183,6 +203,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                     break;
                 case READ_TIMEOUT_FIELD:
                     readTimeout = parser.intValue();
+                    break;
+                case CONNECTION_ACQUISITION_TIMEOUT_FIELD:
+                    connectionAcquisitionTimeout = parser.intValue();
                     break;
                 case RETRY_BACKOFF_MILLIS_FIELD:
                     retryBackoffMillis = parser.intValue();
@@ -209,6 +232,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             .maxConnections(maxConnections)
             .connectionTimeout(connectionTimeout)
             .readTimeout(readTimeout)
+            .connectionAcquisitionTimeout(connectionAcquisitionTimeout)
             .retryBackoffMillis(retryBackoffMillis)
             .retryTimeoutSeconds(retryTimeoutSeconds)
             .maxRetryTimes(maxRetryTimes)
