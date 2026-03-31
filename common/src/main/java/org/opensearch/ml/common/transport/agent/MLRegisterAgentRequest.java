@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.agent;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -19,6 +22,7 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -52,6 +56,16 @@ public class MLRegisterAgentRequest extends ActionRequest {
             // Basic validation - check for conflicting configuration (following connector pattern)
             if (mlAgent.getContextManagementName() != null && mlAgent.getContextManagement() != null) {
                 exception = addValidationError("Cannot specify both context_management_name and context_management", exception);
+            }
+
+            // Validate created_by as an optional safe-text field
+            Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+            fieldsToValidate.put(MLAgent.CREATED_BY_FIELD, new FieldDescriptor(mlAgent.getCreatedBy(), false));
+            ActionRequestValidationException fieldException = validateFields(fieldsToValidate);
+            if (fieldException != null) {
+                for (String error : fieldException.validationErrors()) {
+                    exception = addValidationError(error, exception);
+                }
             }
 
             // Validate context management template name

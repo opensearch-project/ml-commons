@@ -8,6 +8,7 @@ package org.opensearch.ml.common.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -55,6 +56,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONTEXT_MANAGEMENT_NAME_FIELD = "context_management_name";
     public static final String CONTEXT_MANAGEMENT_FIELD = "context_management";
+    public static final String CREATED_BY_FIELD = "created_by";
     private static final String LLM_INTERFACE_FIELD = "_llm_interface";
     private static final String TAG_VALUE_UNKNOWN = "unknown";
     private static final String TAG_MEMORY_TYPE = "memory_type";
@@ -80,6 +82,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private String contextManagementName;
     private ContextManagementTemplate contextManagement;
     private String tenantId;
+    private String createdBy;
 
     @Builder(toBuilder = true)
     public MLAgent(
@@ -97,7 +100,8 @@ public class MLAgent implements ToXContentObject, Writeable {
         Boolean isHidden,
         String contextManagementName,
         ContextManagementTemplate contextManagement,
-        String tenantId
+        String tenantId,
+        String createdBy
     ) {
         this.name = name;
         this.type = type;
@@ -115,6 +119,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.contextManagementName = contextManagementName;
         this.contextManagement = contextManagement;
         this.tenantId = tenantId;
+        this.createdBy = createdBy;
         validate();
     }
 
@@ -150,7 +155,8 @@ public class MLAgent implements ToXContentObject, Writeable {
             isHidden,
             contextManagementName,
             contextManagement,
-            tenantId
+            tenantId,
+            null
         );
     }
 
@@ -243,6 +249,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             }
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.createdBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
         validate();
     }
 
@@ -302,6 +309,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalString(createdBy);
         }
     }
 
@@ -364,6 +374,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (createdBy != null) {
+            builder.field(CREATED_BY_FIELD, createdBy);
+        }
         builder.endObject();
         return builder;
     }
@@ -392,6 +405,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String contextManagementName = null;
         ContextManagementTemplate contextManagement = null;
         String tenantId = null;
+        String createdBy = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -449,6 +463,9 @@ public class MLAgent implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case CREATED_BY_FIELD:
+                    createdBy = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -472,6 +489,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             .contextManagementName(contextManagementName)
             .contextManagement(contextManagement)
             .tenantId(tenantId)
+            .createdBy(createdBy)
             .build();
     }
 
@@ -492,7 +510,8 @@ public class MLAgent implements ToXContentObject, Writeable {
         Tags tags = Tags
             .create()
             .addTag(IS_HIDDEN_FIELD, isHidden != null ? isHidden : false)
-            .addTag(AGENT_TYPE_FIELD, type != null ? type : TAG_VALUE_UNKNOWN);
+            .addTag(AGENT_TYPE_FIELD, type != null ? type : TAG_VALUE_UNKNOWN)
+            .addTag(CREATED_BY_FIELD, createdBy != null ? createdBy : TAG_VALUE_UNKNOWN);
 
         if (memory != null && memory.getType() != null) {
             tags = tags.addTag(TAG_MEMORY_TYPE, memory.getType());
