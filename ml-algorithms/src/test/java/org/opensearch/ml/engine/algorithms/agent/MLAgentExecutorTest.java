@@ -23,12 +23,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
-import org.opensearch.action.index.IndexResponse;
-
-import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.ml.common.MLMemoryType;
-import org.opensearch.core.xcontent.XContentParser;
-
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,6 +33,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -53,10 +48,12 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
@@ -2199,7 +2196,8 @@ public class MLAgentExecutorTest {
     @SuppressWarnings("unchecked")
     public void testExecute_remoteAgenticMemoryDisabled_coversForbiddenLogFailure() throws IOException {
         // isRemoteAgenticMemoryEnabled() default mock = false → !false = true → enters check
-        MLAgent agent = MLAgent.builder()
+        MLAgent agent = MLAgent
+            .builder()
             .name("test-agent")
             .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
@@ -2231,7 +2229,8 @@ public class MLAgentExecutorTest {
         // Put null factory for CONVERSATION_INDEX → containsKey=true but get=null
         memoryFactoryMap.put(MLMemoryType.CONVERSATION_INDEX.name(), null);
 
-        MLAgent agent = MLAgent.builder()
+        MLAgent agent = MLAgent
+            .builder()
             .name("test-agent")
             .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
@@ -2264,7 +2263,8 @@ public class MLAgentExecutorTest {
         Map<String, String> agentParams = new HashMap<>();
         agentParams.put("mcp_connectors", "[{\"connectorId\":\"mcp-1\"}]");
 
-        MLAgent agent = MLAgent.builder()
+        MLAgent agent = MLAgent
+            .builder()
             .name("test-agent")
             .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
@@ -2294,7 +2294,8 @@ public class MLAgentExecutorTest {
         mockLocalNode();
         when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
 
-        MLAgent agent = MLAgent.builder()
+        MLAgent agent = MLAgent
+            .builder()
             .name("test-agent")
             .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
@@ -2334,7 +2335,8 @@ public class MLAgentExecutorTest {
         mockLocalNode();
         when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
 
-        MLAgent agent = MLAgent.builder()
+        MLAgent agent = MLAgent
+            .builder()
             .name("test-agent")
             .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
@@ -2366,8 +2368,10 @@ public class MLAgentExecutorTest {
     public void testExecute_asyncAgent_indexTaskFailure_covers1085_1090() throws IOException {
         mockLocalNode();
         when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
-        MLAgent agent = MLAgent.builder()
-            .name("test-agent").type(MLAgentType.CONVERSATIONAL.name())
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
             .build();
         mockSdkClientResponse(buildAgentResponse(agent));
@@ -2395,8 +2399,10 @@ public class MLAgentExecutorTest {
     public void testExecute_asyncAgent_success_covers1372() throws IOException {
         mockLocalNode();
         when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
-        MLAgent agent = MLAgent.builder()
-            .name("test-agent").type(MLAgentType.CONVERSATIONAL.name())
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
             .build();
         mockSdkClientResponse(buildAgentResponse(agent));
@@ -2435,8 +2441,10 @@ public class MLAgentExecutorTest {
     public void testExecute_asyncAgent_failure_covers1426() throws IOException {
         mockLocalNode();
         when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
-        MLAgent agent = MLAgent.builder()
-            .name("test-agent").type(MLAgentType.CONVERSATIONAL.name())
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .llm(LLMSpec.builder().modelId("test-model").build())
             .build();
         mockSdkClientResponse(buildAgentResponse(agent));
