@@ -43,8 +43,9 @@ public class HttpStreamingHandlerTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("model", "gpt-4");
 
-        HttpStreamingHandler.HTTPEventSourceListener listener =
-            handler.new HTTPEventSourceListener(mockStreamListener, LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS, parameters);
+        HttpStreamingHandler.HTTPEventSourceListener listener = handler.new HTTPEventSourceListener(
+            mockStreamListener, LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS, parameters
+        );
 
         // JSON with choices[0].delta.content so that line 310 AgentUtils.logTimeToFirstToken fires
         String jsonData = "{\"choices\":[{\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}]}";
