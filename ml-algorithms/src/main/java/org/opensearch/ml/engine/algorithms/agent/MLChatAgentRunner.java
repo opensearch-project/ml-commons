@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
@@ -41,6 +41,9 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpe
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolNames;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logModelInvocationFailure;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolFailure;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolInvocation;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseFrontendTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
@@ -351,7 +354,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                 runAgent(mlAgent, params, listener, memory, functionCalling);
             }, e -> {
-                log.error("Failed to get chat history. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
+                log.error("Failed to get chat history. agentId={}, tenantId={}", params.get(AGENT_ID_LOG_FIELD), mlAgent.getTenantId(), e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
@@ -444,9 +447,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         Map<String, Tool> backendTools
     ) {
-        String agentId = parameters.get(AGENT_ID_FIELD);
         String tenantId = mlAgent.getTenantId();
-        log.info("Starting chat agent execution. agentId={}, tenantId={}", agentId, tenantId);
+        log.info("Starting chat agent execution. agentId={}, tenantId={}", parameters.get(AGENT_ID_LOG_FIELD), tenantId);
 
         LLMSpec llm = mlAgent.getLlm();
         String llmModelId = llm.getModelId();
@@ -512,7 +514,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean usesUnifiedInterface,
         ModelProvider modelProvider
     ) {
-        String agentId = parameters.get(AGENT_ID_FIELD);
         LLMSpec llm = mlAgent.getLlm();
         String sessionId = memory != null ? memory.getId() : null;
 
@@ -831,7 +832,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
-                log.error("Failed to run chat agent. agentId={}, tenantId={}, statusCode={}", agentId, tenantId, extractStatusCode(e), e);
+                log
+                    .error(
+                        "Failed to run chat agent. agentId={}, tenantId={}, statusCode={}",
+                        parameters.get(AGENT_ID_LOG_FIELD),
+                        tenantId,
+                        extractStatusCode(e),
+                        e
+                    );
                 listener.onFailure(e);
             });
             if (nextStepListener != null) {
@@ -981,9 +989,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     .info(
                         "Tool invoked. toolName={}, agentId={}, tenantId={}",
                         action,
-                        tmpParameters.get(AGENT_ID_FIELD),
+                        tmpParameters.get(AGENT_ID_LOG_FIELD),
                         tmpParameters.get(TENANT_ID_FIELD)
                     );
+                logToolInvocation(action, tmpParameters.get(AGENT_ID_LOG_FIELD), tmpParameters.get(TENANT_ID_FIELD));
                 if (tools.get(action) instanceof MLModelTool) {
                     Map<String, String> llmToolTmpParameters = new HashMap<>();
                     llmToolTmpParameters.putAll(tmpParameters);
@@ -1003,11 +1012,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     .error(
                         "Failed to run tool {}. agentId={}, tenantId={}, statusCode={}",
                         action,
-                        tmpParameters.get(AGENT_ID_FIELD),
+                        tmpParameters.get(AGENT_ID_LOG_FIELD),
                         tmpParameters.get(TENANT_ID_FIELD),
                         extractStatusCode(e),
                         e
                     );
+                logToolFailure(action, tmpParameters.get(AGENT_ID_LOG_FIELD), tmpParameters.get(TENANT_ID_FIELD), extractStatusCode(e));
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
@@ -1580,11 +1590,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     .error(
                         "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
                         llmSpec.getModelId(),
-                        summaryParams.get(AGENT_ID_FIELD),
+                        summaryParams.get(AGENT_ID_LOG_FIELD),
                         tenantId,
                         AgentUtils.extractStatusCode(e),
                         e
                     );
+                logModelInvocationFailure(
+                    llmSpec.getModelId(),
+                    summaryParams.get(AGENT_ID_LOG_FIELD),
+                    tenantId,
+                    AgentUtils.extractStatusCode(e)
+                );
                 listener.onFailure(e);
             }));
         } catch (Exception e) {

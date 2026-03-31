@@ -1651,4 +1651,30 @@ public class MLChatAgentRunnerTest {
         verify(conversationIndexMemory).saveStructuredMessages(any(), any());
     }
 
+    @Test
+    public void testMainLLMCallFailure_coversRestructuredLogErrorBlock() {
+        // Exercises the restructured multi-line log.error block for "Failed to run chat agent"
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(firstToolSpec))
+            .build();
+
+        Mockito.reset(client);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("LLM invocation failed"));
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, null);
+
+        Mockito.verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
 }

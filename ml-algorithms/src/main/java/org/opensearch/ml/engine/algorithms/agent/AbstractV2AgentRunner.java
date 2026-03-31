@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -550,7 +550,7 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         Memory memory,
         List<Message> fullConversation
     ) {
-        String agentId = params.get(AGENT_ID_FIELD);
+        String agentId = params.get(AGENT_ID_LOG_FIELD);
         String tenantId = mlAgent.getTenantId();
         log.info("Starting Agent with {} messages. agentId={}, tenantId={}", fullConversation.size(), agentId, tenantId);
 

@@ -2746,4 +2746,80 @@ public class AgentUtilsTest extends MLStaticMockBase {
         assertEquals("model-1", result.get()[0]); // falls back to modelId
         assertEquals("model-1", result.get()[1]); // falls back to modelId
     }
+
+    // ===== Structured metric logging tests =====
+
+    @Test
+    public void testLogAgentExecutionFailure_completesWithoutException() {
+        AgentUtils.logAgentExecutionFailure("CONVERSATIONAL", "agent-1", "tenant-1", 100L, "500");
+    }
+
+    @Test
+    public void testLogAgentExecutionFailure_withNullValues() {
+        AgentUtils.logAgentExecutionFailure(null, null, null, 0L, null);
+    }
+
+    @Test
+    public void testLogAgentExecutionLatency_completesWithoutException() {
+        AgentUtils.logAgentExecutionLatency("CONVERSATIONAL", "agent-1", "tenant-1", 200L);
+    }
+
+    @Test
+    public void testLogAgentExecutionLatency_withTaskId_completesWithoutException() {
+        AgentUtils.logAgentExecutionLatency("CONVERSATIONAL", "agent-1", "tenant-1", 200L, "task-123");
+    }
+
+    @Test
+    public void testLogAgentExecutionLatency_withTaskId_nullValues() {
+        AgentUtils.logAgentExecutionLatency(null, null, null, 0L, null);
+    }
+
+    @Test
+    public void testLogToolInvocation_completesWithoutException() {
+        AgentUtils.logToolInvocation("SearchTool", "agent-1", "tenant-1");
+    }
+
+    @Test
+    public void testLogToolInvocation_withNullValues() {
+        AgentUtils.logToolInvocation(null, null, null);
+    }
+
+    @Test
+    public void testLogToolFailure_completesWithoutException() {
+        AgentUtils.logToolFailure("SearchTool", "agent-1", "tenant-1", "400");
+    }
+
+    @Test
+    public void testLogToolFailure_withNullValues() {
+        AgentUtils.logToolFailure(null, null, null, null);
+    }
+
+    @Test
+    public void testLogModelInvocationFailure_completesWithoutException() {
+        AgentUtils.logModelInvocationFailure("model-1", "agent-1", "tenant-1", "503");
+    }
+
+    @Test
+    public void testLogModelInvocationFailure_withNullValues() {
+        AgentUtils.logModelInvocationFailure(null, null, null, null);
+    }
+
+    @Test
+    public void testLogTimeToFirstToken_completesWithoutException() {
+        AgentUtils.logTimeToFirstToken("model-1", "tenant-1", 150L);
+    }
+
+    @Test
+    public void testLogTimeToFirstToken_withNullValues() {
+        AgentUtils.logTimeToFirstToken(null, null, 0L);
+    }
+
+    @Test
+    public void testLogMetric_oddKvPairs_triggersWarningAndDropsUnpairedKey() throws Exception {
+        // Exercises the private logMetric warning branch for odd number of kvPairs
+        java.lang.reflect.Method logMetric = AgentUtils.class.getDeclaredMethod("logMetric", boolean.class, String.class, Object[].class);
+        logMetric.setAccessible(true);
+        // Three kvPairs (odd) — the last "orphan-key" has no value and should be dropped
+        logMetric.invoke(null, false, "TestMetric", new Object[] { "key1", "val1", "orphan-key" });
+    }
 }

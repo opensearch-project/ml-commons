@@ -33,6 +33,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -47,9 +48,12 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
@@ -120,6 +124,7 @@ public class MLAgentExecutorTest {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
     private Settings settings;
+    private Metadata metadata;
 
     @Mock
     private MLAgentRunner mlAgentRunner;
@@ -159,7 +164,7 @@ public class MLAgentExecutorTest {
 
         // Mock ClusterService for the agent index check
         ClusterState clusterState = mock(ClusterState.class);
-        Metadata metadata = mock(Metadata.class);
+        metadata = mock(Metadata.class);
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
         when(metadata.hasIndex(anyString())).thenReturn(false); // Simulate index not found
@@ -807,6 +812,109 @@ public class MLAgentExecutorTest {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", agentId, 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
+    }
+
+    // ===== Execute path tests covering the new logAgentExecutionFailure calls =====
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_sdkClientThrowsIndexNotFound_coversLogFailureIndexNotFound() {
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new IndexNotFoundException(".plugins-ml-agent"));
+                return stage;
+            });
+            return stage;
+        });
+
+        Map<String, String> parameters = Collections.singletonMap("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(OpenSearchStatusException.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_sdkClientThrowsGenericException_coversLogFailureGenericError() {
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("connection failed"));
+                return stage;
+            });
+            return stage;
+        });
+
+        Map<String, String> parameters = Collections.singletonMap("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_agentNotFound_nullParser_coversLogFailureNotFound() {
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            GetDataObjectResponse mockResponse = mock(GetDataObjectResponse.class);
+            when(mockResponse.parser()).thenReturn(null);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(mockResponse, null);
+                return stage;
+            });
+            return stage;
+        });
+
+        Map<String, String> parameters = Collections.singletonMap("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(OpenSearchStatusException.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_agentFoundButParseContextNPE_coversParseExceptionLogFailure() throws IOException {
+        // Covers logAgentExecutionFailure in the catch(Exception e) block for parse failures.
+        // When GetDataObjectResponse is constructed from a GetResponse, calling processAgentInput
+        // eventually NPEs on unmocked clusterService.localNode(), which is caught and logged.
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent", false, null);
+
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            GetDataObjectResponse mockResponse = new GetDataObjectResponse(agentGetResponse);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(mockResponse, null);
+                return stage;
+            });
+            return stage;
+        });
+
+        Map<String, String> parameters = Collections.singletonMap("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        // listener.onFailure is called — either from parse exception or downstream NPE,
+        // both paths cover the logAgentExecutionFailure call
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(Exception.class));
     }
 
     @Test
@@ -1946,15 +2054,15 @@ public class MLAgentExecutorTest {
         agentParams.put(MCP_CONNECTORS_FIELD, "[{\"id\":\"mcp-conn-1\"}]");
 
         MLAgent v2Agent = MLAgent
-            .builder()
-            .name("test_v2_mcp_agent")
-            .type(MLAgentType.CONVERSATIONAL_V2.name())
-            .description("V2 agent with MCP connector, MCP enabled")
-            .parameters(agentParams)
-            .memory(new MLMemorySpec("conversation_index", null, 0, null))
-            .createdTime(Instant.now())
-            .lastUpdateTime(Instant.now())
-            .build();
+                .builder()
+                .name("test_v2_mcp_agent")
+                .type(MLAgentType.CONVERSATIONAL_V2.name())
+                .description("V2 agent with MCP connector, MCP enabled")
+                .parameters(agentParams)
+                .memory(new MLMemorySpec("conversation_index", null, 0, null))
+                .createdTime(Instant.now())
+                .lastUpdateTime(Instant.now())
+                .build();
 
         mockSdkClientWithAgent(serializeAgentToGetResponseJson(v2Agent));
         memoryFactoryMap.put("CONVERSATION_INDEX", mockMemoryFactory);
@@ -1976,5 +2084,397 @@ public class MLAgentExecutorTest {
 
         // MCP check passes (enabled), so execution must reach executeV2Agent
         verify(memory, timeout(5000).atLeastOnce()).getStructuredMessages(any());
+    }
+
+    // ===== Additional tests for patch coverage of logAgentExecutionFailure/Latency calls =====
+
+    /**
+     * Helper to mock clusterService.localNode() so MLTask can be built without NPE.
+     */
+    private void mockLocalNode() {
+        DiscoveryNode localNode = mock(DiscoveryNode.class);
+        when(localNode.getId()).thenReturn("node-1");
+        when(clusterService.localNode()).thenReturn(localNode);
+    }
+
+    /**
+     * Helper to build a GetDataObjectResponse from a serialized MLAgent.
+     */
+    private GetDataObjectResponse buildAgentResponse(MLAgent agent) throws IOException {
+        XContentBuilder content = agent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "test-agent", 1L, 1L, 1L, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        return new GetDataObjectResponse(getResponse);
+    }
+
+    /**
+     * Helper to set up sdkClient mock to call callback with provided response.
+     */
+    @SuppressWarnings("unchecked")
+    private void mockSdkClientResponse(GetDataObjectResponse response) {
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(response, null);
+                return stage;
+            });
+            return stage;
+        });
+    }
+
+    /**
+     * Test tenant mismatch path: multi-tenancy enabled, agent has different tenantId than request.
+     * Covers logAgentExecutionFailure in the FORBIDDEN tenant mismatch block.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_tenantMismatch_coversForbiddenLogFailure() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        mlAgentExecutor.onMultiTenancyEnabledChanged(true);
+
+        // Agent registered with tenantId "tenant-a"
+        GetResponse agentGetResponse = prepareMLAgent("test-agent", false, "tenant-a");
+        mockSdkClientResponse(new GetDataObjectResponse(agentGetResponse));
+
+        // Request uses different tenantId "tenant-b"
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", "tenant-b", FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(OpenSearchStatusException.class));
+    }
+
+    /**
+     * Test that a failure in GetResponse parsing triggers the outer catch block.
+     * Covers logAgentExecutionFailure in the outer catch at line ~572.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_getResponseParserFails_coversOuterCatchLogFailure() {
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            GetDataObjectResponse mockResponse = mock(GetDataObjectResponse.class);
+            XContentParser mockParser = mock(XContentParser.class);
+            // Make parser throw RuntimeException so GetResponse.fromXContent fails
+            try {
+                when(mockParser.nextToken()).thenThrow(new RuntimeException("parser error"));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            when(mockResponse.parser()).thenReturn(mockParser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(mockResponse, null);
+                return stage;
+            });
+            return stage;
+        });
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(Exception.class));
+    }
+
+    /**
+     * Test remote agentic memory disabled path.
+     * When an agent has REMOTE_AGENTIC_MEMORY type but the feature is disabled,
+     * covers logAgentExecutionFailure in the FORBIDDEN remote memory block.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_remoteAgenticMemoryDisabled_coversForbiddenLogFailure() throws IOException {
+        // isRemoteAgenticMemoryEnabled() default mock = false → !false = true → enters check
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .memory(MLMemorySpec.builder().type(MLMemoryType.REMOTE_AGENTIC_MEMORY.name()).build())
+            .build();
+
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        // Use mutable params so put(AGENT_ID_LOG_FIELD) at line 283 succeeds
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(OpenSearchStatusException.class));
+    }
+
+    /**
+     * Test memory factory null path (BAD_REQUEST).
+     * When an agent has CONVERSATION_INDEX memory spec but no factory is registered,
+     * covers logAgentExecutionFailure in the memoryFactory == null block.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_memoryFactoryNull_coversBADREQUESTLogFailure() throws IOException {
+        mockLocalNode();
+        // Put null factory for CONVERSATION_INDEX → containsKey=true but get=null
+        memoryFactoryMap.put(MLMemoryType.CONVERSATION_INDEX.name(), null);
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .memory(MLMemorySpec.builder().type(MLMemoryType.CONVERSATION_INDEX.name()).build())
+            .build();
+
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(IllegalArgumentException.class));
+    }
+
+    /**
+     * Test MCP connector disabled path.
+     * When an agent has MCP connector parameters but MCP feature is disabled,
+     * covers logAgentExecutionFailure in the MCP disabled block in executeAgent.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_mcpConnectorDisabled_coversForbiddenLogFailure() throws IOException {
+        mockLocalNode();
+        // isMcpConnectorEnabled() default mock = false → !false = true → MCP check triggers
+
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put("mcp_connectors", "[{\"connectorId\":\"mcp-1\"}]");
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .parameters(agentParams)
+            .build();
+
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(Exception.class));
+    }
+
+    /**
+     * Test synchronous agent execution success path.
+     * Uses a spy to inject mock runner that calls onResponse,
+     * covering logAgentExecutionLatency in createAgentActionListener.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_syncAgent_success_coversLogAgentExecutionLatency() throws IOException {
+        mockLocalNode();
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .build();
+
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        // Spy on the executor so we can control getAgentRunner
+        MLAgentExecutor spyExecutor = spy(mlAgentExecutor);
+        doReturn(mlAgentRunner).when(spyExecutor).getAgentRunner(any(), any());
+
+        // Mock runner.run to immediately call listener.onResponse
+        doAnswer(invocation -> {
+            ActionListener<Object> agentListener = invocation.getArgument(2);
+            agentListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(new ArrayList<>()).build());
+            return null;
+        }).when(mlAgentRunner).run(any(), any(), any(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        spyExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onResponse(any());
+    }
+
+    /**
+     * Test synchronous agent execution failure path.
+     * Mock runner calls onFailure, covering logAgentExecutionFailure
+     * in createAgentActionListener failure callback.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_syncAgent_failure_coversLogAgentExecutionFailure() throws IOException {
+        mockLocalNode();
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .build();
+
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        MLAgentExecutor spyExecutor = spy(mlAgentExecutor);
+        doReturn(mlAgentRunner).when(spyExecutor).getAgentRunner(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> agentListener = invocation.getArgument(2);
+            agentListener.onFailure(new RuntimeException("agent execution failed"));
+            return null;
+        }).when(mlAgentRunner).run(any(), any(), any(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        spyExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_asyncAgent_indexTaskFailure_covers1085_1090() throws IOException {
+        mockLocalNode();
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .build();
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        MLAgentExecutor spyExecutor = spy(mlAgentExecutor);
+        doReturn(mlAgentRunner).when(spyExecutor).getAgentRunner(any(), any());
+        doAnswer(inv -> {
+            ActionListener<IndexResponse> taskListener = inv.getArgument(1);
+            taskListener.onFailure(new RuntimeException("failed to index task"));
+            return null;
+        }).when(spyExecutor).indexMLTask(any(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset, true);
+
+        spyExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_asyncAgent_success_covers1372() throws IOException {
+        mockLocalNode();
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .build();
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        CompletionStage updateStage = mock(CompletionStage.class);
+        when(updateStage.whenComplete(any())).thenReturn(updateStage);
+        when(sdkClient.updateDataObjectAsync(any())).thenReturn(updateStage);
+
+        MLAgentExecutor spyExecutor = spy(mlAgentExecutor);
+        doReturn(mlAgentRunner).when(spyExecutor).getAgentRunner(any(), any());
+        doAnswer(inv -> {
+            ActionListener<IndexResponse> taskListener = inv.getArgument(1);
+            IndexResponse mockIndexResp = mock(IndexResponse.class);
+            when(mockIndexResp.getId()).thenReturn("task-id-1");
+            taskListener.onResponse(mockIndexResp);
+            return null;
+        }).when(spyExecutor).indexMLTask(any(), any());
+        doAnswer(inv -> {
+            ActionListener<Object> agentListener = inv.getArgument(2);
+            agentListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(new ArrayList<>()).build());
+            return null;
+        }).when(mlAgentRunner).run(any(), any(), any(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset, true);
+
+        spyExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onResponse(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_asyncAgent_failure_covers1426() throws IOException {
+        mockLocalNode();
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .build();
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        CompletionStage updateStage = mock(CompletionStage.class);
+        when(updateStage.whenComplete(any())).thenReturn(updateStage);
+        when(sdkClient.updateDataObjectAsync(any())).thenReturn(updateStage);
+
+        MLAgentExecutor spyExecutor = spy(mlAgentExecutor);
+        doReturn(mlAgentRunner).when(spyExecutor).getAgentRunner(any(), any());
+        doAnswer(inv -> {
+            ActionListener<IndexResponse> taskListener = inv.getArgument(1);
+            IndexResponse mockIndexResp = mock(IndexResponse.class);
+            when(mockIndexResp.getId()).thenReturn("task-id-1");
+            taskListener.onResponse(mockIndexResp);
+            return null;
+        }).when(spyExecutor).indexMLTask(any(), any());
+        doAnswer(inv -> {
+            ActionListener<Object> agentListener = inv.getArgument(2);
+            agentListener.onFailure(new RuntimeException("agent execution failed async"));
+            return null;
+        }).when(mlAgentRunner).run(any(), any(), any(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset, true);
+
+        spyExecutor.execute(agentInput, listener, channel);
+
+        verify(listener, timeout(5000).atLeastOnce()).onResponse(any());
     }
 }
