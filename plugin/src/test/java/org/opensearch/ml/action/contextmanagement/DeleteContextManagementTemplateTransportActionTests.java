@@ -15,10 +15,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.contextmanagement.MLDeleteContextManagementTemplateRequest;
 import org.opensearch.ml.common.transport.contextmanagement.MLDeleteContextManagementTemplateResponse;
 import org.opensearch.tasks.Task;
@@ -107,11 +109,64 @@ public class DeleteContextManagementTemplateTransportActionTests extends OpenSea
 
         transportAction.doExecute(task, request, listener);
 
-        ArgumentCaptor<RuntimeException> exceptionCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        ArgumentCaptor<OpenSearchStatusException> exceptionCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
 
-        RuntimeException exception = exceptionCaptor.getValue();
+        OpenSearchStatusException exception = exceptionCaptor.getValue();
         assertEquals("Context management template not found: test_template", exception.getMessage());
+        assertEquals(RestStatus.NOT_FOUND, exception.status());
+    }
+
+    @Test
+    public void testDoExecute_TemplateNotFound_Returns404() {
+        String templateName = "sliding_window_max_40000_tokens_managers123";
+        MLDeleteContextManagementTemplateRequest request = new MLDeleteContextManagementTemplateRequest(templateName);
+        Task task = mock(Task.class);
+        ActionListener<MLDeleteContextManagementTemplateResponse> listener = mock(ActionListener.class);
+
+        // Mock template not found (service returns false)
+        doAnswer(invocation -> {
+            ActionListener<Boolean> deleteListener = invocation.getArgument(1);
+            deleteListener.onResponse(false);
+            return null;
+        }).when(contextManagementTemplateService).deleteTemplate(eq(templateName), any());
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(
+            "Expected OpenSearchStatusException but got " + exception.getClass().getName(),
+            exception instanceof OpenSearchStatusException
+        );
+        OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
+        assertEquals(RestStatus.NOT_FOUND, statusException.status());
+        assertTrue(statusException.getMessage().contains(templateName));
+    }
+
+    @Test
+    public void testDoExecute_TemplateNotFound_ExceptionIsNotRuntimeException() {
+        String templateName = "nonexistent_template";
+        MLDeleteContextManagementTemplateRequest request = new MLDeleteContextManagementTemplateRequest(templateName);
+        Task task = mock(Task.class);
+        ActionListener<MLDeleteContextManagementTemplateResponse> listener = mock(ActionListener.class);
+
+        // Mock template not found
+        doAnswer(invocation -> {
+            ActionListener<Boolean> deleteListener = invocation.getArgument(1);
+            deleteListener.onResponse(false);
+            return null;
+        }).when(contextManagementTemplateService).deleteTemplate(eq(templateName), any());
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+
+        // Verify it's NOT a plain RuntimeException (which would cause a 500)
+        assertFalse("Should not be a plain RuntimeException", exceptionCaptor.getValue().getClass().equals(RuntimeException.class));
     }
 
     @Test
