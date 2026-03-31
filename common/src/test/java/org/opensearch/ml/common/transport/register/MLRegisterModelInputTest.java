@@ -6,6 +6,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_6_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -689,5 +691,42 @@ public class MLRegisterModelInputTest {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLRegisterModelInput parsedInput = new MLRegisterModelInput(streamInput);
         verify.accept(parsedInput);
+    }
+
+    // ---- created_by tests ----
+
+    @Test
+    public void builder_WithCreatedBy() {
+        MLRegisterModelInput withCreatedBy = input.toBuilder().createdBy("flow-framework").build();
+        assertEquals("flow-framework", withCreatedBy.getCreatedBy());
+    }
+
+    @Test
+    public void builder_WithoutCreatedBy_DefaultsToNull() {
+        assertNull(input.getCreatedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithCreatedBy() throws IOException {
+        MLRegisterModelInput inputWithCreatedBy = input.toBuilder().createdBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_7_0);
+        inputWithCreatedBy.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_7_0);
+        MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
+        assertEquals("flow-framework", deserialized.getCreatedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_CreatedBy_OldVersion_IsNull() throws IOException {
+        MLRegisterModelInput inputWithCreatedBy = input.toBuilder().createdBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_6_0);
+        inputWithCreatedBy.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_6_0);
+        MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
+        assertNull(deserialized.getCreatedBy());
     }
 }

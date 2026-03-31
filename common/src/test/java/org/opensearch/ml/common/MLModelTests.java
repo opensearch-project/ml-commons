@@ -452,4 +452,73 @@ public class MLModelTests {
                 .identifyModel("anthropic", "https://test-api.anthropic.com/v1/messages", new JSONObject(requestBody), paramsOnlyConnector)
         );
     }
+
+    // ---- created_by tests ----
+
+    @Test
+    public void builder_WithCreatedBy() {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).createdBy("flow-framework").build();
+        assertEquals("flow-framework", model.getCreatedBy());
+    }
+
+    @Test
+    public void builder_WithoutCreatedBy_DefaultsToNull() {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        assertNull(model.getCreatedBy());
+    }
+
+    @Test
+    public void toXContent_WithCreatedBy() throws IOException {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).createdBy("flow-framework").build();
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.core.xcontent.XContentBuilder
+            .builder(XContentType.JSON.xContent());
+        model.toXContent(builder, EMPTY_PARAMS);
+        org.junit.Assert
+            .assertTrue(org.opensearch.ml.common.TestHelper.xContentBuilderToString(builder).contains("\"created_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void toXContent_WithoutCreatedBy_OmitsField() throws IOException {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.core.xcontent.XContentBuilder
+            .builder(XContentType.JSON.xContent());
+        model.toXContent(builder, EMPTY_PARAMS);
+        org.junit.Assert.assertFalse(org.opensearch.ml.common.TestHelper.xContentBuilderToString(builder).contains("created_by"));
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithCreatedBy() throws IOException {
+        MLModel model = MLModel
+            .builder()
+            .name("test")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1")
+            .createdBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        model.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLModel deserialized = new MLModel(streamInput);
+        assertEquals("flow-framework", deserialized.getCreatedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_CreatedBy_OldVersion_IsNull() throws IOException {
+        MLModel model = MLModel
+            .builder()
+            .name("test")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1")
+            .createdBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_6_0);
+        model.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_6_0);
+        MLModel deserialized = new MLModel(streamInput);
+        assertNull(deserialized.getCreatedBy());
+    }
 }
