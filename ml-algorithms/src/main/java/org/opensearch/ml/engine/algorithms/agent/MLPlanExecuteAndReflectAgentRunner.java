@@ -5,13 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -393,7 +393,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener, tokenTracker, functionCalling);
             }, e -> {
-                log.error("Failed to get chat history. agentId={}, tenantId={}", allParams.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
+                log
+                    .error(
+                        "Failed to get chat history. agentId={}, tenantId={}",
+                        allParams.get(AGENT_ID_LOG_FIELD),
+                        mlAgent.getTenantId(),
+                        e
+                    );
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
@@ -562,7 +568,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 addSteps(steps, allParams, STEPS_FIELD);
 
                 String stepToExecute = steps.getFirst();
-                String reActAgentId = allParams.get(EXECUTOR_AGENT_ID_FIELD);
+                String reActAgentId = allParams.get(EXECUTOR_AGENT_ID_LOG);
                 Map<String, String> reactParams = new HashMap<>();
                 reactParams.put(QUESTION_FIELD, stepToExecute);
                 // required for agent revamp input
@@ -714,7 +720,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         tokenTracker
                     );
                 }, e -> {
-                    String agentId = allParams.getOrDefault("agent_id", "unknown");
+                    String agentId = allParams.getOrDefault(AGENT_ID_LOG_FIELD, "unknown");
                     String tenantIdLog = allParams.get(TENANT_ID_FIELD);
                     log.error("Failed to execute ReAct agent. agentId={}, tenantId={}", agentId, tenantIdLog, e);
                     finalListener.onFailure(e);
@@ -725,7 +731,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 .error(
                     "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
                     llm.getModelId(),
-                    allParams.get(AGENT_ID_FIELD),
+                    allParams.get(AGENT_ID_LOG_FIELD),
                     allParams.get(TENANT_ID_FIELD),
                     extractStatusCode(e),
                     e
@@ -1074,7 +1080,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .error(
                         "Failed to invoke model in agent. modelId={}, agentId={}, tenantId={}, statusCode={}",
                         llmSpec.getModelId(),
-                        summaryParams.get(AGENT_ID_FIELD),
+                        summaryParams.get(AGENT_ID_LOG_FIELD),
                         summaryParams.get(TENANT_ID_FIELD),
                         extractStatusCode(e),
                         e
