@@ -6,9 +6,11 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.CREATED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
@@ -239,6 +241,7 @@ public class MLModel implements ToXContentObject {
     private String connectorId;
     private Guardrails guardrails;
     private String tenantId;
+    private String createdBy;
 
     /**
      * Model interface is a map that contains the input and output fields of the model, with JSON schema as the value.
@@ -306,7 +309,8 @@ public class MLModel implements ToXContentObject {
         String connectorId,
         Guardrails guardrails,
         Map<String, String> modelInterface,
-        String tenantId
+        String tenantId,
+        String createdBy
     ) {
         this.name = name;
         this.modelGroupId = modelGroupId;
@@ -343,6 +347,7 @@ public class MLModel implements ToXContentObject {
         this.guardrails = guardrails;
         this.modelInterface = modelInterface;
         this.tenantId = tenantId;
+        this.createdBy = createdBy;
     }
 
     public MLModel(StreamInput input) throws IOException {
@@ -413,6 +418,7 @@ public class MLModel implements ToXContentObject {
                 modelInterface = input.readMap(StreamInput::readString, StreamInput::readString);
             }
             this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+            this.createdBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
         }
     }
 
@@ -499,6 +505,9 @@ public class MLModel implements ToXContentObject {
         }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalString(createdBy);
         }
     }
 
@@ -610,6 +619,9 @@ public class MLModel implements ToXContentObject {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (createdBy != null) {
+            builder.field(CREATED_BY_FIELD, createdBy);
+        }
         builder.endObject();
         return builder;
     }
@@ -656,6 +668,7 @@ public class MLModel implements ToXContentObject {
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
         String tenantId = null;
+        String createdBy = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -797,6 +810,9 @@ public class MLModel implements ToXContentObject {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case CREATED_BY_FIELD:
+                    createdBy = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -839,6 +855,7 @@ public class MLModel implements ToXContentObject {
             .guardrails(guardrails)
             .modelInterface(modelInterface)
             .tenantId(tenantId)
+            .createdBy(createdBy)
             .build();
     }
 
@@ -931,7 +948,8 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_SERVICE_PROVIDER, serviceProvider)
             .addTag(TAG_ALGORITHM, algorithm.name())
             .addTag(TAG_MODEL, model)
-            .addTag(TAG_TYPE, modelType);
+            .addTag(TAG_TYPE, modelType)
+            .addTag(CREATED_BY_FIELD, createdBy != null ? createdBy : TAG_VALUE_UNKNOWN);
 
         if ((serviceProvider.equals(TAG_VALUE_UNKNOWN) || model.equals(TAG_VALUE_UNKNOWN)) && !url.equals(TAG_VALUE_UNKNOWN)) {
             tags = tags.addTag(TAG_URL, url);
@@ -1104,7 +1122,8 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_SERVICE_PROVIDER, nameParts[0])
             .addTag(TAG_ALGORITHM, this.algorithm.name()) // nameParts[1] is not used
             .addTag(TAG_MODEL, nameParts[2])
-            .addTag(TAG_TYPE, modelType);
+            .addTag(TAG_TYPE, modelType)
+            .addTag(CREATED_BY_FIELD, createdBy != null ? createdBy : TAG_VALUE_UNKNOWN);
 
         if (this.modelFormat != null) {
             tags = tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
@@ -1135,7 +1154,8 @@ public class MLModel implements ToXContentObject {
             .create()
             .addTag(TAG_DEPLOYMENT, TAG_CUSTOM_DEPLOYMENT_VALUE)
             .addTag(TAG_ALGORITHM, this.algorithm.name())
-            .addTag(TAG_TYPE, modelType);
+            .addTag(TAG_TYPE, modelType)
+            .addTag(CREATED_BY_FIELD, createdBy != null ? createdBy : TAG_VALUE_UNKNOWN);
 
         if (this.modelFormat != null) {
             tags = tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());

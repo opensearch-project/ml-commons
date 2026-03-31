@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.agent;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -19,6 +22,7 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -45,24 +49,22 @@ public class MLRegisterAgentRequest extends ActionRequest {
 
     @Override
     public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
         if (mlAgent == null) {
-            exception = addValidationError("ML agent can't be null", exception);
-        } else {
-            // Basic validation - check for conflicting configuration (following connector pattern)
-            if (mlAgent.getContextManagementName() != null && mlAgent.getContextManagement() != null) {
-                exception = addValidationError("Cannot specify both context_management_name and context_management", exception);
-            }
+            return addValidationError("ML agent can't be null", null);
+        }
 
-            // Validate context management template name
-            if (mlAgent.getContextManagementName() != null) {
-                exception = validateContextManagementTemplateName(mlAgent.getContextManagementName(), exception);
-            }
+        Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Agent created_by field", new FieldDescriptor(mlAgent.getCreatedBy(), false));
+        ActionRequestValidationException exception = validateFields(fieldsToValidate);
 
-            // Validate inline context management configuration
-            if (mlAgent.getContextManagement() != null) {
-                exception = validateInlineContextManagement(mlAgent.getContextManagement(), exception);
-            }
+        if (mlAgent.getContextManagementName() != null && mlAgent.getContextManagement() != null) {
+            exception = addValidationError("Cannot specify both context_management_name and context_management", exception);
+        }
+        if (mlAgent.getContextManagementName() != null) {
+            exception = validateContextManagementTemplateName(mlAgent.getContextManagementName(), exception);
+        }
+        if (mlAgent.getContextManagement() != null) {
+            exception = validateInlineContextManagement(mlAgent.getContextManagement(), exception);
         }
 
         return exception;

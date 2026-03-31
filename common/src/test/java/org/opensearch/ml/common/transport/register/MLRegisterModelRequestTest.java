@@ -195,4 +195,20 @@ public class MLRegisterModelRequestTest {
         assertEquals("Validation Failed: 1: Model description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
     }
 
+    @Test
+    public void validate_ValidCreatedBy() {
+        MLRegisterModelInput input = mlRegisterModelInput.toBuilder().createdBy("flow-framework").build();
+        MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(input).build();
+        assertNull(request.validate());
+    }
+
+    @Test
+    public void validate_InvalidCreatedBy() {
+        MLRegisterModelInput input = mlRegisterModelInput.toBuilder().createdBy("<script>bad</script>").build();
+        MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(input).build();
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertEquals("Validation Failed: 1: Model created_by field " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
 }

@@ -50,6 +50,7 @@ public class MLCreateConnectorRequest extends ActionRequest {
         fieldsToValidate
             .put("Model connector name", new FieldDescriptor(mlCreateConnectorInput.getName(), !mlCreateConnectorInput.isDryRun()));
         fieldsToValidate.put("Model connector description", new FieldDescriptor(mlCreateConnectorInput.getDescription(), false));
+        fieldsToValidate.put("Model connector created_by field", new FieldDescriptor(mlCreateConnectorInput.getCreatedBy(), false));
 
         return validateFields(fieldsToValidate);
     }

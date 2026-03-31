@@ -356,7 +356,8 @@ public class DeleteAgentTransportActionTests {
             isHidden,
             null, // contextManagementName
             null, // contextManagement
-            tenantId
+            tenantId,
+            null
         );
 
         XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);

@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -451,5 +452,140 @@ public class MLModelTests {
             mlModel
                 .identifyModel("anthropic", "https://test-api.anthropic.com/v1/messages", new JSONObject(requestBody), paramsOnlyConnector)
         );
+    }
+
+    // ---- created_by tests ----
+
+    @Test
+    public void builder_WithCreatedBy() {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).createdBy("flow-framework").build();
+        assertEquals("flow-framework", model.getCreatedBy());
+    }
+
+    @Test
+    public void builder_WithoutCreatedBy_DefaultsToNull() {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        assertNull(model.getCreatedBy());
+    }
+
+    @Test
+    public void toXContent_WithCreatedBy() throws IOException {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).createdBy("flow-framework").build();
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.core.xcontent.XContentBuilder
+            .builder(XContentType.JSON.xContent());
+        model.toXContent(builder, EMPTY_PARAMS);
+        org.junit.Assert
+            .assertTrue(org.opensearch.ml.common.TestHelper.xContentBuilderToString(builder).contains("\"created_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void toXContent_WithoutCreatedBy_OmitsField() throws IOException {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.core.xcontent.XContentBuilder
+            .builder(XContentType.JSON.xContent());
+        model.toXContent(builder, EMPTY_PARAMS);
+        org.junit.Assert.assertFalse(org.opensearch.ml.common.TestHelper.xContentBuilderToString(builder).contains("created_by"));
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithCreatedBy() throws IOException {
+        MLModel model = MLModel
+            .builder()
+            .name("test")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1")
+            .createdBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        model.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLModel deserialized = new MLModel(streamInput);
+        assertEquals("flow-framework", deserialized.getCreatedBy());
+    }
+
+    @Test
+    public void testGetTags_RemoteModel_CreatedBy() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .actions(
+                List
+                    .of(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .build()
+                    )
+            )
+            .build();
+        MLModel withCreatedBy = MLModel.builder().algorithm(FunctionName.REMOTE).createdBy("flow-framework").build();
+        assertEquals("flow-framework", withCreatedBy.getTags(connector).getTagsMap().get("created_by"));
+
+        MLModel withoutCreatedBy = MLModel.builder().algorithm(FunctionName.REMOTE).build();
+        assertEquals("unknown", withoutCreatedBy.getTags(connector).getTagsMap().get("created_by"));
+    }
+
+    @Test
+    public void testGetTags_PreTrainedModel_CreatedBy() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
+        MLModel withCreatedBy = MLModel
+            .builder()
+            .name("huggingface/sentence-transformers/bert-base-uncased")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .createdBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", withCreatedBy.getTags().getTagsMap().get("created_by"));
+
+        MLModel withoutCreatedBy = MLModel
+            .builder()
+            .name("huggingface/sentence-transformers/bert-base-uncased")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .build();
+        assertEquals("unknown", withoutCreatedBy.getTags().getTagsMap().get("created_by"));
+    }
+
+    @Test
+    public void testGetTags_CustomModel_CreatedBy() {
+        MLModel withCreatedBy = MLModel
+            .builder()
+            .name("my-custom-model")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .createdBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", withCreatedBy.getTags().getTagsMap().get("created_by"));
+
+        MLModel withoutCreatedBy = MLModel.builder().name("my-custom-model").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        assertEquals("unknown", withoutCreatedBy.getTags().getTagsMap().get("created_by"));
+    }
+
+    @Test
+    public void writeTo_ReadFrom_CreatedBy_OldVersion_IsNull() throws IOException {
+        MLModel model = MLModel
+            .builder()
+            .name("test")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1")
+            .createdBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        model.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        MLModel deserialized = new MLModel(streamInput);
+        assertNull(deserialized.getCreatedBy());
     }
 }

@@ -6,9 +6,11 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.CREATED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -79,6 +81,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
     private String url;
     private Map<String, String> headers;
+    private String createdBy;
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(
@@ -97,7 +100,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         ConnectorClientConfig connectorClientConfig,
         String tenantId,
         String url,
-        Map<String, String> headers
+        Map<String, String> headers,
+        String createdBy
     ) {
         if (!dryRun && !updateConnector) {
 
@@ -140,6 +144,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.tenantId = tenantId;
         this.url = url;
         this.headers = headers;
+        this.createdBy = createdBy;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -162,6 +167,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         String tenantId = null;
         String url = null;
         Map<String, String> headers = null;
+        String createdBy = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -222,6 +228,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case CONNECTOR_HEADER_FIELD:
                     headers = parser.mapStrings();
                     break;
+                case CREATED_BY_FIELD:
+                    createdBy = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -243,7 +252,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             connectorClientConfig,
             tenantId,
             url,
-            headers
+            headers,
+            createdBy
         );
     }
 
@@ -291,6 +301,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (headers != null) {
             builder.field(CONNECTOR_HEADER_FIELD, headers);
+        }
+        if (createdBy != null) {
+            builder.field(CREATED_BY_FIELD, createdBy);
         }
         builder.endObject();
         return builder;
@@ -361,6 +374,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 output.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
+            output.writeOptionalString(createdBy);
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -403,5 +419,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 this.headers = input.readMap(s -> s.readString(), s -> s.readString());
             }
         }
+        this.createdBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
     }
 }

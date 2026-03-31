@@ -313,4 +313,34 @@ public class MLCreateConnectorRequestTests {
         assertNotNull("Validation should fail when dry run is false and name is empty", nonDryRunException);
         assertTrue(nonDryRunException.getMessage().contains("Model connector name is required"));
     }
+
+    @Test
+    public void validateWithValidCreatedBy() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("key", "value"))
+            .createdBy("flow-framework")
+            .build();
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(input).build();
+        assertNull(request.validate());
+    }
+
+    @Test
+    public void validateWithInvalidCreatedBy() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("key", "value"))
+            .createdBy("<script>bad</script>")
+            .build();
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(input).build();
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("Model connector created_by field " + SAFE_INPUT_DESCRIPTION));
+    }
 }
