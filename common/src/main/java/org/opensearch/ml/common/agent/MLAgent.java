@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.agent;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.CREATED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
@@ -56,7 +57,6 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONTEXT_MANAGEMENT_NAME_FIELD = "context_management_name";
     public static final String CONTEXT_MANAGEMENT_FIELD = "context_management";
-    public static final String CREATED_BY_FIELD = "created_by";
     private static final String LLM_INTERFACE_FIELD = "_llm_interface";
     private static final String TAG_VALUE_UNKNOWN = "unknown";
     private static final String TAG_MEMORY_TYPE = "memory_type";

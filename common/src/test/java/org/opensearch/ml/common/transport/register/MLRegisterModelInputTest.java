@@ -6,7 +6,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_6_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 
 import java.io.IOException;
@@ -722,10 +722,10 @@ public class MLRegisterModelInputTest {
     public void writeTo_ReadFrom_CreatedBy_OldVersion_IsNull() throws IOException {
         MLRegisterModelInput inputWithCreatedBy = input.toBuilder().createdBy("flow-framework").build();
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(VERSION_3_6_0);
+        output.setVersion(VERSION_3_5_0);
         inputWithCreatedBy.writeTo(output);
         StreamInput streamInput = output.bytes().streamInput();
-        streamInput.setVersion(VERSION_3_6_0);
+        streamInput.setVersion(VERSION_3_5_0);
         MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
         assertNull(deserialized.getCreatedBy());
     }

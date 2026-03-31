@@ -852,6 +852,7 @@ public class MLModelManager {
                     .isHidden(registerModelInput.getIsHidden())
                     .guardrails(registerModelInput.getGuardrails())
                     .modelInterface(registerModelInput.getModelInterface())
+                    .tenantId(registerModelInput.getTenantId())
                     .createdBy(registerModelInput.getCreatedBy())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);

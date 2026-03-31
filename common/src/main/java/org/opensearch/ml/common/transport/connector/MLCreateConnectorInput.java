@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.CREATED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
@@ -57,7 +58,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
     public static final String CONNECTOR_URL_FIELD = "url";
     public static final String CONNECTOR_HEADER_FIELD = "headers";
-    public static final String CREATED_BY_FIELD = "created_by";
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_2_13_0;
 

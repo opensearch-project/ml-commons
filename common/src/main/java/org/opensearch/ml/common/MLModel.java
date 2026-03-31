@@ -6,6 +6,7 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.CREATED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
@@ -113,7 +114,6 @@ public class MLModel implements ToXContentObject {
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String GUARDRAILS_FIELD = "guardrails";
     public static final String INTERFACE_FIELD = "interface";
-    public static final String CREATED_BY_FIELD = "created_by";
 
     private static final String TAG_DEPLOYMENT = "deployment";
     private static final String TAG_REMOTE_DEPLOYMENT_VALUE = "remote";

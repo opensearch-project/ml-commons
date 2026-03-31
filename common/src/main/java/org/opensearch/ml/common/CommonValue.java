@@ -23,6 +23,7 @@ public class CommonValue {
 
     /** The field name containing the tenant id */
     public static final String TENANT_ID_FIELD = "tenant_id";
+    public static final String CREATED_BY_FIELD = "created_by";
     public static final String AGENT_ID_FIELD = "agent_id";
 
     public static final String MASTER_KEY = "master_key";
@@ -103,7 +104,6 @@ public class CommonValue {
     public static final Version VERSION_3_3_0 = Version.fromString("3.3.0");
     public static final Version VERSION_3_4_0 = Version.fromString("3.4.0");
     public static final Version VERSION_3_5_0 = Version.fromString("3.5.0");
-    public static final Version VERSION_3_6_0 = Version.fromString("3.6.0");
     public static final Version VERSION_3_7_0 = Version.fromString("3.7.0");
 
     // Connector Constants

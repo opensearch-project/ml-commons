@@ -27,11 +27,13 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
@@ -732,10 +734,10 @@ public class HttpConnectorTest {
     public void writeTo_ReadFrom_WithCreatedBy() throws IOException {
         HttpConnector connector = HttpConnector.builder().name("test").protocol("http").createdBy("flow-framework").build();
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_7_0);
+        output.setVersion(CommonValue.VERSION_3_7_0);
         connector.writeTo(output);
-        org.opensearch.core.common.io.stream.StreamInput streamInput = output.bytes().streamInput();
-        streamInput.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_7_0);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
         HttpConnector deserialized = new HttpConnector(streamInput);
         Assert.assertEquals("flow-framework", deserialized.getCreatedBy());
     }
@@ -744,10 +746,10 @@ public class HttpConnectorTest {
     public void writeTo_ReadFrom_CreatedBy_OldVersion_IsNull() throws IOException {
         HttpConnector connector = HttpConnector.builder().name("test").protocol("http").createdBy("flow-framework").build();
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_6_0);
+        output.setVersion(CommonValue.VERSION_3_5_0);
         connector.writeTo(output);
-        org.opensearch.core.common.io.stream.StreamInput streamInput = output.bytes().streamInput();
-        streamInput.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_6_0);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
         HttpConnector deserialized = new HttpConnector(streamInput);
         Assert.assertNull(deserialized.getCreatedBy());
     }

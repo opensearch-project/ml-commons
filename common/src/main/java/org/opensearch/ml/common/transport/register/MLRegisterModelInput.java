@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.register;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.CREATED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
@@ -73,7 +74,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
     public static final String GUARDRAILS_FIELD = "guardrails";
-    public static final String CREATED_BY_FIELD = "created_by";
 
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = CommonValue.VERSION_2_11_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = CommonValue.VERSION_2_12_0;

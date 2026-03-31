@@ -581,10 +581,10 @@ public class MLModelTests {
             .createdBy("flow-framework")
             .build();
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(CommonValue.VERSION_3_6_0);
+        output.setVersion(CommonValue.VERSION_3_5_0);
         model.writeTo(output);
         StreamInput streamInput = output.bytes().streamInput();
-        streamInput.setVersion(CommonValue.VERSION_3_6_0);
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLModel deserialized = new MLModel(streamInput);
         assertNull(deserialized.getCreatedBy());
     }

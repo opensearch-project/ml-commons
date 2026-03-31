@@ -642,10 +642,10 @@ public class MLCreateConnectorInputTests {
             .createdBy("flow-framework")
             .build();
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(CommonValue.VERSION_3_6_0);
+        output.setVersion(CommonValue.VERSION_3_5_0);
         input.writeTo(output);
         StreamInput streamInput = output.bytes().streamInput();
-        streamInput.setVersion(CommonValue.VERSION_3_6_0);
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
         assertNull(deserialized.getCreatedBy());
     }
