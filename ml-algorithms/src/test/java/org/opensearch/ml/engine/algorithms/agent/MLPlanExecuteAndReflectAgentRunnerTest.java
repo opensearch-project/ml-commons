@@ -1389,4 +1389,35 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             verify(agentActionListener).onResponse(any());
         }
     }
+
+    @Test
+    public void testMainLLMCallFailure_coversFirstLogModelInvocationFailure() {
+        // Covers logModelInvocationFailure in the main planner LLM failure callback
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("LLM invocation failed"));
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
 }
