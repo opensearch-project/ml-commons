@@ -65,8 +65,12 @@ public class MLUpdateConnectorRequest extends ActionRequest {
             Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
             fieldsToValidate.put("Model connector name", new FieldDescriptor(updateContent.getName(), false));
             fieldsToValidate.put("Model connector description", new FieldDescriptor(updateContent.getDescription(), false));
-            fieldsToValidate.put("Model connector created_by field", new FieldDescriptor(updateContent.getCreatedBy(), false));
-            exception = validateFields(fieldsToValidate);
+            ActionRequestValidationException fieldException = validateFields(fieldsToValidate);
+            if (fieldException != null) {
+                for (String error : fieldException.validationErrors()) {
+                    exception = addValidationError(error, exception);
+                }
+            }
         }
         return exception;
     }
