@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -192,8 +193,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
                 }, exception -> {
                     // Preserve client errors (4XX) with their detailed messages
-                    if (exception instanceof OpenSearchStatusException) {
-                        OpenSearchStatusException osException = (OpenSearchStatusException) exception;
+                    if (exception instanceof OpenSearchException) {
+                        OpenSearchException osException = (OpenSearchException) exception;
                         if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                             actionListener.onFailure(exception);
                             return;
@@ -303,8 +304,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         storeLongTermMemory(strategy, strategyNameSpace, input, messages, user, facts, memoryConfig, actionListener);
                     }, e -> {
                         // Preserve client errors (4XX) with their detailed messages
-                        if (e instanceof OpenSearchStatusException) {
-                            OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                        if (e instanceof OpenSearchException) {
+                            OpenSearchException osException = (OpenSearchException) e;
                             if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                                 actionListener.onFailure(e);
                                 return;
@@ -369,8 +370,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                 );
                         }, e -> {
                             // Preserve client errors (4XX) with their detailed messages
-                            if (e instanceof OpenSearchStatusException) {
-                                OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                            if (e instanceof OpenSearchException) {
+                                OpenSearchException osException = (OpenSearchException) e;
                                 if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                                     actionListener.onFailure(e);
                                     return;
