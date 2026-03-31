@@ -283,15 +283,6 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
 
         if (!indicesToDelete.isEmpty()) {
             boolean isDeleteAll = deleteMemories.containsAll(EnumSet.allOf(MemoryType.class));
-            if (indicesToDelete.size() != deleteMemories.size()) {
-                log
-                    .warn(
-                        "Some memory indices were not found for container: {}, requested types: {}, found indices: {}",
-                        memoryContainerId,
-                        deleteMemories,
-                        indicesToDelete
-                    );
-            }
             DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(indicesToDelete.toArray(new String[0]));
             memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
                 String event = isDeleteAll ? "ALL_INDICES_DELETED" : "SELECTIVE_INDICES_DELETED";

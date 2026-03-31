@@ -352,20 +352,24 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
     }
 
+    /**
+     * Returns true if long-term memory is disabled, i.e., there is no LLM or no strategies configured.
+     */
+    private boolean isLongTermMemoryDisabled() {
+        return getLlmId() == null || getStrategies() == null || getStrategies().isEmpty();
+    }
+
     public String getIndexName(MemoryType memoryType) {
         if (memoryType == null) {
             return null;
         }
-        // Check if disabled
-        if (memoryType == MemoryType.LONG_TERM
-            && (this.getLlmId() == null || this.getStrategies() == null || this.getStrategies().isEmpty())) {
+        if (memoryType == MemoryType.LONG_TERM && isLongTermMemoryDisabled()) {
             return null;
         }
         if (memoryType == MemoryType.SESSIONS && isDisableSession()) {
             return null;
         }
-        if (memoryType == MemoryType.HISTORY
-            && (isDisableHistory() || getLlmId() == null || getStrategies() == null || getStrategies().isEmpty())) {
+        if (memoryType == MemoryType.HISTORY && (isDisableHistory() || isLongTermMemoryDisabled())) {
             return null;
         }
         return getFinalMemoryIndexPrefix() + memoryType.getIndexSuffix();
