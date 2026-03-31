@@ -740,8 +740,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         }
 
         // Don't track any 4xx client errors (user/configuration issues)
-        if (e instanceof OpenSearchStatusException) {
-            RestStatus status = ((OpenSearchStatusException) e).status();
+        if (e instanceof OpenSearchException) {
+            RestStatus status = ((OpenSearchException) e).status();
             if (status.getStatus() >= 400 && status.getStatus() < 500) {
                 return false;
             }
