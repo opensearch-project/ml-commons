@@ -948,7 +948,8 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_SERVICE_PROVIDER, serviceProvider)
             .addTag(TAG_ALGORITHM, algorithm.name())
             .addTag(TAG_MODEL, model)
-            .addTag(TAG_TYPE, modelType);
+            .addTag(TAG_TYPE, modelType)
+            .addTag(CREATED_BY_FIELD, createdBy != null ? createdBy : TAG_VALUE_UNKNOWN);
 
         if ((serviceProvider.equals(TAG_VALUE_UNKNOWN) || model.equals(TAG_VALUE_UNKNOWN)) && !url.equals(TAG_VALUE_UNKNOWN)) {
             tags = tags.addTag(TAG_URL, url);
@@ -1121,7 +1122,8 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_SERVICE_PROVIDER, nameParts[0])
             .addTag(TAG_ALGORITHM, this.algorithm.name()) // nameParts[1] is not used
             .addTag(TAG_MODEL, nameParts[2])
-            .addTag(TAG_TYPE, modelType);
+            .addTag(TAG_TYPE, modelType)
+            .addTag(CREATED_BY_FIELD, createdBy != null ? createdBy : TAG_VALUE_UNKNOWN);
 
         if (this.modelFormat != null) {
             tags = tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
@@ -1152,7 +1154,8 @@ public class MLModel implements ToXContentObject {
             .create()
             .addTag(TAG_DEPLOYMENT, TAG_CUSTOM_DEPLOYMENT_VALUE)
             .addTag(TAG_ALGORITHM, this.algorithm.name())
-            .addTag(TAG_TYPE, modelType);
+            .addTag(TAG_TYPE, modelType)
+            .addTag(CREATED_BY_FIELD, createdBy != null ? createdBy : TAG_VALUE_UNKNOWN);
 
         if (this.modelFormat != null) {
             tags = tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());

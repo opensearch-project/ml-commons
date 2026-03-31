@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -502,6 +503,72 @@ public class MLModelTests {
         streamInput.setVersion(CommonValue.VERSION_3_7_0);
         MLModel deserialized = new MLModel(streamInput);
         assertEquals("flow-framework", deserialized.getCreatedBy());
+    }
+
+    @Test
+    public void testGetTags_RemoteModel_CreatedBy() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .actions(
+                List
+                    .of(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .build()
+                    )
+            )
+            .build();
+        MLModel withCreatedBy = MLModel.builder().algorithm(FunctionName.REMOTE).createdBy("flow-framework").build();
+        assertEquals("flow-framework", withCreatedBy.getTags(connector).getTagsMap().get("created_by"));
+
+        MLModel withoutCreatedBy = MLModel.builder().algorithm(FunctionName.REMOTE).build();
+        assertEquals("unknown", withoutCreatedBy.getTags(connector).getTagsMap().get("created_by"));
+    }
+
+    @Test
+    public void testGetTags_PreTrainedModel_CreatedBy() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
+        MLModel withCreatedBy = MLModel
+            .builder()
+            .name("huggingface/sentence-transformers/bert-base-uncased")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .createdBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", withCreatedBy.getTags().getTagsMap().get("created_by"));
+
+        MLModel withoutCreatedBy = MLModel
+            .builder()
+            .name("huggingface/sentence-transformers/bert-base-uncased")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .build();
+        assertEquals("unknown", withoutCreatedBy.getTags().getTagsMap().get("created_by"));
+    }
+
+    @Test
+    public void testGetTags_CustomModel_CreatedBy() {
+        MLModel withCreatedBy = MLModel
+            .builder()
+            .name("my-custom-model")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .createdBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", withCreatedBy.getTags().getTagsMap().get("created_by"));
+
+        MLModel withoutCreatedBy = MLModel.builder().name("my-custom-model").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        assertEquals("unknown", withoutCreatedBy.getTags().getTagsMap().get("created_by"));
     }
 
     @Test
