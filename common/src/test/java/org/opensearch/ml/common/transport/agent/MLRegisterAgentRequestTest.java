@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.agent;
 
 import static org.junit.Assert.*;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -362,6 +363,22 @@ public class MLRegisterAgentRequestTest {
         ActionRequestValidationException exception = request.validate();
 
         assertNull(exception);
+    }
+
+    @Test
+    public void validate_ValidCreatedBy() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type("flow").createdBy("flow-framework").build();
+        MLRegisterAgentRequest request = new MLRegisterAgentRequest(agent);
+        assertNull(request.validate());
+    }
+
+    @Test
+    public void validate_InvalidCreatedBy() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type("flow").createdBy("<script>bad</script>").build();
+        MLRegisterAgentRequest request = new MLRegisterAgentRequest(agent);
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("Agent created_by field " + SAFE_INPUT_DESCRIPTION));
     }
 
     /**

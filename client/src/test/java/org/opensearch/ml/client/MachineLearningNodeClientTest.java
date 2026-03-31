@@ -962,6 +962,28 @@ public class MachineLearningNodeClientTest {
     }
 
     @Test
+    public void register_withCreatedBy() {
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(new MLRegisterModelResponse("taskId", MLTaskState.CREATED.name()));
+            return null;
+        }).when(client).execute(eq(MLRegisterModelAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLRegisterModelRequest> requestCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
+        MLRegisterModelInput mlInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .modelName("testModel")
+            .version("1")
+            .createdBy("flow-framework")
+            .build();
+        machineLearningNodeClient.register(mlInput, registerModelActionListener);
+
+        verify(client).execute(eq(MLRegisterModelAction.INSTANCE), requestCaptor.capture(), any());
+        assertEquals("flow-framework", requestCaptor.getValue().getRegisterModelInput().getCreatedBy());
+    }
+
+    @Test
     public void deploy() {
         String taskId = "taskId";
         String status = MLTaskState.CREATED.name();
@@ -1049,6 +1071,29 @@ public class MachineLearningNodeClientTest {
         verify(createConnectorActionListener).onResponse(argumentCaptor.capture());
         assertEquals(connectorId, (argumentCaptor.getValue()).getConnectorId());
 
+    }
+
+    @Test
+    public void createConnector_withCreatedBy() {
+        doAnswer(invocation -> {
+            ActionListener<MLCreateConnectorResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(new MLCreateConnectorResponse("connectorId"));
+            return null;
+        }).when(client).execute(eq(MLCreateConnectorAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLCreateConnectorRequest> requestCaptor = ArgumentCaptor.forClass(MLCreateConnectorRequest.class);
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("key", "value"))
+            .createdBy("flow-framework")
+            .build();
+        machineLearningNodeClient.createConnector(input, createConnectorActionListener);
+
+        verify(client).execute(eq(MLCreateConnectorAction.INSTANCE), requestCaptor.capture(), any());
+        assertEquals("flow-framework", requestCaptor.getValue().getMlCreateConnectorInput().getCreatedBy());
     }
 
     @Test
@@ -1171,6 +1216,23 @@ public class MachineLearningNodeClientTest {
         verify(client).execute(eq(MLRegisterAgentAction.INSTANCE), isA(MLRegisterAgentRequest.class), any());
         verify(registerAgentResponseActionListener).onResponse(argumentCaptor.capture());
         assertEquals(agentId, (argumentCaptor.getValue()).getAgentId());
+    }
+
+    @Test
+    public void registerAgent_withCreatedBy() {
+        String agentId = "agentId";
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterAgentResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(new MLRegisterAgentResponse(agentId));
+            return null;
+        }).when(client).execute(eq(MLRegisterAgentAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLRegisterAgentRequest> requestCaptor = ArgumentCaptor.forClass(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent.builder().name("Agent name").type(MLAgentType.FLOW.name()).createdBy("flow-framework").build();
+        machineLearningNodeClient.registerAgent(mlAgent, registerAgentResponseActionListener);
+
+        verify(client).execute(eq(MLRegisterAgentAction.INSTANCE), requestCaptor.capture(), any());
+        assertEquals("flow-framework", requestCaptor.getValue().getMlAgent().getCreatedBy());
     }
 
     @Test
