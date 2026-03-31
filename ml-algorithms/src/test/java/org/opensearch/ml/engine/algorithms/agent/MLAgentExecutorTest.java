@@ -1829,6 +1829,75 @@ public class MLAgentExecutorTest {
         return new AgentMLInput("test-agent-id", null, FunctionName.AGENT, agentInput, dataset, false);
     }
 
+    /**
+     * Covers the false branch of condition 1: agentType.isV2() == false.
+     * A non-V2 agent (CONVERSATIONAL) with no memory spec reaches executeAgent via the
+     * line-484 path (null memory, null inputMessages). The V2 condition fails immediately
+     * and execution falls through to the normal runner path.
+     */
+    @Test
+    public void test_ExecuteAgent_NonV2Agent_DoesNotRouteToExecuteV2Agent() throws IOException {
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(false);
+
+        MLAgent convAgent = MLAgent
+            .builder()
+            .name("test_conv_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            // no memory spec → executeAgent called with null memory and null inputMessages
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        mockSdkClientWithAgent(serializeAgentToGetResponseJson(convAgent));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "What is ML?");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test-agent-id", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, listener, channel);
+
+        // agentType.isV2() = false → V2 execution path must not be entered
+        verify(memory, never()).getStructuredMessages(any());
+        verify(listener, timeout(5000)).onFailure(any());
+    }
+
+    /**
+     * Covers the false branch of condition 2: inputMessages == null (with agentType.isV2() true).
+     * A V2 agent with no memory spec reaches executeAgent via the line-484 path where
+     * inputMessages is hardcoded null. The condition fails at the second && operand.
+     */
+    @Test
+    public void test_ExecuteAgent_V2Agent_WithNullInputMessages_DoesNotRouteToExecuteV2Agent() throws IOException {
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(false);
+
+        MLAgent v2Agent = MLAgent
+            .builder()
+            .name("test_v2_no_memory")
+            .type(MLAgentType.CONVERSATIONAL_V2.name())
+            // no memory spec → executeAgent called with null memory and null inputMessages
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        mockSdkClientWithAgent(serializeAgentToGetResponseJson(v2Agent));
+
+        // Old-style dataset input (no AgentInput) → inputMessages stays null inside executeAgent
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "What is ML?");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test-agent-id", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, listener, channel);
+
+        // agentType.isV2() = true, but inputMessages = null → V2 execution path must not be entered
+        verify(memory, never()).getStructuredMessages(any());
+        verify(listener, timeout(5000)).onFailure(any());
+    }
+
     @Test
     public void test_ExecuteAgent_V2Agent_WithMcpConnector_McpDisabled_FailsWithMcpError() throws IOException {
         when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
