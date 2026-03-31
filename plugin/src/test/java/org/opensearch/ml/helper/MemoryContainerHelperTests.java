@@ -14,8 +14,10 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -58,6 +60,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -221,6 +224,17 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
     }
 
     public void testGetMemoryIndexName() {
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        strategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("test-id")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("test-namespace"))
+                    .build()
+            );
         MemoryConfiguration configuration = MemoryConfiguration
             .builder()
             .indexPrefix("prefix")
@@ -228,17 +242,17 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .dimension(4)
             .disableSession(false)
+            .llmId("test-llm")
+            .strategies(strategies)
             .build();
 
         MLMemoryContainer container = createContainerBuilder().configuration(configuration).build();
         assertNotNull(helper.getMemoryIndexName(container, MemoryType.LONG_TERM));
         assertNull(helper.getMemoryIndexName(container, null));
 
-        // Test with null configuration - returns default index name
+        // Test with null configuration - returns null (no index name when config is missing)
         MLMemoryContainer containerNullConfig = createContainerBuilder().configuration(null).build();
-        // When configuration is null, a default index name is used
-        assertNotNull(helper.getMemoryIndexName(containerNullConfig, MemoryType.LONG_TERM));
-        assertEquals(".plugins-ml-am-default-memory-long-term", helper.getMemoryIndexName(containerNullConfig, MemoryType.LONG_TERM));
+        assertNull(helper.getMemoryIndexName(containerNullConfig, MemoryType.LONG_TERM));
 
         // Test all memory types - by default all are enabled
         assertNotNull(helper.getMemoryIndexName(container, MemoryType.SESSIONS));

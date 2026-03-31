@@ -28,6 +28,22 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration.EmbeddingCon
  */
 public class MemoryConfigurationTests {
 
+    /** Creates a config with long-term memory enabled (llmId + strategies required for LONG_TERM/HISTORY index names). */
+    private static MemoryConfiguration configWithLongTermMemory(MemoryConfiguration.MemoryConfigurationBuilder builder) {
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        strategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("test-id")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("test-namespace"))
+                    .build()
+            );
+        return (builder != null ? builder : MemoryConfiguration.builder()).llmId("test-llm").strategies(strategies).build();
+    }
+
     // ==================== validateStrategiesRequireModels Tests ====================
 
     @Test
@@ -687,7 +703,7 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testGetIndexName_LongTerm() {
-        MemoryConfiguration config = MemoryConfiguration.builder().build();
+        MemoryConfiguration config = configWithLongTermMemory(null);
 
         String result = config.getIndexName(MemoryType.LONG_TERM);
         assertNotNull(result);
@@ -696,7 +712,7 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testGetIndexName_HistoryEnabled() {
-        MemoryConfiguration config = MemoryConfiguration.builder().disableHistory(false).build();
+        MemoryConfiguration config = configWithLongTermMemory(MemoryConfiguration.builder().disableHistory(false));
 
         String result = config.getIndexName(MemoryType.HISTORY);
         assertNotNull(result);
@@ -867,7 +883,7 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testGetLongMemoryIndexName_Default() {
-        MemoryConfiguration config = MemoryConfiguration.builder().build();
+        MemoryConfiguration config = configWithLongTermMemory(null);
 
         String result = config.getLongMemoryIndexName();
         assertNotNull(result);
@@ -876,7 +892,7 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testGetLongMemoryIndexName_WithCustomPrefix() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("long-term-prefix").build();
+        MemoryConfiguration config = configWithLongTermMemory(MemoryConfiguration.builder().indexPrefix("long-term-prefix"));
 
         String result = config.getLongMemoryIndexName();
         assertNotNull(result);
@@ -886,7 +902,7 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testGetLongMemoryIndexName_WithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
+        MemoryConfiguration config = configWithLongTermMemory(MemoryConfiguration.builder().useSystemIndex(true));
 
         String result = config.getLongMemoryIndexName();
         assertNotNull(result);
@@ -898,7 +914,7 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testGetLongMemoryHistoryIndexName_Enabled() {
-        MemoryConfiguration config = MemoryConfiguration.builder().disableHistory(false).build();
+        MemoryConfiguration config = configWithLongTermMemory(MemoryConfiguration.builder().disableHistory(false));
 
         String result = config.getLongMemoryHistoryIndexName();
         assertNotNull(result);
@@ -915,7 +931,9 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testGetLongMemoryHistoryIndexName_WithCustomPrefix() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("history-prefix").disableHistory(false).build();
+        MemoryConfiguration config = configWithLongTermMemory(
+            MemoryConfiguration.builder().indexPrefix("history-prefix").disableHistory(false)
+        );
 
         String result = config.getLongMemoryHistoryIndexName();
         assertNotNull(result);
