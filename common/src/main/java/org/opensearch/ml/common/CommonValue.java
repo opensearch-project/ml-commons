@@ -23,7 +23,11 @@ public class CommonValue {
 
     /** The field name containing the tenant id */
     public static final String TENANT_ID_FIELD = "tenant_id";
-    public static final String AGENT_ID_FIELD = "agent_id";
+    /**
+     * Internal parameter key for propagating the executing agent's ID through the parameter map
+     * for logging. Uses a distinct key to avoid colliding with the "agent_id" tool parameter
+     * used by AgentTool to specify which sub-agent to invoke.
+     */
     public static final String AGENT_ID_LOG_FIELD = "agent_id_log";
 
     public static final String MASTER_KEY = "master_key";
