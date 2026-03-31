@@ -674,4 +674,155 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
         // Act
         provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
     }
+
+    // ==================== Tests for extractMessageFromResponse ====================
+
+    @Test
+    public void testExtractMessageFromResponse_ValidGeminiResponse() {
+        // Arrange
+        Map<String, Object> part = new HashMap<>();
+        part.put("text", "Hello world");
+
+        List<Map<String, Object>> parts = new ArrayList<>();
+        parts.add(part);
+
+        Map<String, Object> content = new HashMap<>();
+        content.put("parts", parts);
+        content.put("role", "model");
+
+        Map<String, Object> candidate = new HashMap<>();
+        candidate.put("content", content);
+
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        candidates.add(candidate);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("candidates", candidates);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.contains("\"parts\""));
+        assertTrue(result.contains("\"role\":\"model\""));
+        assertTrue(result.contains("Hello world"));
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_NullResponseData() {
+        // Act
+        String result = provider.extractMessageFromResponse(null);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_MissingCandidates() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_EmptyCandidates() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("candidates", new ArrayList<>());
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_CandidatesNotList() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("candidates", "not a list");
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_FirstCandidateNotMap() {
+        // Arrange
+        List<Object> candidates = new ArrayList<>();
+        candidates.add("not a map");
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("candidates", candidates);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_MissingContent() {
+        // Arrange
+        Map<String, Object> candidate = new HashMap<>();
+        candidate.put("index", 0);
+
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        candidates.add(candidate);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("candidates", candidates);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_WithMultipleParts() {
+        // Arrange
+        Map<String, Object> textPart = new HashMap<>();
+        textPart.put("text", "First part");
+
+        Map<String, Object> textPart2 = new HashMap<>();
+        textPart2.put("text", "Second part");
+
+        List<Map<String, Object>> parts = new ArrayList<>();
+        parts.add(textPart);
+        parts.add(textPart2);
+
+        Map<String, Object> content = new HashMap<>();
+        content.put("parts", parts);
+        content.put("role", "model");
+
+        Map<String, Object> candidate = new HashMap<>();
+        candidate.put("content", content);
+
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        candidates.add(candidate);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("candidates", candidates);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.contains("First part"));
+        assertTrue(result.contains("Second part"));
+    }
 }

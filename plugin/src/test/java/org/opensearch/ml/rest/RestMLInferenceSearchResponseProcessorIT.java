@@ -113,8 +113,8 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "}";
 
     private final String bedrockClaudeModelConnectorEntity = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
-        + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
+        + "  \"name\": \"Bedrock Connector: claude haiku 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude haiku 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"client_config\": {\n"
@@ -126,7 +126,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
         + "    \"model\": \""
-        + "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        + "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         + "\",\n"
         + "    \"system_prompt\": \"You are a helpful assistant.\",\n"
         + "\"response_filter\": \"$.output.message.content[0].text\""
@@ -154,9 +154,9 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
         + ".amazonaws.com/model/"
-        + "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        + "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         + "/converse\",\n"
-        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.prompt}\\\"}]}] , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
+        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.prompt}\\\"}]}] , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
