@@ -563,6 +563,93 @@ public class MLCreateConnectorInputTests {
         assertEquals("https://test.com", connector.getUrl());
     }
 
+    // ---- created_by tests ----
+
+    @Test
+    public void builder_WithCreatedBy() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .createdBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", input.getCreatedBy());
+    }
+
+    @Test
+    public void builder_WithoutCreatedBy_DefaultsToNull() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .build();
+        assertNull(input.getCreatedBy());
+    }
+
+    @Test
+    public void toXContent_WithCreatedBy() throws Exception {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .createdBy("flow-framework")
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"created_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void parse_WithCreatedBy() throws Exception {
+        String json =
+            "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"key\":\"val\"},\"created_by\":\"flow-framework\"}";
+        testParseFromJsonString(json, parsedInput -> assertEquals("flow-framework", parsedInput.getCreatedBy()));
+    }
+
+    @Test
+    public void readInputStream_WithCreatedBy() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .createdBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertEquals("flow-framework", deserialized.getCreatedBy());
+    }
+
+    @Test
+    public void readInputStream_CreatedBy_OldVersion_IsNull() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .createdBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_6_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_6_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNull(deserialized.getCreatedBy());
+    }
+
     // Helper method to create XContentParser from a JSON string
     private XContentParser createParser(String jsonString) throws IOException {
         XContentParser parser = XContentType.JSON

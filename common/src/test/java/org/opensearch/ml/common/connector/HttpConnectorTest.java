@@ -683,4 +683,73 @@ public class HttpConnectorTest {
         Assert.assertEquals("https://test2.com", foundByName.get().getUrl());
     }
 
+    // ---- created_by tests ----
+
+    @Test
+    public void builder_WithCreatedBy() {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").createdBy("flow-framework").build();
+        Assert.assertEquals("flow-framework", connector.getCreatedBy());
+    }
+
+    @Test
+    public void builder_WithoutCreatedBy_DefaultsToNull() {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").build();
+        Assert.assertNull(connector.getCreatedBy());
+    }
+
+    @Test
+    public void toXContent_WithCreatedBy() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").createdBy("flow-framework").build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        Assert.assertTrue(TestHelper.xContentBuilderToString(builder).contains("\"created_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void toXContent_WithoutCreatedBy_OmitsField() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        Assert.assertFalse(TestHelper.xContentBuilderToString(builder).contains("created_by"));
+    }
+
+    @Test
+    public void parse_WithCreatedBy() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"protocol\":\"http\",\"created_by\":\"flow-framework\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        HttpConnector connector = new HttpConnector("http", parser);
+        Assert.assertEquals("flow-framework", connector.getCreatedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithCreatedBy() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").createdBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_7_0);
+        connector.writeTo(output);
+        org.opensearch.core.common.io.stream.StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_7_0);
+        HttpConnector deserialized = new HttpConnector(streamInput);
+        Assert.assertEquals("flow-framework", deserialized.getCreatedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_CreatedBy_OldVersion_IsNull() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").createdBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_6_0);
+        connector.writeTo(output);
+        org.opensearch.core.common.io.stream.StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_6_0);
+        HttpConnector deserialized = new HttpConnector(streamInput);
+        Assert.assertNull(deserialized.getCreatedBy());
+    }
+
 }

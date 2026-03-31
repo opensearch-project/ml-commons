@@ -76,6 +76,8 @@ public abstract class AbstractConnector implements Connector {
     protected ConnectorClientConfig connectorClientConfig;
     @Setter
     protected String tenantId;
+    @Setter
+    protected String createdBy;
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {

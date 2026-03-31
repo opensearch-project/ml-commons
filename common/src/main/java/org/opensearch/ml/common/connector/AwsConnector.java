@@ -42,7 +42,8 @@ public class AwsConnector extends HttpConnector {
         AccessMode accessMode,
         User owner,
         ConnectorClientConfig connectorClientConfig,
-        String tenantId
+        String tenantId,
+        String createdBy
     ) {
         super(
             name,
@@ -56,7 +57,8 @@ public class AwsConnector extends HttpConnector {
             accessMode,
             owner,
             connectorClientConfig,
-            tenantId
+            tenantId,
+            createdBy
         );
         validate();
     }
