@@ -1651,4 +1651,89 @@ public class MLChatAgentRunnerTest {
         verify(conversationIndexMemory).saveStructuredMessages(any(), any());
     }
 
+    @Test
+    public void testUnsupportedToolFormatFailureMessageIntegration() {
+        // Agent has FIRST_TOOL, but LLM requests "unknownTool" which is not in the tools map.
+        // This exercises the else-branch (lines 727-731) where formatFailureMessage is called.
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+
+        Mockito.reset(client);
+        Mockito
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thinking", "action", "unknownTool")))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "done", "final_answer", "The answer")))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testToolExecutionFailureFormatErrorMessageIntegration() {
+        // Agent has FIRST_TOOL which fails, exercising the onFailure handler (lines 957-984)
+        // where formatFailureMessage wraps the error message before feeding it back to the LLM.
+        when(firstTool.validate(any())).thenReturn(true);
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+
+        Mockito
+            .doAnswer(generateToolFailure(new RuntimeException("execution error")))
+            .when(firstTool)
+            .run(Mockito.anyMap(), toolListenerCaptor.capture());
+
+        Mockito.reset(client);
+        Mockito
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "using tool", "action", FIRST_TOOL)))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "done", "final_answer", "The answer")))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        verify(firstTool).run(any(), any());
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testFormatFailureMessage_AsSubAgent() {
+        Map<String, String> params = new HashMap<>();
+        params.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "true");
+
+        String result = MLChatAgentRunner.formatFailureMessage(params, "Tool failed");
+        assertEquals(PromptTemplate.SUB_AGENT_FAILURE_PREFIX + "Tool failed", result);
+    }
+
+    @Test
+    public void testFormatFailureMessage_AsStandaloneAgent() {
+        Map<String, String> params = new HashMap<>();
+        params.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "false");
+
+        String result = MLChatAgentRunner.formatFailureMessage(params, "Tool failed");
+        assertEquals("Tool failed", result);
+    }
+
+    @Test
+    public void testFormatFailureMessage_DefaultBehavior() {
+        Map<String, String> params = new HashMap<>();
+        // IS_SUB_AGENT_FIELD not set, should default to false
+
+        String result = MLChatAgentRunner.formatFailureMessage(params, "Tool failed");
+        assertEquals("Tool failed", result);
+    }
+
+    @Test
+    public void testFormatFailureMessage_NullFailureMessage() {
+        Map<String, String> params = new HashMap<>();
+        params.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "true");
+
+        String result = MLChatAgentRunner.formatFailureMessage(params, null);
+        assertEquals(PromptTemplate.SUB_AGENT_FAILURE_PREFIX + "Unknown error", result);
+    }
+
 }

@@ -59,6 +59,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -724,7 +725,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }
 
                     } else {
-                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                        String res = formatFailureMessage(
+                            tmpParameters,
+                            String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action)
+                        );
                         StringSubstitutor substitutor = new StringSubstitutor(
                             Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
                             "${parameters.",
@@ -967,13 +971,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                     nextStepListener
                         .onResponse(
-                            String
-                                .format(
-                                    Locale.ROOT,
-                                    "Failed to run the tool %s with the error message %s.",
-                                    finalAction,
-                                    e.getMessage().replaceAll("\\n", "\n")
-                                )
+                            formatFailureMessage(
+                                tmpParameters,
+                                String
+                                    .format(
+                                        Locale.ROOT,
+                                        "Failed to run the tool %s with the error message %s.",
+                                        finalAction,
+                                        e.getMessage().replaceAll("\\n", "\n")
+                                    )
+                            )
                         );
                 });
                 // Log tool invocation
@@ -1009,10 +1016,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         e
                     );
                 nextStepListener
-                    .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
+                    .onResponse(
+                        formatFailureMessage(
+                            tmpParameters,
+                            String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage())
+                        )
+                    );
             }
         } else { // TODO: add failure to interaction to let LLM regenerate ?
-            String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
+            String res = formatFailureMessage(
+                tmpParameters,
+                String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput)
+            );
             nextStepListener.onResponse(res);
         }
     }
@@ -1266,6 +1281,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
             cotModelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
         }
         return cotModelTensors;
+    }
+
+    /**
+     * Formats a failure message. If this agent is running as a sub-agent (e.g., under PER agent),
+     * adds a standardized prefix so the parent agent can detect and handle failures appropriately.
+     *
+     * @param parameters Agent parameters containing IS_SUB_AGENT_FIELD
+     * @param failureMessage The failure message (can be null)
+     * @return Formatted failure message with prefix if sub-agent, otherwise original message
+     */
+    @VisibleForTesting
+    static String formatFailureMessage(Map<String, String> parameters, String failureMessage) {
+        boolean isSubAgent = Boolean.parseBoolean(parameters.getOrDefault(AgentTokenTracker.IS_SUB_AGENT_FIELD, "false"));
+
+        if (isSubAgent) {
+            return PromptTemplate.SUB_AGENT_FAILURE_PREFIX + Objects.toString(failureMessage, "Unknown error");
+        }
+
+        return failureMessage;
     }
 
     private static String constructLLMPrompt(Map<String, Tool> tools, Map<String, String> tmpParameters) {

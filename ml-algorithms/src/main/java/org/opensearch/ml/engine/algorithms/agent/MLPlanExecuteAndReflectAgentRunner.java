@@ -673,6 +673,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         );
                     }
 
+                    // Process step result to detect failures and enhance with context for planner
+                    String rawStepResult = results.get(STEP_RESULT_FIELD);
+                    String processedStepResult = enhanceStepResultWithFailureContext(rawStepResult, stepToExecute);
+
                     completedSteps.add(String.format("\n<step-%d>\n%s\n</step-%d>\n", stepsExecuted + 1, stepToExecute, stepsExecuted + 1));
                     completedSteps
                         .add(
@@ -680,7 +684,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                 .format(
                                     "\n<step-%d-result>\n%s\n</step-%d-result>\n",
                                     stepsExecuted + 1,
-                                    results.get(STEP_RESULT_FIELD),
+                                    processedStepResult,
                                     stepsExecuted + 1
                                 )
                         );
@@ -689,7 +693,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         memory,
                         memory != null ? memory.getType() : null,
                         stepToExecute,
-                        results.get(STEP_RESULT_FIELD),
+                        processedStepResult,
                         conversationId,
                         false,
                         parentInteractionId,
@@ -851,6 +855,46 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     @VisibleForTesting
     void addSteps(List<String> steps, Map<String, String> allParams, String field) {
         allParams.put(field, String.join(", ", steps));
+    }
+
+    /**
+     * Detects if a step result indicates a failure from the executor agent.
+     *
+     * @param stepResult The result from the executor agent
+     * @return true if the step execution failed, false otherwise
+     */
+    @VisibleForTesting
+    boolean isStepExecutionFailure(String stepResult) {
+        return stepResult != null && stepResult.startsWith(PromptTemplate.SUB_AGENT_FAILURE_PREFIX);
+    }
+
+    /**
+     * Enhances step result with explicit failure context for the planner.
+     * If the step execution failed, wraps it with additional context to help the planner
+     * understand and handle the failure appropriately.
+     *
+     * @param stepResult The result from the executor agent
+     * @param stepDescription The description of the step that was attempted
+     * @return Enhanced result with failure context if failed, otherwise original result
+     */
+    @VisibleForTesting
+    String enhanceStepResultWithFailureContext(String stepResult, String stepDescription) {
+        if (!isStepExecutionFailure(stepResult)) {
+            return stepResult;
+        }
+
+        return String
+            .format(
+                "STEP EXECUTION FAILED: %s\n\n"
+                    + "Step attempted: %s\n\n"
+                    + "IMPORTANT: This step did NOT complete successfully. You should:\n"
+                    + "1. Reformulate this step with different parameters or approach\n"
+                    + "2. Break it down into simpler sub-steps\n"
+                    + "3. Choose an alternative strategy to accomplish the goal\n"
+                    + "4. If this indicates a fundamental blocker, acknowledge it in your final result",
+                stepResult,
+                stepDescription
+            );
     }
 
     @VisibleForTesting
