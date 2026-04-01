@@ -173,6 +173,15 @@ public class ToolUtilsTest {
     }
 
     @Test
+    public void testBuildToolParameters_AgentIdLogDoesNotOverrideAgentId() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+        MLToolSpec toolSpec = MLToolSpec.builder().type("AgentTool").parameters(Map.of("agent_id", "configured-sub-agent-id")).build();
+        Map<String, String> result = ToolUtils.buildToolParameters(parameters, toolSpec, "test_tenant");
+        assertEquals("configured-sub-agent-id", result.get("agent_id"));
+    }
+
+    @Test
     public void testFilterToolOutput_NoFiltering() {
         // Create a simple object
         Map<String, String> originalOutput = Map.of("key1", "value1", "key2", "value2");

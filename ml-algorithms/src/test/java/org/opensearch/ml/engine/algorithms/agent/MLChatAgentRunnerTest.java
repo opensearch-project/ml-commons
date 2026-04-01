@@ -45,6 +45,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -58,8 +59,12 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
@@ -1651,4 +1656,53 @@ public class MLChatAgentRunnerTest {
         verify(conversationIndexMemory).saveStructuredMessages(any(), any());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testChatAgentWithAgentTool() {
+        AgentTool.Factory.getInstance().init(client);
+        Map<String, Tool.Factory> factories = new HashMap<>(toolFactories);
+        factories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
+        MLChatAgentRunner runner = new MLChatAgentRunner(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            factories,
+            memoryMap,
+            null,
+            null
+        );
+
+        MLToolSpec agentToolSpec = MLToolSpec.builder().type(AgentTool.TYPE).parameters(Map.of("agent_id", "sub-agent-id")).build();
+        MLAgent chatAgent = MLAgent
+            .builder()
+            .name("ParentChatAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("MODEL_ID").build())
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(agentToolSpec))
+            .build();
+
+        // AgentTool returns a sub-agent response.
+        ModelTensor subAgentTensor = ModelTensor.builder().name("response").result("Paris").build();
+        ModelTensors subAgentTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(subAgentTensor)).build();
+        ModelTensorOutput subAgentOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(subAgentTensors)).build();
+
+        // LLM calls use MLPredictionTaskRequest; AgentTool calls use MLExecuteTaskRequest.
+        Mockito.reset(client);
+        doAnswer(getLLMAnswer(ImmutableMap.of("action", AgentTool.TYPE, "action_input", "What is the capital of France?")))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("final_answer", "Paris")))
+            .when(client)
+            .execute(any(ActionType.class), isA(MLPredictionTaskRequest.class), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(subAgentOutput).build());
+            return null;
+        }).when(client).execute(any(ActionType.class), isA(MLExecuteTaskRequest.class), any());
+
+        runner.run(chatAgent, new HashMap<>(), agentActionListener, null);
+
+        verify(agentActionListener).onResponse(any());
+        verify(client, Mockito.times(1)).execute(any(ActionType.class), isA(MLExecuteTaskRequest.class), any());
+    }
 }

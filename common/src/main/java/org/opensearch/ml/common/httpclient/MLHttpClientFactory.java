@@ -7,8 +7,6 @@ package org.opensearch.ml.common.httpclient;
 
 import static org.opensearch.secure_sm.AccessController.doPrivileged;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.time.Duration;
 
 import javax.net.ssl.KeyManager;

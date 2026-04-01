@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.time.Instant;
 
 import org.apache.commons.lang3.StringUtils;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -98,6 +99,10 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
                     );
                 return;
             }
+            if (container.getConfiguration().isDisableSession()) {
+                actionListener.onFailure(new OpenSearchStatusException("Session is disabled for this container", RestStatus.BAD_REQUEST));
+                return;
+            }
             createNewSession(input, container, user, tenantId, actionListener);
         }, actionListener::onFailure));
     }
@@ -142,6 +147,14 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
                     MLCreateSessionResponse response = MLCreateSessionResponse.builder().sessionId(sessionId).status("exists").build();
                     actionListener.onResponse(response);
                 } else {
+                    // Preserve client errors (4XX) with their detailed messages
+                    if (e instanceof OpenSearchException) {
+                        OpenSearchException osException = (OpenSearchException) e;
+                        if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                            actionListener.onFailure(e);
+                            return;
+                        }
+                    }
                     log.error("Failed to create session in container {}", input.getMemoryContainerId(), e);
                     actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 }
