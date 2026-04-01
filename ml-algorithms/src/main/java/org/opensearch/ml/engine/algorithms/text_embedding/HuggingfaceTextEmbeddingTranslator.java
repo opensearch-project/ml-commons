@@ -78,9 +78,29 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
     /** {@inheritDoc} */
     @Override
     public float[] processOutput(TranslatorContext ctx, NDList list) {
-        NDArray embeddings = list.get("last_hidden_state");
-        if (embeddings == null) {
-            embeddings = list.get(0);
+        NDArray embeddings;
+
+        // NONE pooling mode uses pre-pooled output directly if available
+        if ("none".equals(pooling)) {
+            // Try to get pre-pooled output (sentence_embedding, pooler_output, etc.)
+            embeddings = list.get("sentence_embedding");
+            if (embeddings == null) {
+                embeddings = list.get("pooler_output");
+            }
+            if (embeddings == null && list.size() > 1) {
+                // Use second output if available
+                embeddings = list.get(1);
+            }
+            if (embeddings == null) {
+                // Fallback to first output
+                embeddings = list.get(0);
+            }
+        } else {
+            // For other pooling modes, use last_hidden_state or first output
+            embeddings = list.get("last_hidden_state");
+            if (embeddings == null) {
+                embeddings = list.get(0);
+            }
         }
         Encoding encoding = (Encoding) ctx.getAttachment("encoding");
         long[] attentionMask = encoding.getAttentionMask();
@@ -101,6 +121,12 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
                 break;
             case "cls":
                 embeddings = embeddings.get(0);
+                break;
+            case "lasttoken":
+                embeddings = lastTokenPool(embeddings, inputAttentionMask);
+                break;
+            case "none":
+                // No pooling - use pre-pooled output as-is
                 break;
             default:
                 throw new AssertionError("Unexpected pooling model: " + pooling);
@@ -144,6 +170,18 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
         NDArray maskSum = inputAttentionMask.sum(AXIS);
         NDArray embeddingSum = embeddings.mul(inputAttentionMask).sum(AXIS);
         return embeddingSum.div(maskSum);
+    }
+
+    private NDArray lastTokenPool(NDArray embeddings, NDArray inputAttentionMask) {
+        // Sum attention mask to get count of real tokens
+        long tokenCount = (long) inputAttentionMask.sum().toFloatArray()[0];
+        // Last token index (0-based)
+        long lastTokenIdx = tokenCount - 1;
+        // Handle edge case
+        if (lastTokenIdx < 0) {
+            lastTokenIdx = 0;
+        }
+        return embeddings.get(lastTokenIdx);
     }
 
     /**
@@ -216,10 +254,11 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
                 && !"max".equals(poolingMode)
                 && !"cls".equals(poolingMode)
                 && !"mean_sqrt_len".equals(poolingMode)
-                && !"weightedmean".equals(poolingMode)) {
+                && !"weightedmean".equals(poolingMode)
+                && !"lasttoken".equals(poolingMode)
+                && !"none".equals(poolingMode)) {
                 throw new IllegalArgumentException(
-                    "Invalid pooling model, must be one of [mean_tokens, max_tokens,"
-                        + " cls_token, mean_sqrt_len_tokens, weightedmean_tokens]."
+                    "Invalid pooling model, must be one of [mean, max, cls, mean_sqrt_len, weightedmean, lasttoken, none]."
                 );
             }
             this.pooling = poolingMode;

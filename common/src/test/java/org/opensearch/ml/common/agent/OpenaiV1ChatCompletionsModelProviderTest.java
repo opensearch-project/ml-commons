@@ -1182,4 +1182,151 @@ public class OpenaiV1ChatCompletionsModelProviderTest {
         assertNotNull(result);
         assertEquals("assistant", result.getRole());
     }
+
+    // ==================== Tests for extractMessageFromResponse ====================
+
+    @Test
+    public void testExtractMessageFromResponse_ValidOpenAIResponse() {
+        // Arrange
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", "assistant");
+        message.put("content", "Hello world");
+
+        Map<String, Object> choice = new HashMap<>();
+        choice.put("message", message);
+        choice.put("index", 0);
+
+        List<Map<String, Object>> choices = new ArrayList<>();
+        choices.add(choice);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("choices", choices);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.contains("\"role\":\"assistant\""));
+        assertTrue(result.contains("\"content\":\"Hello world\""));
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_NullResponseData() {
+        // Act
+        String result = provider.extractMessageFromResponse(null);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_MissingChoices() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_EmptyChoices() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("choices", new ArrayList<>());
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_ChoicesNotList() {
+        // Arrange
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("choices", "not a list");
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_FirstChoiceNotMap() {
+        // Arrange
+        List<Object> choices = new ArrayList<>();
+        choices.add("not a map");
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("choices", choices);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_MissingMessage() {
+        // Arrange
+        Map<String, Object> choice = new HashMap<>();
+        choice.put("index", 0);
+
+        List<Map<String, Object>> choices = new ArrayList<>();
+        choices.add(choice);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("choices", choices);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void testExtractMessageFromResponse_WithToolCalls() {
+        // Arrange
+        List<Map<String, Object>> toolCalls = new ArrayList<>();
+        Map<String, Object> toolCall = new HashMap<>();
+        toolCall.put("id", "call_123");
+        toolCall.put("type", "function");
+        Map<String, String> function = new HashMap<>();
+        function.put("name", "get_weather");
+        function.put("arguments", "{\"location\":\"Seattle\"}");
+        toolCall.put("function", function);
+        toolCalls.add(toolCall);
+
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", "assistant");
+        message.put("content", "Let me check the weather");
+        message.put("tool_calls", toolCalls);
+
+        Map<String, Object> choice = new HashMap<>();
+        choice.put("message", message);
+
+        List<Map<String, Object>> choices = new ArrayList<>();
+        choices.add(choice);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("choices", choices);
+
+        // Act
+        String result = provider.extractMessageFromResponse(responseData);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.contains("\"role\":\"assistant\""));
+        assertTrue(result.contains("tool_calls"));
+        assertTrue(result.contains("get_weather"));
+    }
 }

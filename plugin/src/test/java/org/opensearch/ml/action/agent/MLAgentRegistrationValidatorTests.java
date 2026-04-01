@@ -410,4 +410,310 @@ public class MLAgentRegistrationValidatorTests extends TestCase {
             assertEquals("Invalid context management configuration", e.getMessage());
         }
     }
+
+    // ===== V2 Agent Memory Validation Tests =====
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithAgenticMemory() throws InterruptedException {
+        org.opensearch.ml.common.agent.MLMemorySpec memorySpec = org.opensearch.ml.common.agent.MLMemorySpec
+            .builder()
+            .type("agentic_memory")
+            .build();
+
+        MLAgent agent = MLAgent.builder().name("test_v2_agent").type("conversational_v2").memory(memorySpec).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithRemoteAgenticMemory() throws InterruptedException {
+        org.opensearch.ml.common.agent.MLMemorySpec memorySpec = org.opensearch.ml.common.agent.MLMemorySpec
+            .builder()
+            .type("remote_agentic_memory")
+            .build();
+
+        MLAgent agent = MLAgent.builder().name("test_v2_agent").type("conversational_v2").memory(memorySpec).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithConversationIndex() throws InterruptedException {
+        org.opensearch.ml.common.agent.MLMemorySpec memorySpec = org.opensearch.ml.common.agent.MLMemorySpec
+            .builder()
+            .type("conversation_index")
+            .build();
+
+        MLAgent agent = MLAgent.builder().name("test_v2_agent").type("conversational_v2").memory(memorySpec).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) are not compatible with conversation_index memory"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithoutMemory() throws InterruptedException {
+        MLAgent agent = MLAgent.builder().name("test_v2_agent").type("conversational_v2").build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) require memory configuration"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithContextManagement() throws InterruptedException {
+        org.opensearch.ml.common.agent.MLMemorySpec memorySpec = org.opensearch.ml.common.agent.MLMemorySpec
+            .builder()
+            .type("agentic_memory")
+            .build();
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_v2_agent")
+            .type("conversational_v2")
+            .memory(memorySpec)
+            .contextManagementName("some_template")
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) do not support context management"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V2Agent_WithInlineContextManagement() throws InterruptedException {
+        org.opensearch.ml.common.agent.MLMemorySpec memorySpec = org.opensearch.ml.common.agent.MLMemorySpec
+            .builder()
+            .type("agentic_memory")
+            .build();
+
+        Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
+        hooks.put("POST_TOOL", List.of(new ContextManagerConfig("ToolsOutputTruncateManager", null, null)));
+        ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("inline_template").hooks(hooks).build();
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_v2_agent")
+            .type("conversational_v2")
+            .memory(memorySpec)
+            .contextManagement(contextManagement)
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertNull(result.get());
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("V2 agents (CONVERSATIONAL_V2) do not support context management"));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_V1Agent_WithConversationIndex() throws InterruptedException {
+        org.opensearch.ml.common.agent.MLMemorySpec memorySpec = org.opensearch.ml.common.agent.MLMemorySpec
+            .builder()
+            .type("conversation_index")
+            .build();
+
+        MLAgent agent = MLAgent.builder().name("test_v1_agent").type("flow").memory(memorySpec).build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        validator.validateAgentForRegistration(agent, new ActionListener<Boolean>() {
+            @Override
+            public void onResponse(Boolean response) {
+                result.set(response);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                error.set(e);
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(result.get());
+        assertNull(error.get());
+    }
+
+    @Test
+    public void testValidateContextManagementConfiguration_V2AgentWithContextManagementName() {
+        org.opensearch.ml.common.agent.MLMemorySpec memorySpec = org.opensearch.ml.common.agent.MLMemorySpec
+            .builder()
+            .type("agentic_memory")
+            .build();
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_v2_agent")
+            .type("conversational_v2")
+            .memory(memorySpec)
+            .contextManagementName("template_name")
+            .build();
+
+        String result = validator.validateContextManagementConfiguration(agent);
+        assertNotNull(result);
+        assertTrue(result.contains("V2 agents (CONVERSATIONAL_V2) do not support context management"));
+    }
+
+    @Test
+    public void testValidateContextManagementConfiguration_AllValidHookNames() {
+        Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
+        hooks.put("PRE_TOOL", List.of(new ContextManagerConfig("ToolsOutputTruncateManager", null, null)));
+        hooks.put("POST_TOOL", List.of(new ContextManagerConfig("ToolsOutputTruncateManager", null, null)));
+        hooks.put("PRE_LLM", List.of(new ContextManagerConfig("SummarizationManager", null, null)));
+        hooks.put("POST_LLM", List.of(new ContextManagerConfig("SummarizationManager", null, null)));
+        hooks.put("PRE_EXECUTION", List.of(new ContextManagerConfig("MemoryManager", null, null)));
+        hooks.put("POST_EXECUTION", List.of(new ContextManagerConfig("MemoryManager", null, null)));
+        hooks.put("POST_MEMORY", List.of(new ContextManagerConfig("ConversationManager", null, null)));
+
+        ContextManagementTemplate contextManagement = ContextManagementTemplate.builder().name("all_hooks_template").hooks(hooks).build();
+
+        MLAgent agent = MLAgent.builder().name("test_agent").type("flow").contextManagement(contextManagement).build();
+
+        String result = validator.validateContextManagementConfiguration(agent);
+        assertNull(result);
+    }
+
+    @Test
+    public void testValidateContextManagementConfiguration_InvalidContextManagerConfig() {
+        // This test verifies that MLAgent constructor validates context management config
+        // and throws an exception for invalid configurations (null type)
+        Map<String, List<ContextManagerConfig>> hooks = new HashMap<>();
+        // Create invalid config with null type
+        hooks.put("POST_TOOL", List.of(new ContextManagerConfig(null, null, null)));
+
+        ContextManagementTemplate contextManagement = ContextManagementTemplate
+            .builder()
+            .name("invalid_config_template")
+            .hooks(hooks)
+            .build();
+
+        try {
+            MLAgent agent = MLAgent.builder().name("test_agent").type("flow").contextManagement(contextManagement).build();
+            fail("Expected IllegalArgumentException to be thrown");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid context management configuration", e.getMessage());
+        }
+    }
 }

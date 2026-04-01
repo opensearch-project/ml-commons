@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -80,6 +79,8 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         clusterService = mock(ClusterService.class);
         mlModelManager = mock(MLModelManager.class);
         mlAgent = mock(MLAgent.class);
+        // Configure mock agent as V1 agent (flow type) by default
+        when(mlAgent.getType()).thenReturn("conversational");
         restAction = new RestMLExecuteStreamAction(mlModelManager, mlFeatureEnabledSetting, clusterService);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -212,6 +213,7 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
 
         RestMLExecuteStreamAction spyAction = spy(restAction);
         MLAgent mockAgent = mock(MLAgent.class);
+        when(mockAgent.getType()).thenReturn("conversational");
         LLMSpec mockLLM = mock(LLMSpec.class);
         when(mockLLM.getModelId()).thenReturn("valid_model_id");
         when(mockAgent.getLlm()).thenReturn(mockLLM);
@@ -230,6 +232,41 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
                 .build();
 
         assertNotNull(spyAction.prepareRequest(request, client));
+    }
+
+    @Test
+    public void testPrepareRequestV2AgentRejected() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetResponse mockResponse = mock(GetResponse.class);
+            when(mockResponse.isExists()).thenReturn(true);
+            when(mockResponse.getSourceAsString()).thenReturn(
+                    "{\"name\":\"test_agent\",\"type\":\"conversational_v2\"}"
+            );
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "v2_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/v2_agent_id/_execute/stream")
+                .build();
+
+        OpenSearchStatusException exception = assertThrows(
+                OpenSearchStatusException.class,
+                () -> restAction.prepareRequest(request, client)
+        );
+        assertTrue(exception.getMessage().contains("V2 agents"));
+        assertTrue(exception.getMessage().contains("do not support streaming"));
+        assertTrue(exception.getMessage().contains("/_execute"));
+        assertEquals(RestStatus.BAD_REQUEST, exception.status());
     }
 
     @Test

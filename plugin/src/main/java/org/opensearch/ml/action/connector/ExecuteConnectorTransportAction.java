@@ -106,9 +106,11 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                         connectorExecutor.setXContentRegistry(xContentRegistry);
                         connectorExecutor
                             .executeAction(finalConnectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
+                                connectorExecutor.close();
                                 connector.removeCredential();
                                 actionListener.onResponse(taskResponse);
                             }, e -> {
+                                connectorExecutor.close();
                                 connector.removeCredential();
                                 actionListener.onFailure(e);
                             }));

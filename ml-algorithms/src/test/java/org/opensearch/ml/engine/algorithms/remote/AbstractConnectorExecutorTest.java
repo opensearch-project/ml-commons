@@ -188,4 +188,24 @@ public class AbstractConnectorExecutorTest {
         assertEquals(MCP_HEADER_AWS_ACCESS_KEY_ID, headerNameCaptor.getAllValues().get(0));
         assertEquals(MCP_HEADER_OPENSEARCH_URL, headerNameCaptor.getAllValues().get(1));
     }
+
+    @Test
+    public void testClose_closesHttpClient() {
+        // Inject a mock SdkAsyncHttpClient into httpClientRef
+        software.amazon.awssdk.http.async.SdkAsyncHttpClient mockHttpClient = mock(
+            software.amazon.awssdk.http.async.SdkAsyncHttpClient.class
+        );
+        executor.httpClientRef.set(mockHttpClient);
+
+        executor.close();
+
+        verify(mockHttpClient).close();
+        assertNull(executor.httpClientRef.get());
+    }
+
+    @Test
+    public void testClose_whenNoClient_doesNotThrow() {
+        assertNull(executor.httpClientRef.get());
+        executor.close(); // should be a no-op
+    }
 }
