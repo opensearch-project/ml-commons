@@ -873,7 +873,7 @@ public class AgentUtils {
         if (Strings.isNullOrEmpty(overrideDescription)) {
             return toolSpec;
         }
-        return toolSpec.toBuilder().description(overrideDescription).runtimeResources(toolSpec.getRuntimeResources()).build();
+        return toolSpec.toBuilder().description(overrideDescription).build();
     }
 
     private static void getMCPToolSpecsFromConnector(
