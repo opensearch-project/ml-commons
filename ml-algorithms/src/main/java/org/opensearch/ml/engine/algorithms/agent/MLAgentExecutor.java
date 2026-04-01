@@ -7,7 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
@@ -266,7 +266,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         Map<String, String> requestParameters = inputDataSet.getParameters();
 
                                         // Add agentId to parameters for logging in agent runners
-                                        inputDataSet.getParameters().put(AGENT_ID_FIELD, agentId);
+                                        inputDataSet.getParameters().put(AGENT_ID_LOG_FIELD, agentId);
 
                                         mlAgent = applyMemoryContainerOverride(mlAgent, inputDataSet, agentId);
                                         final MLAgent finalMlAgent = mlAgent;
@@ -674,7 +674,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         .error(
                                             "Failed to regenerate for interaction {}. agentId={}, tenantId={}",
                                             regenerateInteractionId,
-                                            inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                                            inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
                                             tenantId,
                                             e
                                         );
@@ -703,7 +703,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             log
                 .error(
                     "Failed to create parent interaction. agentId={}, tenantId={}",
-                    inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                    inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
                     tenantId,
                     ex
                 );
@@ -882,18 +882,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     log
                         .error(
                             "Failed during memory post-processing. agentId={}, tenantId={}",
-                            params.get(AGENT_ID_FIELD),
+                            params.get(AGENT_ID_LOG_FIELD),
                             mlAgent.getTenantId(),
                             ex
                         );
                     listener.onFailure(ex);
                 }
             }, e -> {
-                log.error("Failed to save input messages. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
+                log
+                    .error(
+                        "Failed to save input messages. agentId={}, tenantId={}",
+                        params.get(AGENT_ID_LOG_FIELD),
+                        mlAgent.getTenantId(),
+                        e
+                    );
                 listener.onFailure(e);
             }));
         }, e -> {
-            log.error("Failed to get history. agentId={}, tenantId={}", params.get(AGENT_ID_FIELD), mlAgent.getTenantId(), e);
+            log.error("Failed to get history. agentId={}, tenantId={}", params.get(AGENT_ID_LOG_FIELD), mlAgent.getTenantId(), e);
             listener.onFailure(e);
         }));
     }
@@ -967,7 +973,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(
                     mlTask,
                     mlAgent.getType(),
-                    inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                    inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
                     tenantId,
                     outputs,
                     modelTensors,
@@ -995,7 +1001,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     log
                         .error(
                             "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
-                            inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                            inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
                             tenantId,
                             extractStatusCode(e),
                             e
@@ -1006,7 +1012,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 log
                     .error(
                         "Failed to create task for agent async execution. agentId={}, tenantId={}",
-                        inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                        inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
                         tenantId,
                         e
                     );
@@ -1018,7 +1024,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 outputs,
                 modelTensors,
                 mlAgent.getType(),
-                inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
                 tenantId,
                 parentInteractionId,
                 memory
@@ -1043,7 +1049,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 log
                     .error(
                         "Failed to run agent. agentId={}, tenantId={}, statusCode={}",
-                        inputDataSet.getParameters().get(AGENT_ID_FIELD),
+                        inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD),
                         tenantId,
                         extractStatusCode(e),
                         e
@@ -1073,7 +1079,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         HookRegistry hookRegistry,
         List<Message> inputMessages
     ) {
-        String agentId = inputDataSet.getParameters().get(AGENT_ID_FIELD);
+        String agentId = inputDataSet.getParameters().get(AGENT_ID_LOG_FIELD);
         Map<String, String> params = new HashMap<>(inputDataSet.getParameters());
 
         // Get runner (routes to MLChatAgentRunnerV2Refactored for CONVERSATIONAL_V2)
