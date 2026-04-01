@@ -5,6 +5,7 @@
 
 
 import org.opensearch.gradle.testclusters.OpenSearchCluster
+import org.opensearch.gradle.info.FipsBuildParams
 
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
@@ -198,6 +199,13 @@ def _numNodes = findProperty('numNodes') as Integer ?: 1
 test {
     include '**/*Tests.class'
     systemProperty 'tests.security.manager', 'false'
+    // In FIPS mode, bc-fips is excluded from the plugin bundle to avoid jar hell with OpenSearch core.
+    // Unit tests don't run inside OpenSearch, so we add bc-fips directly to the test classpath.
+    if (FipsBuildParams.isInFipsMode()) {
+        classpath += configurations.detachedConfiguration(
+            dependencies.create("org.bouncycastle:bc-fips:2.1.2")
+        )
+    }
 }
 
 def opensearch_tmp_dir = rootProject.file('build/private/opensearch_tmp').absoluteFile
@@ -275,19 +283,13 @@ integTest {
 
 // Resolve plugin zips
 ext.resolvePluginFile = { pluginId ->
-    return new Callable<RegularFile>() {
-        @Override
-        RegularFile call() throws Exception {
-            return new RegularFile() {
-                @Override
-                File getAsFile() {
-                    return configurations.opensearchPlugin.resolvedConfiguration.resolvedArtifacts
-                            .find { ResolvedArtifact f -> f.name.startsWith(pluginId) }
-                            .file
-                }
-            }
-        }
-    }
+    return { ->
+        layout.file(provider {
+            configurations.opensearchPlugin.resolvedConfiguration.resolvedArtifacts
+                    .find { ResolvedArtifact f -> f.name.startsWith(pluginId) }
+                    .file
+        }).get()
+    } as Callable<RegularFile>
 }
 
 def jobSchedulerFile  = resolvePluginFile("opensearch-job-scheduler")
@@ -297,6 +299,47 @@ def securityPluginFile = resolvePluginFile("opensearch-security")
 testClusters.integTest {
     testDistribution = "ARCHIVE"
     if (_numNodes > 1) numberOfNodes = _numNodes
+
+    // Streaming setup - enable with -Dstreaming=true
+    if (System.getProperty("streaming") == "true") {
+        setting 'opensearch.experimental.feature.transport.stream.enabled', 'true'
+        setting 'http.type', securityEnabled ? 'reactor-netty4-secure' : 'reactor-netty4'
+
+        if (_numNodes > 1) {
+            setting 'arrow.flight.publish_host', '127.0.0.1'
+            setting 'arrow.flight.bind_host', '127.0.0.1'
+        }
+
+        if (securityEnabled) {
+            setting 'transport.stream.type.default', 'FLIGHT-SECURE'
+            setting 'flight.ssl.enable', 'true'
+        }
+
+        systemProperty 'io.netty.allocator.numDirectArenas', '1'
+        systemProperty 'io.netty.noUnsafe', 'false'
+        systemProperty 'io.netty.tryUnsafe', 'true'
+        systemProperty 'io.netty.tryReflectionSetAccessible', 'true'
+        jvmArgs '--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED'
+
+        // Required streaming plugins
+        def opensearchCore = System.getenv("OPENSEARCH_CORE_PATH") ?: { throw new GradleException("OPENSEARCH_CORE_PATH environment variable must be set") }()
+        def transportPluginDir = file("${opensearchCore}/plugins/transport-reactor-netty4/build/distributions")
+        def arrowPluginDir = file("${opensearchCore}/plugins/arrow-flight-rpc/build/distributions")
+
+        def transportPlugin = transportPluginDir.exists() ? transportPluginDir.listFiles()?.find { it.name.endsWith('.zip') && it.name.contains(opensearchVersion) } : null
+        def arrowPlugin = arrowPluginDir.exists() ? arrowPluginDir.listFiles()?.find { it.name.endsWith('.zip') && it.name.contains(opensearchVersion) } : null
+
+        if (!transportPlugin) {
+            throw new GradleException("transport-reactor-netty4 plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:transport-reactor-netty4:assemble")
+        }
+        if (!arrowPlugin) {
+            throw new GradleException("arrow-flight-rpc plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:arrow-flight-rpc:assemble")
+        }
+
+        plugin(layout.file(provider { transportPlugin }))
+        plugin(layout.file(provider { arrowPlugin }))
+    }
+
     configureClusterPlugins(delegate, jobSchedulerFile, securityPluginFile, securityEnabled)
 }
 
@@ -356,18 +399,7 @@ def configureClusterPlugins(cluster, jobSchedZip, securityZip, securityEnabled) 
 }
 
 testClusters.yamlRestTest {
-
-    plugin(provider(new Callable<RegularFile>(){
-        @Override
-        RegularFile call() throws Exception {
-            return new RegularFile() {
-                @Override
-                File getAsFile() {
-                    return configurations.zipArchive.asFileTree.getSingleFile()
-                }
-            }
-        }
-    }))
+    plugin(layout.file(provider { configurations.zipArchive.asFileTree.getSingleFile() }))
 }
 
 task integTestRemote(type: RestIntegTestTask) {
@@ -597,6 +629,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.rest.RestMLPredictionStreamAction.*',
         'org.opensearch.ml.rest.RestMLExecuteStreamAction',
         'org.opensearch.ml.rest.RestMLExecuteStreamAction.*',
+        // TODO: Refactor ContextManagementTemplateService to make async callbacks testable
+        'org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService',
 ]
 
 jacocoTestCoverageVerification {
@@ -627,6 +661,13 @@ configurations.all {
     exclude group: "org.jetbrains", module: "annotations"
     exclude group: "com.google.guava", module: "failureaccess"
     exclude group: "com.google.errorprone", module: "error_prone_annotations"
+    
+    // When building with -Pcrypto.standard=FIPS-140-3, bcFips jars are provided by OpenSearch
+    // This prevents jar hell when the plugin is installed
+    if (FipsBuildParams.isInFipsMode()) {
+        exclude group: 'org.bouncycastle', module: 'bc-fips'
+    }
+    
     resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
@@ -752,28 +793,20 @@ String opensearchMlPlugin = "opensearch-ml-" + project.version + ".zip"
             testDistribution = "ARCHIVE"
             versions = [bwcShortVersion, opensearch_version]
             numberOfNodes = 3
-            plugin(provider(new Callable<RegularFile>() {
-                @Override
-                RegularFile call() throws Exception {
-                    return new RegularFile() {
-                        @Override
-                        File getAsFile() {
-                            File bwcDir = new File('./plugin/' + bwcFilePath)
-                            if (!bwcDir.exists()) {
-                                bwcDir.mkdirs()
-                            }
-                            File dir = new File('./plugin/' + bwcFilePath + bwcVersion)
-                            if (!dir.exists()) {
-                                dir.mkdirs()
-                            }
-                            File f = new File(dir, bwcMlPlugin)
-                            if (!f.exists()) {
-                                new URL(bwcRemoteFile).withInputStream{ ins -> f.withOutputStream{ it << ins }}
-                            }
-                            return fileTree(bwcFilePath + bwcVersion).getSingleFile()
-                        }
-                    }
+            plugin(layout.file(provider {
+                File bwcDir = new File('./plugin/' + bwcFilePath)
+                if (!bwcDir.exists()) {
+                    bwcDir.mkdirs()
                 }
+                File dir = new File('./plugin/' + bwcFilePath + bwcVersion)
+                if (!dir.exists()) {
+                    dir.mkdirs()
+                }
+                File f = new File(dir, bwcMlPlugin)
+                if (!f.exists()) {
+                    new URL(bwcRemoteFile).withInputStream{ ins -> f.withOutputStream{ it << ins }}
+                }
+                fileTree(bwcFilePath + bwcVersion).getSingleFile()
             }))
             setting 'path.repo', "${buildDir}/cluster/shared/repo/${baseName}"
             setting 'http.content_type.required', 'true'
@@ -782,21 +815,13 @@ String opensearchMlPlugin = "opensearch-ml-" + project.version + ".zip"
 }
 
 List<Provider<RegularFile>> plugins = [
-        provider(new Callable<RegularFile>() {
-            @Override
-            RegularFile call() throws Exception {
-                return new RegularFile() {
-                    @Override
-                    File getAsFile() {
-                        project.mkdir "$bwcFilePath/$project.version"
-                        copy {
-                            from "$buildDir/distributions/$opensearchMlPlugin"
-                            into "$bwcFilePath/$project.version"
-                        }
-                        return fileTree(bwcFilePath + project.version).getSingleFile()
-                    }
-                }
+        layout.file(provider {
+            project.mkdir "$bwcFilePath/$project.version"
+            copy {
+                from "$buildDir/distributions/$opensearchMlPlugin"
+                into "$bwcFilePath/$project.version"
             }
+            fileTree(bwcFilePath + project.version).getSingleFile()
         })
 ]
 

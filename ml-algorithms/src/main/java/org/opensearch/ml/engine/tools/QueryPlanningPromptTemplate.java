@@ -3,6 +3,7 @@ package org.opensearch.ml.engine.tools;
 public class QueryPlanningPromptTemplate {
 
     public static final String DEFAULT_QUERY = "{\"size\":10,\"query\":{\"match_all\":{}}}";
+    public static final String FALLBACK_QUERY_PROMPT_PLACEHOLDER = "{{FALLBACK_QUERY}}";
 
     // ==== RULES ====
     public static final String QUERY_TYPE_RULES = "Use only fields present in the provided mapping; never invent names.\n"
@@ -89,7 +90,7 @@ public class QueryPlanningPromptTemplate {
             + "- Harvest candidates from the question (entities, attributes, constraints).\n"
             + "- From query_fields (that exist) and the index mapping, choose fields that map to those candidates and the user intent—even if only loosely (use reasonable proxies).\n"
             + "- Ignore other fields that don’t help answer the question.\n"
-            + "- Micro Self-Check (silent): verify chosen fields exist; if any don’t, swap to the closest mapped proxy and continue. Only if no remotely relevant fields exist at all, use the default match_all query.\n";
+            + "- Micro Self-Check (silent): verify chosen fields exist; if any don’t, swap to the closest mapped proxy and continue. Only if no remotely relevant fields exist at all, use the default query.\n";
 
     public static final String PROMPT_PREFIX = "==== PURPOSE ====\n"
         + "You are an OpenSearch DSL expert. Convert a natural-language question into a strict JSON OpenSearch query body.\n\n"
@@ -112,7 +113,7 @@ public class QueryPlanningPromptTemplate {
         + "- Do NOT wrap in quotes or prose: no single quotes ('), no smart quotes (’ “ ”), no angle brackets (< >), no XML/HTML, no lists, no headers, no ellipses.\n"
         + "- Use valid JSON only: standard double quotes (\") for all keys/strings; no comments; no trailing commas.\n"
         + "- If the request truly cannot be fulfilled because no remotely relevant fields exist, return EXACTLY:\n"
-        + DEFAULT_QUERY
+        + FALLBACK_QUERY_PROMPT_PLACEHOLDER
         + "\n";
 
     // ==== EXAMPLES ==== (Field selection lines included only where they clarify proxies vs. distractors)
@@ -179,7 +180,7 @@ public class QueryPlanningPromptTemplate {
         + "Input: List satellites with periapsis above 400km.\n"
         + "Mapping: { \"properties\": { \"name\": { \"type\": \"text\" }, \"color\": { \"type\": \"keyword\" } } }\n"
         + "Output: "
-        + DEFAULT_QUERY
+        + FALLBACK_QUERY_PROMPT_PLACEHOLDER
         + "\n";
 
     public static final String EXAMPLE_12 = "Example 12 — neural preferred with safe fallback (merged)\n"

@@ -10,14 +10,17 @@ import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
@@ -26,7 +29,9 @@ import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 @Getter
 public abstract class AbstractConnector implements Connector {
     public static final String ACCESS_KEY_FIELD = "access_key";
@@ -121,8 +126,12 @@ public abstract class AbstractConnector implements Connector {
 
     @Override
     public Optional<ConnectorAction> findAction(String action) {
-        if (actions != null) {
-            return actions.stream().filter(a -> a.getActionType().name().equalsIgnoreCase(action)).findFirst();
+        // Guard against null actions list or null action parameter
+        if (actions != null && action != null) {
+            if (ConnectorAction.ActionType.isValidAction(action)) {
+                return actions.stream().filter(a -> a.getActionType().name().equalsIgnoreCase(action)).findFirst();
+            }
+            return actions.stream().filter(a -> action.equals(a.getName())).findFirst();
         }
         return Optional.empty();
     }
@@ -152,5 +161,69 @@ public abstract class AbstractConnector implements Connector {
         }
         return predictEndpoint;
     }
+
+    @Override
+    public void encrypt(
+        TriConsumer<List<String>, String, ActionListener<List<String>>> function,
+        String tenantId,
+        ActionListener<Boolean> listener
+    ) {
+        if (credential == null || credential.isEmpty()) {
+            listener.onResponse(true);
+            return;
+        }
+        List<String> orderedEncryptKeys = new ArrayList<>();
+        List<String> orderedToEncrypt = new ArrayList<>();
+        for (String key : credential.keySet()) {
+            orderedEncryptKeys.add(key);
+            orderedToEncrypt.add(credential.get(key));
+        }
+        ActionListener<List<String>> updateEncryptedCredentialsListener = ActionListener.wrap(r -> {
+            Map<String, String> encryptedCredentials = new HashMap<>();
+            for (int i = 0; i < r.size(); i++) {
+                encryptedCredentials.put(orderedEncryptKeys.get(i), r.get(i));
+            }
+            credential = encryptedCredentials;
+            listener.onResponse(true);
+        }, e -> {
+            log.error("Failed to encrypt credentials in connector", e);
+            listener.onFailure(e);
+        });
+        function.apply(orderedToEncrypt, tenantId, updateEncryptedCredentialsListener);
+    }
+
+    @Override
+    public void decrypt(
+        String action,
+        TriConsumer<List<String>, String, ActionListener<List<String>>> function,
+        String tenantId,
+        ActionListener<Boolean> listener
+    ) {
+        if (credential == null || credential.isEmpty()) {
+            this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
+            listener.onResponse(true);
+            return;
+        }
+        List<String> orderedDecryptKeys = new ArrayList<>();
+        List<String> orderedToDecrypt = new ArrayList<>();
+        for (Map.Entry<String, String> entry : credential.entrySet()) {
+            orderedDecryptKeys.add(entry.getKey());
+            orderedToDecrypt.add(entry.getValue());
+        }
+        ActionListener<List<String>> updateDecryptedCredentialsListener = ActionListener.wrap(r -> {
+            decryptedCredential = new HashMap<>();
+            for (int i = 0; i < r.size(); i++) {
+                decryptedCredential.put(orderedDecryptKeys.get(i), r.get(i));
+            }
+            this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
+            listener.onResponse(true);
+        }, e -> {
+            log.error("Failed to decrypt credentials in connector", e);
+            listener.onFailure(e);
+        });
+        function.apply(orderedToDecrypt, tenantId, updateDecryptedCredentialsListener);
+    }
+
+    protected abstract Map<String, String> getAllHeaders(String action);
 
 }

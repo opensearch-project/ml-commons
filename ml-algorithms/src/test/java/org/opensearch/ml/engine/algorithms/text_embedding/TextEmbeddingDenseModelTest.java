@@ -214,6 +214,50 @@ public class TextEmbeddingDenseModelTest {
         initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, 768);
     }
 
+    @Test
+    public void initModel_predict_ONNX_LastTokenPooling() throws URISyntaxException {
+        String modelFile = "all-MiniLM-L6-v2_onnx.zip";
+        String modelType = "bert";
+        TextEmbeddingModelConfig.PoolingMode poolingMode = TextEmbeddingModelConfig.PoolingMode.LAST_TOKEN;
+        boolean normalize = true;
+        int modelMaxLength = 512;
+        MLModelFormat modelFormat = MLModelFormat.ONNX;
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, dimension);
+    }
+
+    @Test
+    public void initModel_predict_ONNX_NonePooling() throws URISyntaxException {
+        String modelFile = "all-MiniLM-L6-v2_onnx.zip";
+        String modelType = "bert";
+        TextEmbeddingModelConfig.PoolingMode poolingMode = TextEmbeddingModelConfig.PoolingMode.NONE;
+        boolean normalize = true;
+        int modelMaxLength = 512;
+        MLModelFormat modelFormat = MLModelFormat.ONNX;
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, dimension);
+    }
+
+    @Test
+    public void initModel_predict_TorchScript_Huggingface_LastTokenPooling() throws URISyntaxException {
+        String modelFile = "all-MiniLM-L6-v2_torchscript_huggingface.zip";
+        String modelType = "bert";
+        TextEmbeddingModelConfig.PoolingMode poolingMode = TextEmbeddingModelConfig.PoolingMode.LAST_TOKEN;
+        boolean normalize = true;
+        int modelMaxLength = 512;
+        MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, dimension);
+    }
+
+    @Test
+    public void initModel_predict_TorchScript_Huggingface_NonePooling() throws URISyntaxException {
+        String modelFile = "all-MiniLM-L6-v2_torchscript_huggingface.zip";
+        String modelType = "bert";
+        TextEmbeddingModelConfig.PoolingMode poolingMode = TextEmbeddingModelConfig.PoolingMode.NONE;
+        boolean normalize = true;
+        int modelMaxLength = 512;
+        MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, dimension);
+    }
+
     private void initModel_predict_HuggingfaceModel(
         String modelFile,
         String modelType,
@@ -559,7 +603,7 @@ public class TextEmbeddingDenseModelTest {
     public void test_initModelAsync_throwIllegalStateException() {
         exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("Method is not implemented");
-        textEmbeddingDenseModel.initModelAsync(model, new HashMap<>(), encryptor);
+        textEmbeddingDenseModel.initModelAsync(model, new HashMap<>(), encryptor, mock(ActionListener.class));
     }
 
     @Test

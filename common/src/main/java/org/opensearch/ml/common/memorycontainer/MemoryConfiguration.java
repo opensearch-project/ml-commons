@@ -81,7 +81,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     @Builder.Default
     private boolean disableHistory = false;
     @Builder.Default
-    private boolean disableSession = true;
+    private boolean disableSession = false;
     @Builder.Default
     private boolean useSystemIndex = true;
     private String tenantId;
@@ -265,7 +265,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Map<String, Map<String, Object>> indexSettings = new HashMap<>();
         Map<String, Object> parameters = new HashMap<>();
         boolean disableHistory = false;
-        boolean disableSession = true;
+        boolean disableSession = false;
         boolean useSystemIndex = true;
         String tenantId = null;
 
@@ -352,15 +352,24 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
     }
 
+    /**
+     * Returns true if long-term memory is disabled, i.e., there is no LLM or no strategies configured.
+     */
+    private boolean isLongTermMemoryDisabled() {
+        return getLlmId() == null || getStrategies() == null || getStrategies().isEmpty();
+    }
+
     public String getIndexName(MemoryType memoryType) {
         if (memoryType == null) {
             return null;
         }
-        // Check if disabled
+        if (memoryType == MemoryType.LONG_TERM && isLongTermMemoryDisabled()) {
+            return null;
+        }
         if (memoryType == MemoryType.SESSIONS && isDisableSession()) {
             return null;
         }
-        if (memoryType == MemoryType.HISTORY && isDisableHistory()) {
+        if (memoryType == MemoryType.HISTORY && (isDisableHistory() || isLongTermMemoryDisabled())) {
             return null;
         }
         return getFinalMemoryIndexPrefix() + memoryType.getIndexSuffix();

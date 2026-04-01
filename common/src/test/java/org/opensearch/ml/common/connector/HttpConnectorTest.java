@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.mockito.Mockito.mock;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.io.IOException;
@@ -15,16 +16,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.Optional;
 
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -38,8 +40,12 @@ public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
+    TriConsumer<List<String>, String, ActionListener<List<String>>> encryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "encrypted: " + x.toLowerCase(Locale.ROOT)).toArray(String[]::new)));
+    TriConsumer<List<String>, String, ActionListener<List<String>>> decryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "decrypted: " + x.toUpperCase(Locale.ROOT)).toArray(String[]::new)));
+
+    ActionListener<Boolean> listener = mock(ActionListener.class);
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
@@ -52,12 +58,6 @@ public class HttpConnectorTest {
         + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
         + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
         + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
-
-    @Before
-    public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
-    }
 
     @Test
     public void constructor_InvalidProtocol() {
@@ -124,7 +124,7 @@ public class HttpConnectorTest {
     @Test
     public void decrypt() {
         HttpConnector connector = createHttpConnector();
-        connector.decrypt(PREDICT.name(), decryptFunction, null);
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -141,7 +141,7 @@ public class HttpConnectorTest {
     @Test
     public void encrypted() {
         HttpConnector connector = createHttpConnector();
-        connector.encrypt(encryptFunction, null);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
         Map<String, String> credential = connector.getCredential();
         Assert.assertEquals(1, credential.size());
         Assert.assertEquals("encrypted: test_key_value", credential.get("key"));
@@ -379,6 +379,7 @@ public class HttpConnectorTest {
 
     public static HttpConnector createHttpConnectorWithRequestBody(String requestBody) {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
+        String name = null;
         String method = "POST";
         String url = "https://test.com";
         Map<String, String> headers = new HashMap<>();
@@ -388,6 +389,7 @@ public class HttpConnectorTest {
 
         ConnectorAction action = new ConnectorAction(
             actionType,
+            name,
             method,
             url,
             headers,
@@ -402,7 +404,7 @@ public class HttpConnectorTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
-        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
 
         HttpConnector connector = HttpConnector
             .builder()
@@ -529,6 +531,156 @@ public class HttpConnectorTest {
         Assert.assertEquals(1, modelTensors.size());
         Assert.assertEquals("response", modelTensors.get(0).getName());
         Assert.assertEquals(42, modelTensors.get(0).getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testFindAction_WithValidActionType() {
+        HttpConnector connector = createHttpConnector();
+        Optional<ConnectorAction> action = connector.findAction("PREDICT");
+        Assert.assertTrue(action.isPresent());
+        Assert.assertEquals(PREDICT, action.get().getActionType());
+    }
+
+    @Test
+    public void testFindAction_WithValidActionTypeCaseInsensitive() {
+        HttpConnector connector = createHttpConnector();
+        Optional<ConnectorAction> action = connector.findAction("predict");
+        Assert.assertTrue(action.isPresent());
+        Assert.assertEquals(PREDICT, action.get().getActionType());
+    }
+
+    @Test
+    public void testFindAction_WithCustomActionName() {
+        String customActionName = "custom_action";
+        ConnectorAction customAction = new ConnectorAction(
+            PREDICT,
+            customActionName,
+            "POST",
+            "https://custom.com",
+            null,
+            "{\"input\": \"test\"}",
+            null,
+            null
+        );
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector")
+            .protocol("http")
+            .actions(Arrays.asList(customAction))
+            .build();
+
+        Optional<ConnectorAction> action = connector.findAction(customActionName);
+        Assert.assertTrue(action.isPresent());
+        Assert.assertEquals(customActionName, action.get().getName());
+        Assert.assertEquals(PREDICT, action.get().getActionType());
+    }
+
+    @Test
+    public void testFindAction_WithNullAction() {
+        HttpConnector connector = createHttpConnector();
+        Optional<ConnectorAction> action = connector.findAction(null);
+        Assert.assertFalse(action.isPresent());
+    }
+
+    @Test
+    public void testFindAction_WithInvalidActionType() {
+        HttpConnector connector = createHttpConnector();
+        Optional<ConnectorAction> action = connector.findAction("INVALID_ACTION");
+        Assert.assertFalse(action.isPresent());
+    }
+
+    @Test
+    public void testFindAction_WithNullActions() {
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").actions(null).build();
+        Optional<ConnectorAction> action = connector.findAction("PREDICT");
+        Assert.assertFalse(action.isPresent());
+    }
+
+    @Test
+    public void testFindAction_CustomNameTakesPrecedenceOverActionType() {
+        String customActionName = "my_predict";
+        ConnectorAction action1 = new ConnectorAction(
+            PREDICT,
+            null,
+            "POST",
+            "https://test1.com",
+            null,
+            "{\"input\": \"test1\"}",
+            null,
+            null
+        );
+        ConnectorAction action2 = new ConnectorAction(
+            ConnectorAction.ActionType.EXECUTE,
+            customActionName,
+            "POST",
+            "https://test2.com",
+            null,
+            "{\"input\": \"test2\"}",
+            null,
+            null
+        );
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector")
+            .protocol("http")
+            .actions(Arrays.asList(action1, action2))
+            .build();
+
+        // When searching by valid action type, should find by action type first
+        Optional<ConnectorAction> foundByType = connector.findAction("PREDICT");
+        Assert.assertTrue(foundByType.isPresent());
+        Assert.assertEquals(PREDICT, foundByType.get().getActionType());
+        Assert.assertEquals("https://test1.com", foundByType.get().getUrl());
+
+        // When searching by custom name, should find by name
+        Optional<ConnectorAction> foundByName = connector.findAction(customActionName);
+        Assert.assertTrue(foundByName.isPresent());
+        Assert.assertEquals(customActionName, foundByName.get().getName());
+        Assert.assertEquals("https://test2.com", foundByName.get().getUrl());
+    }
+
+    @Test
+    public void testFindAction_MultipleActionsWithSameType() {
+        ConnectorAction action1 = new ConnectorAction(
+            PREDICT,
+            "predict_action_1",
+            "POST",
+            "https://test1.com",
+            null,
+            "{\"input\": \"test1\"}",
+            null,
+            null
+        );
+        ConnectorAction action2 = new ConnectorAction(
+            PREDICT,
+            "predict_action_2",
+            "POST",
+            "https://test2.com",
+            null,
+            "{\"input\": \"test2\"}",
+            null,
+            null
+        );
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector")
+            .protocol("http")
+            .actions(Arrays.asList(action1, action2))
+            .build();
+
+        // Should return the first matching action when searching by type
+        Optional<ConnectorAction> foundByType = connector.findAction("PREDICT");
+        Assert.assertTrue(foundByType.isPresent());
+        Assert.assertEquals("predict_action_1", foundByType.get().getName());
+
+        // Should find specific action by custom name
+        Optional<ConnectorAction> foundByName = connector.findAction("predict_action_2");
+        Assert.assertTrue(foundByName.isPresent());
+        Assert.assertEquals("predict_action_2", foundByName.get().getName());
+        Assert.assertEquals("https://test2.com", foundByName.get().getUrl());
     }
 
 }

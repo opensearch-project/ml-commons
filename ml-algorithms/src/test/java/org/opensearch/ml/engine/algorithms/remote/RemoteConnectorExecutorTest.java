@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
+import static org.opensearch.ml.engine.helper.MLTestHelper.encryptCredentials;
 import static org.opensearch.ml.engine.processor.ProcessorChain.INPUT_PROCESSORS;
 
 import java.io.IOException;
@@ -105,7 +106,12 @@ public class RemoteConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
         return AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -114,7 +120,7 @@ public class RemoteConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
             .build();
     }
 

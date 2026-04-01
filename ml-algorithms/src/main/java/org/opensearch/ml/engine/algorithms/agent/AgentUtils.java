@@ -10,6 +10,14 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENDPOINT_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ENDPOINT_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_ARN_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_ARN_SNAKE_CASE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -29,6 +37,8 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.TENANT_ID_FIELD;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.io.IOException;
@@ -54,14 +64,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -69,13 +82,21 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
@@ -83,6 +104,8 @@ import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -90,6 +113,8 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.transport.client.Client;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -108,22 +133,28 @@ public class AgentUtils {
     public static final String PROMPT_CHAT_HISTORY_PREFIX = "prompt.chat_history_prefix";
     public static final String DISABLE_TRACE = "disable_trace";
     public static final String VERBOSE = "verbose";
+    public static final String INCLUDE_TOKEN_USAGE = "include_token_usage";
     public static final String LLM_GEN_INPUT = "llm_generated_input";
 
     public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
     public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
     public static final String TOOL_RESULT = "tool_result";
     public static final String TOOL_CALL_ID = "tool_call_id";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE = "bedrock/converse";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
+    public static final String LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT = "gemini/v1beta/generatecontent";
 
     public static final String TOOL_CALLS_PATH = "tool_calls_path";
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
     public static final String TOOL_CALLS_TOOL_INPUT = "tool_calls.tool_input";
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
+    public static final String TOKEN_USAGE_PATH = "token_usage_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
+    private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
+        .compile(",\\s*\"additionalProperties\"\\s*:\\s*(?:false|true)", Pattern.CASE_INSENSITIVE);
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
@@ -137,6 +168,8 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
+    public static final String AGENT_TYPE_PARAM = "agent_type";
 
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
@@ -204,12 +237,18 @@ public class AgentUtils {
             }
             Tool tool = tools.get(toolName);
             Map<String, Object> toolParams = new HashMap<>();
-            toolParams.put(NAME, tool.getName());
-            toolParams.put(DESCRIPTION, tool.getDescription());
+            toolParams.put(NAME, StringEscapeUtils.escapeJson(tool.getName()));
+            toolParams.put(DESCRIPTION, StringEscapeUtils.escapeJson(tool.getDescription()));
             Map<String, ?> attributes = tool.getAttributes();
             if (attributes != null) {
                 for (String key : attributes.keySet()) {
                     toolParams.put("attributes." + key, attributes.get(key));
+                }
+                // For Gemini, clean input_schema to remove additionalProperties
+                if (parameters.containsKey("gemini.schema.cleaner") && attributes.containsKey("input_schema")) {
+                    String schema = String.valueOf(attributes.get("input_schema"));
+                    String cleanedSchema = removeAdditionalPropertiesFromSchema(schema);
+                    toolParams.put("attributes.input_schema_cleaned", cleanedSchema);
                 }
             }
             StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${tool.", "}");
@@ -218,6 +257,51 @@ public class AgentUtils {
         }
         parameters.put(TOOLS, String.join(", ", toolInfos));
         return prompt;
+    }
+
+    /**
+     * Removes additionalProperties from JSON schema string for API compatibility.
+     * Recursively removes additionalProperties from all schema objects (where type: "object").
+     * This method can be reused for any API that doesn't support additionalProperties in schemas.
+     */
+    public static String removeAdditionalPropertiesFromSchema(String schema) {
+        if (schema == null || schema.trim().isEmpty()) {
+            return schema;
+        }
+        try {
+            // Parse JSON and recursively remove additionalProperties from all schema objects
+            JsonObject jsonObject = JsonParser.parseString(schema).getAsJsonObject();
+            removeAdditionalPropertiesRecursive(jsonObject);
+            return gson.toJson(jsonObject);
+        } catch (Exception e) {
+            log.warn("Failed to parse schema as JSON, using regex fallback: {}", e.getMessage());
+            // Fallback to regex if JSON parsing fails
+            return ADDITIONAL_PROPERTIES_PATTERN.matcher(schema).replaceAll("");
+        }
+    }
+
+    /**
+     * Recursively removes additionalProperties from schema objects (objects with type: "object").
+     */
+    private static void removeAdditionalPropertiesRecursive(com.google.gson.JsonElement element) {
+        if (element.isJsonObject()) {
+            JsonObject obj = element.getAsJsonObject();
+            // Remove additionalProperties from schema objects (objects with "type": "object")
+            if (obj.has("type") && "object".equals(obj.get("type").getAsString())) {
+                obj.remove("additionalProperties");
+                // Process nested schema objects in properties
+                if (obj.has("properties") && obj.get("properties").isJsonObject()) {
+                    JsonObject properties = obj.get("properties").getAsJsonObject();
+                    for (String key : properties.keySet()) {
+                        removeAdditionalPropertiesRecursive(properties.get(key));
+                    }
+                }
+            }
+        } else if (element.isJsonArray()) {
+            for (com.google.gson.JsonElement item : element.getAsJsonArray()) {
+                removeAdditionalPropertiesRecursive(item);
+            }
+        }
     }
 
     public static String addToolsToPromptString(
@@ -318,6 +402,7 @@ public class AgentUtils {
         List<String> interactions,
         FunctionCalling functionCalling
     ) {
+        // TODO: Handle Function calling in a different function
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
         String llmResponseExcludePath = parameters.get(LLM_RESPONSE_EXCLUDE_PATH);
@@ -356,6 +441,12 @@ public class AgentUtils {
                 llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
             }
             if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason) || isToolUseResponse) {
+                // Handles tool calls
+                // TODO: Refactor tool call detection logic into FunctionCalling interface.
+                // Currently, we rely on finish_reason to detect tool calls, but some LLMs (e.g., Gemini)
+                // use the same finish_reason for both tool calls and final responses. The workaround
+                // uses isToolUseResponse flag or checks if functionCalling.handle() returns tool calls.
+                // This logic should be centralized in the FunctionCalling interface to handle LLM-specific differences.
                 List<Map<String, String>> toolCalls = null;
                 try {
                     String toolName = "";
@@ -386,15 +477,15 @@ public class AgentUtils {
                     String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
                     String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
                     if (toolCallsMsgPath != null) {
+                        Map<String, ?> workingDataAsMap = dataAsMap;
                         if (toolCallsMsgExcludePath != null) {
-                            Map<String, ?> newDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
-                            Object toolCallsMsg = JsonPath.read(newDataAsMap, toolCallsMsgPath);
-                            interactions.add(StringUtils.toJson(toolCallsMsg));
-                        } else {
-                            Object toolCallsMsg = JsonPath.read(dataAsMap, toolCallsMsgPath);
-                            interactions.add(StringUtils.toJson(toolCallsMsg));
+                            workingDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
                         }
-
+                        if (functionCalling != null) {
+                            workingDataAsMap = functionCalling.filterToFirstToolCall(workingDataAsMap, parameters);
+                        }
+                        Object toolCallsMsg = JsonPath.read(workingDataAsMap, toolCallsMsgPath);
+                        interactions.add(StringUtils.toJson(toolCallsMsg));
                     } else {
                         interactions
                             .add(
@@ -654,6 +745,23 @@ public class AgentUtils {
         return messageHistoryLimitStr != null ? Integer.parseInt(messageHistoryLimitStr) : LAST_N_INTERACTIONS;
     }
 
+    /**
+     * Sanitizes memory parameters for logging by redacting sensitive credential data.
+     *
+     * @param params The memory parameters map that may contain sensitive data
+     * @return A copy of the map with credential fields redacted, or null if input is null
+     */
+    public static Map<String, Object> sanitizeForLogging(Map<String, Object> params) {
+        if (params == null) {
+            return null;
+        }
+        Map<String, Object> sanitized = new HashMap<>(params);
+        if (sanitized.containsKey(CREDENTIAL_FIELD)) {
+            sanitized.put(CREDENTIAL_FIELD, "[REDACTED]");
+        }
+        return sanitized;
+    }
+
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = new ArrayList<>();
@@ -756,25 +864,35 @@ public class AgentUtils {
                     toolListener.onResponse(Collections.emptyList());
                     return;
                 }
-                connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
+                ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+                    List<MLToolSpec> mcpToolSpecs;
+                    if (client == null) {
+                        throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
+                    }
 
-                List<MLToolSpec> mcpToolSpecs;
-                if (connector instanceof McpConnector) {
-                    McpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                        .initInstance(connector.getProtocol(), connector, Connector.class);
-                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                    toolListener.onResponse(mcpToolSpecs);
-                    return;
-                }
-                if (connector instanceof McpStreamableHttpConnector) {
-                    McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                        .initInstance(connector.getProtocol(), connector, Connector.class);
-                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                    toolListener.onResponse(mcpToolSpecs);
-                    return;
-                }
-                log.error("Unsupported connector type for connector: " + connectorId);
-                toolListener.onResponse(Collections.emptyList());
+                    if (connector instanceof McpConnector) {
+                        McpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
+                        connectorExecutor.setClient(client);
+                        mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                        toolListener.onResponse(mcpToolSpecs);
+                        return;
+                    }
+                    if (connector instanceof McpStreamableHttpConnector) {
+                        McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
+                        connectorExecutor.setClient(client);
+                        mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                        toolListener.onResponse(mcpToolSpecs);
+                        return;
+                    }
+                    log.error("Unsupported connector type for connector: " + connectorId);
+                    toolListener.onResponse(Collections.emptyList());
+                }, e -> {
+                    log.error("Failed to decrypt credentials in connector", e);
+                    toolListener.onFailure(e);
+                });
+                connector.decrypt("", encryptor::decrypt, tenantId, decryptSuccessfulListener);
             } catch (Exception e) {
                 log.error("Failed to get tools from connector: " + connectorId, e);
                 toolListener.onResponse(Collections.emptyList());
@@ -998,7 +1116,7 @@ public class AgentUtils {
 
     public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> executeParams, MLToolSpec toolSpec) {
         if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
+            throw new IllegalArgumentException("Tool type not found");
         }
         Map<String, Object> toolParams = new HashMap<>();
         toolParams.putAll(executeParams);
@@ -1018,5 +1136,576 @@ public class AgentUtils {
         }
 
         return tool;
+    }
+
+    public static Map<String, Object> createMemoryParams(
+        String question,
+        String memoryId,
+        String appType,
+        MLAgent mlAgent,
+        Map<String, String> requestParameters
+    ) {
+        Map<String, Object> memoryParams = new HashMap<>();
+        memoryParams.put(ConversationIndexMemory.MEMORY_NAME, question);
+        memoryParams.put(ConversationIndexMemory.MEMORY_ID, memoryId);
+        memoryParams.put(APP_TYPE, appType);
+        MLMemorySpec agentMemory = mlAgent != null ? mlAgent.getMemory() : null;
+        if (agentMemory != null) {
+            String containerId = agentMemory.getMemoryContainerId();
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
+            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+        }
+        if (requestParameters != null) {
+            // Extract memory_container_id
+            String containerId = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
+
+            // Check if parameters are wrapped in memory_configuration
+            // In current implementation, agent memory processing method will be overridden to remote agentic memory
+            // if the agent receive the memory config field, no matter what its previous memory type is.
+            // In long run, memory configuration should only be expected for remote agentic memory type.
+            // TODO: Add a memory type check to restrict memory config to remote agentic memory only
+            String memoryConfigStr = requestParameters.get(MEMORY_CONFIGURATION_FIELD);
+            if (!Strings.isNullOrEmpty(memoryConfigStr)) {
+                // Parse the memory_configuration JSON
+                try (
+                    XContentParser parser = JsonXContent.jsonXContent
+                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, memoryConfigStr)
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    Map<String, Object> memoryConfig = parser.map();
+
+                    // Extract endpoint (support both legacy and explicit keys)
+                    String endpointParam = (String) memoryConfig.get(ENDPOINT_FIELD);
+                    if (Strings.isNullOrEmpty(endpointParam)) {
+                        endpointParam = (String) memoryConfig.get(MEMORY_ENDPOINT_FIELD);
+                    }
+                    if (!Strings.isNullOrEmpty(endpointParam)) {
+                        memoryParams.put(ENDPOINT_FIELD, endpointParam);
+                    }
+
+                    // Extract region
+                    String regionParam = (String) memoryConfig.get(HttpConnector.REGION_FIELD);
+                    if (!Strings.isNullOrEmpty(regionParam)) {
+                        memoryParams.put(HttpConnector.REGION_FIELD, regionParam);
+                    }
+
+                    // Extract credential
+                    Object credentialObj = memoryConfig.get(CREDENTIAL_FIELD);
+                    if (credentialObj instanceof Map) {
+                        Map<String, String> credential = (Map<String, String>) credentialObj;
+                        if (!credential.isEmpty()) {
+                            memoryParams.put(CREDENTIAL_FIELD, credential);
+                        }
+                    }
+
+                    // Check for direct roleArn field - if present, override credential map
+                    String roleArnParam = (String) memoryConfig.get(ROLE_ARN_FIELD);
+                    if (Strings.isNullOrEmpty(roleArnParam)) {
+                        roleArnParam = (String) memoryConfig.get(ROLE_ARN_SNAKE_CASE_FIELD);
+                    }
+                    if (!Strings.isNullOrEmpty(roleArnParam)) {
+                        // Override credential with roleArn
+                        Map<String, String> roleArnCredential = new HashMap<>();
+                        roleArnCredential.put(ROLE_ARN_FIELD, roleArnParam);
+                        memoryParams.put(CREDENTIAL_FIELD, roleArnCredential);
+                    }
+
+                    // Extract user_id if provided
+                    String userIdParam = (String) memoryConfig.get(USER_ID_FIELD);
+                    if (!Strings.isNullOrEmpty(userIdParam)) {
+                        memoryParams.put(USER_ID_FIELD, userIdParam);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse memory_configuration", e);
+                }
+            }
+            if (mlAgent != null) {
+                memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+            }
+        }
+        return memoryParams;
+    }
+
+    public static List<Map<String, Object>> parseFrontendTools(String aguiTools) {
+        List<Map<String, Object>> frontendTools = new ArrayList<>();
+        if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
+            try {
+                Type listType = new TypeToken<List<Map<String, Object>>>() {
+                }.getType();
+                List<Map<String, Object>> parsed = gson.fromJson(aguiTools, listType);
+                if (parsed != null) {
+                    frontendTools.addAll(parsed);
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse frontend tools: {}", e.getMessage());
+            }
+        }
+        return frontendTools;
+    }
+
+    public static Map<String, Tool> wrapFrontendToolsAsToolObjects(List<Map<String, Object>> frontendTools) {
+        Map<String, Tool> wrappedTools = new HashMap<>();
+
+        for (Map<String, Object> frontendTool : frontendTools) {
+            String toolName = (String) frontendTool.get("name");
+            String toolDescription = (String) frontendTool.get("description");
+
+            // Create frontend tool object with source marker
+            Map<String, Object> toolAttributes = new HashMap<>();
+            toolAttributes.put("source", "frontend");
+            toolAttributes.put("tool_definition", frontendTool);
+
+            Object parameters = frontendTool.get("parameters");
+            if (parameters != null) {
+                toolAttributes.put("input_schema", gson.toJson(parameters));
+            } else {
+                Map<String, Object> emptySchema = Map.of("type", "object", "properties", Map.of());
+                toolAttributes.put("input_schema", gson.toJson(emptySchema));
+            }
+
+            Tool frontendToolObj = new AGUIFrontendTool(toolName, toolDescription, toolAttributes);
+            wrappedTools.put(toolName, frontendToolObj);
+        }
+
+        return wrappedTools;
+    }
+
+    /**
+     * Checks if the agent type in the given parameters is AG_UI.
+     *
+     * @param parameters The parameters map containing agent type information
+     * @return true if the agent type is AG_UI, false otherwise
+     */
+    public static boolean isAGUIAgent(Map<String, String> parameters) {
+        if (parameters == null || !parameters.containsKey(AGENT_TYPE_PARAM)) {
+            return false;
+        }
+
+        try {
+            String agentTypeValue = parameters.get(AGENT_TYPE_PARAM);
+            MLAgentType agentType = MLAgentType.from(agentTypeValue);
+            return agentType == MLAgentType.AG_UI;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Extract text content from a message's content blocks.
+     *
+     * @param message The message to extract text from
+     * @return The concatenated text content, trimmed
+     */
+    public static String extractTextFromMessage(Message message) {
+        if (message == null || message.getContent() == null) {
+            return "";
+        }
+
+        StringBuilder textBuilder = new StringBuilder();
+        for (ContentBlock block : message.getContent()) {
+            if (block.getType() == ContentType.TEXT && block.getText() != null) {
+                textBuilder.append(block.getText().trim());
+                textBuilder.append("\n");
+            }
+        }
+
+        return textBuilder.toString().trim();
+    }
+
+    /**
+     * Extract user-assistant message pairs from a list of structured messages.
+     * Processes messages backwards to detect Q&A pairs, skipping trailing user messages,
+     * then reverses the result to maintain chronological order.
+     *
+     * @param messages The list of structured messages to process
+     * @param sessionId The session/conversation ID for the pairs
+     * @param appType The application type to set on each pair (may be null)
+     * @return A list of ConversationIndexMessage pairs in chronological order
+     */
+    public static List<ConversationIndexMessage> extractMessagePairs(List<Message> messages, String sessionId, String appType) {
+        if (messages == null || messages.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<ConversationIndexMessage> messagePairs = new ArrayList<>();
+
+        StringBuilder userTextBuilder = new StringBuilder();
+        StringBuilder assistantTextBuilder = new StringBuilder();
+        boolean skippingTrailingUsers = true;
+        String currentRole = null;
+
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message message = messages.get(i);
+
+            if (message == null || message.getRole() == null) {
+                continue;
+            }
+
+            String role = message.getRole().toLowerCase();
+
+            // Skip non-user/assistant roles
+            if (!role.equals("user") && !role.equals("assistant")) {
+                continue;
+            }
+
+            // Skip trailing user messages
+            if (skippingTrailingUsers && role.equals("user")) {
+                continue;
+            }
+
+            if (skippingTrailingUsers && role.equals("assistant")) {
+                skippingTrailingUsers = false;
+            }
+
+            // Detect role change from user to assistant (going backwards)
+            if (currentRole != null && currentRole.equals("user") && role.equals("assistant")) {
+                // Save the accumulated pair
+                String userText = userTextBuilder.toString().trim();
+                String assistantText = assistantTextBuilder.toString().trim();
+
+                if (!userText.isEmpty() && !assistantText.isEmpty()) {
+                    ConversationIndexMessage msg = ConversationIndexMessage
+                        .conversationIndexMessageBuilder()
+                        .type(appType)
+                        .question(userText)
+                        .response(assistantText)
+                        .finalAnswer(true)
+                        .sessionId(sessionId)
+                        .build();
+
+                    messagePairs.add(msg);
+                }
+
+                // Clear buffers for next pair
+                userTextBuilder.setLength(0);
+                assistantTextBuilder.setLength(0);
+            }
+
+            // Extract text
+            String text = extractTextFromMessage(message);
+
+            // Accumulate text based on role (prepending since we're going backwards)
+            if (role.equals("user")) {
+                if (!text.isEmpty()) {
+                    if (userTextBuilder.length() > 0) {
+                        userTextBuilder.insert(0, "\n");
+                    }
+                    userTextBuilder.insert(0, text);
+                }
+            } else if (role.equals("assistant")) {
+                if (!text.isEmpty()) {
+                    if (assistantTextBuilder.length() > 0) {
+                        assistantTextBuilder.insert(0, "\n");
+                    }
+                    assistantTextBuilder.insert(0, text);
+                }
+            }
+
+            currentRole = role;
+        }
+
+        // Save any remaining pair
+        String userText = userTextBuilder.toString().trim();
+        String assistantText = assistantTextBuilder.toString().trim();
+
+        if (!userText.isEmpty() && !assistantText.isEmpty()) {
+            ConversationIndexMessage msg = ConversationIndexMessage
+                .conversationIndexMessageBuilder()
+                .type(appType)
+                .question(userText)
+                .response(assistantText)
+                .finalAnswer(true)
+                .sessionId(sessionId)
+                .build();
+
+            messagePairs.add(msg);
+        }
+
+        // Reverse to maintain chronological order
+        Collections.reverse(messagePairs);
+
+        return messagePairs;
+    }
+
+    /**
+     * Extracts HTTP status code from exception if available.
+     * Returns the status code as a string if the exception is an OpenSearchException,
+     * otherwise returns "unknown".
+     *
+     * @param e the exception to extract status code from
+     * @return status code as string or "unknown"
+     */
+    public static String extractStatusCode(Exception e) {
+        if (e instanceof OpenSearchException) {
+            return String.valueOf(((OpenSearchException) e).status().getStatus());
+        }
+        return "unknown";
+    }
+
+    public static void getModel(
+        String modelId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        ActionListener<MLModel> listener
+    ) {
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_MODEL_INDEX)
+            .id(modelId)
+            .tenantId(tenantId)
+            .build();
+
+        try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                log.debug("Completed Get Model Request, id:{}", modelId);
+                ctx.restore();
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                        log.error("Failed to get model index", cause);
+                        listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                    } else {
+                        log.error("Failed to get ML model {}", modelId, cause);
+                        listener.onFailure(cause);
+                    }
+                } else {
+                    try {
+                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        if (gr != null && gr.isExists()) {
+                            try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, gr.getSourceAsBytesRef())) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                MLModel mlModel = MLModel.parse(parser, null);
+                                listener.onResponse(mlModel);
+                            } catch (Exception e) {
+                                log.error("Failed to parse model:{}", modelId);
+                                listener.onFailure(e);
+                            }
+                        } else {
+                            listener.onFailure(new OpenSearchStatusException("Failed to find model:" + modelId, RestStatus.NOT_FOUND));
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Extracts a Long value from a map, handling both Number and String types
+     *
+     * @param map the map to extract from
+     * @param fieldName the field name
+     * @return Long value or null if extraction fails
+     */
+    public static Long getLongValue(Map<String, Object> map, String fieldName) {
+        Object value = map.get(fieldName);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Long.parseLong((String) value);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the model endpoint URL from an MLModel.
+     * If the model has an inline connector, uses it directly.
+     * If the model has a connector ID, fetches the connector first.
+     * Then resolves the endpoint URL using connector parameters.
+     *
+     * @param mlModel the MLModel to resolve URL from
+     * @param tenantId the tenant ID
+     * @param sdkClient the SDK client for async operations
+     * @param client the OpenSearch client for thread context
+     * @param listener the action listener to handle the resolved URL
+     */
+    public static void resolveModelUrl(
+        MLModel mlModel,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        ActionListener<String> listener
+    ) {
+        // Check if model has inline connector
+        if (mlModel.getConnector() != null) {
+            try {
+                String url = extractUrlFromConnector(mlModel.getConnector());
+                listener.onResponse(url);
+            } catch (Exception e) {
+                log.debug("Failed to resolve URL from inline connector", e);
+                listener.onFailure(e);
+            }
+            return;
+        }
+
+        // Check if model has connector ID
+        if (mlModel.getConnectorId() != null) {
+            getConnector(mlModel.getConnectorId(), tenantId, sdkClient, client, ActionListener.wrap(connector -> {
+                try {
+                    String url = extractUrlFromConnector(connector);
+                    listener.onResponse(url);
+                } catch (Exception e) {
+                    log.debug("Failed to resolve URL from connector ID", e);
+                    listener.onFailure(e);
+                }
+            }, listener::onFailure));
+            return;
+        }
+
+        // No connector available
+        listener.onFailure(new IllegalStateException("Model has neither connector nor connector ID"));
+    }
+
+    /**
+     * Extracts the endpoint URL from a connector using its parameters.
+     *
+     * @param connector the connector to extract URL from
+     * @return the resolved endpoint URL
+     */
+    private static String extractUrlFromConnector(Connector connector) {
+        if (connector == null) {
+            throw new IllegalArgumentException("Connector cannot be null");
+        }
+
+        Map<String, String> parameters = connector.getParameters();
+        if (parameters == null) {
+            parameters = Map.of();
+        }
+
+        // Get the predict endpoint URL
+        String endpoint = connector.getActionEndpoint("predict", parameters);
+        if (endpoint == null || endpoint.isEmpty()) {
+            throw new IllegalStateException("Connector has no predict endpoint");
+        }
+
+        return endpoint;
+    }
+
+    /**
+     * Resolves model metadata (name and URL) for token tracking.
+     * Combines getModel + resolveModelUrl into a single call that never fails —
+     * always returns best-effort data with fallbacks.
+     *
+     * @param modelId the model ID
+     * @param tenantId the tenant ID
+     * @param sdkClient the SDK client (may be null)
+     * @param client the OpenSearch client
+     * @param xContentRegistry the content registry for parsing
+     * @param listener receives String[]{url, name} — never called with onFailure
+     */
+    public static void getModelMetadata(
+        String modelId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        ActionListener<String[]> listener
+    ) {
+        // Primarily for test compatibility — sdkClient may be null in unit tests.
+        // TODO: Update tests to mock this
+        if (sdkClient == null) {
+            listener.onResponse(new String[] { modelId, modelId });
+            return;
+        }
+
+        getModel(modelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(mlModel -> {
+            String modelName = mlModel.getName();
+            resolveModelUrl(
+                mlModel,
+                tenantId,
+                sdkClient,
+                client,
+                ActionListener.wrap(url -> { listener.onResponse(new String[] { url, modelName }); }, e -> {
+                    log.debug("Failed to resolve model URL, using model ID as fallback", e);
+                    listener.onResponse(new String[] { modelId, modelName });
+                })
+            );
+        }, e -> {
+            log.debug("Failed to fetch model for URL resolution, using model ID as fallback", e);
+            listener.onResponse(new String[] { modelId, modelId });
+        }));
+    }
+
+    /**
+     * Adds a token usage tensor to the response and logs per-model usage.
+     * Shared utility used by both MLChatAgentRunner and MLPlanExecuteAndReflectAgentRunner.
+     *
+     * @param modelTensors the response tensor list to add to
+     * @param tokenTracker the token tracker (may be null)
+     * @param tenantId the tenant ID for logging (may be null)
+     * @param includeTokenUsage whether to include the token usage tensor in the response;
+     *                          sub-agents always include the tensor regardless of this flag
+     *                          so the parent agent can merge their usage
+     */
+    public static void addTokenUsageTensor(
+        List<ModelTensors> modelTensors,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage
+    ) {
+        if (tokenTracker == null || !tokenTracker.hasUsage()) {
+            return;
+        }
+
+        Map<String, Object> tokenUsageMap = tokenTracker.toOutputMap();
+
+        // Sub-agents always include the tensor so the parent can merge their usage
+        if (includeTokenUsage || tokenTracker.isSubAgent()) {
+            modelTensors
+                .add(
+                    ModelTensors
+                        .builder()
+                        .mlModelTensors(List.of(ModelTensor.builder().name(AgentTokenTracker.TOKEN_USAGE).dataAsMap(tokenUsageMap).build()))
+                        .build()
+                );
+        }
+
+        logTokenUsageDetails(tokenTracker, tokenUsageMap, tenantId);
+    }
+
+    /**
+     * Logs structured per-model token usage for analytics/monitoring.
+     * Skips logging for sub-agents since the parent agent logs the merged totals.
+     *
+     * @param tokenTracker the token tracker
+     * @param tokenUsageMap the pre-computed output map from the tracker
+     * @param tenantId the tenant ID for logging (may be null)
+     */
+    @SuppressWarnings("unchecked")
+    public static void logTokenUsageDetails(AgentTokenTracker tokenTracker, Map<String, Object> tokenUsageMap, String tenantId) {
+        if (tokenTracker == null || tokenUsageMap == null) {
+            return;
+        }
+
+        // Skip logging for sub-agents — the parent agent logs the merged totals
+        if (tokenTracker.isSubAgent()) {
+            return;
+        }
+
+        Object perModelObj = tokenUsageMap.get(AgentTokenTracker.PER_MODEL_USAGE);
+        if (perModelObj instanceof List) {
+            List<Map<String, Object>> perModelUsage = (List<Map<String, Object>>) perModelObj;
+            long eventTime = System.currentTimeMillis();
+            for (Map<String, Object> modelUsage : perModelUsage) {
+                Map<String, Object> logEntry = new java.util.LinkedHashMap<>();
+                logEntry.put("tenantId", tenantId);
+                logEntry.put("model_usage", modelUsage);
+                logEntry.put("eventTime", eventTime);
+                log.info("{}", StringUtils.toJson(logEntry));
+            }
+        }
     }
 }

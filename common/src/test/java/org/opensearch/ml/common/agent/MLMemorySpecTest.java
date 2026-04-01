@@ -21,7 +21,7 @@ public class MLMemorySpecTest {
 
     @Test
     public void writeTo() throws IOException {
-        MLMemorySpec spec = new MLMemorySpec("test", "123", 0);
+        MLMemorySpec spec = new MLMemorySpec("test", "123", 0, null);
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLMemorySpec spec1 = new MLMemorySpec(output.bytes().streamInput());
@@ -33,7 +33,7 @@ public class MLMemorySpecTest {
 
     @Test
     public void toXContent() throws IOException {
-        MLMemorySpec spec = new MLMemorySpec("test", "123", 0);
+        MLMemorySpec spec = new MLMemorySpec("test", "123", 0, null);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
@@ -61,7 +61,7 @@ public class MLMemorySpecTest {
 
     @Test
     public void fromStream() throws IOException {
-        MLMemorySpec spec = new MLMemorySpec("test", "123", 0);
+        MLMemorySpec spec = new MLMemorySpec("test", "123", 0, null);
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLMemorySpec spec1 = MLMemorySpec.fromStream(output.bytes().streamInput());

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.ml.common.CommonValue.CONNECTOR_ACTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 
 import org.opensearch.ResourceNotFoundException;
@@ -18,9 +19,9 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.MLEngineClassLoader;
@@ -59,7 +60,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         EncryptorImpl encryptor,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLExecuteConnectorAction.NAME, transportService, actionFilters, MLConnectorDeleteRequest::new);
+        super(MLExecuteConnectorAction.NAME, transportService, actionFilters, MLExecuteConnectorRequest::new);
         this.client = client;
         this.clusterService = clusterService;
         this.scriptService = scriptService;
@@ -73,25 +74,52 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> actionListener) {
         MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.fromActionRequest(request);
         String connectorId = executeConnectorRequest.getConnectorId();
+        if (executeConnectorRequest.getMlInput() == null) {
+            actionListener.onFailure(new IllegalArgumentException("MLInput cannot be null"));
+            return;
+        }
+
+        // instanceof returns false for null, so this also validates non-null
+        if (!(executeConnectorRequest.getMlInput().getInputDataset() instanceof RemoteInferenceInputDataSet)) {
+            actionListener.onFailure(new IllegalArgumentException("Input dataset must be of type RemoteInferenceInputDataSet"));
+            return;
+        }
+        RemoteInferenceInputDataSet inputDataset = (RemoteInferenceInputDataSet) executeConnectorRequest.getMlInput().getInputDataset();
         String connectorAction = ConnectorAction.ActionType.EXECUTE.name();
+        if (inputDataset.getParameters() != null && inputDataset.getParameters().get(CONNECTOR_ACTION_FIELD) != null) {
+            connectorAction = inputDataset.getParameters().get(CONNECTOR_ACTION_FIELD);
+        }
 
         if (MLIndicesHandler
             .doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
+            String finalConnectorAction = connectorAction;
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
-                    connector.decrypt(connectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
-                    RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
-                        .initInstance(connector.getProtocol(), connector, Connector.class);
-                    connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
-                    connectorExecutor.setScriptService(scriptService);
-                    connectorExecutor.setClusterService(clusterService);
-                    connectorExecutor.setClient(client);
-                    connectorExecutor.setXContentRegistry(xContentRegistry);
-                    connectorExecutor
-                        .executeAction(connectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
-                            actionListener.onResponse(taskResponse);
-                        }, e -> { actionListener.onFailure(e); }));
+                    ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+                        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                            .initInstance(connector.getProtocol(), connector, Connector.class);
+                        connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+                        connectorExecutor.setScriptService(scriptService);
+                        connectorExecutor.setClusterService(clusterService);
+                        connectorExecutor.setClient(client);
+                        connectorExecutor.setXContentRegistry(xContentRegistry);
+                        connectorExecutor
+                            .executeAction(finalConnectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
+                                connectorExecutor.close();
+                                connector.removeCredential();
+                                actionListener.onResponse(taskResponse);
+                            }, e -> {
+                                connectorExecutor.close();
+                                connector.removeCredential();
+                                actionListener.onFailure(e);
+                            }));
+                    }, e -> {
+                        log.error("Failed to decrypt credentials in connector", e);
+                        connector.removeCredential();
+                        actionListener.onFailure(e);
+                    });
+                    connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
                 }
             }, e -> {
                 log.error("Failed to get connector " + connectorId, e);

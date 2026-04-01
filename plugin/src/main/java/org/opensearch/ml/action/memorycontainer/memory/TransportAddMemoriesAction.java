@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -124,16 +125,20 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             return;
         }
 
-        memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
-            if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
-                actionListener
-                    .onFailure(
-                        new OpenSearchStatusException("User doesn't have permissions to add memory to this container", RestStatus.FORBIDDEN)
-                    );
-                return;
-            }
-            createNewSessionIfAbsent(input, container, user, actionListener);
-        }, actionListener::onFailure));
+        memoryContainerHelper
+            .getMemoryContainer(memoryContainerId, request.getMlAddMemoryInput().getTenantId(), ActionListener.wrap(container -> {
+                if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User doesn't have permissions to add memory to this container",
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                createNewSessionIfAbsent(input, container, user, actionListener);
+            }, actionListener::onFailure));
     }
 
     private void createNewSessionIfAbsent(
@@ -143,6 +148,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         try {
+            String tenantId = input.getTenantId();
             container.getConfiguration().getParameters().putAll(input.getParameters()); // merge user provided parameters
             List<MessageInput> messages = input.getMessages();
 
@@ -187,8 +193,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
                 }, exception -> {
                     // Preserve client errors (4XX) with their detailed messages
-                    if (exception instanceof OpenSearchStatusException) {
-                        OpenSearchStatusException osException = (OpenSearchStatusException) exception;
+                    if (exception instanceof OpenSearchException) {
+                        OpenSearchException osException = (OpenSearchException) exception;
                         if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                             actionListener.onFailure(exception);
                             return;
@@ -199,7 +205,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 });
 
-                memoryProcessingService.summarizeMessages(container.getConfiguration(), messages, summaryListener);
+                memoryProcessingService.summarizeMessages(tenantId, container.getConfiguration(), messages, summaryListener);
             } else {
                 processAndIndexMemory(input, container, user, actionListener);
             }
@@ -286,6 +292,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         List<MemoryStrategy> strategies = container.getConfiguration().getStrategies();
         MemoryConfiguration memoryConfig = container.getConfiguration();
+        String tenantId = input.getTenantId();
 
         for (MemoryStrategy strategy : strategies) {
             if (strategy.isEnabled()) {
@@ -293,12 +300,12 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 if (strategyNameSpace.size() != strategy.getNamespace().size()) {
                     log.info("Skipping strategy {} due to missing namespace", strategy.getId());
                 } else {
-                    memoryProcessingService.runMemoryStrategy(strategy, messages, memoryConfig, ActionListener.wrap(facts -> {
+                    memoryProcessingService.runMemoryStrategy(tenantId, strategy, messages, memoryConfig, ActionListener.wrap(facts -> {
                         storeLongTermMemory(strategy, strategyNameSpace, input, messages, user, facts, memoryConfig, actionListener);
                     }, e -> {
                         // Preserve client errors (4XX) with their detailed messages
-                        if (e instanceof OpenSearchStatusException) {
-                            OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                        if (e instanceof OpenSearchException) {
+                            OpenSearchException osException = (OpenSearchException) e;
                             if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                                 actionListener.onFailure(e);
                                 return;
@@ -336,6 +343,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
     ) {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
+        String tenantId = input.getTenantId();
 
         // Search for similar facts and make memory decisions
         if (!facts.isEmpty() && memoryConfig != null && memoryConfig.getLlmId() != null) {
@@ -345,7 +353,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
                 if (allSearchResults.size() > 0) {
                     memoryProcessingService
-                        .makeMemoryDecisions(facts, allSearchResults, strategy, memoryConfig, ActionListener.wrap(decisions -> {
+                        .makeMemoryDecisions(tenantId, facts, allSearchResults, strategy, memoryConfig, ActionListener.wrap(decisions -> {
                             memoryOperationsService
                                 .executeMemoryOperations(
                                     decisions,
@@ -362,8 +370,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                 );
                         }, e -> {
                             // Preserve client errors (4XX) with their detailed messages
-                            if (e instanceof OpenSearchStatusException) {
-                                OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                            if (e instanceof OpenSearchException) {
+                                OpenSearchException osException = (OpenSearchException) e;
                                 if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                                     actionListener.onFailure(e);
                                     return;

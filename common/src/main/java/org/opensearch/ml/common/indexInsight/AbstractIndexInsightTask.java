@@ -15,7 +15,6 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -249,6 +248,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .tenantId(tenantId)
             .index(sourceIndex)
             .taskType(taskType)
+            .lastUpdatedTime(Instant.now())
             .status(IndexInsightTaskStatus.FAILED)
             .build();
         writeIndexInsight(
@@ -470,11 +470,14 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         String sourceIndex,
         ActionListener<String> listener
     ) {
+        Map<String, String> params = new HashMap<>();
+        params.put("prompt", prompt);
+
         AgentMLInput agentInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)
             .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(params).build())
             .build();
 
         MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);

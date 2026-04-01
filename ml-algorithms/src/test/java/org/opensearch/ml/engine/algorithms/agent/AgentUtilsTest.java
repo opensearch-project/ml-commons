@@ -6,10 +6,16 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -17,6 +23,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
@@ -1288,7 +1295,11 @@ public class AgentUtilsTest extends MLStaticMockBase {
     private void mockMcpConnector(MockedStatic<Connector> connectorStatic) {
         McpConnector mockConnector = mock(McpConnector.class);
         when(mockConnector.getProtocol()).thenReturn("mcp_sse");
-        doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
     }
 
@@ -1329,7 +1340,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1361,7 +1372,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1393,7 +1404,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1923,7 +1934,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1935,7 +1946,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             // Mock an unsupported connector type (neither McpConnector nor McpStreamableHttpConnector)
             HttpConnector mockConnector = mock(HttpConnector.class);
             when(mockConnector.getProtocol()).thenReturn("http");
-            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString(), isA(ActionListener.class));
             connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
 
             MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
@@ -1997,7 +2008,742 @@ public class AgentUtilsTest extends MLStaticMockBase {
     private void mockMcpStreamableHttpConnector(MockedStatic<Connector> connectorStatic) {
         McpStreamableHttpConnector mockConnector = mock(McpStreamableHttpConnector.class);
         when(mockConnector.getProtocol()).thenReturn("mcp_streamable_http");
-        doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+    }
+
+    @Test
+    public void testSanitizeForLogging_NullInput() {
+        assertNull(AgentUtils.sanitizeForLogging(null));
+    }
+
+    @Test
+    public void testSanitizeForLogging_EmptyMap() {
+        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+        assertTrue(result.isEmpty());
+        assertNotSame(params, result);
+    }
+
+    @Test
+    public void testSanitizeForLogging_WithCredentialField() {
+        Map<String, Object> params = new HashMap<>();
+        Map<String, String> credential = new HashMap<>();
+        credential.put("accessKey", "secretAccessKey123");
+        credential.put("secretKey", "verySecretKey456");
+        params.put(CREDENTIAL_FIELD, credential);
+        params.put("endpoint", "https://example.com");
+        params.put("region", "us-west-2");
+
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+
+        // Verify credential is redacted
+        assertEquals("[REDACTED]", result.get(CREDENTIAL_FIELD));
+        // Verify other fields are unchanged
+        assertEquals("https://example.com", result.get("endpoint"));
+        assertEquals("us-west-2", result.get("region"));
+        // Verify original map is not modified
+        assertEquals(credential, params.get(CREDENTIAL_FIELD));
+        // Verify it's a different map
+        assertNotSame(params, result);
+    }
+
+    @Test
+    public void testSanitizeForLogging_WithoutCredentialField() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("endpoint", "https://example.com");
+        params.put("region", "us-west-2");
+        params.put("memory_id", "test-memory-id");
+
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+
+        // Verify all fields are unchanged
+        assertEquals("https://example.com", result.get("endpoint"));
+        assertEquals("us-west-2", result.get("region"));
+        assertEquals("test-memory-id", result.get("memory_id"));
+        // Verify it's a different map (shallow copy)
+        assertNotSame(params, result);
+    }
+
+    // ==================== Tests for extractTextFromMessage ====================
+
+    @Test
+    public void testExtractTextFromMessage_SingleTextBlock() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText("Hello world");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("Hello world", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_MultipleTextBlocks() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block1 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block1.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block1.setText("First");
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block2 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block2.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block2.setText("Second");
+
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Arrays.asList(block1, block2)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("First\nSecond", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_MixedContentTypes() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock textBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        textBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        textBlock.setText("Text content");
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock imageBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        imageBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.IMAGE);
+
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Arrays.asList(textBlock, imageBlock)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("Text content", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullMessage() {
+        assertEquals("", AgentUtils.extractTextFromMessage(null));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullContent() {
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            null
+        );
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_EmptyContent() {
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.emptyList()
+        );
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullTextInBlock() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText(null);
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_WhitespaceTrimmed() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText("  Hello  ");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        assertEquals("Hello", AgentUtils.extractTextFromMessage(message));
+    }
+
+    // ==================== Tests for extractMessagePairs ====================
+
+    private org.opensearch.ml.common.input.execute.agent.Message createMessage(String role, String text) {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText(text);
+        return new org.opensearch.ml.common.input.execute.agent.Message(role, Collections.singletonList(block));
+    }
+
+    @Test
+    public void testExtractMessagePairs_SinglePair() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "What is AI?"), createMessage("assistant", "AI is artificial intelligence."));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "session1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("What is AI?", pairs.get(0).getQuestion());
+        assertEquals("AI is artificial intelligence.", pairs.get(0).getResponse());
+        assertEquals("session1", pairs.get(0).getSessionId());
+        assertTrue(pairs.get(0).getFinalAnswer());
+    }
+
+    @Test
+    public void testExtractMessagePairs_MultiplePairs() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(
+                createMessage("user", "Q1"),
+                createMessage("assistant", "A1"),
+                createMessage("user", "Q2"),
+                createMessage("assistant", "A2")
+            );
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", "app");
+
+        assertEquals(2, pairs.size());
+        // Chronological order
+        assertEquals("Q1", pairs.get(0).getQuestion());
+        assertEquals("A1", pairs.get(0).getResponse());
+        assertEquals("Q2", pairs.get(1).getQuestion());
+        assertEquals("A2", pairs.get(1).getResponse());
+        assertEquals("app", pairs.get(0).getType());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsTrailingUserMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "Q1"), createMessage("assistant", "A1"), createMessage("user", "Trailing question"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+        assertEquals("A1", pairs.get(0).getResponse());
+    }
+
+    @Test
+    public void testExtractMessagePairs_OnlyUserMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Collections
+            .singletonList(createMessage("user", "Just a question"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+        assertTrue(pairs.isEmpty());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsSystemMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("system", "System prompt"), createMessage("user", "Q1"), createMessage("assistant", "A1"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsNullMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "Q1"), null, createMessage("assistant", "A1"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+    }
+
+    @Test
+    public void testExtractMessagePairs_EmptyList() {
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils
+            .extractMessagePairs(Collections.emptyList(), "s1", null);
+        assertTrue(pairs.isEmpty());
+    }
+
+    // ===== getModelMetadata tests =====
+
+    @Test
+    public void testGetModelMetadata_nullSdkClient() {
+        AtomicReference<String[]> result = new AtomicReference<>();
+        AgentUtils.getModelMetadata("model-1", "tenant-1", null, client, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError("Should not fail", e);
+        }));
+
+        assertNotNull(result.get());
+        assertEquals("model-1", result.get()[0]); // url falls back to modelId
+        assertEquals("model-1", result.get()[1]); // name falls back to modelId
+    }
+
+    // ===== addTokenUsageTensor tests =====
+
+    @Test
+    public void testAddTokenUsageTensor_nullTracker() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentUtils.addTokenUsageTensor(tensors, null, "tenant-1", true);
+        assertTrue(tensors.isEmpty());
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_emptyTracker() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", true);
+        assertTrue(tensors.isEmpty()); // hasUsage() is false
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_withUsage() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", true);
+
+        assertEquals(1, tensors.size());
+        ModelTensors modelTensors = tensors.get(0);
+        assertEquals(1, modelTensors.getMlModelTensors().size());
+
+        ModelTensor tensor = modelTensors.getMlModelTensors().get(0);
+        assertEquals(AgentTokenTracker.TOKEN_USAGE, tensor.getName());
+        assertNotNull(tensor.getDataAsMap());
+        assertTrue(tensor.getDataAsMap().containsKey(AgentTokenTracker.PER_MODEL_USAGE));
+        assertTrue(tensor.getDataAsMap().containsKey(AgentTokenTracker.PER_TURN_USAGE));
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_excludedWhenFlagFalse() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", false);
+
+        // Tensor should NOT be added when includeTokenUsage is false
+        assertTrue(tensors.isEmpty());
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_subAgentAlwaysIncludesTensor() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setSubAgent(true);
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        // Even with includeTokenUsage=false, sub-agents must include the tensor for parent merging
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", false);
+
+        assertEquals(1, tensors.size());
+        ModelTensor tensor = tensors.get(0).getMlModelTensors().get(0);
+        assertEquals(AgentTokenTracker.TOKEN_USAGE, tensor.getName());
+    }
+
+    // ===== getLongValue tests =====
+
+    @Test
+    public void testGetLongValue_fromNumber() {
+        Map<String, Object> map = Map.of("tokens", 42L);
+        assertEquals(Long.valueOf(42L), AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_fromString() {
+        Map<String, Object> map = Map.of("tokens", "100");
+        assertEquals(Long.valueOf(100L), AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_fromInvalidString() {
+        Map<String, Object> map = Map.of("tokens", "not_a_number");
+        assertNull(AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_missingKey() {
+        Map<String, Object> map = Map.of("other", 42);
+        assertNull(AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    // ===== resolveModelUrl tests =====
+
+    @Test
+    public void testResolveModelUrl_withInlineConnector() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        Connector connector = mock(Connector.class);
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(connector.getParameters()).thenReturn(Map.of());
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn("https://bedrock.amazonaws.com/model/claude/converse");
+
+        AtomicReference<String> result = new AtomicReference<>();
+        AgentUtils.resolveModelUrl(mlModel, "tenant-1", null, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError("Should not fail", e);
+        }));
+
+        assertEquals("https://bedrock.amazonaws.com/model/claude/converse", result.get());
+    }
+
+    @Test
+    public void testResolveModelUrl_noConnectorOrConnectorId() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mlModel.getConnector()).thenReturn(null);
+        when(mlModel.getConnectorId()).thenReturn(null);
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .resolveModelUrl(
+                mlModel,
+                "tenant-1",
+                null,
+                null,
+                ActionListener.wrap(url -> { throw new AssertionError("Should not succeed"); }, error::set)
+            );
+
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalStateException);
+    }
+
+    @Test
+    public void testResolveModelUrl_inlineConnectorNullEndpoint() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        Connector connector = mock(Connector.class);
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(connector.getParameters()).thenReturn(null);
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(null);
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .resolveModelUrl(
+                mlModel,
+                "tenant-1",
+                null,
+                null,
+                ActionListener.wrap(url -> { throw new AssertionError("Should not succeed"); }, error::set)
+            );
+
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalStateException);
+    }
+
+    // ===== logTokenUsageDetails tests =====
+
+    @Test
+    public void testLogTokenUsageDetails_nullTracker() {
+        // Should not throw
+        AgentUtils.logTokenUsageDetails(null, Map.of(), "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_nullMap() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        // Should not throw
+        AgentUtils.logTokenUsageDetails(tracker, null, "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_subAgent_skipsLogging() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setSubAgent(true);
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        // Should not throw; sub-agent logging is silently skipped
+        AgentUtils.logTokenUsageDetails(tracker, tracker.toOutputMap(), "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_withPerModelUsage() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        // Should not throw; logs structured per-model usage
+        AgentUtils.logTokenUsageDetails(tracker, tracker.toOutputMap(), "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_emptyPerModelUsage() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        Map<String, Object> emptyMap = new HashMap<>();
+        emptyMap.put(AgentTokenTracker.PER_MODEL_USAGE, "not_a_list");
+
+        // Should not throw; per_model_usage is not a List so logging loop is skipped
+        AgentUtils.logTokenUsageDetails(tracker, emptyMap, null);
+    }
+
+    // ===== getModel tests =====
+
+    @SuppressWarnings("unchecked")
+    private void stubGetModelSuccess(String modelJson) {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\""
+                + org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX
+                + "\",\"_id\":\"model-1\",\"found\":true,\"_source\":"
+                + modelJson
+                + "}";
+            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(parser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void stubGetModelNotFound() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"model-1\",\"found\":false}";
+            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(parser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void stubGetModelException(Throwable error) {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, error);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    @Test
+    public void testGetModel_success() {
+        String modelJson = "{\"name\":\"test-model\",\"algorithm\":\"TEXT_EMBEDDING\"}";
+        stubGetModelSuccess(modelJson);
+
+        AtomicReference<org.opensearch.ml.common.MLModel> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(result::set, error::set));
+
+        assertNull(error.get());
+        assertNotNull(result.get());
+        assertEquals("test-model", result.get().getName());
+    }
+
+    @Test
+    public void testGetModel_notFound() {
+        stubGetModelNotFound();
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+        assertTrue(error.get().getMessage().contains("Failed to find model"));
+    }
+
+    @Test
+    public void testGetModel_indexNotFoundException() {
+        stubGetModelException(new org.opensearch.index.IndexNotFoundException("test"));
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+        assertTrue(error.get().getMessage().contains("Failed to find model"));
+    }
+
+    @Test
+    public void testGetModel_genericException() {
+        stubGetModelException(new RuntimeException("Something went wrong"));
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+    }
+
+    @Test
+    public void testGetModel_nullParser() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(null);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+        assertTrue(error.get().getMessage().contains("Failed to find model"));
+    }
+
+    // ===== resolveModelUrl connector ID path tests =====
+
+    @Test
+    public void testResolveModelUrl_withConnectorId_success() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mlModel.getConnector()).thenReturn(null);
+        when(mlModel.getConnectorId()).thenReturn("connector-1");
+
+        // Stub getConnector to return a connector with a valid endpoint
+        stubGetConnector();
+
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+            Connector mockConnector = mock(Connector.class);
+            when(mockConnector.getParameters()).thenReturn(Map.of());
+            when(mockConnector.getActionEndpoint("predict", Map.of())).thenReturn("https://bedrock.amazonaws.com/model/test");
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+            AtomicReference<String> result = new AtomicReference<>();
+            AtomicReference<Exception> error = new AtomicReference<>();
+            AgentUtils.resolveModelUrl(mlModel, "tenant-1", sdkClient, client, ActionListener.wrap(result::set, error::set));
+
+            assertNull(error.get());
+            assertEquals("https://bedrock.amazonaws.com/model/test", result.get());
+        }
+    }
+
+    @Test
+    public void testResolveModelUrl_withConnectorId_connectorFetchFails() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mlModel.getConnector()).thenReturn(null);
+        when(mlModel.getConnectorId()).thenReturn("connector-1");
+
+        // Stub getConnector to fail
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("Failed to get connector"));
+                return stage;
+            });
+            return stage;
+        });
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.resolveModelUrl(mlModel, "tenant-1", sdkClient, client, ActionListener.wrap(url -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+    }
+
+    // ===== getModelMetadata with sdkClient tests =====
+
+    @Test
+    public void testGetModelMetadata_success() {
+        String modelJson = "{\"name\":\"test-model\",\"algorithm\":\"TEXT_EMBEDDING\"}";
+        stubGetModelSuccess(modelJson);
+
+        // Need a second stub for the connector fetch from resolveModelUrl
+        // But the model has no connector, so it will fail with IllegalStateException
+        // which triggers the fallback path
+
+        AtomicReference<String[]> result = new AtomicReference<>();
+        AgentUtils
+            .getModelMetadata("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(result::set, e -> {
+                throw new AssertionError("Should not fail", e);
+            }));
+
+        assertNotNull(result.get());
+        // URL falls back to modelId because model has no connector
+        assertEquals("model-1", result.get()[0]);
+        // Name comes from the model
+        assertEquals("test-model", result.get()[1]);
+    }
+
+    @Test
+    public void testGetModelMetadata_getModelFails_fallback() {
+        stubGetModelException(new RuntimeException("DB error"));
+
+        AtomicReference<String[]> result = new AtomicReference<>();
+        AgentUtils
+            .getModelMetadata("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(result::set, e -> {
+                throw new AssertionError("Should not fail", e);
+            }));
+
+        assertNotNull(result.get());
+        assertEquals("model-1", result.get()[0]); // falls back to modelId
+        assertEquals("model-1", result.get()[1]); // falls back to modelId
     }
 }

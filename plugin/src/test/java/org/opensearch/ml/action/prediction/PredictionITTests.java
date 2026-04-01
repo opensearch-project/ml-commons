@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.tests.util.LuceneTestCase;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -42,15 +41,16 @@ import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
 
+@OpenSearchIntegTestCase.SuiteScopeTestCase
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
 public class PredictionITTests extends MLCommonsIntegTestCase {
-    private String irisIndexName;
-    private String kMeansModelId;
-    private String batchRcfModelId;
-    private String fitRcfModelId;
-    private String linearRegressionModelId;
-    private String logisticRegressionModelId;
-    private int batchRcfDataSize = 100;
+    private static String irisIndexName;
+    private static String kMeansModelId;
+    private static String batchRcfModelId;
+    private static String fitRcfModelId;
+    private static String linearRegressionModelId;
+    private static String logisticRegressionModelId;
+    private static final int batchRcfDataSize = 100;
 
     /**
      * set ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS to 0 to disable ML_COMMONS_SYNC_UP_JOB
@@ -63,9 +63,8 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
+    @Override
+    public void setupSuiteScopeCluster() throws Exception {
         irisIndexName = "iris_data_for_prediction_it";
         loadIrisData(irisIndexName);
 

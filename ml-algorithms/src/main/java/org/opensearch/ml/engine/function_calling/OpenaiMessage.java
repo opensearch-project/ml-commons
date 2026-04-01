@@ -27,11 +27,14 @@ public class OpenaiMessage implements LLMMessage {
     }
 
     OpenaiMessage(String role, Object content) {
-        this.role = role;
+        this.role = role != null ? role : "tool";
         this.content = (String) content;
     }
 
     public String getResponse() {
-        return StringUtils.toJson(Map.of("role", role, "tool_call_id", toolCallId, "content", content));
+        String roleToUse = role != null ? role : "tool";
+        String contentToUse = content != null ? content : "";
+        String toolCallIdToUse = toolCallId != null ? toolCallId : "";
+        return StringUtils.toJson(Map.of("role", roleToUse, "tool_call_id", toolCallIdToUse, "content", contentToUse));
     }
 }

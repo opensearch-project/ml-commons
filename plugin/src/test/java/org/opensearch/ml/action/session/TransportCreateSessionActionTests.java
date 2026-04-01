@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +22,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -30,6 +32,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
@@ -148,10 +151,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -214,10 +217,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper to simulate successful flow
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -237,7 +240,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Verify that the flow continues (tenant validation passes in this case)
         // The exact behavior depends on TenantAwareHelper implementation
-        verify(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        verify(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
     }
 
     @Test
@@ -304,10 +307,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper to return error
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onFailure(new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND));
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         // Execute
         transportCreateSessionAction.doExecute(task, request, actionListener);
@@ -329,10 +332,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
 
@@ -350,6 +353,99 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testDoExecute_DisabledSession_BadRequest() {
+        // Setup mocks
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        // Create container with session disabled
+        MemoryConfiguration disabledSessionConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("test-memory")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("test-embedding-model")
+            .dimension(768)
+            .disableSession(true)
+            .build();
+
+        MLMemoryContainer containerWithDisabledSession = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .description("Test memory container")
+            .configuration(disabledSessionConfig)
+            .build();
+
+        // Mock memory container helper to return container with disabled session
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(containerWithDisabledSession);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+
+        // Execute
+        transportCreateSessionAction.doExecute(task, request, actionListener);
+
+        // Verify - should fail with BAD_REQUEST before reaching indexData
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) exception).status());
+        assertEquals("Session is disabled for this container", exception.getMessage());
+
+        // Verify indexData was never called
+        verify(memoryContainerHelper, never()).indexData(any(), any(), any());
+    }
+
+    @Test
+    public void testDoExecute_IndexData_4XXErrorPreserved() {
+        // Setup mocks
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        // Mock memory container helper
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(memoryContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
+
+        // Mock indexData to fail with 4XX client error (e.g., IndexNotFoundException)
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new IndexNotFoundException("Session index not found"));
+            return null;
+        }).when(memoryContainerHelper).indexData(any(), any(), any());
+
+        // Execute
+        transportCreateSessionAction.doExecute(task, request, actionListener);
+
+        // Verify - 4XX errors are preserved and passed through (not converted to INTERNAL_SERVER_ERROR)
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(
+            "Expected OpenSearchException or subclass, got: " + exception.getClass().getName(),
+            exception instanceof OpenSearchException
+        );
+        RestStatus status = exception instanceof OpenSearchStatusException
+            ? ((OpenSearchStatusException) exception).status()
+            : ((IndexNotFoundException) exception).status();
+        assertEquals(RestStatus.NOT_FOUND, status);
+        assertTrue(
+            "Expected message about index not found, got: " + exception.getMessage(),
+            exception.getMessage().contains("Session index not found") || exception.getMessage().contains("index not found")
+        );
+    }
+
+    @Test
     public void testDoExecute_IndexingFailure() {
         // Setup mocks
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
@@ -357,10 +453,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -405,10 +501,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -461,10 +557,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -518,10 +614,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -598,10 +694,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");

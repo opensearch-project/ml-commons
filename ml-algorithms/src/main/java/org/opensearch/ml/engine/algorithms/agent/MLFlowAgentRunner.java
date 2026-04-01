@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,13 +25,14 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
@@ -170,24 +172,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void updateMemory(Map<String, Object> additionalInfo, MLMemorySpec memorySpec, String memoryId, String interactionId) {
-        if (memoryId == null || interactionId == null || memorySpec == null || memorySpec.getType() == null) {
-            return;
-        }
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
-            .get(memorySpec.getType());
-        conversationIndexMemoryFactory
-            .create(
-                memoryId,
-                ActionListener
-                    .wrap(
-                        memory -> updateInteraction(additionalInfo, interactionId, memory),
-                        e -> log.error("Failed create memory from id: {}", memoryId, e)
-                    )
-            );
-    }
-
-    @VisibleForTesting
     void updateMemoryWithListener(
         Map<String, Object> additionalInfo,
         MLMemorySpec memorySpec,
@@ -199,10 +183,10 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             return;
         }
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
-            .get(memorySpec.getType());
+            .get(MLMemoryType.from(memorySpec.getType()).name());
         conversationIndexMemoryFactory
             .create(
-                memoryId,
+                Map.of(MEMORY_ID, memoryId),
                 ActionListener
                     .wrap(
                         memory -> updateInteractionWithListener(additionalInfo, interactionId, memory, listener),

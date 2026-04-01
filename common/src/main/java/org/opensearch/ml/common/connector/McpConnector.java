@@ -6,22 +6,12 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ACCESS_FIELD;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
-import static org.opensearch.ml.common.CommonValue.CLIENT_CONFIG_FIELD;
-import static org.opensearch.ml.common.CommonValue.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.CREDENTIAL_FIELD;
-import static org.opensearch.ml.common.CommonValue.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.HEADERS_FIELD;
-import static org.opensearch.ml.common.CommonValue.LAST_UPDATED_TIME_FIELD;
-import static org.opensearch.ml.common.CommonValue.NAME_FIELD;
-import static org.opensearch.ml.common.CommonValue.OWNER_FIELD;
-import static org.opensearch.ml.common.CommonValue.PARAMETERS_FIELD;
-import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.URL_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 
@@ -32,7 +22,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -60,32 +49,8 @@ import lombok.extern.log4j.Log4j2;
 @EqualsAndHashCode
 @Getter
 @org.opensearch.ml.common.annotation.Connector(MCP_SSE)
-public class McpConnector implements Connector {
+public class McpConnector extends AbstractConnector {
 
-    protected String name;
-    protected String description;
-    protected String version;
-    protected String protocol;
-
-    protected Map<String, String> credential;
-    protected Map<String, String> decryptedHeaders;
-    protected Map<String, String> parameters;
-    @Setter
-    protected Map<String, String> decryptedCredential;
-    @Setter
-    protected List<String> backendRoles;
-    @Setter
-    protected User owner;
-    @Setter
-    protected AccessMode access;
-    @Setter
-    protected Instant createdTime;
-    @Setter
-    protected Instant lastUpdateTime;
-    @Setter
-    protected ConnectorClientConfig connectorClientConfig;
-    @Setter
-    protected String tenantId;
     @Setter
     @Getter
     protected String url;
@@ -204,22 +169,8 @@ public class McpConnector implements Connector {
         return decryptedHeaders;
     }
 
-    @Override
-    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
-        Map<String, String> decrypted = new HashMap<>();
-        for (String key : credential.keySet()) {
-            decrypted.put(key, function.apply(credential.get(key), tenantId));
-        }
-        this.decryptedCredential = decrypted;
-        this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    @Override
-    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
-        for (String key : credential.keySet()) {
-            String encrypted = function.apply(credential.get(key), tenantId);
-            credential.put(key, encrypted);
-        }
+    protected Map<String, String> getAllHeaders(String action) {
+        return headers;
     }
 
     @Override
@@ -332,7 +283,7 @@ public class McpConnector implements Connector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function) {
+    public void update(MLCreateConnectorInput updateContent) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -347,7 +298,6 @@ public class McpConnector implements Connector {
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
-            encrypt(function, this.tenantId);
         }
         if (updateContent.getBackendRoles() != null) {
             this.backendRoles = updateContent.getBackendRoles();

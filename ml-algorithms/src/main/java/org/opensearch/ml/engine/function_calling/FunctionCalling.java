@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.function_calling;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 
 /**
@@ -35,4 +36,28 @@ public interface FunctionCalling {
      * @return a LLMMessage containing tool results.
      */
     List<LLMMessage> supply(List<Map<String, Object>> toolResults);
+
+    /**
+     * Filters the dataAsMap to keep only the first tool call for interaction history.
+     * This prevents the model from expecting results for multiple tool calls when only the first one is executed.
+     * Default implementation returns the original dataAsMap unchanged.
+     *
+     * @param dataAsMap the original response data map
+     * @param parameters configuration parameters
+     * @return filtered data map containing only the first tool call, or original if no filtering needed
+     */
+    default Map<String, ?> filterToFirstToolCall(Map<String, ?> dataAsMap, Map<String, String> parameters) {
+        return dataAsMap;
+    }
+
+    /**
+     * Extracts token usage information from the LLM response.
+     * Each implementation knows its own response format and field names.
+     *
+     * @param llmResponseDataAsMap the full LLM response data map
+     * @return TokenUsage object with token counts, or null if extraction fails or is not supported
+     */
+    default TokenUsage extractTokenUsage(Map<String, ?> llmResponseDataAsMap) {
+        return null; // Default: no token tracking
+    }
 }

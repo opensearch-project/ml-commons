@@ -159,7 +159,7 @@ public class RestMLMcpToolsRegisterActionTests extends OpenSearchTestCase {
     @Test
     public void test_doExecute_withUnrecognizedToolName() throws IOException {
         exceptionRule.expect(ActionRequestValidationException.class);
-        exceptionRule.expectMessage("Validation Failed: 1: Unrecognized tool in request: [NotRealTool]");
+        exceptionRule.expectMessage("Validation Failed: 1: Unrecognized tool in request");
         String registerToolRequest = """
             {
                 "tools": [

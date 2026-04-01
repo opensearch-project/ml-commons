@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -18,6 +17,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentStreamRestRequest;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +43,11 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.rest.RestChannel;
@@ -75,6 +79,8 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         clusterService = mock(ClusterService.class);
         mlModelManager = mock(MLModelManager.class);
         mlAgent = mock(MLAgent.class);
+        // Configure mock agent as V1 agent (flow type) by default
+        when(mlAgent.getType()).thenReturn("conversational");
         restAction = new RestMLExecuteStreamAction(mlModelManager, mlFeatureEnabledSetting, clusterService);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -207,6 +213,7 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
 
         RestMLExecuteStreamAction spyAction = spy(restAction);
         MLAgent mockAgent = mock(MLAgent.class);
+        when(mockAgent.getType()).thenReturn("conversational");
         LLMSpec mockLLM = mock(LLMSpec.class);
         when(mockLLM.getModelId()).thenReturn("valid_model_id");
         when(mockAgent.getLlm()).thenReturn(mockLLM);
@@ -225,6 +232,41 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
                 .build();
 
         assertNotNull(spyAction.prepareRequest(request, client));
+    }
+
+    @Test
+    public void testPrepareRequestV2AgentRejected() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetResponse mockResponse = mock(GetResponse.class);
+            when(mockResponse.isExists()).thenReturn(true);
+            when(mockResponse.getSourceAsString()).thenReturn(
+                    "{\"name\":\"test_agent\",\"type\":\"conversational_v2\"}"
+            );
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "v2_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/v2_agent_id/_execute/stream")
+                .build();
+
+        OpenSearchStatusException exception = assertThrows(
+                OpenSearchStatusException.class,
+                () -> restAction.prepareRequest(request, client)
+        );
+        assertTrue(exception.getMessage().contains("V2 agents"));
+        assertTrue(exception.getMessage().contains("do not support streaming"));
+        assertTrue(exception.getMessage().contains("/_execute"));
+        assertEquals(RestStatus.BAD_REQUEST, exception.status());
     }
 
     @Test
@@ -370,5 +412,385 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         assertNotNull(result);
         assertEquals(content.length(), result.length());
         assertEquals(content, result.utf8ToString());
+    }
+
+    @Test
+    public void testPrepareRequestWithMcpHeadersFeatureDisabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(false);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-key"));
+        headers.put("aws-region", List.of("us-west-2"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> restAction.prepareRequest(request, client)
+        );
+        assertTrue(exception.getMessage().contains("MCP header passthrough"));
+        assertTrue(exception.getMessage().contains("plugins.ml_commons.mcp_header_passthrough_enabled"));
+    }
+
+    @Test
+    public void testPrepareRequestWithMcpHeadersFeatureEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-key"));
+        headers.put("aws-region", List.of("us-west-2"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        assertNotNull(spyAction.prepareRequest(request, client));
+        
+        // Verify headers were put into ThreadContext
+        assertEquals("test-key", client.threadPool().getThreadContext().getHeader("aws-access-key-id"));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader("aws-region"));
+    }
+
+    @Test
+    public void testPrepareRequestWithoutMcpHeaders() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        RestRequest request = getExecuteAgentStreamRestRequest();
+
+        // Should work without MCP headers when feature flag state doesn't matter
+        assertNotNull(spyAction.prepareRequest(request, client));
+    }
+
+    @Test
+    public void testPrepareRequestWithAllMcpHeaders() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()).thenReturn(true);
+
+        RestMLExecuteStreamAction spyAction = spy(restAction);
+        doReturn(mlAgent).when(spyAction).validateAndGetAgent(anyString(), any());
+        doReturn(true).when(spyAction).isModelValid(anyString(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-access-key"));
+        headers.put("aws-secret-access-key", List.of("test-secret-key"));
+        headers.put("aws-session-token", List.of("test-session-token"));
+        headers.put("aws-region", List.of("us-west-2"));
+        headers.put("aws-service-name", List.of("bedrock"));
+        headers.put("opensearch-url", List.of("https://localhost:9200"));
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        assertNotNull(spyAction.prepareRequest(request, client));
+        
+        // Verify all MCP headers were put into ThreadContext
+        assertEquals("test-access-key", client.threadPool().getThreadContext().getHeader("aws-access-key-id"));
+        assertEquals("test-secret-key", client.threadPool().getThreadContext().getHeader("aws-secret-access-key"));
+        assertEquals("test-session-token", client.threadPool().getThreadContext().getHeader("aws-session-token"));
+        assertEquals("us-west-2", client.threadPool().getThreadContext().getHeader("aws-region"));
+        assertEquals("bedrock", client.threadPool().getThreadContext().getHeader("aws-service-name"));
+        assertEquals("https://localhost:9200", client.threadPool().getThreadContext().getHeader("opensearch-url"));
+    }
+
+    // ===== extractTokenUsage tests =====
+
+    private MLTaskResponse buildResponseWithTokenUsage() {
+        Map<String, Object> tokenUsageMap = new HashMap<>();
+        tokenUsageMap.put("per_model_usage", List.of(Map.of("model_id", "m1", "input_tokens", 100L)));
+        tokenUsageMap.put("per_turn_usage", List.of(Map.of("turn", 1, "input_tokens", 100L)));
+
+        ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("content", "hello", "is_last", false)).build();
+        ModelTensor tokenTensor = ModelTensor.builder().name("token_usage").dataAsMap(tokenUsageMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor, tokenTensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        return MLTaskResponse.builder().output(output).build();
+    }
+
+    private MLTaskResponse buildResponseWithoutTokenUsage() {
+        ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("content", "hello", "is_last", false)).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        return MLTaskResponse.builder().output(output).build();
+    }
+
+    @Test
+    public void testExtractTokenUsage_withTokenUsageTensor() throws Exception {
+        MLTaskResponse response = buildResponseWithTokenUsage();
+
+        Map<String, ?> tokenUsage = invokeExtractTokenUsage(response);
+
+        assertNotNull(tokenUsage);
+        assertTrue(tokenUsage.containsKey("per_model_usage"));
+        assertTrue(tokenUsage.containsKey("per_turn_usage"));
+    }
+
+    @Test
+    public void testExtractTokenUsage_withoutTokenUsageTensor() throws Exception {
+        MLTaskResponse response = buildResponseWithoutTokenUsage();
+
+        Map<String, ?> tokenUsage = invokeExtractTokenUsage(response);
+
+        assertNull(tokenUsage);
+    }
+
+    @Test
+    public void testExtractTokenUsage_emptyOutput() throws Exception {
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of()).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        Map<String, ?> tokenUsage = invokeExtractTokenUsage(response);
+
+        assertNull(tokenUsage);
+    }
+
+    // ===== extractThreadId / extractRunId tests =====
+
+    private MLExecuteTaskRequest buildAGUIRequest(Map<String, String> parameters) {
+        AgentMLInput agentInput = new AgentMLInput(
+            "agent-1",
+            null,
+            FunctionName.AGENT,
+            RemoteInferenceInputDataSet.builder().parameters(parameters).build(),
+            false
+        );
+        return new MLExecuteTaskRequest(FunctionName.AGENT, agentInput, false);
+    }
+
+    @Test
+    public void testExtractThreadId_withAGUIParam() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put("agui_thread_id", "thread_abc123");
+        params.put("agui_run_id", "run_xyz");
+        MLExecuteTaskRequest request = buildAGUIRequest(params);
+
+        String threadId = invokeExtractThreadId(request);
+
+        assertEquals("thread_abc123", threadId);
+    }
+
+    @Test
+    public void testExtractThreadId_withoutAGUIParam_fallback() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        MLExecuteTaskRequest request = buildAGUIRequest(params);
+
+        String threadId = invokeExtractThreadId(request);
+
+        assertTrue(threadId.startsWith("thread_"));
+    }
+
+    @Test
+    public void testExtractRunId_withAGUIParam() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put("agui_thread_id", "thread_abc");
+        params.put("agui_run_id", "run_xyz789");
+        MLExecuteTaskRequest request = buildAGUIRequest(params);
+
+        String runId = invokeExtractRunId(request);
+
+        assertEquals("run_xyz789", runId);
+    }
+
+    @Test
+    public void testExtractRunId_withoutAGUIParam_fallback() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        MLExecuteTaskRequest request = buildAGUIRequest(params);
+
+        String runId = invokeExtractRunId(request);
+
+        assertTrue(runId.startsWith("run_"));
+    }
+
+    // ===== isAGUIAgent tests =====
+
+    @Test
+    public void testIsAGUIAgent_withThreadId() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put("agui_thread_id", "thread_abc");
+        MLExecuteTaskRequest request = buildAGUIRequest(params);
+
+        assertTrue(invokeIsAGUIAgent(request));
+    }
+
+    @Test
+    public void testIsAGUIAgent_withRunId() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put("agui_run_id", "run_abc");
+        MLExecuteTaskRequest request = buildAGUIRequest(params);
+
+        assertTrue(invokeIsAGUIAgent(request));
+    }
+
+    @Test
+    public void testIsAGUIAgent_withoutAGUIParams() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        MLExecuteTaskRequest request = buildAGUIRequest(params);
+
+        assertFalse(invokeIsAGUIAgent(request));
+    }
+
+    // ===== convertToHttpChunk tests =====
+
+    @Test
+    public void testConvertToHttpChunk_nonAGUI_withContent() throws Exception {
+        ModelTensor responseTensor = ModelTensor
+            .builder()
+            .name("response")
+            .dataAsMap(Map.of("content", "Hello world", "is_last", false))
+            .build();
+        ModelTensor memoryTensor = ModelTensor.builder().name("memory_id").result("session-1").build();
+        ModelTensor parentTensor = ModelTensor.builder().name("parent_interaction_id").result("parent-1").build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor, memoryTensor, parentTensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        HttpChunk chunk = invokeConvertToHttpChunk(response, false, null, null);
+
+        assertNotNull(chunk);
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("Hello world"));
+        assertTrue(content.startsWith("data: "));
+    }
+
+    @Test
+    public void testConvertToHttpChunk_nonAGUI_withTokenUsage() throws Exception {
+        MLTaskResponse response = buildResponseWithTokenUsage();
+
+        HttpChunk chunk = invokeConvertToHttpChunk(response, false, null, null);
+
+        assertNotNull(chunk);
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("token_usage"));
+        assertTrue(content.contains("per_model_usage"));
+    }
+
+    @Test
+    public void testConvertToHttpChunk_nonAGUI_lastChunk() throws Exception {
+        ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("content", "", "is_last", true)).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        HttpChunk chunk = invokeConvertToHttpChunk(response, false, null, null);
+
+        assertNotNull(chunk);
+        assertTrue(chunk.isLast());
+    }
+
+    @Test
+    public void testConvertToHttpChunk_AGUI_withTokenUsage() throws Exception {
+        MLTaskResponse response = buildResponseWithTokenUsage();
+
+        HttpChunk chunk = invokeConvertToHttpChunk(response, true, "thread_1", "run_1");
+
+        assertNotNull(chunk);
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        // AG-UI mode should emit token_usage as a CustomEvent
+        assertTrue(content.contains("token_usage"));
+    }
+
+    @Test
+    public void testConvertToHttpChunk_AGUI_lastChunk_emitsRunFinished() throws Exception {
+        ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("content", "", "is_last", true)).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        HttpChunk chunk = invokeConvertToHttpChunk(response, true, "thread_1", "run_1");
+
+        assertNotNull(chunk);
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("RUN_FINISHED"));
+        assertTrue(chunk.isLast());
+    }
+
+    @Test
+    public void testConvertToHttpChunk_errorResponse() throws Exception {
+        ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("error", "Something went wrong")).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        HttpChunk chunk = invokeConvertToHttpChunk(response, false, null, null);
+
+        assertNotNull(chunk);
+        assertTrue(chunk.isLast());
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("Something went wrong"));
+    }
+
+    // ===== Reflection helpers for testing private methods =====
+
+    @SuppressWarnings("unchecked")
+    private Map<String, ?> invokeExtractTokenUsage(MLTaskResponse response) throws Exception {
+        Method method = RestMLExecuteStreamAction.class.getDeclaredMethod("extractTokenUsage", MLTaskResponse.class);
+        method.setAccessible(true);
+        return (Map<String, ?>) method.invoke(restAction, response);
+    }
+
+    private String invokeExtractThreadId(MLExecuteTaskRequest request) throws Exception {
+        Method method = RestMLExecuteStreamAction.class.getDeclaredMethod("extractThreadId", MLExecuteTaskRequest.class);
+        method.setAccessible(true);
+        return (String) method.invoke(restAction, request);
+    }
+
+    private String invokeExtractRunId(MLExecuteTaskRequest request) throws Exception {
+        Method method = RestMLExecuteStreamAction.class.getDeclaredMethod("extractRunId", MLExecuteTaskRequest.class);
+        method.setAccessible(true);
+        return (String) method.invoke(restAction, request);
+    }
+
+    private boolean invokeIsAGUIAgent(MLExecuteTaskRequest request) throws Exception {
+        Method method = RestMLExecuteStreamAction.class.getDeclaredMethod("isAGUIAgent", MLExecuteTaskRequest.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(restAction, request);
+    }
+
+    private HttpChunk invokeConvertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent, String threadId, String runId)
+        throws Exception {
+        Method method = RestMLExecuteStreamAction.class
+            .getDeclaredMethod("convertToHttpChunk", MLTaskResponse.class, boolean.class, String.class, String.class);
+        method.setAccessible(true);
+        return (HttpChunk) method.invoke(restAction, response, isAGUIAgent, threadId, runId);
     }
 }
