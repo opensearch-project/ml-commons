@@ -17,6 +17,8 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -42,6 +44,8 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryRequest;
@@ -101,12 +105,32 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         // Mock ML feature settings
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
 
-        // Setup mock container
+        // Setup mock container (llmId + strategies required for LONG_TERM/HISTORY index names)
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        strategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("test-id")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("test-namespace"))
+                    .build()
+            );
         mockContainer = MLMemoryContainer
             .builder()
             .name("test-container")
             .description("Test container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory").useSystemIndex(false).disableSession(false).build())
+            .configuration(
+                MemoryConfiguration
+                    .builder()
+                    .indexPrefix("test-memory")
+                    .useSystemIndex(false)
+                    .disableSession(false)
+                    .llmId("test-llm")
+                    .strategies(strategies)
+                    .build()
+            )
             .build();
 
         // Setup mock user
@@ -311,11 +335,30 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         String memoryContainerId = "container-123";
         MemoryType memoryType = MemoryType.LONG_TERM;
 
-        // Configure container with system index
+        // Configure container with system index (llmId + strategies required for LONG_TERM)
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        strategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("test-id")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("test-namespace"))
+                    .build()
+            );
         mockContainer = MLMemoryContainer
             .builder()
             .name("test-container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory").useSystemIndex(true).build())
+            .configuration(
+                MemoryConfiguration
+                    .builder()
+                    .indexPrefix("test-memory")
+                    .useSystemIndex(true)
+                    .llmId("test-llm")
+                    .strategies(strategies)
+                    .build()
+            )
             .build();
 
         // Provide explicit query
@@ -748,7 +791,18 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         String memoryContainerId = "container-123";
         MemoryType memoryType = MemoryType.LONG_TERM;
 
-        // Create container with system index enabled
+        // Create container with system index enabled (llmId + strategies required for LONG_TERM)
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        strategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("test-id")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("test-namespace"))
+                    .build()
+            );
         mockContainer = MLMemoryContainer
             .builder()
             .name("test-container")
@@ -757,6 +811,8 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
                     .builder()
                     .indexPrefix("test-memory")
                     .useSystemIndex(true)  // Enable system index
+                    .llmId("test-llm")
+                    .strategies(strategies)
                     .build()
             )
             .build();

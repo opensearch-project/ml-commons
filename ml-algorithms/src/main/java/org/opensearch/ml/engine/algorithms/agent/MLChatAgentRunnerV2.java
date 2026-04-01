@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -79,7 +79,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         ModelProvider modelProvider,
         ActionListener<AgentLogicResult> listener
     ) {
-        String agentId = params.get(AGENT_ID_FIELD);
+        String agentId = params.get(AGENT_ID_LOG_FIELD);
         int maxIterations = getMaxIterations(params);
         // Create mutable list for ReAct iterations (will append tool results)
         List<Message> messages = new ArrayList<>(conversationHistory);
@@ -164,7 +164,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         List<String> toolInteractionJsonList,
         ActionListener<AgentLogicResult> listener
     ) {
-        String agentId = params.get(AGENT_ID_FIELD);
+        String agentId = params.get(AGENT_ID_LOG_FIELD);
         String tenantId = mlAgent.getTenantId();
         int currentIteration = iteration.getAndIncrement();
 

@@ -20,16 +20,19 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.transport.client.Client;
@@ -181,5 +184,30 @@ public class AgentToolTests {
         tool.run(parameters, listener);
 
         verify(listener).onFailure(any(Exception.class));
+    }
+
+    @Test
+    public void testAgentIdLNotGetOverride() {
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("thought", "thought 1", "action", "action1")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "configured-sub-agent-id"));
+
+        ArgumentCaptor<MLExecuteTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), requestCaptor.capture(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test question");
+
+        tool.run(parameters, listener);
+
+        AgentMLInput capturedInput = (AgentMLInput) requestCaptor.getValue().getInput();
+        assertEquals("configured-sub-agent-id", capturedInput.getAgentId());
+        verify(listener).onResponse(mlModelTensorOutput);
     }
 }

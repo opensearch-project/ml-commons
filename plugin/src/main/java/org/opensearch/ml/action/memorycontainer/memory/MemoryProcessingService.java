@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
@@ -186,8 +187,8 @@ public class MemoryProcessingService {
                 listener.onResponse(facts);
             } catch (Exception e) {
                 // Preserve client errors (4XX) with their detailed messages
-                if (e instanceof OpenSearchStatusException) {
-                    OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                if (e instanceof OpenSearchException) {
+                    OpenSearchException osException = (OpenSearchException) e;
                     if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                         listener.onFailure(e);
                         return;
@@ -286,8 +287,8 @@ public class MemoryProcessingService {
                     listener.onResponse(decisions);
                 } catch (Exception e) {
                     // Preserve client errors (4XX) with their detailed messages
-                    if (e instanceof OpenSearchStatusException) {
-                        OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                    if (e instanceof OpenSearchException) {
+                        OpenSearchException osException = (OpenSearchException) e;
                         if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                             listener.onFailure(e);
                             return;
@@ -435,8 +436,8 @@ public class MemoryProcessingService {
             }
         } catch (Exception e) {
             // Preserve client errors (4XX) with their detailed messages
-            if (e instanceof OpenSearchStatusException) {
-                OpenSearchStatusException osException = (OpenSearchStatusException) e;
+            if (e instanceof OpenSearchException) {
+                OpenSearchException osException = (OpenSearchException) e;
                 if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                     throw osException;
                 }
@@ -488,8 +489,8 @@ public class MemoryProcessingService {
                         listener.onResponse(summary);
                     } catch (Exception e) {
                         // Preserve client errors (4XX) with their detailed messages
-                        if (e instanceof OpenSearchStatusException) {
-                            OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                        if (e instanceof OpenSearchException) {
+                            OpenSearchException osException = (OpenSearchException) e;
                             if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
                                 listener.onFailure(e);
                                 return;
