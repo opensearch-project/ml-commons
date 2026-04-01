@@ -65,7 +65,7 @@ public class MLRegisterModelInputTest {
         + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
         + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
         + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
-        + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
+        + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30,\"read_timeout\":30,"
         + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
     private final FunctionName functionName = FunctionName.TEXT_EMBEDDING;
     private final String modelName = "modelName";
@@ -189,7 +189,7 @@ public class MLRegisterModelInputTest {
             + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
             + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
             + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
-            + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
+            + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30,\"read_timeout\":30,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
 
         assertEquals(expectedFunctionInputStr, jsonStr);
@@ -219,7 +219,7 @@ public class MLRegisterModelInputTest {
             + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
             + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
             + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
-            + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
+            + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30,\"read_timeout\":30,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
 
         assertEquals(expectedIncompleteInputStr, jsonStr);
