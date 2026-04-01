@@ -168,6 +168,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String TOOL_DESCRIPTIONS_FIELD = "tool_descriptions";
     public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
     public static final String AGENT_TYPE_PARAM = "agent_type";
 
@@ -814,13 +815,17 @@ public class AgentUtils {
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
             List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
+            Map<String, String> toolDescriptionOverrides = toStringMap(mcpConnectorConfig.get(TOOL_DESCRIPTIONS_FIELD));
 
             try {
                 getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
                     try {
                         List<MLToolSpec> filteredTools;
                         if (toolFilters == null || toolFilters.isEmpty()) {
-                            filteredTools = mcpToolspecs;
+                            filteredTools = mcpToolspecs
+                                    .stream()
+                                    .map(toolSpec -> applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides))
+                                    .collect(Collectors.toList());
                         } else {
                             filteredTools = new ArrayList<>();
                             List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
@@ -828,13 +833,12 @@ public class AgentUtils {
                             for (MLToolSpec toolSpec : mcpToolspecs) {
                                 for (Pattern pattern : compiledPatterns) {
                                     if (pattern.matcher(toolSpec.getName()).matches()) {
-                                        filteredTools.add(toolSpec);
+                                        filteredTools.add(applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides));
                                         break;
                                     }
                                 }
                             }
                         }
-
                         finalToolSpecs.addAll(filteredTools);
                     } catch (Throwable t) {
                         log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);
@@ -862,6 +866,37 @@ public class AgentUtils {
         if (remainingConnectors.decrementAndGet() == 0) {
             finalListener.onResponse(finalToolSpecs);
         }
+    }
+
+    private static Map<String, String> toStringMap(Object rawMap) {
+        if (!(rawMap instanceof Map<?, ?>)) {
+            return Collections.emptyMap();
+        }
+        return ((Map<?, ?>) rawMap)
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getKey() != null && entry.getValue() != null)
+            .collect(Collectors.toMap(entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
+    }
+
+    private static MLToolSpec applyToolDescriptionOverride(MLToolSpec toolSpec, Map<String, String> toolDescriptionOverrides) {
+        if (toolSpec == null || toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty()) {
+            return toolSpec;
+        }
+        String overrideDescription = toolDescriptionOverrides.get(toolSpec.getName());
+        if (Strings.isNullOrEmpty(overrideDescription)) {
+            return toolSpec;
+        }
+        System.out
+            .println(
+                "*************************** toolname:"
+                    + toolSpec.getName()
+                    + ": old description: "
+                    + toolSpec.getDescription()
+                    + " :overrideDescription: "
+                    + overrideDescription
+            );
+        return toolSpec.toBuilder().description(overrideDescription).runtimeResources(toolSpec.getRuntimeResources()).build();
     }
 
     private static void getMCPToolSpecsFromConnector(
