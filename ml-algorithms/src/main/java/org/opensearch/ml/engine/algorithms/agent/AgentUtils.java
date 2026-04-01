@@ -64,6 +64,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
@@ -236,8 +237,8 @@ public class AgentUtils {
             }
             Tool tool = tools.get(toolName);
             Map<String, Object> toolParams = new HashMap<>();
-            toolParams.put(NAME, tool.getName());
-            toolParams.put(DESCRIPTION, tool.getDescription());
+            toolParams.put(NAME, StringEscapeUtils.escapeJson(tool.getName()));
+            toolParams.put(DESCRIPTION, StringEscapeUtils.escapeJson(tool.getDescription()));
             Map<String, ?> attributes = tool.getAttributes();
             if (attributes != null) {
                 for (String key : attributes.keySet()) {

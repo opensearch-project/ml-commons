@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.CommonValue.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
@@ -129,7 +129,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             log
                 .error(
                     "Error starting AG-UI agent execution. agentId={}, tenantId={}",
-                    params.get(AGENT_ID_FIELD),
+                    params.get(AGENT_ID_LOG_FIELD),
                     mlAgent.getTenantId(),
                     e
                 );
@@ -177,7 +177,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 log
                     .error(
                         "Failed to load history for AGUI snapshot. agentId={}, tenantId={}",
-                        params.get(AGENT_ID_FIELD),
+                        params.get(AGENT_ID_LOG_FIELD),
                         mlAgent.getTenantId(),
                         e
                     );
