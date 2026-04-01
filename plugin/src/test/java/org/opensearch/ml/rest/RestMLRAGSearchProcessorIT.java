@@ -255,6 +255,11 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    \"description\": \"The connector to Cohere's public chat API\",\n"
         + "    \"version\": \"1\",\n"
         + "    \"protocol\": \"http\",\n"
+        + "    \"client_config\": {\n"
+        + "        \"max_connection\": 30,\n"
+        + "        \"connection_timeout\": 120,\n"
+        + "        \"read_timeout\": 120\n"
+        + "    },\n"
         + "    \"credential\": {\n"
         + "        \"cohere_key\": \""
         + COHERE_KEY
@@ -1079,8 +1084,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithCohere() throws Exception {
-        // Skip test if key is null
-        if (COHERE_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (COHERE_KEY == null || !isServiceReachable("api.cohere.ai")) {
             return;
         }
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
@@ -1131,8 +1136,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithCohereUsingLlmResponseField() throws Exception {
-        // Skip test if key is null
-        if (COHERE_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (COHERE_KEY == null || !isServiceReachable("api.cohere.ai")) {
             return;
         }
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
