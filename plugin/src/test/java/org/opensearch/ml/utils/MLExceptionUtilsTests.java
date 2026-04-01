@@ -20,6 +20,7 @@ import org.opensearch.core.common.io.stream.NotSerializableExceptionWrapper;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.transport.RemoteTransportException;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -100,5 +101,32 @@ public class MLExceptionUtilsTests extends OpenSearchIntegTestCase {
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(logger).warn(argumentCaptor.capture());
         assertEquals(error, argumentCaptor.getValue());
+    }
+
+    public void testGetRootCauseMessage_RemoteTransportException() {
+        String realError = "Unable to access memory service";
+        Exception rootCause = new RuntimeException(realError);
+        RemoteTransportException transportException = new RemoteTransportException(
+            "node1",
+            null,
+            "cluster:admin/opensearch/ml/execute/stream",
+            rootCause
+        );
+        String rootCauseMessage = MLExceptionUtils.getRootCauseMessage(transportException);
+        assertEquals(realError, rootCauseMessage);
+    }
+
+    public void testGetRootCauseMessage_NestedTransportException() {
+        String realError = "Error from remote service: Too many requests";
+        Exception innerCause = new RuntimeException(realError);
+        Exception middleCause = new RuntimeException("wrapped", innerCause);
+        RemoteTransportException transportException = new RemoteTransportException(
+            "node1",
+            null,
+            "cluster:admin/opensearch/ml/execute/stream",
+            middleCause
+        );
+        String rootCauseMessage = MLExceptionUtils.getRootCauseMessage(transportException);
+        assertEquals(realError, rootCauseMessage);
     }
 }

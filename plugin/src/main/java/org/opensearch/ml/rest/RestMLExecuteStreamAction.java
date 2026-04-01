@@ -79,6 +79,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
@@ -281,9 +282,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }).doOnNext(channel::sendChunk).onErrorResume(ex -> {
                 log.error("Error occurred", ex);
                 try {
-                    String errorMessage = ex instanceof IOException
-                        ? "Failed to parse request: " + ex.getMessage()
-                        : "Error processing request: " + ex.getMessage();
+                    String errorMessage = buildStreamErrorMessage(ex);
                     HttpChunk errorChunk = createHttpChunk("data: {\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}\n\n", true);
                     channel.sendChunk(errorChunk);
                 } catch (Exception e) {
@@ -623,6 +622,15 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             log.error("Failed to combine chunks", e);
             throw new OpenSearchStatusException("Failed to combine request chunks", RestStatus.INTERNAL_SERVER_ERROR, e);
         }
+    }
+
+    @VisibleForTesting
+    String buildStreamErrorMessage(Throwable ex) {
+        String rootCause = MLExceptionUtils.getRootCauseMessage(ex);
+        if (rootCause == null || rootCause.isEmpty()) {
+            rootCause = ex.getClass().getSimpleName();
+        }
+        return ex instanceof IOException ? "Failed to parse request: " + rootCause : "Error processing request: " + rootCause;
     }
 
     private HttpChunk createHttpChunk(String sseData, boolean isLast) {
