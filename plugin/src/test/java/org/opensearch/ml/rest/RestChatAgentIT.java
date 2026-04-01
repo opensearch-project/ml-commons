@@ -44,7 +44,7 @@ public class RestChatAgentIT extends MLCommonsRestTestCase {
     private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
     private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
-    private static final String REGION = "us-east-1";
+    private static final String REGION = "us-west-2";
     private static final String MODEL_ID_BEDROCK = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
     private String irisIndex = "iris_data";
