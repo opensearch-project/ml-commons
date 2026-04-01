@@ -873,15 +873,6 @@ public class AgentUtils {
         if (Strings.isNullOrEmpty(overrideDescription)) {
             return toolSpec;
         }
-        System.out
-            .println(
-                "*************************** toolname:"
-                    + toolSpec.getName()
-                    + ": old description: "
-                    + toolSpec.getDescription()
-                    + " :overrideDescription: "
-                    + overrideDescription
-            );
         return toolSpec.toBuilder().description(overrideDescription).runtimeResources(toolSpec.getRuntimeResources()).build();
     }
 
