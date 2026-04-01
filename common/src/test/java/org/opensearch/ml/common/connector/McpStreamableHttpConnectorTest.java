@@ -45,7 +45,7 @@ public class McpStreamableHttpConnectorTest {
         .onResponse(List.of(s.stream().map(x -> "decrypted: " + x.toUpperCase(Locale.ROOT)).toArray(String[]::new)));
 
     String TEST_CONNECTOR_JSON_STRING =
-        "{\"name\":\"test_mcp_streamable_http_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp streamable http connector\",\"protocol\":\"mcp_streamable_http\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"endpoint\":\"/custom/endpoint\"}}";
+        "{\"name\":\"test_mcp_streamable_http_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp streamable http connector\",\"protocol\":\"mcp_streamable_http\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30,\"read_timeout\":30,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"endpoint\":\"/custom/endpoint\"}}";
 
     @Test
     public void constructor_InvalidProtocol() {
@@ -277,7 +277,7 @@ public class McpStreamableHttpConnectorTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("endpoint", "/custom/endpoint");
 
-        ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
+        ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30, 30, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
 
         return McpStreamableHttpConnector
             .builder()
