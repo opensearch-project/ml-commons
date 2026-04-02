@@ -21,6 +21,12 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.6.0
 * Override resolveClass ([#4692](https://github.com/opensearch-project/ml-commons/pull/4692))
 
 ### Bug Fixes
+* Fix connection_timeout and read_timeout defaults to match seconds unit ([#4759](https://github.com/opensearch-project/ml-commons/pull/4759))
+* Fix: Modify agent_id field to agent_id_log for logging ([#4762](https://github.com/opensearch-project/ml-commons/pull/4762))
+* Fix: Respect MCP connector setting for Agent V2 ([#4739](https://github.com/opensearch-project/ml-commons/pull/4739))
+* escape tool name and description ([#4747](https://github.com/opensearch-project/ml-commons/pull/4747))
+* fix: change OpenSearchStatusException check to OpenSearchException to include more ([#4725](https://github.com/opensearch-project/ml-commons/pull/4725))
+* fix: wrong error code when deleting memory container ([#4723](https://github.com/opensearch-project/ml-commons/pull/4723))
 * Fix SdkAsyncHttpClient resource leak in connector executors ([#4716](https://github.com/opensearch-project/ml-commons/pull/4716))
 * fix unsupported operation ([#4733](https://github.com/opensearch-project/ml-commons/pull/4733))
 * fix context bug ([#4730](https://github.com/opensearch-project/ml-commons/pull/4730))
@@ -31,6 +37,8 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.6.0
 * Fix numeric type preservation in ML inference query template substitution ([#4656](https://github.com/opensearch-project/ml-commons/pull/4656))
 
 ### Infrastructure
+* Fix: Increase Cohere integration test timeout to 120s ([#4767](https://github.com/opensearch-project/ml-commons/pull/4767))
+* Upgrade Bedrock Claude models in integration tests to improve rate limits ([#4742](https://github.com/opensearch-project/ml-commons/pull/4742))
 * Enable FIPS flag by default on build/run ([#4719](https://github.com/opensearch-project/ml-commons/pull/4719))
 * Optimize IT setup, remove redundant per-test work ([#4667](https://github.com/opensearch-project/ml-commons/pull/4667))
 * fix: improve CI test stability - skip unreachable OpenAI tests and fix flaky IndexUtilsTests ([#4668](https://github.com/opensearch-project/ml-commons/pull/4668))
