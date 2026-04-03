@@ -37,6 +37,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.6.0
 * Fix numeric type preservation in ML inference query template substitution ([#4656](https://github.com/opensearch-project/ml-commons/pull/4656))
 
 ### Infrastructure
+* Fix RestChatAgentIT teardown failure when AWS credentials are absent ([#4772](https://github.com/opensearch-project/ml-commons/pull/4772))
 * Fix: Increase Cohere integration test timeout to 120s ([#4767](https://github.com/opensearch-project/ml-commons/pull/4767))
 * Upgrade Bedrock Claude models in integration tests to improve rate limits ([#4742](https://github.com/opensearch-project/ml-commons/pull/4742))
 * Enable FIPS flag by default on build/run ([#4719](https://github.com/opensearch-project/ml-commons/pull/4719))
