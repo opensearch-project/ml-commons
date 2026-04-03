@@ -787,6 +787,70 @@ public class AgentUtils {
         return toolSpecs;
     }
 
+    public static void resolveFlowToolSpecsWithMcpValidation(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        Client client,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> listener
+    ) {
+        List<MLToolSpec> configuredToolSpecs = getMlToolSpecs(mlAgent, params);
+        if (configuredToolSpecs == null || configuredToolSpecs.isEmpty()) {
+            listener.onResponse(Collections.emptyList());
+            return;
+        }
+        boolean hasMcpTool = configuredToolSpecs
+            .stream()
+            .anyMatch(toolSpec -> McpSseTool.TYPE.equals(toolSpec.getType()) || McpStreamableHttpTool.TYPE.equals(toolSpec.getType()));
+        if (!hasMcpTool) {
+            listener.onResponse(configuredToolSpecs);
+            return;
+        }
+        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpToolSpecs -> {
+            Map<String, MLToolSpec> mcpToolSpecMap = mcpToolSpecs
+                .stream()
+                .collect(Collectors.toMap(MLToolSpec::getName, spec -> spec, (firstSpec, ignoredDuplicate) -> firstSpec));
+            List<MLToolSpec> resolvedSpecs = new ArrayList<>();
+            for (MLToolSpec configuredSpec : configuredToolSpecs) {
+                if (!McpSseTool.TYPE.equals(configuredSpec.getType()) && !McpStreamableHttpTool.TYPE.equals(configuredSpec.getType())) {
+                    resolvedSpecs.add(configuredSpec);
+                } else {
+                    String configuredToolName = getToolName(configuredSpec);
+                    MLToolSpec mcpSpec = mcpToolSpecMap.get(configuredToolName);
+                    if (mcpSpec == null) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "MCP tool [" + configuredToolName + "] configured in agent is not available in the MCP connector(s)."
+                                )
+                            );
+                        return;
+                    }
+                    Map<String, Object> mergedRuntimeResources = new HashMap<>();
+                    if (mcpSpec.getRuntimeResources() != null) {
+                        mergedRuntimeResources.putAll(mcpSpec.getRuntimeResources());
+                    }
+                    if (configuredSpec.getRuntimeResources() != null) {
+                        mergedRuntimeResources.putAll(configuredSpec.getRuntimeResources());
+                    }
+                    MLToolSpec resolved = configuredSpec
+                        .toBuilder()
+                        .description(
+                            Strings.isNullOrEmpty(configuredSpec.getDescription())
+                                ? mcpSpec.getDescription()
+                                : configuredSpec.getDescription()
+                        )
+                        .attributes(configuredSpec.getAttributes() == null ? mcpSpec.getAttributes() : configuredSpec.getAttributes())
+                        .runtimeResources(mergedRuntimeResources.isEmpty() ? null : mergedRuntimeResources)
+                        .build();
+                    resolvedSpecs.add(resolved);
+                }
+            }
+            listener.onResponse(resolvedSpecs);
+        }, listener::onFailure));
+    }
+
     public static void getMcpToolSpecs(
         MLAgent mlAgent,
         Client client,
