@@ -48,7 +48,3 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.6.0
 * Prevent SearchModelGroupITTests timeout by disabling dedicated masters and fix Bedrock connection pool exhaustion ([#4665](https://github.com/opensearch-project/ml-commons/pull/4665))
 * Upgrade Bedrock Claude models in integration tests for higher rate limits ([#4742](https://github.com/opensearch-project/ml-commons/pull/4742))
 * Rename resource-action-groups.yml to resource-access-levels.yml to fix security checks ([#4737](https://github.com/opensearch-project/ml-commons/pull/4737))
-
-### Documentation
-* Add 3.5.0 release notes ([#4577](https://github.com/opensearch-project/ml-commons/pull/4577))
-* Add `rithin-pullela-aws` as maintainer ([#4660](https://github.com/opensearch-project/ml-commons/pull/4660))
