@@ -19,7 +19,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.resolveFlowToolSpecsWithMcpValidation;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
@@ -182,14 +182,26 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String memoryId,
         String parentInteractionId
     ) {
+        resolveFlowToolSpecsWithMcpValidation(mlAgent, params, client, sdkClient, encryptor, ActionListener.wrap(toolSpecs -> {
+            runAgentWithToolSpecs(mlAgent, params, listener, memory, memoryId, parentInteractionId, toolSpecs);
+        }, listener::onFailure));
+    }
 
+    private void runAgentWithToolSpecs(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        String memoryId,
+        String parentInteractionId,
+        List<MLToolSpec> toolSpecs
+    ) {
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
         List<ModelTensor> flowAgentOutput = new ArrayList<>();
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
         if (toolSpecs == null || toolSpecs.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
