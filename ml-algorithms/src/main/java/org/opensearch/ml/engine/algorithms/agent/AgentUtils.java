@@ -812,7 +812,6 @@ public class AgentUtils {
                 .filter(spec -> spec.getName() != null)
                 .collect(Collectors.toMap(MLToolSpec::getName, spec -> spec, (firstSpec, ignoredDuplicate) -> firstSpec));
             List<MLToolSpec> resolvedSpecs = new ArrayList<>();
-            boolean failed = false;
             for (MLToolSpec configuredSpec : configuredToolSpecs) {
                 if (!McpSseTool.TYPE.equals(configuredSpec.getType()) && !McpStreamableHttpTool.TYPE.equals(configuredSpec.getType())) {
                     resolvedSpecs.add(configuredSpec);
@@ -820,14 +819,13 @@ public class AgentUtils {
                     String configuredToolName = getToolName(configuredSpec);
                     MLToolSpec mcpSpec = mcpToolSpecMap.get(configuredToolName);
                     if (mcpSpec == null) {
-                        failed = true;
                         listener
                             .onFailure(
                                 new IllegalArgumentException(
                                     "MCP tool [" + configuredToolName + "] configured in agent is not available in the MCP connector(s)."
                                 )
                             );
-                        break;
+                        return;
                     }
                     Map<String, Object> mergedRuntimeResources = new HashMap<>();
                     if (mcpSpec.getRuntimeResources() != null) {
@@ -849,9 +847,7 @@ public class AgentUtils {
                     resolvedSpecs.add(resolved);
                 }
             }
-            if (!failed) {
-                listener.onResponse(resolvedSpecs);
-            }
+            listener.onResponse(resolvedSpecs);
         }, listener::onFailure));
     }
 
