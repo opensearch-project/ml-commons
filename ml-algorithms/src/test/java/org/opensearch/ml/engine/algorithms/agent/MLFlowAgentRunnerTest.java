@@ -668,12 +668,12 @@ public class MLFlowAgentRunnerTest extends MLStaticMockBase {
 
     @Test
     public void testRun_WithMcpStreamableHttp_Tools_Success() throws Exception {
-        runMixedOpenSearchAndMcpToolsSuccessTest(McpStreamableHttpTool.TYPE, "mcp_streamable_http");
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpStreamableHttpTool.TYPE, McpStreamableHttpTool.TYPE);
     }
 
     @Test
     public void testRun_WithMcpSse_Tools_Success() throws Exception {
-        runMixedOpenSearchAndMcpToolsSuccessTest(McpSseTool.TYPE, "mcp_sse");
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpSseTool.TYPE, McpSseTool.TYPE);
     }
 
     private void runMixedOpenSearchAndMcpToolsSuccessTest(String mcpToolType, String mcpProtocol) throws Exception {
