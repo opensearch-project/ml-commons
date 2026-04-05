@@ -2132,6 +2132,35 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_NullConfiguredToolSpecs() {
+        MLAgent agent = MLAgent.builder().tenantId("tenant").name("agent").type("flow").tools(Collections.emptyList()).build();
+        AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+        ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+        try (MockedStatic<AgentUtils> agentUtilsStatic = mockStatic(AgentUtils.class)) {
+            agentUtilsStatic.when(() -> AgentUtils.getMlToolSpecs(any(MLAgent.class), any(Map.class))).thenReturn(null);
+            agentUtilsStatic
+                .when(
+                    () -> AgentUtils
+                        .resolveFlowToolSpecsWithMcpValidation(
+                            any(MLAgent.class),
+                            any(Map.class),
+                            any(Client.class),
+                            any(SdkClient.class),
+                            any(Encryptor.class),
+                            any(ActionListener.class)
+                        )
+                )
+                .thenCallRealMethod();
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+        }
+
+        assertNotNull(response.get());
+        assertTrue(response.get().isEmpty());
+    }
+
+    @Test
     public void testResolveFlowToolSpecsWithMcpValidation_NoMcpToolConfigured() {
         MLToolSpec configured = MLToolSpec.builder().type("MLModelTool").name("tool1").description("llm").build();
         MLAgent agent = MLAgent.builder().tenantId("tenant").name("agent").type("flow").tools(List.of(configured)).build();

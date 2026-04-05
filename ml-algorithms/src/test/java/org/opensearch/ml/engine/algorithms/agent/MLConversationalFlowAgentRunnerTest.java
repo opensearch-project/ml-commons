@@ -117,12 +117,12 @@ public class MLConversationalFlowAgentRunnerTest extends MLStaticMockBase {
 
     @Test
     public void testRun_WithMcpStreamableHttp_Tools_Success() throws Exception {
-        runMixedOpenSearchAndMcpToolsSuccessTest(McpStreamableHttpTool.TYPE, "mcp_streamable_http");
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpStreamableHttpTool.TYPE, McpStreamableHttpTool.TYPE);
     }
 
     @Test
     public void testRun_WithMcpSse_Tools_Success() throws Exception {
-        runMixedOpenSearchAndMcpToolsSuccessTest(McpSseTool.TYPE, "mcp_sse");
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpSseTool.TYPE, McpSseTool.TYPE);
     }
 
     private void runMixedOpenSearchAndMcpToolsSuccessTest(String mcpToolType, String mcpProtocol) throws Exception {
@@ -224,6 +224,7 @@ public class MLConversationalFlowAgentRunnerTest extends MLStaticMockBase {
 
             ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
             verify(agentActionListener).onResponse(responseCaptor.capture());
+            @SuppressWarnings("unchecked")
             List<ModelTensor> output = (List<ModelTensor>) responseCaptor.getValue();
             assertEquals(4, output.size());
             assertEquals("os_tool_1", output.get(0).getName());
@@ -245,7 +246,7 @@ public class MLConversationalFlowAgentRunnerTest extends MLStaticMockBase {
 
     @Test
     public void testRun_WhenMcpToolConfiguredButNoMcpConnector_ShouldFail() {
-        MLToolSpec mcpTool = MLToolSpec.builder().name("missing_mcp_tool").type("McpStreamableHttpTool").build();
+        MLToolSpec mcpTool = MLToolSpec.builder().name("missing_mcp_tool").type(McpStreamableHttpTool.TYPE).build();
         MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.CONVERSATIONAL_FLOW.name()).tools(List.of(mcpTool)).build();
         runner.run(mlAgent, new HashMap<>(), agentActionListener, null);
 

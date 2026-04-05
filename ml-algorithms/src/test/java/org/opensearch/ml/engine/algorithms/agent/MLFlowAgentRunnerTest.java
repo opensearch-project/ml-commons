@@ -571,12 +571,12 @@ public class MLFlowAgentRunnerTest extends MLStaticMockBase {
 
     @Test
     public void testRun_WithMcpStreamableHttp_Tools_Success() throws Exception {
-        runMixedOpenSearchAndMcpToolsSuccessTest(McpStreamableHttpTool.TYPE, "mcp_streamable_http");
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpStreamableHttpTool.TYPE, McpStreamableHttpTool.TYPE);
     }
 
     @Test
     public void testRun_WithMcpSse_Tools_Success() throws Exception {
-        runMixedOpenSearchAndMcpToolsSuccessTest(McpSseTool.TYPE, "mcp_sse");
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpSseTool.TYPE, McpSseTool.TYPE);
     }
 
     private void runMixedOpenSearchAndMcpToolsSuccessTest(String mcpToolType, String mcpProtocol) throws Exception {
@@ -682,6 +682,7 @@ public class MLFlowAgentRunnerTest extends MLStaticMockBase {
 
             ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
             verify(agentActionListener).onResponse(responseCaptor.capture());
+            @SuppressWarnings("unchecked")
             List<ModelTensor> output = (List<ModelTensor>) responseCaptor.getValue();
             assertEquals(4, output.size());
             assertEquals("os_tool_1", output.get(0).getName());
