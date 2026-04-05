@@ -157,15 +157,18 @@ public class MLConversationalFlowAgentRunnerTest extends MLStaticMockBase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
             String json = "{\"_index\":\"i\",\"_id\":\"j\",\"found\":true,\"_source\":{}}";
-            org.opensearch.core.xcontent.XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(NamedXContentRegistry.EMPTY, null, json);
-            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
-            when(resp.parser()).thenReturn(parser);
             CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
             when(stage.whenComplete(any())).thenAnswer(cbInv -> {
-                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
-                cb.accept(resp, null);
+                try (
+                    org.opensearch.core.xcontent.XContentParser parser = XContentType.JSON
+                        .xContent()
+                        .createParser(NamedXContentRegistry.EMPTY, null, json)
+                ) {
+                    GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+                    when(resp.parser()).thenReturn(parser);
+                    BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                    cb.accept(resp, null);
+                }
                 return stage;
             });
             return stage;
