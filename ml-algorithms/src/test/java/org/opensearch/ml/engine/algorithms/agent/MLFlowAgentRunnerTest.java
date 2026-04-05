@@ -694,7 +694,7 @@ public class MLFlowAgentRunnerTest extends MLStaticMockBase {
 
     @Test
     public void testRun_WhenMcpToolConfiguredButNoMcpConnector_ShouldFail() {
-        MLToolSpec mcpTool = MLToolSpec.builder().name("missing_mcp_tool").type("McpStreamableHttpTool").build();
+        MLToolSpec mcpTool = MLToolSpec.builder().name("missing_mcp_tool").type(McpStreamableHttpTool.TYPE).build();
         MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).tools(List.of(mcpTool)).build();
         mlFlowAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
 
