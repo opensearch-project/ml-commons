@@ -10,9 +10,11 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
@@ -157,6 +159,14 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 );
             }
         }, error -> {
+            // Preserve client errors (4XX) with their detailed messages
+            if (error instanceof OpenSearchException) {
+                OpenSearchException osException = (OpenSearchException) error;
+                if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                    actionListener.onFailure(error);
+                    return;
+                }
+            }
             log.error("Failed to retrieve memory container: {} for deletion", memoryContainerId, error);
             actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }));
@@ -227,18 +237,8 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 // Note: Shared prefix validation already done BEFORE container deletion
                 if (deleteAllMemories || (deleteMemories != null && !deleteMemories.isEmpty())) {
                     MemoryConfiguration configuration = container.getConfiguration();
-                    if (deleteAllMemories) {
-                        deleteAllMemoryIndices(memoryContainerId, configuration, user, deleteResponse, actionListener);
-                    } else {
-                        deleteSelectiveMemoryIndices(
-                            memoryContainerId,
-                            configuration,
-                            deleteMemories,
-                            user,
-                            deleteResponse,
-                            actionListener
-                        );
-                    }
+                    Set<MemoryType> typesToDelete = deleteAllMemories ? EnumSet.allOf(MemoryType.class) : deleteMemories;
+                    deleteSelectiveMemoryIndices(memoryContainerId, configuration, typesToDelete, user, deleteResponse, actionListener);
                 } else {
                     // No index deletion requested
                     actionListener.onResponse(deleteResponse);
@@ -248,58 +248,6 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }
         }
-    }
-
-    private void deleteAllMemoryIndices(
-        String memoryContainerId,
-        MemoryConfiguration configuration,
-        User user,
-        DeleteResponse deleteResponse,
-        ActionListener<DeleteResponse> actionListener
-    ) {
-        // Don't use index pattern here to avoid delete other user's index by mistake
-        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(
-            configuration.getSessionIndexName(),
-            configuration.getWorkingMemoryIndexName(),
-            configuration.getLongMemoryIndexName(),
-            configuration.getLongMemoryHistoryIndexName()
-        );
-
-        log
-            .debug(
-                "Attempting to delete all memory indices for container {}: [{}, {}, {}, {}]",
-                memoryContainerId,
-                configuration.getSessionIndexName(),
-                configuration.getWorkingMemoryIndexName(),
-                configuration.getLongMemoryIndexName(),
-                configuration.getLongMemoryHistoryIndexName()
-            );
-        memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
-            log
-                .info(
-                    "Delete memory container - Event: ALL_INDICES_DELETED, Container ID: {}, Indices: [{}, {}, {}, {}], User: {}, Timestamp: {}",
-                    memoryContainerId,
-                    configuration.getSessionIndexName(),
-                    configuration.getWorkingMemoryIndexName(),
-                    configuration.getLongMemoryIndexName(),
-                    configuration.getLongMemoryHistoryIndexName(),
-                    user != null ? user.getName() : "unknown",
-                    Instant.now()
-                );
-            actionListener.onResponse(deleteResponse);
-        }, e -> {
-            log
-                .error(
-                    "Failed to delete memory indices for container: {}. Indices: [{}, {}, {}, {}]",
-                    memoryContainerId,
-                    configuration.getSessionIndexName(),
-                    configuration.getWorkingMemoryIndexName(),
-                    configuration.getLongMemoryIndexName(),
-                    configuration.getLongMemoryHistoryIndexName(),
-                    e
-                );
-            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
-        }));
     }
 
     private void deleteSelectiveMemoryIndices(
@@ -334,19 +282,14 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         }
 
         if (!indicesToDelete.isEmpty()) {
-            log
-                .debug(
-                    "Attempting selective deletion of memory indices for container {}: {}, requested types: {}",
-                    memoryContainerId,
-                    indicesToDelete,
-                    deleteMemories
-                );
-
+            boolean isDeleteAll = deleteMemories.containsAll(EnumSet.allOf(MemoryType.class));
             DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(indicesToDelete.toArray(new String[0]));
             memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
+                String event = isDeleteAll ? "ALL_INDICES_DELETED" : "SELECTIVE_INDICES_DELETED";
                 log
                     .info(
-                        "Delete memory container - Event: SELECTIVE_INDICES_DELETED, Container ID: {}, Indices: {}, Memory Types: {}, User: {}, Timestamp: {}",
+                        "Delete memory container - Event: {}, Container ID: {}, Indices: {}, Memory Types: {}, User: {}, Timestamp: {}",
+                        event,
                         memoryContainerId,
                         indicesToDelete,
                         deleteMemories,
@@ -355,6 +298,14 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                     );
                 actionListener.onResponse(deleteResponse);
             }, e -> {
+                // Preserve client errors (4XX) with their detailed messages
+                if (e instanceof OpenSearchException) {
+                    OpenSearchException osException = (OpenSearchException) e;
+                    if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                        actionListener.onFailure(e);
+                        return;
+                    }
+                }
                 log.error("Failed to delete selective memory indices [{}] for container: {}.", memoryContainerId, indicesToDelete, e);
                 actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }));

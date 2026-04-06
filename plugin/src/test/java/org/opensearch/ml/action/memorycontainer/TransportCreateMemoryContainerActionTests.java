@@ -42,6 +42,10 @@ import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.ingest.GetPipelineRequest;
 import org.opensearch.action.ingest.GetPipelineResponse;
 import org.opensearch.action.ingest.PutPipelineRequest;
+import org.opensearch.action.search.GetSearchPipelineAction;
+import org.opensearch.action.search.GetSearchPipelineRequest;
+import org.opensearch.action.search.PutSearchPipelineAction;
+import org.opensearch.action.search.PutSearchPipelineRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
@@ -149,6 +153,19 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         // Setup admin client chain
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.indices()).thenReturn(indicesAdminClient);
+
+        // Mock client.execute() for search pipeline creation (hybrid search pipeline) - scoped to search pipeline actions
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onFailure(new org.opensearch.OpenSearchStatusException("not found", RestStatus.NOT_FOUND));
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(GetSearchPipelineRequest.class), any(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(client).execute(eq(PutSearchPipelineAction.INSTANCE), any(PutSearchPipelineRequest.class), any(ActionListener.class));
 
         // Setup memory storage config
         List<MemoryStrategy> strategies = new ArrayList<>();

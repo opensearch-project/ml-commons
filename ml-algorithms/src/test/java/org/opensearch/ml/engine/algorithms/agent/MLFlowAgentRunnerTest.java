@@ -42,6 +42,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -51,10 +52,13 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
@@ -495,4 +499,46 @@ public class MLFlowAgentRunnerTest {
         }
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFlowAgentWithAgentTool() {
+        AgentTool.Factory.getInstance().init(client);
+        Map<String, Tool.Factory> factories = new HashMap<>(toolFactories);
+        factories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
+        MLFlowAgentRunner runner = new MLFlowAgentRunner(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            factories,
+            memoryMap,
+            null,
+            null
+        );
+
+        final Map<String, String> params = new HashMap<>();
+        params.put("question", "What is the capital of France?");
+
+        MLToolSpec agentToolSpec = MLToolSpec.builder().type(AgentTool.TYPE).parameters(Map.of("agent_id", "sub-agent-id")).build();
+        MLAgent flowAgent = MLAgent
+            .builder()
+            .name("ParentFlowAgent")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(agentToolSpec))
+            .build();
+
+        ModelTensor subAgentTensor = ModelTensor.builder().name("response").result("Paris").build();
+        ModelTensors subAgentTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(subAgentTensor)).build();
+        ModelTensorOutput subAgentOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(subAgentTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(subAgentOutput).build());
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+
+        runner.run(flowAgent, params, agentActionListener);
+
+        verify(agentActionListener).onResponse(any());
+    }
 }
