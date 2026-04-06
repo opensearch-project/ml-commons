@@ -241,7 +241,7 @@ public class AgentUtils {
             toolParams.put(DESCRIPTION, StringEscapeUtils.escapeJson(tool.getDescription()));
             Map<String, ?> attributes = tool.getAttributes();
             if (attributes == null || !attributes.containsKey("input_schema")) {
-                toolParams.putIfAbsent("attributes.input_schema", "{\"type\":\"object\",\"properties\":{}}");
+                toolParams.put("attributes.input_schema", "{\"type\":\"object\",\"properties\":{}}");
             }
             if (attributes != null) {
                 for (String key : attributes.keySet()) {

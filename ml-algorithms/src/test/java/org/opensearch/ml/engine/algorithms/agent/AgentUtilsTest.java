@@ -1270,10 +1270,30 @@ public class AgentUtilsTest extends MLStaticMockBase {
         AgentUtils.addToolsToFunctionCalling(tools, parameters, List.of("VectorDBTool"), "prompt");
 
         String result = parameters.get(TOOLS);
-        // Verify the placeholder was resolved (not left as raw ${tool.attributes.input_schema})
         Assert.assertFalse(result.contains("${tool.attributes.input_schema}"));
-        // Verify it's valid JSON
-        Assert.assertTrue(result.contains("\"inputSchema\":{\"json\":{\"type\":\"object\""));
+        Assert.assertTrue(result.contains("\"inputSchema\":{\"json\":{\"type\":\"object\",\"properties\":{}}}"));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_ToolWithAttributesButNoInputSchema() {
+        Tool toolNoSchema = mock(Tool.class);
+        when(toolNoSchema.getName()).thenReturn("VectorDBTool");
+        when(toolNoSchema.getDescription()).thenReturn("knn dense retrieval tool");
+        when(toolNoSchema.getAttributes()).thenReturn(Map.of("some_other_key", "value"));
+
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("VectorDBTool", toolNoSchema);
+
+        Map<String, String> parameters = new HashMap<>();
+        String toolTemplate =
+            "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\":{\"json\":${tool.attributes.input_schema}}}}";
+        parameters.put(TOOL_TEMPLATE, toolTemplate);
+
+        AgentUtils.addToolsToFunctionCalling(tools, parameters, List.of("VectorDBTool"), "prompt");
+
+        String result = parameters.get(TOOLS);
+        Assert.assertFalse(result.contains("${tool.attributes.input_schema}"));
+        Assert.assertTrue(result.contains("\"inputSchema\":{\"json\":{\"type\":\"object\",\"properties\":{}}}"));
     }
 
     @Test
