@@ -22,6 +22,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.agent.MLAgent;
 
 public class MLMcpConnectorListToolsResponseTest {
 
@@ -76,6 +77,8 @@ public class MLMcpConnectorListToolsResponseTest {
         XContentBuilder builder = XContentType.JSON.contentBuilder();
         response.toXContent(builder, EMPTY_PARAMS);
         String json = builder.toString();
+        assertTrue(json.trim().startsWith("{"));
+        assertTrue(json.contains("\"" + MLAgent.TOOLS_FIELD + "\":"));
         assertTrue(json.contains("\"name\":\"tool1\""));
         assertTrue(json.contains("\"type\":\"MCP\""));
     }

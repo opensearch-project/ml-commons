@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMCPToolSpecsFromConnector;
 
@@ -16,13 +17,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.MLToolSpec;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpConnectorListToolsAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.list.MLMcpConnectorListToolsRequest;
@@ -70,6 +71,10 @@ public class TransportMcpConnectorListToolsAction extends HandledTransportAction
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLMcpConnectorListToolsResponse> listener) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
+            return;
+        }
         MLMcpConnectorListToolsRequest listRequest = MLMcpConnectorListToolsRequest.fromActionRequest(request);
         String connectorId = listRequest.getConnectorId();
         String tenantId = listRequest.getTenantId();
@@ -79,13 +84,12 @@ public class TransportMcpConnectorListToolsAction extends HandledTransportAction
         }
 
         fetchToolSpecsFromConnector(connectorId, tenantId, ActionListener.wrap(toolSpecs -> {
-            if (toolSpecs == null || toolSpecs.isEmpty()) {
-                log.error("No tools defined for connector : {}", connectorId);
-                listener.onFailure(new MLException("No tools defined for connector"));
-                return;
+            List<MLToolSpec> specs = toolSpecs == null || toolSpecs.isEmpty() ? Collections.emptyList() : toolSpecs;
+            if (specs.isEmpty()) {
+                log.debug("No tools defined for connector: {}", connectorId);
             }
             List<McpToolInfo> toolInfos = new ArrayList<>();
-            for (MLToolSpec spec : toolSpecs) {
+            for (MLToolSpec spec : specs) {
                 toolInfos.add(toMcpToolInfo(spec));
             }
             listener.onResponse(MLMcpConnectorListToolsResponse.builder().tools(toolInfos).build());

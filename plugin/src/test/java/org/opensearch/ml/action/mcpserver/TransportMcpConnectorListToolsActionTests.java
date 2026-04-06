@@ -8,7 +8,9 @@ package org.opensearch.ml.action.mcpserver;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 
 import java.util.Collections;
 import java.util.List;
@@ -19,10 +21,10 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.MLToolSpec;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.requests.list.MLMcpConnectorListToolsRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpConnectorListToolsResponse;
@@ -98,6 +100,7 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         super.setUp();
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
         transportAction = new TestableTransportMcpConnectorListToolsAction(
             transportService,
             actionFilters,
@@ -106,6 +109,32 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
             encryptor,
             mlFeatureEnabledSetting
         );
+    }
+
+    @Test
+    public void testDoExecute_McpServerDisabled_CallsListenerOnFailure() {
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+        TestableTransportMcpConnectorListToolsAction action = new TestableTransportMcpConnectorListToolsAction(
+            transportService,
+            actionFilters,
+            client,
+            sdkClient,
+            encryptor,
+            mlFeatureEnabledSetting
+        );
+        action.setToolSpecsToReturn(List.of(MLToolSpec.builder().type("test_tool").name("TestTool").description("Desc").build()));
+
+        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
+        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        verifyNoMoreInteractions(listener);
+        Exception e = captor.getValue();
+        assertTrue(e instanceof OpenSearchException);
+        assertEquals(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE, e.getMessage());
     }
 
     @Test
@@ -136,7 +165,7 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
     }
 
     @Test
-    public void testDoExecute_EmptyTools_Fails() {
+    public void testDoExecute_EmptyTools_ReturnsEmptyList() {
         transportAction.setToolSpecsToReturn(Collections.emptyList());
 
         MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest
@@ -148,14 +177,14 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
 
         transportAction.doExecute(task, request, listener);
 
-        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof MLException);
-        assertTrue(captor.getValue().getMessage().contains("No tools defined for connector"));
+        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
+        verify(listener).onResponse(captor.capture());
+        assertNotNull(captor.getValue());
+        assertTrue(captor.getValue().getTools().isEmpty());
     }
 
     @Test
-    public void testDoExecute_NullTools_Fails() {
+    public void testDoExecute_NullTools_ReturnsEmptyList() {
         transportAction.setToolSpecsToReturn(null);
 
         MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest
@@ -167,10 +196,10 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
 
         transportAction.doExecute(task, request, listener);
 
-        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof MLException);
-        assertTrue(captor.getValue().getMessage().contains("No tools defined for connector"));
+        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
+        verify(listener).onResponse(captor.capture());
+        assertNotNull(captor.getValue());
+        assertTrue(captor.getValue().getTools().isEmpty());
     }
 
     @Test
