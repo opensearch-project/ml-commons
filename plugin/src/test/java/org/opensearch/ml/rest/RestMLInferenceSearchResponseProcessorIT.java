@@ -33,11 +33,11 @@ import com.jayway.jsonpath.JsonPath;
 public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestCase {
 
     private final String OPENAI_KEY = System.getenv("OPENAI_KEY");
-    private String openAIChatModelId;
-    private String bedrockEmbeddingModelId;
+    private static String openAIChatModelId;
+    private static String bedrockEmbeddingModelId;
     private String localModelId;
-    private String bedrockClaudeModelId;
-    private String bedrockMultiModalEmbeddingModelId;
+    private static String bedrockClaudeModelId;
+    private static String bedrockMultiModalEmbeddingModelId;
     private final String completionModelConnectorEntity = "{\n"
         + "  \"name\": \"OpenAI text embedding model Connector\",\n"
         + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
@@ -76,7 +76,10 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"client_config\": {\n"
-        + "    \"max_connection\": 200\n"
+        + "    \"max_connection\": 50,\n"
+        + "    \"max_retry_times\": 3,\n"
+        + "    \"retry_backoff_millis\": 200,\n"
+        + "    \"retry_timeout_seconds\": 30\n"
         + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
@@ -118,7 +121,10 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"client_config\": {\n"
-        + "    \"max_connection\": 200\n"
+        + "    \"max_connection\": 50,\n"
+        + "    \"max_retry_times\": 3,\n"
+        + "    \"retry_backoff_millis\": 200,\n"
+        + "    \"retry_timeout_seconds\": 30\n"
         + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
@@ -210,20 +216,22 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
         if (!initialSleepDone) {
             waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+
+            String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
+            openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, false);
+            String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
+            bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, false);
+            String bedrockClaudeModelName = "bedrock claude model " + randomAlphaOfLength(5);
+            bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, false);
+            String bedrockMultiModalEmbeddingModelName = "bedrock multi modal embedding model " + randomAlphaOfLength(5);
+            bedrockMultiModalEmbeddingModelId = registerRemoteModel(
+                bedrockMultiModalEmbeddingModelConnectorEntity,
+                bedrockMultiModalEmbeddingModelName,
+                false
+            );
+
             initialSleepDone = true;
         }
-        String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
-        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, false);
-        String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
-        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, false);
-        String bedrockClaudeModelName = "bedrock claude model " + randomAlphaOfLength(5);
-        this.bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, false);
-        String bedrockMultiModalEmbeddingModelName = "bedrock multi modal embedding model " + randomAlphaOfLength(5);
-        this.bedrockMultiModalEmbeddingModelId = registerRemoteModel(
-            bedrockMultiModalEmbeddingModelConnectorEntity,
-            bedrockMultiModalEmbeddingModelName,
-            false
-        );
 
         String index_name = "daily_index";
         String createIndexRequestBody = "{\n"
