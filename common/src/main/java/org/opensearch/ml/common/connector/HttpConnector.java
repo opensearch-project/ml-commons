@@ -90,6 +90,11 @@ public class HttpConnector extends AbstractConnector {
         this.protocol = protocol;
         this.parameters = parameters;
         this.credential = credential;
+        // Extract and remove the encrypted flag if present in credentials
+        if (credential != null && credential.containsKey(ENCRYPTED_FIELD)) {
+            String encryptedValue = credential.remove(ENCRYPTED_FIELD);
+            this.isEncrypted = encryptedValue == null || Boolean.parseBoolean(encryptedValue);
+        }
         this.actions = actions;
         this.backendRoles = backendRoles;
         this.access = accessMode;
@@ -127,6 +132,11 @@ public class HttpConnector extends AbstractConnector {
                 case CREDENTIAL_FIELD:
                     credential = new HashMap<>();
                     credential.putAll(parser.mapStrings());
+                    // Extract and remove the 'encrypted' flag from credentials map
+                    if (credential.containsKey(ENCRYPTED_FIELD)) {
+                        String encryptedValue = credential.remove(ENCRYPTED_FIELD);
+                        isEncrypted = encryptedValue == null || Boolean.parseBoolean(encryptedValue);
+                    }
                     break;
                 case ACTIONS_FIELD:
                     actions = new ArrayList<>();
@@ -186,7 +196,10 @@ public class HttpConnector extends AbstractConnector {
             builder.field(PARAMETERS_FIELD, parameters);
         }
         if (credential != null) {
-            builder.field(CREDENTIAL_FIELD, credential);
+            // Include the encrypted flag in the credential map for serialization
+            Map<String, String> credentialWithFlag = new HashMap<>(credential);
+            credentialWithFlag.put(ENCRYPTED_FIELD, String.valueOf(isEncrypted));
+            builder.field(CREDENTIAL_FIELD, credentialWithFlag);
         }
         if (actions != null) {
             builder.field(ACTIONS_FIELD, actions);
@@ -257,6 +270,10 @@ public class HttpConnector extends AbstractConnector {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        // Read isEncrypted flag (default to true for backward compatibility)
+        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
+            this.isEncrypted = input.readBoolean();
+        }
     }
 
     @Override
@@ -310,6 +327,7 @@ public class HttpConnector extends AbstractConnector {
         }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
+            out.writeBoolean(isEncrypted != null ? isEncrypted : true);
         }
     }
 

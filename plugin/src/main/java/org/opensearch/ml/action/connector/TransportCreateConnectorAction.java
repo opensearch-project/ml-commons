@@ -29,6 +29,7 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -118,6 +119,27 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
             Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+
+            // Enforce cluster-level plaintext credentials policy
+            if (connector instanceof AbstractConnector) {
+                AbstractConnector abstractConnector = (AbstractConnector) connector;
+                if (Boolean.FALSE.equals(abstractConnector.getIsEncrypted())) {
+                    if (!mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()) {
+                        // Cluster setting does not allow plaintext credentials - throw exception
+                        throw new IllegalArgumentException(
+                            "Plaintext credentials are not allowed. Please set cluster setting 'plugins.ml_commons.allow_plaintext_credentials' to true to enable plaintext credentials storage."
+                        );
+                    } else {
+                        // Cluster setting allows plaintext credentials
+                        log
+                            .warn(
+                                "Connector '{}' is configured to store credentials in plaintext (unencrypted). "
+                                    + "This is less secure. Only use this for testing or when encryption is handled externally.",
+                                connectorName
+                            );
+                    }
+                }
+            }
 
             User user = RestActionUtils.getUserContext(client);
             if (connectorAccessControlHelper.accessControlNotEnabled(user)) {

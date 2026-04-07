@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.connector;
 
 import static org.mockito.Mockito.mock;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_18_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.io.IOException;
@@ -27,6 +29,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -49,7 +52,7 @@ public class HttpConnectorTest {
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-        + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
+        + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"encrypted\":\"true\",\"key\":\"test_key_value\"},"
         + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
         + "\"headers\":{\"api_key\":\"${credential.key}\"},"
         + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
@@ -642,6 +645,124 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void testEncryptSkippedWhenIsEncryptedFalse() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        // Verify isEncrypted is false
+        Assert.assertFalse(connector.getIsEncrypted());
+        // Verify encrypted key was removed from credential map
+        Assert.assertFalse(connector.getCredential().containsKey("encrypted"));
+        Assert.assertEquals(1, connector.getCredential().size());
+
+        // Encryption should be skipped when isEncrypted is false
+        connector.encrypt(encryptFunction, null, listener);
+
+        // Credential should not be encrypted (still has original value)
+        Assert.assertEquals("test_key_value", connector.getCredential().get("key"));
+    }
+
+    @Test
+    public void testDecryptSkippedWhenIsEncryptedFalse() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "plaintext_value");
+        credential.put("encrypted", "false");
+
+        ConnectorAction action = new ConnectorAction(
+            ConnectorAction.ActionType.PREDICT,
+            null,
+            "POST",
+            "https://test.com",
+            null,
+            "{\"input\": \"test\"}",
+            null,
+            null
+        );
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector")
+            .protocol("http")
+            .credential(credential)
+            .actions(Arrays.asList(action))
+            .build();
+
+        Assert.assertFalse(connector.getIsEncrypted());
+
+        // Decryption should be skipped when isEncrypted is false
+        connector.decrypt(PREDICT.name(), decryptFunction, null, listener);
+
+        // Decrypted credential should be same as original (not passed through decrypt function)
+        Assert.assertEquals("plaintext_value", connector.getDecryptedCredential().get("key"));
+    }
+
+    @Test
+    public void testIsEncryptedDefaultsToTrue() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        // isEncrypted should default to true when not specified
+        Assert.assertTrue(connector.getIsEncrypted());
+    }
+
+    @Test
+    public void testParseEncryptedFlagFromXContent() throws IOException {
+        String jsonStr = "{\"name\":\"test_connector\",\"protocol\":\"http\",\"credential\":{\"key\":\"value\",\"encrypted\":\"false\"}}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+
+        HttpConnector connector = new HttpConnector("http", parser);
+        Assert.assertFalse(connector.getIsEncrypted());
+        // encrypted key should be removed from credential map
+        Assert.assertFalse(connector.getCredential().containsKey("encrypted"));
+    }
+
+    @Test
+    public void testToXContentIncludesEncryptedFlag() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert.assertTrue(content.contains("\"encrypted\":\"false\""));
+    }
+
+    @Test
+    public void testWriteToAndReadFromWithIsEncryptedFalse() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector originalConnector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        Assert.assertFalse(originalConnector.getIsEncrypted());
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalConnector.writeTo(output);
+
+        HttpConnector deserializedConnector = new HttpConnector(output.bytes().streamInput());
+        Assert.assertFalse(deserializedConnector.getIsEncrypted());
+        Assert.assertEquals(originalConnector.getCredential(), deserializedConnector.getCredential());
+    }
+
+    @Test
     public void testFindAction_MultipleActionsWithSameType() {
         ConnectorAction action1 = new ConnectorAction(
             PREDICT,
@@ -681,6 +802,98 @@ public class HttpConnectorTest {
         Assert.assertTrue(foundByName.isPresent());
         Assert.assertEquals("predict_action_2", foundByName.get().getName());
         Assert.assertEquals("https://test2.com", foundByName.get().getUrl());
+    }
+
+    // ============== Backward Compatibility Tests for isEncrypted field ==============
+
+    @Test
+    public void testBWC_WriteToVersion2_19_0_IncludesIsEncrypted() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        Assert.assertFalse(connector.getIsEncrypted());
+
+        // Serialize with VERSION_2_19_0
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_2_19_0);
+        connector.writeTo(output);
+
+        // Deserialize with VERSION_2_19_0
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_2_19_0);
+        HttpConnector deserializedConnector = new HttpConnector(streamInput);
+
+        // isEncrypted should be preserved
+        Assert.assertFalse(deserializedConnector.getIsEncrypted());
+    }
+
+    @Test
+    public void testBWC_WriteToOlderVersion_DoesNotIncludeIsEncrypted() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        Assert.assertFalse(connector.getIsEncrypted());
+
+        // Serialize with older version (VERSION_2_18_0)
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_2_18_0);
+        connector.writeTo(output);
+
+        // Deserialize with older version - isEncrypted should default to true
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_2_18_0);
+        HttpConnector deserializedConnector = new HttpConnector(streamInput);
+
+        // isEncrypted should default to true when not present in stream (for backward compatibility)
+        Assert.assertTrue(deserializedConnector.getIsEncrypted());
+    }
+
+    @Test
+    public void testBWC_ReadFromOlderVersionDefaultsToTrue() throws IOException {
+        // Create connector with isEncrypted=true (the default)
+        HttpConnector connector = createHttpConnector();
+
+        Assert.assertTrue(connector.getIsEncrypted());
+
+        // Serialize with older version (simulating data from an older node)
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_2_18_0);
+        connector.writeTo(output);
+
+        // Deserialize with VERSION_2_19_0 - should handle missing isEncrypted gracefully
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_2_18_0);
+        HttpConnector deserializedConnector = new HttpConnector(streamInput);
+
+        // isEncrypted should default to true (backward compatible behavior)
+        Assert.assertTrue(deserializedConnector.getIsEncrypted());
+    }
+
+    @Test
+    public void testBWC_CrossVersionCommunication_NewToOld() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        // New node writes with VERSION_2_18_0 (to communicate with old node)
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_2_18_0);
+        connector.writeTo(output);
+
+        // Old node reads - should work without errors
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_2_18_0);
+        HttpConnector deserializedConnector = new HttpConnector(streamInput);
+
+        Assert.assertEquals("test_connector", deserializedConnector.getName());
+        Assert.assertNotNull(deserializedConnector.getCredential());
     }
 
 }

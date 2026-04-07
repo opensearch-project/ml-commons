@@ -48,6 +48,7 @@ public abstract class AbstractConnector implements Connector {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";
+    public static final String ENCRYPTED_FIELD = "encrypted";
 
     protected String name;
     protected String description;
@@ -59,6 +60,10 @@ public abstract class AbstractConnector implements Connector {
     protected Map<String, String> decryptedHeaders;
     @Setter
     protected Map<String, String> decryptedCredential;
+
+    // Indicates whether credentials should be encrypted. Default is true.
+    // This flag is extracted from the credentials map and stored separately.
+    protected Boolean isEncrypted = true;
 
     protected List<ConnectorAction> actions;
 
@@ -172,6 +177,12 @@ public abstract class AbstractConnector implements Connector {
             listener.onResponse(true);
             return;
         }
+        // Skip encryption if isEncrypted is false (plaintext mode)
+        if (Boolean.FALSE.equals(isEncrypted)) {
+            log.warn("Connector credentials are configured for plaintext storage (not encrypted)");
+            listener.onResponse(true);
+            return;
+        }
         List<String> orderedEncryptKeys = new ArrayList<>();
         List<String> orderedToEncrypt = new ArrayList<>();
         for (String key : credential.keySet()) {
@@ -200,6 +211,14 @@ public abstract class AbstractConnector implements Connector {
         ActionListener<Boolean> listener
     ) {
         if (credential == null || credential.isEmpty()) {
+            this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
+            listener.onResponse(true);
+            return;
+        }
+        // Skip decryption if isEncrypted is false (plaintext mode)
+        if (Boolean.FALSE.equals(isEncrypted)) {
+            log.debug("Connector credentials are in plaintext mode, using as-is");
+            decryptedCredential = new HashMap<>(credential);
             this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
             listener.onResponse(true);
             return;

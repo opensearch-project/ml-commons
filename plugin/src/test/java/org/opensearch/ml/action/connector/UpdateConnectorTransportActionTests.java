@@ -7,6 +7,7 @@ package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -139,7 +140,8 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
-            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
+            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
+            ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS
         );
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
@@ -467,6 +469,118 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(Result.UPDATED, argumentCaptor.getValue().getResult());
+    }
+
+    @Test
+    public void testExecutePlaintextCredentialsBlockedWhenNotAllowed() {
+        when(mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()).thenReturn(false);
+
+        // Create a connector with plaintext credentials (encrypted=false) using mutable map
+        Map<String, String> plaintextCredential = new java.util.HashMap<>();
+        plaintextCredential.put("api_key", "plaintext_value");
+        plaintextCredential.put("encrypted", "false");
+
+        Map<String, String> parameters = new java.util.HashMap<>();
+        parameters.put("param1", "value1");
+
+        Map<String, String> headers = new java.util.HashMap<>();
+        headers.put("Authorization", "Bearer ${credential.api_key}");
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            Connector connector = HttpConnector
+                .builder()
+                .name("test")
+                .protocol("http")
+                .version("1")
+                .credential(plaintextCredential)
+                .parameters(parameters)
+                .actions(
+                    Arrays
+                        .asList(
+                            ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.PREDICT)
+                                .method("POST")
+                                .url("https://api.openai.com/v1/chat/completions")
+                                .headers(headers)
+                                .requestBody("{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }")
+                                .build()
+                        )
+                )
+                .build();
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Plaintext credentials are not allowed"));
+    }
+
+    @Test
+    public void testExecutePlaintextCredentialsAllowedWhenSettingEnabled() {
+        when(mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()).thenReturn(true);
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        // Create a connector with plaintext credentials (encrypted=false) using mutable map
+        Map<String, String> plaintextCredential = new java.util.HashMap<>();
+        plaintextCredential.put("api_key", "plaintext_value");
+        plaintextCredential.put("encrypted", "false");
+
+        Map<String, String> parameters = new java.util.HashMap<>();
+        parameters.put("param1", "value1");
+
+        Map<String, String> headers = new java.util.HashMap<>();
+        headers.put("Authorization", "Bearer ${credential.api_key}");
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            Connector connector = HttpConnector
+                .builder()
+                .name("test")
+                .protocol("http")
+                .version("1")
+                .credential(plaintextCredential)
+                .parameters(parameters)
+                .actions(
+                    Arrays
+                        .asList(
+                            ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.PREDICT)
+                                .method("POST")
+                                .url("https://api.openai.com/v1/chat/completions")
+                                .headers(headers)
+                                .requestBody("{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }")
+                                .build()
+                        )
+                )
+                .build();
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        // Should succeed when plaintext credentials are allowed
+        verify(actionListener).onResponse(any(UpdateResponse.class));
     }
 
     private SearchResponse noneEmptySearchResponse() throws IOException {

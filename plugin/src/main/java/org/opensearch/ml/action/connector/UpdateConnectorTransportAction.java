@@ -33,6 +33,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -121,6 +122,32 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
+
+                            // Enforce cluster-level plaintext credentials policy
+                            if (connector instanceof AbstractConnector) {
+                                AbstractConnector abstractConnector = (AbstractConnector) connector;
+                                if (Boolean.FALSE.equals(abstractConnector.getIsEncrypted())) {
+                                    if (!mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()) {
+                                        // Cluster setting does not allow plaintext credentials - throw exception
+                                        listener
+                                            .onFailure(
+                                                new IllegalArgumentException(
+                                                    "Plaintext credentials are not allowed. Please set cluster setting 'plugins.ml_commons.allow_plaintext_credentials' to true to enable plaintext credentials storage."
+                                                )
+                                            );
+                                        return;
+                                    } else {
+                                        // Cluster setting allows plaintext credentials
+                                        log
+                                            .warn(
+                                                "Connector '{}' is configured to store credentials in plaintext (unencrypted). "
+                                                    + "This is less secure. Only use this for testing or when encryption is handled externally.",
+                                                connectorId
+                                            );
+                                    }
+                                }
+                            }
+
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
                                 connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                                 connector.setLastUpdateTime(Instant.now());

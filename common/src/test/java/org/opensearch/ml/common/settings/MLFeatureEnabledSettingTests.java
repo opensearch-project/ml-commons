@@ -54,7 +54,8 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                     MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
+                    MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -307,5 +308,48 @@ public class MLFeatureEnabledSettingTests {
         mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build());
 
         assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testPlaintextCredentialsDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default for security
+        assertFalse(setting.isPlaintextCredentialsAllowed());
+    }
+
+    @Test
+    public void testPlaintextCredentialsCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.allow_plaintext_credentials", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertTrue(setting.isPlaintextCredentialsAllowed());
+    }
+
+    @Test
+    public void testPlaintextCredentialsCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.allow_plaintext_credentials", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isPlaintextCredentialsAllowed());
+    }
+
+    @Test
+    public void testPlaintextCredentialsDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.allow_plaintext_credentials", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isPlaintextCredentialsAllowed());
+
+        // Update the setting dynamically to enable
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.allow_plaintext_credentials", true).build());
+
+        assertTrue(setting.isPlaintextCredentialsAllowed());
+
+        // Update the setting dynamically to disable again
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.allow_plaintext_credentials", false).build());
+
+        assertFalse(setting.isPlaintextCredentialsAllowed());
     }
 }

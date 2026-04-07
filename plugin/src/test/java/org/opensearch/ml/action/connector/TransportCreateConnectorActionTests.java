@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
@@ -149,7 +150,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
             ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
-            ML_COMMONS_MCP_CONNECTOR_ENABLED
+            ML_COMMONS_MCP_CONNECTOR_ENABLED,
+            ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
@@ -644,6 +646,90 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ArgumentCaptor<OpenSearchException> argCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(actionListener).onFailure(argCaptor.capture());
         assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE);
+    }
+
+    public void test_execute_plaintext_credentials_blocked_when_not_allowed() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        when(mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()).thenReturn(false);
+
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://api.openai.com/v1/completions")
+                    .build()
+            );
+
+        // Include "encrypted": "false" in credentials to request plaintext storage
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret", "encrypted", "false");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name("test_connector")
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .actions(actions)
+            .build();
+
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Plaintext credentials are not allowed"));
+    }
+
+    public void test_execute_plaintext_credentials_allowed_when_setting_enabled() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        when(mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://api.openai.com/v1/completions")
+                    .build()
+            );
+
+        // Include "encrypted": "false" in credentials to request plaintext storage
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret", "encrypted", "false");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name("test_connector")
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .actions(actions)
+            .build();
+
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+
+        // Capture and verify the response - should succeed
+        ArgumentCaptor<MLCreateConnectorResponse> captor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+
+        MLCreateConnectorResponse actualResponse = captor.getValue();
+        assertNotNull(actualResponse);
+        assertEquals(CONNECTOR_ID, actualResponse.getConnectorId());
     }
 
     public void test_connector_creation_success_rekognition() {
