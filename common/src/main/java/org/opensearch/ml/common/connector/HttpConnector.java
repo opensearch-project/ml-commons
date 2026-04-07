@@ -196,10 +196,15 @@ public class HttpConnector extends AbstractConnector {
             builder.field(PARAMETERS_FIELD, parameters);
         }
         if (credential != null) {
-            // Include the encrypted flag in the credential map for serialization
-            Map<String, String> credentialWithFlag = new HashMap<>(credential);
-            credentialWithFlag.put(ENCRYPTED_FIELD, String.valueOf(isEncrypted));
-            builder.field(CREDENTIAL_FIELD, credentialWithFlag);
+            // Only include the encrypted flag when isEncrypted is false to avoid document pollution
+            // and maintain backward compatibility with existing connectors
+            if (Boolean.FALSE.equals(isEncrypted)) {
+                Map<String, String> credentialWithFlag = new HashMap<>(credential);
+                credentialWithFlag.put(ENCRYPTED_FIELD, "false");
+                builder.field(CREDENTIAL_FIELD, credentialWithFlag);
+            } else {
+                builder.field(CREDENTIAL_FIELD, credential);
+            }
         }
         if (actions != null) {
             builder.field(ACTIONS_FIELD, actions);

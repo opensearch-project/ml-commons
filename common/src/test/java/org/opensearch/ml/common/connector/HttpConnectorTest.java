@@ -52,7 +52,7 @@ public class HttpConnectorTest {
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-        + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"encrypted\":\"true\",\"key\":\"test_key_value\"},"
+        + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
         + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
         + "\"headers\":{\"api_key\":\"${credential.key}\"},"
         + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
