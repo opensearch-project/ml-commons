@@ -153,6 +153,8 @@ public class AgentUtils {
     public static final String TOKEN_USAGE_PATH = "token_usage_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
+    private static final String INPUT_SCHEMA = "input_schema";
+    private static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\"properties\":{}}";
     private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
         .compile(",\\s*\"additionalProperties\"\\s*:\\s*(?:false|true)", Pattern.CASE_INSENSITIVE);
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
@@ -240,16 +242,16 @@ public class AgentUtils {
             toolParams.put(NAME, StringEscapeUtils.escapeJson(tool.getName()));
             toolParams.put(DESCRIPTION, StringEscapeUtils.escapeJson(tool.getDescription()));
             Map<String, ?> attributes = tool.getAttributes();
-            if (attributes == null || !attributes.containsKey("input_schema")) {
-                toolParams.put("attributes.input_schema", "{\"type\":\"object\",\"properties\":{}}");
+            if (attributes == null || !attributes.containsKey(INPUT_SCHEMA)) {
+                toolParams.put("attributes." + INPUT_SCHEMA, DEFAULT_INPUT_SCHEMA);
             }
             if (attributes != null) {
                 for (String key : attributes.keySet()) {
                     toolParams.put("attributes." + key, attributes.get(key));
                 }
                 // For Gemini, clean input_schema to remove additionalProperties
-                if (parameters.containsKey("gemini.schema.cleaner") && attributes.containsKey("input_schema")) {
-                    String schema = String.valueOf(attributes.get("input_schema"));
+                if (parameters.containsKey("gemini.schema.cleaner") && attributes.containsKey(INPUT_SCHEMA)) {
+                    String schema = String.valueOf(attributes.get(INPUT_SCHEMA));
                     String cleanedSchema = removeAdditionalPropertiesFromSchema(schema);
                     toolParams.put("attributes.input_schema_cleaned", cleanedSchema);
                 }
@@ -1265,10 +1267,10 @@ public class AgentUtils {
 
             Object parameters = frontendTool.get("parameters");
             if (parameters != null) {
-                toolAttributes.put("input_schema", gson.toJson(parameters));
+                toolAttributes.put(INPUT_SCHEMA, gson.toJson(parameters));
             } else {
                 Map<String, Object> emptySchema = Map.of("type", "object", "properties", Map.of());
-                toolAttributes.put("input_schema", gson.toJson(emptySchema));
+                toolAttributes.put(INPUT_SCHEMA, gson.toJson(emptySchema));
             }
 
             Tool frontendToolObj = new AGUIFrontendTool(toolName, toolDescription, toolAttributes);
