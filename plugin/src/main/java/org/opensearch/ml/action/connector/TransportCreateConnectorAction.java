@@ -123,7 +123,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             // Enforce cluster-level plaintext credentials policy
             if (connector instanceof AbstractConnector) {
                 AbstractConnector abstractConnector = (AbstractConnector) connector;
-                if (Boolean.FALSE.equals(abstractConnector.getIsEncrypted())) {
+                if (abstractConnector.isPlaintextCredentials()) {
                     if (!mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()) {
                         // Cluster setting does not allow plaintext credentials - throw exception
                         throw new IllegalArgumentException(
