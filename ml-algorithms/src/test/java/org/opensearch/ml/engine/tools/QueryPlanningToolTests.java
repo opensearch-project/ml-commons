@@ -57,7 +57,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptResponse;
-import org.opensearch.action.admin.indices.get.GetIndexResponse;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.xcontent.XContentHelper;
@@ -105,8 +105,8 @@ public class QueryPlanningToolTests {
     private QueryPlanningTool.Factory factory;
 
     // Common test objects
-    private ArgumentCaptor<ActionListener<GetIndexResponse>> actionListenerCaptor;
-    private GetIndexResponse getIndexResponse;
+    private ArgumentCaptor<ActionListener<GetMappingsResponse>> actionListenerCaptor;
+    private GetMappingsResponse getIndexResponse;
     private MappingMetadata mapping;
     private String mockedSearchResponseString;
 
@@ -157,13 +157,12 @@ public class QueryPlanningToolTests {
 
     public void mockGetIndexMapping() {
         // Mock the getIndex operation for getIndexMappingAsync (following IndexMappingToolTests pattern)
-        ArgumentCaptor<ActionListener<GetIndexResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
+        ArgumentCaptor<ActionListener<GetMappingsResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
         this.actionListenerCaptor = captor;
-        doNothing().when(indicesAdminClient).getIndex(any(), actionListenerCaptor.capture());
+        doNothing().when(indicesAdminClient).getMappings(any(), actionListenerCaptor.capture());
 
-        // Create a real GetIndexResponse with real MappingMetadata
-        this.getIndexResponse = mock(GetIndexResponse.class);
-        when(getIndexResponse.indices()).thenReturn(new String[] { "testIndex" });
+        // Create a real GetMappingsResponse with real MappingMetadata
+        this.getIndexResponse = mock(GetMappingsResponse.class);
 
         // Create real MappingMetadata with actual source
         String mappingSource = "{\"properties\":{\"title\":{\"type\":\"text\"}}}";
@@ -887,11 +886,11 @@ public class QueryPlanningToolTests {
     public void testRunWithNonExistentIndex() throws InterruptedException {
 
         doAnswer(invocation -> {
-            org.opensearch.core.action.ActionListener<org.opensearch.action.admin.indices.get.GetIndexResponse> listener = invocation
-                .getArgument(1);
+            org.opensearch.core.action.ActionListener<org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse> listener =
+                invocation.getArgument(1);
             listener.onFailure(new org.opensearch.index.IndexNotFoundException("non_existent_index"));
             return null;
-        }).when(indicesAdminClient).getIndex(any(), any());
+        }).when(indicesAdminClient).getMappings(any(), any());
 
         QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client, null, null);
         final CompletableFuture<String> future = new CompletableFuture<>();
@@ -1083,19 +1082,19 @@ public class QueryPlanningToolTests {
         }).when(queryGenerationTool).run(any(), any());
 
         // Case 1: onResponse mapping null -> NPE inside try caught
-        ArgumentCaptor<ActionListener<GetIndexResponse>> captor1 = ArgumentCaptor.forClass(ActionListener.class);
+        ArgumentCaptor<ActionListener<GetMappingsResponse>> captor1 = ArgumentCaptor.forClass(ActionListener.class);
         doAnswer(invocation -> {
             // capture and call onResponse with a response missing mapping
-            ActionListener<GetIndexResponse> al = invocation.getArgument(1);
+            ActionListener<GetMappingsResponse> al = invocation.getArgument(1);
             if (actionListenerCaptor == null) {
                 actionListenerCaptor = captor1;
             }
             al.onResponse(getIndexResponse); // getIndexResponse will be mocked below
             return null;
-        }).when(indicesAdminClient).getIndex(any(), any());
+        }).when(indicesAdminClient).getMappings(any(), any());
 
         // Mock getIndexResponse to return no mapping for index
-        getIndexResponse = mock(GetIndexResponse.class);
+        getIndexResponse = mock(GetMappingsResponse.class);
         when(getIndexResponse.mappings()).thenReturn(Collections.emptyMap());
 
         CompletableFuture<String> f1 = new CompletableFuture<>();
@@ -1110,10 +1109,10 @@ public class QueryPlanningToolTests {
 
         // Case 2: onFailure path with generic exception (non IndexNotFoundException)
         doAnswer(invocation -> {
-            ActionListener<GetIndexResponse> al = invocation.getArgument(1);
+            ActionListener<GetMappingsResponse> al = invocation.getArgument(1);
             al.onFailure(new RuntimeException("boom"));
             return null;
-        }).when(indicesAdminClient).getIndex(any(), any());
+        }).when(indicesAdminClient).getMappings(any(), any());
 
         CompletableFuture<String> f2 = new CompletableFuture<>();
         ActionListener<String> l2 = ActionListener.wrap(f2::complete, f2::completeExceptionally);
@@ -1126,7 +1125,7 @@ public class QueryPlanningToolTests {
         assertTrue(ix2.getCause().getMessage().contains("Failed to extract index mapping"));
 
         // Case 3: outer try-catch (getIndex throws synchronously)
-        doAnswer(invocation -> { throw new RuntimeException("sync"); }).when(indicesAdminClient).getIndex(any(), any());
+        doAnswer(invocation -> { throw new RuntimeException("sync"); }).when(indicesAdminClient).getMappings(any(), any());
 
         CompletableFuture<String> f3 = new CompletableFuture<>();
         ActionListener<String> l3 = ActionListener.wrap(f3::complete, f3::completeExceptionally);
@@ -1511,11 +1510,11 @@ public class QueryPlanningToolTests {
         mockSampleDoc();
 
         // Mock getIndex to return mappings keyed by multiple concrete indices (simulating alias resolution)
-        ArgumentCaptor<ActionListener<GetIndexResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
-        doNothing().when(indicesAdminClient).getIndex(any(), captor.capture());
+        ArgumentCaptor<ActionListener<GetMappingsResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getMappings(any(), captor.capture());
         this.actionListenerCaptor = captor;
 
-        GetIndexResponse multiIndexResponse = mock(GetIndexResponse.class);
+        GetMappingsResponse multiIndexResponse = mock(GetMappingsResponse.class);
         String mappingSource = "{\"properties\":{\"title\":{\"type\":\"text\"}}}";
         MappingMetadata mapping1 = new MappingMetadata(
             "logs_march",
@@ -1557,10 +1556,10 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testGetIndexMapping_NullMappingsFails() throws ExecutionException, InterruptedException {
-        ArgumentCaptor<ActionListener<GetIndexResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
-        doNothing().when(indicesAdminClient).getIndex(any(), captor.capture());
+        ArgumentCaptor<ActionListener<GetMappingsResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getMappings(any(), captor.capture());
 
-        GetIndexResponse response = mock(GetIndexResponse.class);
+        GetMappingsResponse response = mock(GetMappingsResponse.class);
         when(response.mappings()).thenReturn(null);
 
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
