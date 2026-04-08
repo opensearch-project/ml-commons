@@ -125,10 +125,14 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 AbstractConnector abstractConnector = (AbstractConnector) connector;
                 if (abstractConnector.isPlaintextCredentials()) {
                     if (!mlFeatureEnabledSetting.isPlaintextCredentialsAllowed()) {
-                        // Cluster setting does not allow plaintext credentials - throw exception
-                        throw new IllegalArgumentException(
-                            "Plaintext credentials are not allowed. Please set cluster setting 'plugins.ml_commons.allow_plaintext_credentials' to true to enable plaintext credentials storage."
-                        );
+                        // Cluster setting does not allow plaintext credentials
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "Plaintext credentials are not allowed. Please set cluster setting 'plugins.ml_commons.allow_plaintext_credentials' to true to enable plaintext credentials storage."
+                                )
+                            );
+                        return;
                     } else {
                         // Cluster setting allows plaintext credentials
                         log
