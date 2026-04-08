@@ -1230,11 +1230,11 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
         when(tool1.getName()).thenReturn("Tool1");
         when(tool1.getDescription()).thenReturn("Description of Tool1");
-        when(tool1.getAttributes()).thenReturn(Map.of("param1", "value1"));
+        when(tool1.getAttributes()).thenReturn(Map.of("param1", "value1", "input_schema", "{\"type\":\"object\",\"properties\":{}}"));
 
         when(tool2.getName()).thenReturn("Tool2");
         when(tool2.getDescription()).thenReturn("Description of Tool2");
-        when(tool2.getAttributes()).thenReturn(Map.of("param2", "value2"));
+        when(tool2.getAttributes()).thenReturn(Map.of("param2", "value2", "input_schema", "{\"type\":\"object\",\"properties\":{}}"));
 
         Map<String, String> parameters = new HashMap<>();
         String toolTemplate = "{\"name\": \"${tool.name}\", \"description\": \"${tool.description}\"}";
@@ -1267,11 +1267,13 @@ public class AgentUtilsTest extends MLStaticMockBase {
             "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\":{\"json\":${tool.attributes.input_schema}}}}";
         parameters.put(TOOL_TEMPLATE, toolTemplate);
 
-        AgentUtils.addToolsToFunctionCalling(tools, parameters, List.of("VectorDBTool"), "prompt");
-
-        String result = parameters.get(TOOLS);
-        Assert.assertFalse(result.contains("${tool.attributes.input_schema}"));
-        Assert.assertTrue(result.contains("\"inputSchema\":{\"json\":{\"type\":\"object\",\"properties\":{}}}"));
+        Exception ex = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> AgentUtils.addToolsToFunctionCalling(tools, parameters, List.of("VectorDBTool"), "prompt")
+            );
+        Assert.assertTrue(ex.getMessage().contains("VectorDBTool"));
+        Assert.assertTrue(ex.getMessage().contains("input_schema"));
     }
 
     @Test
@@ -1289,11 +1291,13 @@ public class AgentUtilsTest extends MLStaticMockBase {
             "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\":{\"json\":${tool.attributes.input_schema}}}}";
         parameters.put(TOOL_TEMPLATE, toolTemplate);
 
-        AgentUtils.addToolsToFunctionCalling(tools, parameters, List.of("VectorDBTool"), "prompt");
-
-        String result = parameters.get(TOOLS);
-        Assert.assertFalse(result.contains("${tool.attributes.input_schema}"));
-        Assert.assertTrue(result.contains("\"inputSchema\":{\"json\":{\"type\":\"object\",\"properties\":{}}}"));
+        Exception ex = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> AgentUtils.addToolsToFunctionCalling(tools, parameters, List.of("VectorDBTool"), "prompt")
+            );
+        Assert.assertTrue(ex.getMessage().contains("VectorDBTool"));
+        Assert.assertTrue(ex.getMessage().contains("input_schema"));
     }
 
     @Test

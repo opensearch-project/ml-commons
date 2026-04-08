@@ -154,7 +154,6 @@ public class AgentUtils {
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
     private static final String INPUT_SCHEMA = "input_schema";
-    private static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\"properties\":{}}";
     private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
         .compile(",\\s*\"additionalProperties\"\\s*:\\s*(?:false|true)", Pattern.CASE_INSENSITIVE);
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
@@ -243,18 +242,23 @@ public class AgentUtils {
             toolParams.put(DESCRIPTION, StringEscapeUtils.escapeJson(tool.getDescription()));
             Map<String, ?> attributes = tool.getAttributes();
             if (attributes == null || !attributes.containsKey(INPUT_SCHEMA)) {
-                toolParams.put("attributes." + INPUT_SCHEMA, DEFAULT_INPUT_SCHEMA);
+                throw new IllegalArgumentException(
+                    "Tool ["
+                        + toolName
+                        + "] is missing ["
+                        + INPUT_SCHEMA
+                        + "] in its attributes. "
+                        + "All tools used with function calling must define an input_schema."
+                );
             }
-            if (attributes != null) {
-                for (String key : attributes.keySet()) {
-                    toolParams.put("attributes." + key, attributes.get(key));
-                }
-                // For Gemini, clean input_schema to remove additionalProperties
-                if (parameters.containsKey("gemini.schema.cleaner") && attributes.containsKey(INPUT_SCHEMA)) {
-                    String schema = String.valueOf(attributes.get(INPUT_SCHEMA));
-                    String cleanedSchema = removeAdditionalPropertiesFromSchema(schema);
-                    toolParams.put("attributes.input_schema_cleaned", cleanedSchema);
-                }
+            for (String key : attributes.keySet()) {
+                toolParams.put("attributes." + key, attributes.get(key));
+            }
+            // For Gemini, clean input_schema to remove additionalProperties
+            if (parameters.containsKey("gemini.schema.cleaner") && attributes.containsKey(INPUT_SCHEMA)) {
+                String schema = String.valueOf(attributes.get(INPUT_SCHEMA));
+                String cleanedSchema = removeAdditionalPropertiesFromSchema(schema);
+                toolParams.put("attributes.input_schema_cleaned", cleanedSchema);
             }
             StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${tool.", "}");
             String chatQuestionMessage = substitutor.replace(toolTemplate);
