@@ -5,12 +5,19 @@
 
 package org.opensearch.ml.grpc;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Optional;
+
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.grpc.adapters.StreamObserverAdapter;
 import org.opensearch.ml.grpc.converters.ProtoRequestConverter;
@@ -25,94 +32,80 @@ import lombok.extern.log4j.Log4j2;
 
 /**
  * gRPC service implementation for streaming ML operations.
- *
- * <p>This service provides server-side streaming for:
- * <ul>
- *   <li>Model predictions via PredictModelStream RPC
- *   <li>Agent execution via ExecuteAgentStream RPC
- * </ul>
- *
- * <p>It integrates with OpenSearch's existing ML infrastructure while providing
- * gRPC-based streaming instead of REST SSE.
+ * This service provides server-side streaming for:
+ * - Model predictions via PredictModelStream RPC
+ * - Agent execution via ExecuteAgentStream RPC
  */
 @Log4j2
 public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
 
     // Use Object types to avoid circular dependency with plugin module
-    // At runtime, these will be the actual typed objects passed from the plugin
-    private final Object client;  // org.opensearch.client.Client
-    private final Object modelManager;  // org.opensearch.ml.model.MLModelManager
-    private final Object predictTaskRunner;  // org.opensearch.ml.task.MLPredictTaskRunner
-    private final Object executeTaskRunner;  // org.opensearch.ml.task.MLExecuteTaskRunner
+    private final Object modelManager;
+    private final Object predictTaskRunner;
+    private final Object executeTaskRunner;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final Object modelAccessControlHelper;
+    private final Object client;
+    private final Object sdkClient;
 
     /**
      * Creates a new ML streaming service.
      *
-     * @param client OpenSearch client for cluster operations
      * @param modelManager manager for model access and validation
      * @param predictTaskRunner task runner for executing predictions
      * @param executeTaskRunner task runner for executing agent tasks
      * @param mlFeatureEnabledSetting feature flags for ML capabilities
+     * @param modelAccessControlHelper helper for validating model access control
+     * @param client OpenSearch client for validation
+     * @param sdkClient SDK client for multi-tenant operations
      */
     public MLStreamingService(
-        Object client,
         Object modelManager,
         Object predictTaskRunner,
         Object executeTaskRunner,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        Object modelAccessControlHelper,
+        Object client,
+        Object sdkClient
     ) {
-        this.client = client;
         this.modelManager = modelManager;
         this.predictTaskRunner = predictTaskRunner;
         this.executeTaskRunner = executeTaskRunner;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.modelAccessControlHelper = modelAccessControlHelper;
+        this.client = client;
+        this.sdkClient = sdkClient;
     }
 
     @Override
     public void predictModelStream(MlPredictModelStreamRequest request, StreamObserver<PredictResponse> responseObserver) {
         try {
-            log.error("[GRPC-DEBUG] predictModelStream() called");
-            // 1. Validate streaming is enabled
-            if (!mlFeatureEnabledSetting.isStreamEnabled()) {
-                responseObserver.onError(Status.FAILED_PRECONDITION.withDescription("Streaming is disabled").asRuntimeException());
-                return;
-            }
-
-            // 2. Validate remote inference is enabled
+            // Validate remote inference is enabled
             if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
                 responseObserver.onError(Status.FAILED_PRECONDITION.withDescription("Remote inference is disabled").asRuntimeException());
                 return;
             }
 
-            // 3. Convert protobuf request to ML request
-            MLPredictionTaskRequest mlRequest = ProtoRequestConverter.toPredictRequest(request);
+            // Extract tenant ID from gRPC metadata
+            String tenantId = extractTenantId();
 
-            // 4. Validate model and execute
+            // Convert protobuf request to ML request with tenant ID
+            MLPredictionTaskRequest mlRequest = ProtoRequestConverter.toPredictRequest(request, tenantId);
+
+            // Validate model and execute
             String modelId = mlRequest.getModelId();
-            String tenantId = mlRequest.getTenantId();
-
-            // Check if model is in cache
-            // Use reflection to avoid compile-time dependency on plugin classes
-            java.util.Optional<FunctionName> functionName = getOptionalModelFunctionName(modelId);
-
-            if (functionName.isPresent()) {
-                // Model in cache - validate it's a remote model
-                if (!FunctionName.REMOTE.equals(functionName.get())) {
-                    responseObserver
-                        .onError(
-                            Status.INVALID_ARGUMENT.withDescription("Streaming is only supported for remote models").asRuntimeException()
-                        );
-                    return;
-                }
-
-                // Execute streaming prediction
-                executeStreamingPrediction(mlRequest, responseObserver);
-            } else {
-                // Model not in cache - load it first
-                loadModelAndExecuteStreaming(modelId, tenantId, mlRequest, responseObserver);
+            Optional<FunctionName> functionName = getOptionalModelFunctionName(modelId);
+            if (functionName.isPresent() && !FunctionName.REMOTE.equals(functionName.get())) {
+                responseObserver
+                    .onError(Status.INVALID_ARGUMENT.withDescription("Streaming is only supported for remote models").asRuntimeException());
+                return;
             }
 
+            // Extract user from context
+            User user = getUserFromContext();
+            mlRequest.setUser(user);
+
+            loadModelValidateAndExecuteStreaming(modelId, tenantId, mlRequest, user, responseObserver);
         } catch (Exception e) {
             log.error("Error in predictModelStream", e);
             Status status = GrpcStatusMapper.toGrpcStatus(e);
@@ -120,83 +113,127 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
         }
     }
 
-    @Override
-    public void executeAgentStream(MlExecuteAgentStreamRequest request, StreamObserver<PredictResponse> responseObserver) {
+    /**
+     * Loads a model, validates access, and then executes streaming prediction.
+     */
+    private void loadModelValidateAndExecuteStreaming(
+        String modelId,
+        String tenantId,
+        MLPredictionTaskRequest mlRequest,
+        User user,
+        StreamObserver<PredictResponse> responseObserver
+    ) {
         try {
-            // 1. Validate streaming is enabled
-            if (!mlFeatureEnabledSetting.isStreamEnabled()) {
-                responseObserver.onError(Status.FAILED_PRECONDITION.withDescription("Streaming is disabled").asRuntimeException());
-                return;
-            }
+            // Get ThreadContext from client via reflection
+            Method getThreadPoolMethod = client.getClass().getMethod("threadPool");
+            Object threadPool = getThreadPoolMethod.invoke(client);
+            Method getThreadContextMethod = threadPool.getClass().getMethod("getThreadContext");
+            Object threadContext = getThreadContextMethod.invoke(threadPool);
+            Method stashContextMethod = threadContext.getClass().getMethod("stashContext");
 
-            // 2. Validate agent execution is enabled
-            if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
-                responseObserver.onError(Status.FAILED_PRECONDITION.withDescription("Agent framework is disabled").asRuntimeException());
-                return;
-            }
+            AutoCloseable context = (AutoCloseable) stashContextMethod.invoke(threadContext);
+            ActionListener<MLModel> modelListener = ActionListener.wrap(mlModel -> {
+                try {
+                    // Validate model group access
+                    validateModelGroupAccessAndExecute(mlModel, mlRequest, user, tenantId, responseObserver);
+                } catch (Exception e) {
+                    log.error("Error validating model access", e);
+                    Status status = GrpcStatusMapper.toGrpcStatus(e);
+                    responseObserver.onError(status.asRuntimeException());
+                } finally {
+                    try {
+                        context.close();
+                    } catch (Exception ex) {
+                        log.error("Failed to close context", ex);
+                    }
+                }
+            }, e -> {
+                log.error("Failed to load model {}", modelId, e);
+                try {
+                    context.close();
+                } catch (Exception ex) {
+                    log.error("Failed to close context", ex);
+                }
+                if (e instanceof OpenSearchStatusException && ((OpenSearchStatusException) e).status() == RestStatus.NOT_FOUND) {
+                    responseObserver
+                        .onError(Status.NOT_FOUND.withDescription("Model not found: " + modelId).withCause(e).asRuntimeException());
+                } else {
+                    Status status = GrpcStatusMapper.toGrpcStatus(e);
+                    responseObserver.onError(status.asRuntimeException());
+                }
+            });
 
-            // 3. Convert protobuf request to ML execute request
-            // TODO: Implement ProtoRequestConverter.toExecuteRequest()
-            throw new UnsupportedOperationException(
-                "Agent execution streaming not yet implemented. " + "Requires ProtoRequestConverter.toExecuteRequest() implementation."
-            );
-
+            String resolvedTenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), tenantId);
+            Method getModelMethod = modelManager.getClass().getMethod("getModel", String.class, String.class, ActionListener.class);
+            getModelMethod.invoke(modelManager, modelId, resolvedTenantId, modelListener);
         } catch (Exception e) {
-            log.error("Error in executeAgentStream", e);
+            log.error("Failed to invoke getModel via reflection", e);
             Status status = GrpcStatusMapper.toGrpcStatus(e);
             responseObserver.onError(status.asRuntimeException());
         }
     }
 
     /**
-     * Loads a model from storage and then executes streaming prediction.
+     * Validates model group access and executes streaming prediction if authorized.
      */
-    private void loadModelAndExecuteStreaming(
-        String modelId,
-        String tenantId,
+    private void validateModelGroupAccessAndExecute(
+        MLModel mlModel,
         MLPredictionTaskRequest mlRequest,
+        User user,
+        String tenantId,
         StreamObserver<PredictResponse> responseObserver
     ) {
-        ActionListener<MLModel> listener = ActionListener.wrap(mlModel -> {
-            try {
-                // Validate it's a remote model
-                if (!FunctionName.REMOTE.equals(mlModel.getAlgorithm())) {
+        try {
+            String modelGroupId = mlModel.getModelGroupId();
+
+            // Find validateModelGroupAccess method by iterating through methods
+            // We can't use getMethod() directly because some classes aren't available at compile time
+            Method validateMethod = null;
+            for (Method method : modelAccessControlHelper.getClass().getMethods()) {
+                if (method.getName().equals("validateModelGroupAccess") && method.getParameterCount() == 8) {
+                    validateMethod = method;
+                    break;
+                }
+            }
+
+            if (validateMethod == null) {
+                throw new RuntimeException("validateModelGroupAccess method not found");
+            }
+
+            ActionListener<Boolean> accessListener = ActionListener.wrap(hasAccess -> {
+                if (!hasAccess) {
                     responseObserver
                         .onError(
-                            Status.INVALID_ARGUMENT.withDescription("Streaming is only supported for remote models").asRuntimeException()
+                            Status.PERMISSION_DENIED
+                                .withDescription("User doesn't have privilege to perform this operation on this model")
+                                .asRuntimeException()
                         );
-                    return;
+                } else {
+                    // Access granted - execute streaming prediction
+                    executeStreamingPrediction(mlRequest, responseObserver);
                 }
-
-                // Execute streaming prediction
-                executeStreamingPrediction(mlRequest, responseObserver);
-
-            } catch (Exception e) {
-                log.error("Error loading model for streaming", e);
+            }, e -> {
+                log.error("Error validating model group access", e);
                 Status status = GrpcStatusMapper.toGrpcStatus(e);
                 responseObserver.onError(status.asRuntimeException());
-            }
-        }, e -> {
-            log.error("Failed to load model {}", modelId, e);
-            if (e instanceof OpenSearchStatusException && ((OpenSearchStatusException) e).status() == RestStatus.NOT_FOUND) {
-                responseObserver.onError(Status.NOT_FOUND.withDescription("Model not found: " + modelId).withCause(e).asRuntimeException());
-            } else {
-                Status status = GrpcStatusMapper.toGrpcStatus(e);
-                responseObserver.onError(status.asRuntimeException());
-            }
-        });
+            });
 
-        // Load model with tenant context
-        // Use reflection: modelManager.getModel(modelId, tenantId, listener)
-        try {
-            String resolvedTenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), tenantId);
-            java.lang.reflect.Method getModelMethod = modelManager
-                .getClass()
-                .getMethod("getModel", String.class, String.class, ActionListener.class);
-            getModelMethod.invoke(modelManager, modelId, resolvedTenantId, listener);
+            validateMethod
+                .invoke(
+                    modelAccessControlHelper,
+                    user,
+                    mlFeatureEnabledSetting,
+                    tenantId,
+                    modelGroupId,
+                    MLPredictionStreamTaskAction.NAME,
+                    client,
+                    sdkClient,
+                    accessListener
+                );
         } catch (Exception e) {
-            log.error("Failed to invoke getModel via reflection", e);
-            throw new RuntimeException("Failed to load model", e);
+            log.error("Failed to invoke validateModelGroupAccess via reflection", e);
+            Status status = GrpcStatusMapper.toGrpcStatus(e);
+            responseObserver.onError(status.asRuntimeException());
         }
     }
 
@@ -205,19 +242,15 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
      */
     private void executeStreamingPrediction(MLPredictionTaskRequest mlRequest, StreamObserver<PredictResponse> responseObserver) {
         try {
-            log.debug("[GRPC-DEBUG] executeStreamingPrediction() called");
             // Create adapter that bridges ML streaming to gRPC streaming
-            StreamObserverAdapter<PredictResponse> adapter = new StreamObserverAdapter<>(responseObserver, false);
-            log.debug("[GRPC-DEBUG] Created StreamObserverAdapter");
+            StreamObserverAdapter<PredictResponse> adapter = new StreamObserverAdapter<>(responseObserver);
 
-            // Set the request to enable streaming mode and use our channel
-            mlRequest.setDispatchTask(false); // Force local execution to use our adapter
-            mlRequest.setStreamingChannel(adapter.getChannel()); // Set our gRPC channel
+            // Set the request to use gRPC channel
+            mlRequest.setStreamingChannel(adapter.getChannel());
 
             // Execute prediction via task runner using checkCBAndExecute
-            // This will call executeTask which will use our streaming channel
             try {
-                java.lang.reflect.Method checkCBMethod = predictTaskRunner
+                Method checkCBMethod = predictTaskRunner
                     .getClass()
                     .getSuperclass()
                     .getDeclaredMethod(
@@ -227,10 +260,8 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
                         ActionListener.class
                     );
                 checkCBMethod.setAccessible(true);
-                log.debug("[GRPC-DEBUG] About to invoke checkCBAndExecute with streaming channel set");
                 checkCBMethod.invoke(predictTaskRunner, FunctionName.REMOTE, mlRequest, adapter);
-                log.debug("[GRPC-DEBUG] Invoked checkCBAndExecute successfully");
-            } catch (java.lang.reflect.InvocationTargetException e) {
+            } catch (InvocationTargetException e) {
                 log.error("[GRPC-DEBUG] InvocationTargetException during checkCBAndExecute", e.getCause());
                 throw e.getCause() != null ? (Exception) e.getCause() : e;
             } catch (Exception e) {
@@ -243,6 +274,93 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
             Status status = GrpcStatusMapper.toGrpcStatus(e);
             responseObserver.onError(status.asRuntimeException());
         }
+    }
+
+    @Override
+    public void executeAgentStream(MlExecuteAgentStreamRequest request, StreamObserver<PredictResponse> responseObserver) {
+        try {
+            // Validate agent execution is enabled
+            if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
+                responseObserver.onError(Status.FAILED_PRECONDITION.withDescription("Agent framework is disabled").asRuntimeException());
+                return;
+            }
+
+            // Extract tenant ID from gRPC metadata
+            String tenantId = extractTenantId();
+
+            // Convert protobuf request to ML execute request with tenant ID
+            MLExecuteTaskRequest mlRequest = ProtoRequestConverter.toExecuteRequest(request, tenantId);
+
+            // Execute agent streaming
+            executeAgentStreamingTask(mlRequest, responseObserver);
+        } catch (Exception e) {
+            log.error("Error in executeAgentStream", e);
+            Status status = GrpcStatusMapper.toGrpcStatus(e);
+            responseObserver.onError(status.asRuntimeException());
+        }
+    }
+
+    /**
+     * Executes agent streaming using the execute task runner.
+     */
+    private void executeAgentStreamingTask(MLExecuteTaskRequest mlRequest, StreamObserver<PredictResponse> responseObserver) {
+        try {
+            // Create adapter that bridges ML streaming to gRPC streaming
+            StreamObserverAdapter<PredictResponse> adapter = new StreamObserverAdapter<>(responseObserver);
+
+            // Set the request to enable streaming mode and use gRPC channel
+            mlRequest.setDispatchTask(false);
+            mlRequest.setStreamingChannel(adapter.getChannel());
+
+            // Execute agent task via task runner using checkCBAndExecute
+            try {
+                Method checkCBMethod = executeTaskRunner
+                    .getClass()
+                    .getSuperclass()
+                    .getDeclaredMethod(
+                        "checkCBAndExecute",
+                        FunctionName.class,
+                        org.opensearch.ml.common.transport.MLTaskRequest.class,
+                        org.opensearch.core.action.ActionListener.class
+                    );
+                checkCBMethod.setAccessible(true);
+                checkCBMethod.invoke(executeTaskRunner, FunctionName.AGENT, mlRequest, adapter);
+            } catch (InvocationTargetException e) {
+                log.error("InvocationTargetException during agent execute", e.getCause());
+                throw e.getCause() != null ? (Exception) e.getCause() : e;
+            } catch (Exception e) {
+                log.error("Exception during agent execute reflection", e);
+                throw e;
+            }
+        } catch (Exception e) {
+            log.error("Error executing agent streaming task", e);
+            Status status = GrpcStatusMapper.toGrpcStatus(e);
+            responseObserver.onError(status.asRuntimeException());
+        }
+    }
+
+    /**
+     * Extracts tenant ID from gRPC context.
+     * The TenantIdInterceptor extracts the "x-tenant-id" header from request metadata
+     * and attaches it to the context for access here.
+     *
+     * Returns null if multi-tenancy is disabled.
+     * Throws exception if multi-tenancy is enabled but tenant ID header is missing.
+     */
+    private String extractTenantId() {
+        if (!mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+            return null;
+        }
+
+        // Extract tenant ID from context
+        String tenantId = TenantIdInterceptor.TENANT_ID_CONTEXT_KEY.get();
+
+        // Validate tenant ID is present when multi-tenancy is enabled
+        if (tenantId == null) {
+            throw new OpenSearchStatusException("Tenant ID header is missing or has no value", RestStatus.FORBIDDEN);
+        }
+
+        return tenantId;
     }
 
     /**
@@ -259,13 +377,27 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
      * Gets optional model function name from model manager using reflection.
      */
     @SuppressWarnings("unchecked")
-    private java.util.Optional<FunctionName> getOptionalModelFunctionName(String modelId) {
+    private Optional<FunctionName> getOptionalModelFunctionName(String modelId) {
         try {
-            java.lang.reflect.Method method = modelManager.getClass().getMethod("getOptionalModelFunctionName", String.class);
-            return (java.util.Optional<FunctionName>) method.invoke(modelManager, modelId);
+            Method method = modelManager.getClass().getMethod("getOptionalModelFunctionName", String.class);
+            return (Optional<FunctionName>) method.invoke(modelManager, modelId);
         } catch (Exception e) {
             log.error("Failed to invoke getOptionalModelFunctionName via reflection", e);
-            return java.util.Optional.empty();
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Extracts User from OpenSearch security context via client ThreadContext.
+     */
+    private User getUserFromContext() {
+        try {
+            Class<?> restActionUtilsClass = Class.forName("org.opensearch.ml.utils.RestActionUtils");
+            Method getUserContextMethod = restActionUtilsClass.getMethod("getUserContext", org.opensearch.transport.client.Client.class);
+            return (User) getUserContextMethod.invoke(null, client);
+        } catch (Exception e) {
+            log.error("Failed to get user context via reflection", e);
+            return null;
         }
     }
 }

@@ -17,6 +17,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.grpc.adapters.StreamObserverAdapter;
 
 /**
  * Unit tests for StreamObserverAdapter.
@@ -29,7 +30,7 @@ public class StreamObserverAdapterTests {
     @Before
     public void setUp() {
         mockObserver = new MockStreamObserver();
-        adapter = new StreamObserverAdapter<>(mockObserver, false);
+        adapter = new StreamObserverAdapter<>(mockObserver);
     }
 
     @Test

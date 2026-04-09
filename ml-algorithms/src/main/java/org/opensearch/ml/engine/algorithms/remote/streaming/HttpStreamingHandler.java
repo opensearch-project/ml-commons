@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agui.BaseEvent;
 import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.TextMessageContentEvent;
@@ -211,7 +213,9 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 // HTTP error (e.g., 400 Bad Request)
                 try {
                     String errorBody = response.body() != null ? response.body().string() : "";
-                    streamActionListener.onFailure(new MLException("Error from remote service: " + errorBody));
+                    int statusCode = response.code();
+                    RestStatus restStatus = RestStatus.fromCode(statusCode);
+                    streamActionListener.onFailure(new OpenSearchStatusException("Error from remote service: " + errorBody, restStatus));
                 } catch (IOException e) {
                     streamActionListener.onFailure(new MLException("SSE failure - unable to read error details"));
                 }
