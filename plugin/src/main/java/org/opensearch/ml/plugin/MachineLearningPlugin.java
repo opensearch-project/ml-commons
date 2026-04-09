@@ -958,7 +958,15 @@ public class MachineLearningPlugin extends Plugin
 
         // Initialize gRPC service factory
         org.opensearch.ml.grpc.MLGrpcServiceFactory
-            .initialize(mlModelManager, mlPredictTaskRunner, mlExecuteTaskRunner, mlFeatureEnabledSetting);
+            .initialize(
+                mlModelManager,
+                mlPredictTaskRunner,
+                mlExecuteTaskRunner,
+                mlFeatureEnabledSetting,
+                modelAccessControlHelper,
+                client,
+                sdkClient
+            );
 
         return ImmutableList
             .of(

@@ -14,18 +14,17 @@ dependencies {
     compileOnly project(':opensearch-ml-algorithms')
     compileOnly "org.opensearch:opensearch:${opensearch_version}"
     compileOnly "software.amazon.awssdk:auth:${versions.aws}"
+    compileOnly "org.opensearch:common-utils:${common_utils_version}"
 
     // gRPC dependencies
     compileOnly 'io.grpc:grpc-api:1.75.0'
     compileOnly 'io.grpc:grpc-stub:1.75.0'
     compileOnly 'io.grpc:grpc-protobuf:1.75.0'
+    implementation 'com.google.protobuf:protobuf-java-util:4.29.5'
 
     // gRPC SPI for service registration
     compileOnly "org.opensearch.plugin:transport-grpc-spi:3.6.0-SNAPSHOT"
-
-    // Proto dependency from local Maven repository
-    // Note: Using explicit 3.6.0 version to match OpenSearch version
-    compileOnly "org.opensearch:opensearch-protobufs:3.6.0-SNAPSHOT"
+    compileOnly "org.opensearch:protobufs:1.4.0-SNAPSHOT"
 
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     testImplementation "org.mockito:mockito-core:5.14.2"

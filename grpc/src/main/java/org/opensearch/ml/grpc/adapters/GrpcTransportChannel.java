@@ -6,27 +6,27 @@
 package org.opensearch.ml.grpc.adapters;
 
 import org.opensearch.core.transport.TransportResponse;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.ml.grpc.GrpcStatusMapper;
 import org.opensearch.transport.TransportChannel;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * A dummy TransportChannel implementation that delegates to gRPC StreamObserver.
- *
- * <p>This adapter allows the existing streaming infrastructure (StreamPredictActionListener,
- * HttpStreamingHandler) to work with gRPC by implementing the TransportChannel interface
- * but delegating all operations to the gRPC StreamObserver.
- *
- * <p>This is used instead of passing null for the channel, which causes NullPointerExceptions
- * in error handling paths.
+ * A TransportChannel implementation that delegates to gRPC StreamObserver.
  */
 @Log4j2
 public class GrpcTransportChannel implements TransportChannel {
 
     private final StreamObserver<?> responseObserver;
-    private StreamObserverAdapter<?> adapter;  // Not final - set after construction
-    private final boolean isExecuteRequest;
+    @Setter
+    private StreamObserverAdapter<?> adapter;
+    @Getter
     private boolean completed = false;
 
     /**
@@ -34,18 +34,9 @@ public class GrpcTransportChannel implements TransportChannel {
      *
      * @param responseObserver the gRPC response observer
      * @param adapter the StreamObserverAdapter that handles conversion
-     * @param isExecuteRequest true if this is an agent execute request
      */
-    public GrpcTransportChannel(StreamObserver<?> responseObserver, StreamObserverAdapter<?> adapter, boolean isExecuteRequest) {
+    public GrpcTransportChannel(StreamObserver<?> responseObserver, StreamObserverAdapter<?> adapter) {
         this.responseObserver = responseObserver;
-        this.adapter = adapter;
-        this.isExecuteRequest = isExecuteRequest;
-    }
-
-    /**
-     * Sets the adapter after construction (needed for circular reference).
-     */
-    public void setAdapter(StreamObserverAdapter<?> adapter) {
         this.adapter = adapter;
     }
 
@@ -61,15 +52,13 @@ public class GrpcTransportChannel implements TransportChannel {
 
     @Override
     public void sendResponse(TransportResponse response) {
-        log.debug("GrpcTransportChannel.sendResponse() called - not implemented for streaming");
-        // For streaming, we use sendResponseBatch() instead
+        log.warn("GrpcTransportChannel.sendResponse() called - not implemented for streaming");
     }
 
     @Override
     public void sendResponse(Exception exception) {
-        log.debug("GrpcTransportChannel.sendResponse(Exception) called", exception);
         if (!completed) {
-            io.grpc.Status status = org.opensearch.ml.grpc.GrpcStatusMapper.toGrpcStatus(exception);
+            Status status = GrpcStatusMapper.toGrpcStatus(exception);
             responseObserver.onError(status.asRuntimeException());
             completed = true;
         }
@@ -77,35 +66,22 @@ public class GrpcTransportChannel implements TransportChannel {
 
     /**
      * Sends a streaming response batch.
-     * This is called by StreamPredictActionListener for each chunk.
+     * This is called by StreamPredictActionListener or agent executor for each chunk.
      *
      * @param response the response chunk to send
      */
     @Override
     public void sendResponseBatch(TransportResponse response) {
-        log
-            .debug(
-                "[GRPC-DEBUG] GrpcTransportChannel.sendResponseBatch() called - completed={}, adapter={}, response type={}",
-                completed,
-                adapter != null ? "present" : "null",
-                response != null ? response.getClass().getSimpleName() : "null"
-            );
         if (completed) {
-            log.warn("Attempted to send response batch after stream completed");
             return;
         }
 
-        // Delegate to the adapter to handle the actual gRPC sending
-        if (adapter != null && response instanceof org.opensearch.ml.common.transport.MLTaskResponse) {
-            log.debug("[GRPC-DEBUG] Delegating to adapter.handleStreamResponse()");
-            adapter.handleStreamResponse((org.opensearch.ml.common.transport.MLTaskResponse) response, false);
-        } else {
-            log
-                .debug(
-                    "[GRPC-DEBUG] NOT delegating - adapter={}, response type={}",
-                    adapter != null ? "present" : "null",
-                    response != null ? response.getClass().getName() : "null"
-                );
+        if (adapter != null) {
+            if (response instanceof MLTaskResponse || response instanceof MLExecuteTaskResponse) {
+                adapter.handleStreamResponse(response, false);
+            } else {
+                log.warn("Unsupported response type in sendResponseBatch: " + response.getClass().getName());
+            }
         }
     }
 
@@ -116,12 +92,14 @@ public class GrpcTransportChannel implements TransportChannel {
     @Override
     public void completeStream() {
         if (!completed) {
-            log.debug("[GRPC-DEBUG] GrpcTransportChannel.completeStream() called");
             completed = true;
-            // Delegate to adapter to complete the stream
             if (adapter != null) {
                 adapter.completeGrpcStream();
             }
         }
+    }
+
+    public void markCompleted() {
+        this.completed = true;
     }
 }

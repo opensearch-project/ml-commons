@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -46,6 +47,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -176,22 +178,31 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
             ConverseStreamResponseHandler handler = ConverseStreamResponseHandler.builder().onResponse(response -> {}).onError(error -> {
                 log.error("Converse stream error: {}", error.getMessage());
-                if (isThrottlingError(error)) {
+
+                Throwable actualError = error;
+                if (error instanceof CompletionException && error.getCause() != null) {
+                    actualError = error.getCause();
+                }
+
+                if (actualError instanceof AwsServiceException awsError) {
+                    int statusCode = awsError.statusCode();
+                    RestStatus restStatus = RestStatus.fromCode(statusCode);
+                    log.error("AWS error with status code: {}, mapped to RestStatus: {}", statusCode, restStatus);
+                    listener
+                        .onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + actualError.getMessage(), restStatus, actualError));
+                } else if (isThrottlingError(actualError)) {
                     listener
                         .onFailure(
                             new RemoteConnectorThrottlingException(
                                 REMOTE_SERVICE_ERROR
                                     + "The request was denied due to remote server throttling. "
                                     + "To change the retry policy and behavior, please update the connector client_config.",
-                                RestStatus.BAD_REQUEST
+                                RestStatus.TOO_MANY_REQUESTS
                             )
                         );
-                } else if (isClientError(error)) {
-                    // 4XX errors
-                    listener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + error.getMessage(), RestStatus.BAD_REQUEST));
                 } else {
-                    // 5xx errors
-                    listener.onFailure(new MLException(REMOTE_SERVICE_ERROR + error.getMessage(), error));
+                    // Unknown error type
+                    listener.onFailure(new MLException(REMOTE_SERVICE_ERROR + actualError.getMessage(), actualError));
                 }
             }).onComplete(() -> {
                 if (currentState.get() == StreamState.AWAITING_COMPLETION) {

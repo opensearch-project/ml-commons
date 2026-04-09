@@ -103,6 +103,7 @@ public class StreamingWrapper {
         MLTaskResponse completionChunk = createStreamChunk("", sessionId, parentInteractionId, true);
         try {
             channel.sendResponseBatch(completionChunk);
+            channel.completeStream();
         } catch (Exception e) {
             log.warn("Failed to send completion chunk: {}", e.getMessage());
         }
@@ -215,13 +216,13 @@ public class StreamingWrapper {
 
     private MLTaskResponse createStreamChunk(String toolOutput, String sessionId, String parentInteractionId, boolean isLast) {
         List<ModelTensor> tensors = new ArrayList<>();
-        tensors.add(ModelTensor.builder().name("response").dataAsMap(Map.of("content", toolOutput, "is_last", isLast)).build());
         if (sessionId != null) {
             tensors.add(ModelTensor.builder().name("memory_id").result(sessionId).build());
         }
         if (parentInteractionId != null) {
             tensors.add(ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build());
         }
+        tensors.add(ModelTensor.builder().name("response").dataAsMap(Map.of("content", toolOutput, "is_last", isLast)).build());
 
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(tensors).build();
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
