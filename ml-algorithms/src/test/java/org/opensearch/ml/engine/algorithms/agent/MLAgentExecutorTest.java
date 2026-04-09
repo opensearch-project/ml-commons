@@ -72,6 +72,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
@@ -1815,6 +1816,49 @@ public class MLAgentExecutorTest {
         });
     }
 
+    /**
+     * Mock sdkClient to return agent JSON on first call, then fail on subsequent calls (e.g., model metadata fetch).
+     * This ensures deterministic test behavior for agents that require model lookups.
+     * Handles both single-arg and two-arg overloads of getDataObjectAsync.
+     */
+    private void mockSdkClientWithAgentThenFail(String getResponseJson) {
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(localNode.getId()).thenReturn("test-node-id");
+        AtomicBoolean firstCall = new AtomicBoolean(true);
+
+        // Two-arg version used by MLAgentExecutor.execute() for agent fetch
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                if (firstCall.getAndSet(false)) {
+                    // First call: return agent data
+                    GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+                    when(resp.parser())
+                            .thenReturn(XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, getResponseJson));
+                    cb.accept(resp, null);
+                } else {
+                    // Subsequent calls: fail with not found
+                    cb.accept(null, new RuntimeException("Model not found"));
+                }
+                return stage;
+            });
+            return stage;
+        });
+
+        // Single-arg version used by AgentUtils for model metadata lookups
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                // Model metadata calls should fail deterministically
+                cb.accept(null, new RuntimeException("Model not found"));
+                return stage;
+            });
+            return stage;
+        });
+    }
+
     private AgentMLInput buildV2AgentMLInput() {
         ContentBlock textBlock = new ContentBlock();
         textBlock.setType(ContentType.TEXT);
@@ -1850,7 +1894,7 @@ public class MLAgentExecutorTest {
             .lastUpdateTime(Instant.now())
             .build();
 
-        mockSdkClientWithAgent(serializeAgentToGetResponseJson(convAgent));
+        mockSdkClientWithAgentThenFail(serializeAgentToGetResponseJson(convAgent));
 
         Map<String, String> params = new HashMap<>();
         params.put(QUESTION, "What is ML?");

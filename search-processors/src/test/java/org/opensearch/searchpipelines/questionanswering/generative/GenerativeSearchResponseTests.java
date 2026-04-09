@@ -17,22 +17,16 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.io.IOException;
-import java.io.OutputStream;
 
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentGenerator;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.test.OpenSearchTestCase;
@@ -66,11 +60,7 @@ public class GenerativeSearchResponseTests extends OpenSearchTestCase {
             SearchResponse.Clusters.EMPTY,
             "iid"
         );
-        XContent xc = mock(XContent.class);
-        OutputStream os = mock(OutputStream.class);
-        XContentGenerator generator = mock(XContentGenerator.class);
-        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
-        XContentBuilder builder = new XContentBuilder(xc, os);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         XContentBuilder actual = searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(actual);
     }
@@ -99,11 +89,7 @@ public class GenerativeSearchResponseTests extends OpenSearchTestCase {
             SearchResponse.Clusters.EMPTY,
             "iid"
         );
-        XContent xc = mock(XContent.class);
-        OutputStream os = mock(OutputStream.class);
-        XContentGenerator generator = mock(XContentGenerator.class);
-        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
-        XContentBuilder builder = new XContentBuilder(xc, os);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         XContentBuilder actual = searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(actual);
     }
