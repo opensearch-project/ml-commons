@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_NOVA;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.lang.reflect.Constructor;
@@ -40,6 +41,7 @@ public class StreamingHandlerFactory {
         switch (llmInterface.toLowerCase(Locale.ROOT)) {
             case LLM_INTERFACE_BEDROCK_CONVERSE:
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
+            case LLM_INTERFACE_BEDROCK_CONVERSE_NOVA:
                 return createBedrockHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
                 return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters);
