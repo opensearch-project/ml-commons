@@ -7,7 +7,9 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
 import java.io.IOException;
@@ -17,7 +19,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -26,14 +30,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
@@ -65,6 +72,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
@@ -130,6 +138,9 @@ public class MLAgentExecutorTest {
 
     @Mock
     private ActionListener<Output> agentActionListener;
+
+    @Mock
+    private DiscoveryNode localNode;
 
     MLAgent mlAgent;
 
@@ -1680,5 +1691,290 @@ public class MLAgentExecutorTest {
 
         // PER agents don't support structured messages
         assertFalse(mlAgentExecutor.supportsStructuredMessages(agent));
+    }
+
+    @Test
+    public void test_ExecuteAgent_V2Agent_WithMemoryAndMessages_RoutesToExecuteV2Agent() throws IOException {
+        // Setup: agent index exists (needed for MLIndicesHandler.doesMultiTenantIndexExist to return true)
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(localNode.getId()).thenReturn("test-node-id");
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(false);
+
+        // Build a CONVERSATIONAL_V2 agent with a conversation_index memory spec
+        MLAgent v2Agent = MLAgent
+            .builder()
+            .name("test_v2_agent")
+            .type(MLAgentType.CONVERSATIONAL_V2.name())
+            .description("Test V2 agent")
+            .memory(new MLMemorySpec("conversation_index", null, 0, null))
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        // Serialize agent → GetResponse JSON so the sdkClient mock can return it
+        XContentBuilder agentContent = v2Agent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        GetResult getResult = new GetResult(
+            ".plugins-ml-agent",
+            "test-agent-id",
+            1L,
+            1L,
+            1L,
+            true,
+            BytesReference.bytes(agentContent),
+            null,
+            null
+        );
+        GetResponse getAgentResponseObj = new GetResponse(getResult);
+        XContentBuilder responseBuilder = XContentFactory.jsonBuilder();
+        getAgentResponseObj.toXContent(responseBuilder, ToXContent.EMPTY_PARAMS);
+        String getResponseJson = BytesReference.bytes(responseBuilder).utf8ToString();
+
+        // Mock sdkClient.getDataObjectAsync to return the V2 agent (two-arg overload used in execute)
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser())
+                .thenReturn(XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, getResponseJson));
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+            return stage;
+        });
+
+        // Register the memory factory so the execute flow creates a memory instance
+        memoryFactoryMap.put("CONVERSATION_INDEX", mockMemoryFactory);
+        when(memory.getId()).thenReturn("test-memory-id");
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> memListener = invocation.getArgument(1);
+            memListener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(any(), any());
+
+        // Mock getStructuredMessages (first call inside executeV2Agent) to verify the path was reached
+        doAnswer(invocation -> {
+            ActionListener<List<Message>> msgListener = invocation.getArgument(0);
+            msgListener.onFailure(new RuntimeException("reached_executeV2Agent"));
+            return null;
+        }).when(memory).getStructuredMessages(any());
+
+        // Create input with MESSAGES type so inputMessages is non-null in saveRootInteractionAndExecute
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("What is machine learning?");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "What is machine learning?");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test-agent-id", null, FunctionName.AGENT, agentInput, dataset, false);
+
+        mlAgentExecutor.execute(agentMLInput, listener, channel);
+
+        // executeV2Agent delegates immediately to memory.getStructuredMessages — verify it was called
+        verify(memory, timeout(5000).atLeastOnce()).getStructuredMessages(any());
+    }
+
+    private String serializeAgentToGetResponseJson(MLAgent agent) throws IOException {
+        XContentBuilder agentContent = agent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        GetResult getResult = new GetResult(
+            ".plugins-ml-agent",
+            "test-agent-id",
+            1L,
+            1L,
+            1L,
+            true,
+            BytesReference.bytes(agentContent),
+            null,
+            null
+        );
+        GetResponse getAgentResponseObj = new GetResponse(getResult);
+        XContentBuilder responseBuilder = XContentFactory.jsonBuilder();
+        getAgentResponseObj.toXContent(responseBuilder, ToXContent.EMPTY_PARAMS);
+        return BytesReference.bytes(responseBuilder).utf8ToString();
+    }
+
+    private void mockSdkClientWithAgent(String getResponseJson) {
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(localNode.getId()).thenReturn("test-node-id");
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser())
+                .thenReturn(XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, getResponseJson));
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+            return stage;
+        });
+    }
+
+    private AgentMLInput buildV2AgentMLInput() {
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("What is machine learning?");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "What is machine learning?");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        return new AgentMLInput("test-agent-id", null, FunctionName.AGENT, agentInput, dataset, false);
+    }
+
+    /**
+     * Covers the false branch of condition 1: agentType.isV2() == false.
+     * A non-V2 agent (CONVERSATIONAL) with no memory spec reaches executeAgent via the
+     * line-484 path (null memory, null inputMessages). The V2 condition fails immediately
+     * and execution falls through to the normal runner path.
+     */
+    @Test
+    public void test_ExecuteAgent_NonV2Agent_DoesNotRouteToExecuteV2Agent() throws IOException {
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(false);
+
+        MLAgent convAgent = MLAgent
+            .builder()
+            .name("test_conv_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("gpt-4").build())
+            // no memory spec → executeAgent called with null memory and null inputMessages
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        mockSdkClientWithAgent(serializeAgentToGetResponseJson(convAgent));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "What is ML?");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test-agent-id", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, listener, channel);
+
+        // agentType.isV2() = false → V2 execution path must not be entered
+        verify(memory, never()).getStructuredMessages(any());
+        verify(listener, timeout(5000)).onFailure(any());
+    }
+
+    /**
+     * Covers the false branch of condition 2: inputMessages == null (with agentType.isV2() true).
+     * A V2 agent with no memory spec reaches executeAgent via the line-484 path where
+     * inputMessages is hardcoded null. The condition fails at the second && operand.
+     */
+    @Test
+    public void test_ExecuteAgent_V2Agent_WithNullInputMessages_DoesNotRouteToExecuteV2Agent() throws IOException {
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(false);
+
+        MLAgent v2Agent = MLAgent
+            .builder()
+            .name("test_v2_no_memory")
+            .type(MLAgentType.CONVERSATIONAL_V2.name())
+            // no memory spec → executeAgent called with null memory and null inputMessages
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        mockSdkClientWithAgent(serializeAgentToGetResponseJson(v2Agent));
+
+        // Old-style dataset input (no AgentInput) → inputMessages stays null inside executeAgent
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "What is ML?");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test-agent-id", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, listener, channel);
+
+        // agentType.isV2() = true, but inputMessages = null → V2 execution path must not be entered
+        verify(memory, never()).getStructuredMessages(any());
+        verify(listener, timeout(5000)).onFailure(any());
+    }
+
+    @Test
+    public void test_ExecuteAgent_V2Agent_WithMcpConnector_McpDisabled_FailsWithMcpError() throws IOException {
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
+
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put(MCP_CONNECTORS_FIELD, "[{\"id\":\"mcp-conn-1\"}]");
+
+        MLAgent v2Agent = MLAgent
+            .builder()
+            .name("test_v2_mcp_agent")
+            .type(MLAgentType.CONVERSATIONAL_V2.name())
+            .description("V2 agent with MCP connector")
+            .parameters(agentParams)
+            .memory(new MLMemorySpec("conversation_index", null, 0, null))
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        mockSdkClientWithAgent(serializeAgentToGetResponseJson(v2Agent));
+        memoryFactoryMap.put("CONVERSATION_INDEX", mockMemoryFactory);
+        when(memory.getId()).thenReturn("test-memory-id");
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> memListener = invocation.getArgument(1);
+            memListener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(any(), any());
+
+        mlAgentExecutor.execute(buildV2AgentMLInput(), listener, channel);
+
+        // MCP check must fire before V2 routing — listener.onFailure called with MCP error
+        verify(listener, timeout(5000)).onFailure(argThat(e -> e instanceof OpenSearchException
+            && e.getMessage().contains(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE)));
+        // executeV2Agent must NOT have been reached
+        verify(memory, never()).getStructuredMessages(any());
+    }
+
+    @Test
+    public void test_ExecuteAgent_V2Agent_WithMcpConnector_McpEnabled_RoutesToExecuteV2Agent() throws IOException {
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put(MCP_CONNECTORS_FIELD, "[{\"id\":\"mcp-conn-1\"}]");
+
+        MLAgent v2Agent = MLAgent
+            .builder()
+            .name("test_v2_mcp_agent")
+            .type(MLAgentType.CONVERSATIONAL_V2.name())
+            .description("V2 agent with MCP connector, MCP enabled")
+            .parameters(agentParams)
+            .memory(new MLMemorySpec("conversation_index", null, 0, null))
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        mockSdkClientWithAgent(serializeAgentToGetResponseJson(v2Agent));
+        memoryFactoryMap.put("CONVERSATION_INDEX", mockMemoryFactory);
+        when(memory.getId()).thenReturn("test-memory-id");
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> memListener = invocation.getArgument(1);
+            memListener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(any(), any());
+
+        // Fail fast inside executeV2Agent to verify the path was reached
+        doAnswer(invocation -> {
+            ActionListener<List<Message>> msgListener = invocation.getArgument(0);
+            msgListener.onFailure(new RuntimeException("reached_executeV2Agent"));
+            return null;
+        }).when(memory).getStructuredMessages(any());
+
+        mlAgentExecutor.execute(buildV2AgentMLInput(), listener, channel);
+
+        // MCP check passes (enabled), so execution must reach executeV2Agent
+        verify(memory, timeout(5000).atLeastOnce()).getStructuredMessages(any());
     }
 }

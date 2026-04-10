@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -232,7 +233,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     }
 
     public void testDeleteMemoryContainer_IndexNotFoundException() {
-        // Setup getMemoryContainer to throw IndexNotFoundException
+        // Setup getMemoryContainer to throw IndexNotFoundException (404 - index not found)
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
             listener.onFailure(new IndexNotFoundException("Memory container index not found"));
@@ -245,9 +246,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         verify(actionListener).onFailure(argumentCaptor.capture());
 
         Exception exception = argumentCaptor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
-        assertTrue(exception.getMessage().contains("Internal server error"));
+        // 4XX errors (including IndexNotFoundException/404) are preserved and passed through
+        assertTrue(exception instanceof IndexNotFoundException);
+        assertEquals(RestStatus.NOT_FOUND, ((IndexNotFoundException) exception).status());
+        assertTrue(exception.getMessage().contains("Memory container index not found"));
     }
 
     public void testDeleteMemoryContainer_MultiTenancyEnabled_ValidTenantId() {
@@ -488,13 +490,114 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         // Verify deleteIndex was called
         verify(memoryContainerHelper).deleteIndex(any(), any(), any());
 
-        // Verify failure response due to deleteIndex failure
+        // Verify failure response due to deleteIndex failure (RuntimeException -> INTERNAL_SERVER_ERROR)
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
         assertTrue(exception instanceof OpenSearchStatusException);
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
         assertTrue(exception.getMessage().contains("Internal server error"));
+    }
+
+    @Test
+    public void testHandleDeleteResponse_DeleteIndex_4XXErrorPreserved() {
+        // Setup mock container with configuration
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
+        when(mockConfig.getWorkingMemoryIndexName()).thenReturn("test-memory-prefix-working");
+        when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
+        when(mockConfig.getLongMemoryHistoryIndexName()).thenReturn("test-memory-prefix-history");
+
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(true)
+            .deleteMemories(null)
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+
+        // deleteIndex fails with IndexNotFoundException (4XX) - should be preserved
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new IndexNotFoundException("Memory index not found"));
+            return null;
+        }).when(memoryContainerHelper).deleteIndex(any(), any(), any());
+
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        verify(memoryContainerHelper).deleteIndex(any(), any(), any());
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof IndexNotFoundException);
+        assertEquals(RestStatus.NOT_FOUND, ((IndexNotFoundException) exception).status());
+        assertTrue(exception.getMessage().contains("Memory index not found"));
+    }
+
+    @Test
+    public void testHandleDeleteResponse_EmptyIndicesToDelete_ReturnsSuccess() {
+        // Container config where all memory types return null (disabled or misconfigured)
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getSessionIndexName()).thenReturn(null);
+        when(mockConfig.getWorkingMemoryIndexName()).thenReturn(null);
+        when(mockConfig.getLongMemoryIndexName()).thenReturn(null);
+        when(mockConfig.getLongMemoryHistoryIndexName()).thenReturn(null);
+
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(true)
+            .deleteMemories(null)
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        // deleteIndex should NOT be called when indicesToDelete is empty
+        verify(memoryContainerHelper, never()).deleteIndex(any(), any(), any());
+        ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals(deleteResponse.getId(), responseCaptor.getValue().getId());
     }
 
     @Test
