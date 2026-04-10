@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.grpc.adapters;
 
-import java.lang.reflect.Field;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
@@ -27,6 +27,7 @@ public class StreamObserverAdapter<ProtoResponse> extends
     StreamPredictActionListener<org.opensearch.core.action.ActionResponse, MLPredictionTaskRequest> {
 
     private final StreamObserver<ProtoResponse> responseObserver;
+    private final GrpcTransportChannel channel;
 
     /**
      * Creates an adapter for streaming.
@@ -34,39 +35,28 @@ public class StreamObserverAdapter<ProtoResponse> extends
      * @param responseObserver the gRPC response observer to stream results to
      */
     public StreamObserverAdapter(StreamObserver<ProtoResponse> responseObserver) {
-        super(new GrpcTransportChannel(responseObserver, null));
-        this.responseObserver = responseObserver;
-        try {
-            ((GrpcTransportChannel) getChannel()).setAdapter(this);
-        } catch (Exception e) {
-            throw e;
-        }
+        this(responseObserver, new GrpcTransportChannel(responseObserver, null));
     }
 
-    /**
-     * Gets the channel from the parent class.
-     */
+    private StreamObserverAdapter(StreamObserver<ProtoResponse> responseObserver, GrpcTransportChannel channel) {
+        super(channel);
+        this.responseObserver = responseObserver;
+        this.channel = channel;
+        this.channel.setAdapter(this);
+    }
+
     public TransportChannel getChannel() {
-        try {
-            Field field = org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener.class
-                .getDeclaredField("channel");
-            field.setAccessible(true);
-            return (TransportChannel) field.get(this);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to access channel field", e);
-        }
+        return channel;
     }
 
     /**
      * Handles a streaming response chunk from the remote LLM handler.
-     * Required by parent class StreamPredictActionListener.
      *
      * @param response the ML task response containing the streaming chunk
      * @param isLastBatch true if this is the last chunk in the stream
      */
     @Override
     public void onStreamResponse(org.opensearch.core.action.ActionResponse response, boolean isLastBatch) {
-        log.info("StreamObserverAdapter.onStreamResponse called - isLastBatch={}, completed={}", isLastBatch, completed);
         handleStreamResponse(response, isLastBatch);
     }
 
@@ -125,9 +115,10 @@ public class StreamObserverAdapter<ProtoResponse> extends
 
             // Check if content indicates last chunk
             if (isLast) {
-                responseObserver.onCompleted();
-                completed = true;
-                channel.markCompleted();
+                if (completed.compareAndSet(false, true)) {
+                    responseObserver.onCompleted();
+                    channel.markCompleted();
+                }
             }
         } catch (Exception e) {
             log.error("Error handling streaming response", e);
@@ -139,11 +130,10 @@ public class StreamObserverAdapter<ProtoResponse> extends
      * Helper method called by GrpcTransportChannel to complete the stream.
      */
     public void completeGrpcStream() {
-        if (!completed) {
+        if (completed.compareAndSet(false, true)) {
             responseObserver.onCompleted();
-            completed = true;
         }
     }
 
-    private boolean completed = false;
+    private final AtomicBoolean completed = new AtomicBoolean(false);
 }
