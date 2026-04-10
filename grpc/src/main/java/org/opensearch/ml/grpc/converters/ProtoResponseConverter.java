@@ -30,60 +30,17 @@ public class ProtoResponseConverter {
      * Converts response object to PredictResponse protobuf.
      */
     public static PredictResponse toProto(Object response) {
-        if (response == null) {
-            throw new IllegalArgumentException("Response cannot be null");
-        }
-
-        // Handle MLTaskResponse (predictions)
-        if (response instanceof MLTaskResponse mlTaskResponse) {
-            return toProtoFromMLTaskResponse(mlTaskResponse);
-        }
-
-        // Handle MLExecuteTaskResponse (agents)
-        if (response instanceof MLExecuteTaskResponse mlExecuteTaskResponse) {
-            return toProtoFromMLExecuteTaskResponse(mlExecuteTaskResponse);
-        }
-
-        throw new IllegalArgumentException("Unsupported response type: " + response.getClass().getName());
+        ModelTensorOutput output = switch (response) {
+            case MLTaskResponse r -> (ModelTensorOutput) r.getOutput();
+            case MLExecuteTaskResponse r -> (ModelTensorOutput) r.getOutput();
+            default -> throw new IllegalArgumentException("Unsupported: " + response.getClass());
+        };
+        if (output == null)
+            throw new IllegalArgumentException("Output cannot be null");
+        return buildPredictResponse(output);
     }
 
-    /**
-     * Converts MLTaskResponse to PredictResponse protobuf.
-     */
-    private static PredictResponse toProtoFromMLTaskResponse(MLTaskResponse response) {
-        if (response.getOutput() == null) {
-            throw new IllegalArgumentException("MLTaskResponse output cannot be null");
-        }
-
-        if (!(response.getOutput() instanceof ModelTensorOutput output)) {
-            throw new IllegalArgumentException("Expected ModelTensorOutput but got: " + response.getOutput().getClass().getName());
-        }
-
-        return PredictResponse
-            .newBuilder()
-            .addAllInferenceResults(
-                Optional
-                    .ofNullable(output.getMlModelOutputs())
-                    .orElse(java.util.Collections.emptyList())
-                    .stream()
-                    .map(ProtoResponseConverter::convertModelTensorsToInferenceResults)
-                    .toList()
-            )
-            .build();
-    }
-
-    /**
-     * Converts MLExecuteTaskResponse to PredictResponse protobuf.
-     */
-    private static PredictResponse toProtoFromMLExecuteTaskResponse(MLExecuteTaskResponse response) {
-        if (response.getOutput() == null) {
-            throw new IllegalArgumentException("MLExecuteTaskResponse output cannot be null");
-        }
-
-        if (!(response.getOutput() instanceof ModelTensorOutput output)) {
-            throw new IllegalArgumentException("Expected ModelTensorOutput but got: " + response.getOutput().getClass().getName());
-        }
-
+    private static PredictResponse buildPredictResponse(ModelTensorOutput output) {
         return PredictResponse
             .newBuilder()
             .addAllInferenceResults(

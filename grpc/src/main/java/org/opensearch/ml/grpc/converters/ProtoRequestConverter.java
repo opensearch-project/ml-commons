@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.grpc.converters;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,12 +23,9 @@ import org.opensearch.protobufs.MlPredictModelStreamRequest;
 import org.opensearch.protobufs.Parameters;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
-import com.google.protobuf.Struct;
-import com.google.protobuf.Value;
-import com.google.protobuf.util.JsonFormat;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -35,6 +34,8 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class ProtoRequestConverter {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * Converts a MlPredictModelStreamRequest protobuf to MLPredictionTaskRequest.
@@ -121,47 +122,79 @@ public class ProtoRequestConverter {
     }
 
     /**
-     * Converts google.protobuf.Struct to Java Map
-     */
-    private static Map<String, Object> structToMap(Struct struct) {
-        return struct
-            .getFieldsMap()
-            .entrySet()
-            .stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, entry -> valueToObject(entry.getValue())));
-    }
-
-    /**
-     * Converts any Protobuf Message to Java Map using JSON serialization
-     * This is generic and works with any protobuf message structure
+     * Converts any Protobuf Message to Java Map using direct field access.
+     *
+     * @param message the protobuf message to convert
+     * @return Map representation of the protobuf message
      */
     private static Map<String, Object> protoMessageToMap(Message message) {
-        try {
-            // Convert protobuf message to JSON string
-            String json = JsonFormat.printer().includingDefaultValueFields().print(message);
+        Map<String, Object> result = new HashMap<>();
 
-            // Parse JSON string to Map
-            ObjectMapper mapper = new ObjectMapper();
-            return mapper.readValue(json, new TypeReference<Map<String, Object>>() {
-            });
-        } catch (Exception e) {
-            log.error("Failed to convert protobuf message to map", e);
-            throw new IllegalArgumentException("Failed to convert protobuf message", e);
+        // Iterate through all fields in the protobuf message
+        for (Map.Entry<Descriptors.FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
+            Descriptors.FieldDescriptor field = entry.getKey();
+            Object value = entry.getValue();
+
+            // Convert field name to the appropriate format
+            String fieldName = field.getJsonName();
+
+            // Convert field value to appropriate Java type
+            Object convertedValue = convertProtoValue(field, value);
+
+            result.put(fieldName, convertedValue);
         }
+
+        return result;
     }
 
     /**
-     * Converts google.protobuf.Value to Java Object
+     * Converts a protobuf field value to the appropriate Java type.
+     *
+     * @param field the field descriptor
+     * @param value the protobuf field value
+     * @return converted Java object
      */
-    private static Object valueToObject(Value value) {
-        return switch (value.getKindCase()) {
-            case NUMBER_VALUE -> value.getNumberValue();
-            case STRING_VALUE -> value.getStringValue();
-            case BOOL_VALUE -> value.getBoolValue();
-            case STRUCT_VALUE -> structToMap(value.getStructValue());
-            case LIST_VALUE -> value.getListValue().getValuesList().stream().map(ProtoRequestConverter::valueToObject).toList();
-            default -> null;
-        };
+    private static Object convertProtoValue(Descriptors.FieldDescriptor field, Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        // Handle repeated fields (lists)
+        if (field.isRepeated()) {
+            List<?> list = (List<?>) value;
+            List<Object> result = new ArrayList<>(list.size());
+            for (Object item : list) {
+                result.add(convertSingleProtoValue(field, item));
+            }
+            return result;
+        }
+
+        return convertSingleProtoValue(field, value);
+    }
+
+    /**
+     * Converts a single protobuf value to Java type.
+     *
+     * @param field the field descriptor
+     * @param value the protobuf value
+     * @return converted Java object
+     */
+    private static Object convertSingleProtoValue(Descriptors.FieldDescriptor field, Object value) {
+        if (value instanceof Message) {
+            // Recursively convert nested messages
+            return protoMessageToMap((Message) value);
+        }
+
+        // Handle enum values
+        if (field.getType() == Descriptors.FieldDescriptor.Type.ENUM) {
+            if (value instanceof Descriptors.EnumValueDescriptor) {
+                return ((Descriptors.EnumValueDescriptor) value).getName();
+            }
+        }
+
+        // For primitive types (string, int, bool, etc.), return as-is
+        // Protobuf already provides them as appropriate Java types
+        return value;
     }
 
     /**
@@ -196,7 +229,7 @@ public class ProtoRequestConverter {
             return null;
         }
         try {
-            return new ObjectMapper().writeValueAsString(value);
+            return OBJECT_MAPPER.writeValueAsString(value);
         } catch (JsonProcessingException e) {
             log.error("Failed to convert value to JSON string", e);
             throw new IllegalArgumentException("Failed to serialize value to JSON", e);

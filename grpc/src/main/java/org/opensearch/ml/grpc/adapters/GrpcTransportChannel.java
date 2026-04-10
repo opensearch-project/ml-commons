@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.grpc.adapters;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.opensearch.core.transport.TransportResponse;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
@@ -13,7 +15,6 @@ import org.opensearch.transport.TransportChannel;
 
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
@@ -26,8 +27,7 @@ public class GrpcTransportChannel implements TransportChannel {
     private final StreamObserver<?> responseObserver;
     @Setter
     private StreamObserverAdapter<?> adapter;
-    @Getter
-    private boolean completed = false;
+    private final AtomicBoolean completed = new AtomicBoolean(false);
 
     /**
      * Creates a gRPC transport channel adapter.
@@ -38,6 +38,15 @@ public class GrpcTransportChannel implements TransportChannel {
     public GrpcTransportChannel(StreamObserver<?> responseObserver, StreamObserverAdapter<?> adapter) {
         this.responseObserver = responseObserver;
         this.adapter = adapter;
+    }
+
+    /**
+     * Checks if the stream has been completed.
+     *
+     * @return true if completed, false otherwise
+     */
+    public boolean isCompleted() {
+        return completed.get();
     }
 
     @Override
@@ -57,10 +66,9 @@ public class GrpcTransportChannel implements TransportChannel {
 
     @Override
     public void sendResponse(Exception exception) {
-        if (!completed) {
+        if (completed.compareAndSet(false, true)) {
             Status status = GrpcStatusMapper.toGrpcStatus(exception);
             responseObserver.onError(status.asRuntimeException());
-            completed = true;
         }
     }
 
@@ -72,7 +80,7 @@ public class GrpcTransportChannel implements TransportChannel {
      */
     @Override
     public void sendResponseBatch(TransportResponse response) {
-        if (completed) {
+        if (completed.get()) {
             return;
         }
 
@@ -91,15 +99,17 @@ public class GrpcTransportChannel implements TransportChannel {
      */
     @Override
     public void completeStream() {
-        if (!completed) {
-            completed = true;
+        if (completed.compareAndSet(false, true)) {
             if (adapter != null) {
                 adapter.completeGrpcStream();
             }
         }
     }
 
+    /**
+     * Marks the stream as completed. This is called by the adapter when it completes the stream.
+     */
     public void markCompleted() {
-        this.completed = true;
+        completed.set(true);
     }
 }

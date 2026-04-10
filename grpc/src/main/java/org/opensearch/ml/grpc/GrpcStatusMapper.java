@@ -6,6 +6,7 @@
 package org.opensearch.ml.grpc;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchSecurityException;
@@ -20,6 +21,21 @@ import io.grpc.Status;
  * Maps OpenSearch and ML Commons exceptions to gRPC Status codes.
  */
 public class GrpcStatusMapper {
+    private static final Map<RestStatus, Status> STATUS_MAP = Map
+        .of(
+            RestStatus.FORBIDDEN,
+            Status.PERMISSION_DENIED,
+            RestStatus.NOT_FOUND,
+            Status.NOT_FOUND,
+            RestStatus.TOO_MANY_REQUESTS,
+            Status.RESOURCE_EXHAUSTED,
+            RestStatus.BAD_REQUEST,
+            Status.INVALID_ARGUMENT,
+            RestStatus.SERVICE_UNAVAILABLE,
+            Status.UNAVAILABLE,
+            RestStatus.UNAUTHORIZED,
+            Status.UNAUTHENTICATED
+        );
 
     /**
      * Converts an exception to a gRPC Status.
@@ -48,17 +64,8 @@ public class GrpcStatusMapper {
 
         // Handle OpenSearch exceptions with status codes
         if (exception instanceof OpenSearchException osException) {
-            RestStatus status = osException.status();
-
-            return switch (status) {
-                case FORBIDDEN -> Status.PERMISSION_DENIED.withDescription(exception.getMessage()).withCause(exception);
-                case NOT_FOUND -> Status.NOT_FOUND.withDescription(exception.getMessage()).withCause(exception);
-                case TOO_MANY_REQUESTS -> Status.RESOURCE_EXHAUSTED.withDescription(exception.getMessage()).withCause(exception);
-                case BAD_REQUEST -> Status.INVALID_ARGUMENT.withDescription(exception.getMessage()).withCause(exception);
-                case SERVICE_UNAVAILABLE -> Status.UNAVAILABLE.withDescription(exception.getMessage()).withCause(exception);
-                case UNAUTHORIZED -> Status.UNAUTHENTICATED.withDescription(exception.getMessage()).withCause(exception);
-                default -> Status.INTERNAL.withDescription(exception.getMessage()).withCause(exception);
-            };
+            Status grpcStatus = STATUS_MAP.getOrDefault(osException.status(), Status.INTERNAL);
+            return grpcStatus.withDescription(exception.getMessage()).withCause(exception);
         }
 
         // Handle I/O exceptions

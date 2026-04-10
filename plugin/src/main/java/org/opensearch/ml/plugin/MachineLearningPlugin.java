@@ -322,6 +322,12 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.plugin.grpc.ClientAdapter;
+import org.opensearch.ml.plugin.grpc.ModelAccessControlHelperAdapter;
+import org.opensearch.ml.plugin.grpc.ModelManagerAdapter;
+import org.opensearch.ml.plugin.grpc.SdkClientAdapter;
+import org.opensearch.ml.plugin.grpc.TaskRunnerAdapter;
+import org.opensearch.ml.plugin.grpc.UserContextProviderAdapter;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
@@ -956,16 +962,17 @@ public class MachineLearningPlugin extends Plugin
         mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
 
-        // Initialize gRPC service factory
+        // Initialize gRPC service factory with adapters
         org.opensearch.ml.grpc.MLGrpcServiceFactory
             .initialize(
-                mlModelManager,
-                mlPredictTaskRunner,
-                mlExecuteTaskRunner,
+                new ModelManagerAdapter(mlModelManager),
+                new TaskRunnerAdapter(mlPredictTaskRunner),
+                new TaskRunnerAdapter(mlExecuteTaskRunner),
                 mlFeatureEnabledSetting,
-                modelAccessControlHelper,
-                client,
-                sdkClient
+                new ModelAccessControlHelperAdapter(modelAccessControlHelper),
+                new ClientAdapter(client),
+                new SdkClientAdapter(sdkClient),
+                new UserContextProviderAdapter(client)
             );
 
         return ImmutableList
