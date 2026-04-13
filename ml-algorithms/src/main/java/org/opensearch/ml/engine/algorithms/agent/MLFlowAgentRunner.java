@@ -11,7 +11,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.resolveFlowToolSpecsWithMcpValidation;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 
 import java.util.ArrayList;
@@ -85,7 +85,17 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     @SuppressWarnings("removal")
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
+        resolveFlowToolSpecsWithMcpValidation(mlAgent, params, client, sdkClient, encryptor, ActionListener.wrap(toolSpecs -> {
+            runWithToolSpecs(mlAgent, params, listener, toolSpecs);
+        }, listener::onFailure));
+    }
+
+    private void runWithToolSpecs(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        List<MLToolSpec> toolSpecs
+    ) {
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
         List<ModelTensor> flowAgentOutput = new ArrayList<>();
