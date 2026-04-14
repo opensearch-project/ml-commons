@@ -40,6 +40,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.RemoteTransportException;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.TransportChannel;
+import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -182,6 +183,27 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
 
         transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
         verify(transportChannel).sendResponse(any(Exception.class));
+    }
+
+    @Test
+    public void testMessageReceivedHandlerPlainTransportException() throws Exception {
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            TransportResponseHandler<MLExecuteTaskResponse> handler = invocation.getArgument(3);
+
+            // Plain TransportException without OpenSearchWrapperException - unwrapCause returns itself
+            TransportException transportException = new TransportException("plain error");
+            handler.handleException(transportException);
+
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any(TransportResponseHandler.class));
+
+        transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(transportChannel).sendResponse(captor.capture());
+        assertEquals("plain error", captor.getValue().getMessage());
     }
 
     @Test
