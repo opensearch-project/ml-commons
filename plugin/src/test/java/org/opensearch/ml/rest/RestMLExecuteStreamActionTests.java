@@ -836,6 +836,41 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         assertTrue(content.contains("outer message"));
     }
 
+    @Test
+    public void testBuildStreamErrorChunk_nonAGUI_exactFormat() {
+        RuntimeException ex = new RuntimeException("test error");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertEquals("data: {\"error\": \"test error\"}\n\n", content);
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_nonAGUI_escapesQuotesInMessage() {
+        RuntimeException ex = new RuntimeException("field \"name\" is invalid");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertEquals("data: {\"error\": \"field \\\"name\\\" is invalid\"}\n\n", content);
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_AGUI_exactFormat() {
+        RuntimeException ex = new RuntimeException("test error");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, true);
+
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.startsWith("data: "));
+        assertTrue(content.endsWith("\n\n"));
+        // Verify it's valid JSON by extracting the data payload
+        String jsonPayload = content.substring("data: ".length(), content.length() - 2);
+        assertTrue(jsonPayload.contains("\"type\":\"RUN_ERROR\""));
+        assertTrue(jsonPayload.contains("\"message\":\"test error\""));
+    }
+
     // ===== Reflection helpers for testing private methods =====
 
     @SuppressWarnings("unchecked")
