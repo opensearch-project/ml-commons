@@ -325,7 +325,6 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.plugin.grpc.ClientAdapter;
 import org.opensearch.ml.plugin.grpc.ModelAccessControlHelperAdapter;
 import org.opensearch.ml.plugin.grpc.ModelManagerAdapter;
-import org.opensearch.ml.plugin.grpc.SdkClientAdapter;
 import org.opensearch.ml.plugin.grpc.TaskRunnerAdapter;
 import org.opensearch.ml.plugin.grpc.UserContextProviderAdapter;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
@@ -971,7 +970,7 @@ public class MachineLearningPlugin extends Plugin
                 mlFeatureEnabledSetting,
                 new ModelAccessControlHelperAdapter(modelAccessControlHelper),
                 new ClientAdapter(client),
-                new SdkClientAdapter(sdkClient),
+                sdkClient,
                 new UserContextProviderAdapter(client)
             );
 

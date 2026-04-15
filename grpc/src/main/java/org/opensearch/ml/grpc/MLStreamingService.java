@@ -23,7 +23,6 @@ import org.opensearch.ml.grpc.converters.ProtoRequestConverter;
 import org.opensearch.ml.grpc.interfaces.MLClient;
 import org.opensearch.ml.grpc.interfaces.MLModelAccessControlHelper;
 import org.opensearch.ml.grpc.interfaces.MLModelManager;
-import org.opensearch.ml.grpc.interfaces.MLSdkClient;
 import org.opensearch.ml.grpc.interfaces.MLTaskRunner;
 import org.opensearch.ml.grpc.interfaces.MLUserContextProvider;
 import org.opensearch.protobufs.MlExecuteAgentStreamRequest;
@@ -51,7 +50,7 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final MLModelAccessControlHelper modelAccessControlHelper;
     private final MLClient client;
-    private final MLSdkClient sdkClient;
+    private final Object sdkClient;
     private final MLUserContextProvider userContextProvider;
 
     /**
@@ -73,7 +72,7 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MLModelAccessControlHelper modelAccessControlHelper,
         MLClient client,
-        MLSdkClient sdkClient,
+        Object sdkClient,
         MLUserContextProvider userContextProvider
     ) {
         this.modelManager = modelManager;
@@ -287,7 +286,6 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
 
     /**
      * Handles errors by logging and sending error response to the client.
-     * This centralizes error handling logic to reduce code duplication.
      *
      * @param responseObserver the gRPC response observer to send error to
      * @param operation the operation being performed (for logging context)
