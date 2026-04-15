@@ -12,7 +12,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.grpc.interfaces.MLClient;
 import org.opensearch.ml.grpc.interfaces.MLModelAccessControlHelper;
 import org.opensearch.ml.grpc.interfaces.MLModelManager;
-import org.opensearch.ml.grpc.interfaces.MLSdkClient;
 import org.opensearch.ml.grpc.interfaces.MLTaskRunner;
 import org.opensearch.ml.grpc.interfaces.MLUserContextProvider;
 import org.opensearch.transport.grpc.spi.GrpcServiceFactory;
@@ -34,7 +33,7 @@ public class MLGrpcServiceFactory implements GrpcServiceFactory {
     private static volatile MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private static volatile MLModelAccessControlHelper modelAccessControlHelper;
     private static volatile MLClient client;
-    private static volatile MLSdkClient sdkClient;
+    private static volatile Object sdkClient;
     private static volatile MLUserContextProvider userContextProvider;
 
     /**
@@ -64,7 +63,7 @@ public class MLGrpcServiceFactory implements GrpcServiceFactory {
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MLModelAccessControlHelper modelAccessControlHelper,
         MLClient client,
-        MLSdkClient sdkClient,
+        Object sdkClient,
         MLUserContextProvider userContextProvider
     ) {
         if (modelManager == null || predictTaskRunner == null || executeTaskRunner == null) {

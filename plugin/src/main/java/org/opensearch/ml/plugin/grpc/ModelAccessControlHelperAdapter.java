@@ -10,7 +10,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.grpc.interfaces.MLClient;
 import org.opensearch.ml.grpc.interfaces.MLModelAccessControlHelper;
-import org.opensearch.ml.grpc.interfaces.MLSdkClient;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
@@ -35,12 +34,12 @@ public class ModelAccessControlHelperAdapter implements MLModelAccessControlHelp
         String modelGroupId,
         String actionName,
         MLClient client,
-        MLSdkClient sdkClient,
+        Object sdkClient,
         ActionListener<Boolean> listener
     ) {
         // Unwrap the real client and SDK client from the adapters
         Client realClient = ((ClientAdapter) client).getDelegate();
-        SdkClient realSdkClient = (SdkClient) ((SdkClientAdapter) sdkClient).getDelegate();
+        SdkClient realSdkClient = (SdkClient) sdkClient;
 
         // Delegate to the real implementation
         delegate

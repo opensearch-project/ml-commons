@@ -34,7 +34,7 @@ public interface MLModelAccessControlHelper {
         String modelGroupId,
         String actionName,
         MLClient client,
-        MLSdkClient sdkClient,
+        Object sdkClient,
         ActionListener<Boolean> listener
     );
 }

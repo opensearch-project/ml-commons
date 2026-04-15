@@ -114,7 +114,7 @@ dependencies {
     zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
     compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
     compileOnly group: 'org.opensearch', name:'opensearch-security-spi', version:"${opensearch_build}"
-    compileOnly "org.opensearch.plugin:transport-grpc-spi:3.6.0-SNAPSHOT"
+    compileOnly "org.opensearch.plugin:transport-grpc-spi:${opensearch_version}"
     opensearchPlugin "org.opensearch.plugin:opensearch-job-scheduler:${opensearch_build}@zip"
     opensearchPlugin "org.opensearch.plugin:opensearch-security:${opensearch_build}@zip"
 

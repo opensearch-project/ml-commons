@@ -151,7 +151,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
 
     protected abstract void executeTask(Request request, ActionListener<Response> listener);
 
-    protected void checkCBAndExecute(FunctionName functionName, Request request, ActionListener<Response> listener) {
+    public void checkCBAndExecute(FunctionName functionName, Request request, ActionListener<Response> listener) {
         // for agent and remote model prediction we don't need to check circuit breaker
         if (functionName != FunctionName.REMOTE && functionName != FunctionName.AGENT) {
             checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);

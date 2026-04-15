@@ -89,7 +89,7 @@ public class ProtoRequestConverter {
         }
 
         if (!request.hasMlExecuteAgentStreamRequestBody()) {
-            throw new IllegalArgumentException("hasMlExecuteAgentStreamRequestBody must have request body");
+            throw new IllegalArgumentException("MlExecuteAgentStreamRequestBody must have request body");
         }
 
         var requestBody = request.getMlExecuteAgentStreamRequestBody();
@@ -143,7 +143,6 @@ public class ProtoRequestConverter {
 
             result.put(fieldName, convertedValue);
         }
-
         return result;
     }
 
@@ -168,7 +167,6 @@ public class ProtoRequestConverter {
             }
             return result;
         }
-
         return convertSingleProtoValue(field, value);
     }
 

@@ -44,41 +44,16 @@ public class GrpcStatusMapper {
      * @return gRPC Status object
      */
     public static Status toGrpcStatus(Exception exception) {
-        // Handle OpenSearch security exceptions
-        if (exception instanceof OpenSearchSecurityException) {
-            return Status.PERMISSION_DENIED.withDescription(exception.getMessage()).withCause(exception);
-        }
-
-        // Handle ML-specific exceptions
-        if (exception instanceof MLResourceNotFoundException) {
-            return Status.NOT_FOUND.withDescription(exception.getMessage()).withCause(exception);
-        }
-
-        if (exception instanceof MLLimitExceededException) {
-            return Status.RESOURCE_EXHAUSTED.withDescription(exception.getMessage()).withCause(exception);
-        }
-
-        if (exception instanceof MLValidationException) {
-            return Status.INVALID_ARGUMENT.withDescription(exception.getMessage()).withCause(exception);
-        }
-
-        // Handle OpenSearch exceptions with status codes
-        if (exception instanceof OpenSearchException osException) {
-            Status grpcStatus = STATUS_MAP.getOrDefault(osException.status(), Status.INTERNAL);
-            return grpcStatus.withDescription(exception.getMessage()).withCause(exception);
-        }
-
-        // Handle I/O exceptions
-        if (exception instanceof IOException) {
-            return Status.UNAVAILABLE.withDescription(exception.getMessage()).withCause(exception);
-        }
-
-        // Handle illegal argument exceptions
-        if (exception instanceof IllegalArgumentException) {
-            return Status.INVALID_ARGUMENT.withDescription(exception.getMessage()).withCause(exception);
-        }
-
-        // Default to INTERNAL for unknown exceptions
-        return Status.INTERNAL.withDescription(exception.getMessage()).withCause(exception);
+        Status status = switch (exception) {
+            case OpenSearchSecurityException e -> Status.PERMISSION_DENIED;
+            case MLResourceNotFoundException e -> Status.NOT_FOUND;
+            case MLLimitExceededException e -> Status.RESOURCE_EXHAUSTED;
+            case MLValidationException e -> Status.INVALID_ARGUMENT;
+            case OpenSearchException e -> STATUS_MAP.getOrDefault(e.status(), Status.INTERNAL);
+            case IOException e -> Status.UNAVAILABLE;
+            case IllegalArgumentException e -> Status.INVALID_ARGUMENT;
+            default -> Status.INTERNAL;
+        };
+        return status.withDescription(exception.getMessage()).withCause(exception);
     }
 }
