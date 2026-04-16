@@ -14,11 +14,12 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.test.OpenSearchTestCase;
 
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
 import io.modelcontextprotocol.spec.McpSchema;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSearchTestCase {
 
@@ -31,7 +32,7 @@ public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSear
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
-        provider = new OpenSearchMcpStatelessServerTransportProvider(new ObjectMapper());
+        provider = new OpenSearchMcpStatelessServerTransportProvider();
         provider.setMcpHandler(mcpHandler);
     }
 
@@ -46,7 +47,7 @@ public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSear
               "method": "tools/list"
             }
             """;
-        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new ObjectMapper(), requestBody);
+        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(JsonMapper.shared()), requestBody);
         StepVerifier.create(provider.handleRequest(message))
             .expectNextMatches(response -> response instanceof McpSchema.JSONRPCResponse)
             .verifyComplete();
@@ -61,15 +62,13 @@ public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSear
             }
             """;
 
-        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new ObjectMapper(), requestBody);
+        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(JsonMapper.shared()), requestBody);
         StepVerifier.create(provider.handleRequest(message)).expectErrorMatches(e -> e instanceof Exception).verify();
     }
 
     @Test
     public void test_handleRequest_handlerNotSet() throws Exception {
-        OpenSearchMcpStatelessServerTransportProvider providerWithoutHandler = new OpenSearchMcpStatelessServerTransportProvider(
-            new ObjectMapper()
-        );
+        OpenSearchMcpStatelessServerTransportProvider providerWithoutHandler = new OpenSearchMcpStatelessServerTransportProvider();
 
         String requestBody = """
             {
@@ -78,7 +77,7 @@ public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSear
               "method": "tools/list"
             }
             """;
-        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new ObjectMapper(), requestBody);
+        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(JsonMapper.shared()), requestBody);
         StepVerifier
             .create(providerWithoutHandler.handleRequest(message))
             .expectErrorMatches(e -> e.getMessage().contains("MCP handler not initialized"))
@@ -96,7 +95,7 @@ public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSear
               "method": "tools/list"
             }
             """;
-        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new ObjectMapper(), requestBody);
+        McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(JsonMapper.shared()), requestBody);
         StepVerifier.create(provider.handleRequest(message))
             .expectErrorMatches(e -> e.getMessage().contains("Handler error"))
             .verify();
