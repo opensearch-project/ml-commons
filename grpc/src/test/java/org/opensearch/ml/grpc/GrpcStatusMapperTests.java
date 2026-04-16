@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package test.java.org.opensearch.ml.grpc;
+package org.opensearch.ml.grpc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -11,8 +11,8 @@ import static org.junit.Assert.assertNotNull;
 import java.io.IOException;
 
 import org.junit.Test;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchSecurityException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -63,7 +63,7 @@ public class GrpcStatusMapperTests {
 
     @Test
     public void testOpenSearchForbiddenMapsToPermissionDenied() {
-        OpenSearchException exception = new OpenSearchException("Forbidden", RestStatus.FORBIDDEN);
+        OpenSearchStatusException exception = new OpenSearchStatusException("Forbidden", RestStatus.FORBIDDEN);
         Status status = GrpcStatusMapper.toGrpcStatus(exception);
 
         assertNotNull(status);
@@ -72,7 +72,7 @@ public class GrpcStatusMapperTests {
 
     @Test
     public void testOpenSearchNotFoundMapsToNotFound() {
-        OpenSearchException exception = new OpenSearchException("Not found", RestStatus.NOT_FOUND);
+        OpenSearchStatusException exception = new OpenSearchStatusException("Not found", RestStatus.NOT_FOUND);
         Status status = GrpcStatusMapper.toGrpcStatus(exception);
 
         assertNotNull(status);
@@ -81,7 +81,7 @@ public class GrpcStatusMapperTests {
 
     @Test
     public void testOpenSearchTooManyRequestsMapsToResourceExhausted() {
-        OpenSearchException exception = new OpenSearchException("Too many requests", RestStatus.TOO_MANY_REQUESTS);
+        OpenSearchStatusException exception = new OpenSearchStatusException("Too many requests", RestStatus.TOO_MANY_REQUESTS);
         Status status = GrpcStatusMapper.toGrpcStatus(exception);
 
         assertNotNull(status);
@@ -90,7 +90,7 @@ public class GrpcStatusMapperTests {
 
     @Test
     public void testOpenSearchBadRequestMapsToInvalidArgument() {
-        OpenSearchException exception = new OpenSearchException("Bad request", RestStatus.BAD_REQUEST);
+        OpenSearchStatusException exception = new OpenSearchStatusException("Bad request", RestStatus.BAD_REQUEST);
         Status status = GrpcStatusMapper.toGrpcStatus(exception);
 
         assertNotNull(status);
@@ -99,7 +99,7 @@ public class GrpcStatusMapperTests {
 
     @Test
     public void testOpenSearchServiceUnavailableMapsToUnavailable() {
-        OpenSearchException exception = new OpenSearchException("Service unavailable", RestStatus.SERVICE_UNAVAILABLE);
+        OpenSearchStatusException exception = new OpenSearchStatusException("Service unavailable", RestStatus.SERVICE_UNAVAILABLE);
         Status status = GrpcStatusMapper.toGrpcStatus(exception);
 
         assertNotNull(status);
@@ -108,7 +108,7 @@ public class GrpcStatusMapperTests {
 
     @Test
     public void testOpenSearchUnauthorizedMapsToUnauthenticated() {
-        OpenSearchException exception = new OpenSearchException("Unauthorized", RestStatus.UNAUTHORIZED);
+        OpenSearchStatusException exception = new OpenSearchStatusException("Unauthorized", RestStatus.UNAUTHORIZED);
         Status status = GrpcStatusMapper.toGrpcStatus(exception);
 
         assertNotNull(status);

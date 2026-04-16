@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package test.java.org.opensearch.ml.grpc.adapters;
+package org.opensearch.ml.grpc.adapters;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.List;
@@ -17,7 +18,6 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.grpc.adapters.StreamObserverAdapter;
 
 /**
  * Unit tests for StreamObserverAdapter.
@@ -34,51 +34,63 @@ public class StreamObserverAdapterTests {
     }
 
     @Test
-    public void testOnResponseWithLastChunk() {
-        // Create a response with is_last = true
-        Map<String, Object> dataAsMap = Map.of("content", "test", "is_last", true);
-        ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(dataAsMap).build();
-        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+    public void testGetChannel() {
+        assertNotNull("Channel should not be null", adapter.getChannel());
+        assertTrue("Channel should be GrpcTransportChannel", adapter.getChannel() instanceof GrpcTransportChannel);
+    }
+
+    @Test
+    public void testOnResponse_sendsNextButDoesNotComplete() {
+        MLTaskResponse response = createResponse("test", true);
 
         adapter.onResponse(response);
+
+        assertTrue("Observer should have received onNext", mockObserver.nextCalled);
+        assertFalse("onResponse should not complete the stream", mockObserver.completedCalled);
+        assertFalse("Observer should not have received onError", mockObserver.errorCalled);
+    }
+
+    @Test
+    public void testOnResponse_nonLastChunk() {
+        MLTaskResponse response = createResponse("test", false);
+
+        adapter.onResponse(response);
+
+        assertTrue("Observer should have received onNext", mockObserver.nextCalled);
+        assertFalse("Observer should not have received onCompleted", mockObserver.completedCalled);
+        assertFalse("Observer should not have received onError", mockObserver.errorCalled);
+    }
+
+    @Test
+    public void testOnResponse_withoutIsLastFlag() {
+        Map<String, Object> dataAsMap = Map.of("content", "test");
+        MLTaskResponse response = createResponseFromMap(dataAsMap);
+
+        adapter.onResponse(response);
+
+        assertTrue("Observer should have received onNext", mockObserver.nextCalled);
+        assertFalse("Observer should not have received onCompleted", mockObserver.completedCalled);
+        assertFalse("Observer should not have received onError", mockObserver.errorCalled);
+    }
+
+    @Test
+    public void testOnStreamResponse_explicitLast() {
+        MLTaskResponse response = createResponse("test", false);
+
+        adapter.onStreamResponse(response, true);
 
         assertTrue("Observer should have received onNext", mockObserver.nextCalled);
         assertTrue("Observer should have received onCompleted", mockObserver.completedCalled);
-        assertFalse("Observer should not have received onError", mockObserver.errorCalled);
     }
 
     @Test
-    public void testOnResponseWithNonLastChunk() {
-        // Create a response with is_last = false
-        Map<String, Object> dataAsMap = Map.of("content", "test", "is_last", false);
-        ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(dataAsMap).build();
-        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+    public void testOnStreamResponse_notLast() {
+        MLTaskResponse response = createResponse("test", false);
 
-        adapter.onResponse(response);
+        adapter.onStreamResponse(response, false);
 
         assertTrue("Observer should have received onNext", mockObserver.nextCalled);
         assertFalse("Observer should not have received onCompleted", mockObserver.completedCalled);
-        assertFalse("Observer should not have received onError", mockObserver.errorCalled);
-    }
-
-    @Test
-    public void testOnResponseWithoutIsLastFlag() {
-        // Create a response without is_last flag (should default to false)
-        Map<String, Object> dataAsMap = Map.of("content", "test");
-        ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(dataAsMap).build();
-        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
-
-        adapter.onResponse(response);
-
-        assertTrue("Observer should have received onNext", mockObserver.nextCalled);
-        assertFalse("Observer should not have received onCompleted", mockObserver.completedCalled);
-        assertFalse("Observer should not have received onError", mockObserver.errorCalled);
     }
 
     @Test
@@ -93,62 +105,88 @@ public class StreamObserverAdapterTests {
     }
 
     @Test
-    public void testMultipleChunks() {
-        // First chunk (not last)
-        Map<String, Object> data1 = Map.of("content", "chunk1", "is_last", false);
-        ModelTensor tensor1 = ModelTensor.builder().name("response").dataAsMap(data1).build();
-        ModelTensors tensors1 = ModelTensors.builder().mlModelTensors(List.of(tensor1)).build();
-        ModelTensorOutput output1 = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors1)).build();
-        MLTaskResponse response1 = MLTaskResponse.builder().output(output1).build();
-
+    public void testMultipleChunks_thenExplicitComplete() {
+        // First chunk
+        MLTaskResponse response1 = createResponse("chunk1", false);
         adapter.onResponse(response1);
 
         assertTrue("Observer should have received first onNext", mockObserver.nextCalled);
-        assertFalse("Observer should not have completed after first chunk", mockObserver.completedCalled);
+        assertFalse("Should not have completed after first chunk", mockObserver.completedCalled);
 
-        // Reset for second chunk
         mockObserver.reset();
 
-        // Second chunk (last)
-        Map<String, Object> data2 = Map.of("content", "chunk2", "is_last", true);
-        ModelTensor tensor2 = ModelTensor.builder().name("response").dataAsMap(data2).build();
-        ModelTensors tensors2 = ModelTensors.builder().mlModelTensors(List.of(tensor2)).build();
-        ModelTensorOutput output2 = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors2)).build();
-        MLTaskResponse response2 = MLTaskResponse.builder().output(output2).build();
-
+        // Second chunk
+        MLTaskResponse response2 = createResponse("chunk2", false);
         adapter.onResponse(response2);
 
         assertTrue("Observer should have received second onNext", mockObserver.nextCalled);
-        assertTrue("Observer should have completed after last chunk", mockObserver.completedCalled);
+        assertFalse("Should not have completed after second chunk", mockObserver.completedCalled);
+
+        mockObserver.reset();
+
+        // Final chunk via onStreamResponse with isLast=true
+        MLTaskResponse response3 = createResponse("chunk3", false);
+        adapter.onStreamResponse(response3, true);
+
+        assertTrue("Observer should have received third onNext", mockObserver.nextCalled);
+        assertTrue("Should have completed after explicit last", mockObserver.completedCalled);
     }
 
     @Test
-    public void testOnStreamResponseExplicitLast() {
-        Map<String, Object> dataAsMap = Map.of("content", "test");
-        ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(dataAsMap).build();
-        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+    public void testHandleStreamResponse_afterCompleted_ignored() {
+        MLTaskResponse response = createResponse("test", false);
 
-        // Explicitly mark as last
         adapter.onStreamResponse(response, true);
+        assertTrue(mockObserver.completedCalled);
 
-        assertTrue("Observer should have received onNext", mockObserver.nextCalled);
-        assertTrue("Observer should have received onCompleted", mockObserver.completedCalled);
+        mockObserver.reset();
+
+        // Further responses should be ignored
+        adapter.handleStreamResponse(createResponse("ignored", false), false);
+        assertFalse("Should not send after completion", mockObserver.nextCalled);
     }
 
     @Test
-    public void testIsLastDetectionWithStringValue() {
-        // Test with is_last as String "true"
-        Map<String, Object> dataAsMap = Map.of("content", "test", "is_last", "true");
+    public void testCompleteGrpcStream() {
+        adapter.completeGrpcStream();
+
+        assertTrue("Observer should have received onCompleted", mockObserver.completedCalled);
+        assertFalse("Observer should not have received onNext", mockObserver.nextCalled);
+    }
+
+    @Test
+    public void testCompleteGrpcStream_calledTwice() {
+        adapter.completeGrpcStream();
+        assertTrue(mockObserver.completedCalled);
+
+        mockObserver.reset();
+        adapter.completeGrpcStream();
+
+        assertFalse("Should not complete twice", mockObserver.completedCalled);
+    }
+
+    @Test
+    public void testOnFailure_afterCompletion() {
+        adapter.completeGrpcStream();
+        mockObserver.reset();
+
+        // onFailure still sends error even after completion
+        // (this is expected gRPC behavior - the observer handles it)
+        adapter.onFailure(new RuntimeException("error"));
+
+        assertTrue("Should still send error", mockObserver.errorCalled);
+    }
+
+    private MLTaskResponse createResponse(String content, boolean isLast) {
+        Map<String, Object> dataAsMap = Map.of("content", content, "is_last", isLast);
+        return createResponseFromMap(dataAsMap);
+    }
+
+    private MLTaskResponse createResponseFromMap(Map<String, Object> dataAsMap) {
         ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(dataAsMap).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
-
-        adapter.onResponse(response);
-
-        assertTrue("Observer should have received onCompleted with string 'true'", mockObserver.completedCalled);
+        return MLTaskResponse.builder().output(output).build();
     }
 
     /**
