@@ -26,6 +26,7 @@ dependencies {
 
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
+    testImplementation "org.opensearch:protobufs:${versions.opensearchprotobufs}"
 }
 
 lombok {
