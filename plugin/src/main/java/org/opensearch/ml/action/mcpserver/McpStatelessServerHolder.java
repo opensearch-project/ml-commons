@@ -18,13 +18,12 @@ import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolReg
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessAsyncServer;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.ObjectMapper;
 
 @Log4j2
 public class McpStatelessServerHolder {

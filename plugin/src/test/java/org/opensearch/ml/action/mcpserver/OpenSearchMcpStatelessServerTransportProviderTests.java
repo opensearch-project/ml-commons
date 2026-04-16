@@ -14,12 +14,11 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
 import io.modelcontextprotocol.spec.McpSchema;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import tools.jackson.databind.ObjectMapper;
 
 public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSearchTestCase {
 

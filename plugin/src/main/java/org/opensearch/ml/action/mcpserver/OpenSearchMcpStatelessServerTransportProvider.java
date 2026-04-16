@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -14,6 +12,7 @@ import io.modelcontextprotocol.spec.McpStatelessServerTransport;
 import io.modelcontextprotocol.util.Assert;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Simple transport provider that delegates everything to the MCP framework.

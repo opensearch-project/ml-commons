@@ -97,10 +97,10 @@ dependencies {
     implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "${versions.aws}"
     api('io.modelcontextprotocol.sdk:mcp:0.12.1')
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson_annotations}")
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
-    testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
+    testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '3.0.2'
     api group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0'
     implementation group: 'com.squareup.okhttp3', name: 'okhttp-sse', version: '4.12.0'
+    compileOnly("tools.jackson.core:jackson-databind:${versions.jackson3_databind}")   
 }
 
 lombok {
