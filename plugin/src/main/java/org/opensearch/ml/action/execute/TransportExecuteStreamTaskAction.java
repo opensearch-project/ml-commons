@@ -91,10 +91,6 @@ public class TransportExecuteStreamTaskAction extends HandledTransportAction<Act
 
                     public void handleException(TransportException exp) {
                         try {
-                            // Unwrap the TransportException so the caller receives the actual root cause
-                            // instead of a transport-wrapped message that only carries the node address.
-                            // TransportException/StreamException don't implement OpenSearchWrapperException,
-                            // so exp.unwrapCause() returns exp itself — walk the cause chain manually.
                             Throwable cause = exp.getCause() != null ? exp.getCause() : exp;
                             Exception toSend = cause instanceof Exception ? (Exception) cause : exp;
                             channel.sendResponse(toSend);
