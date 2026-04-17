@@ -139,7 +139,7 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
             MLExecuteTaskResponse mockResponse = mock(MLExecuteTaskResponse.class);
             handler.handleResponse(mockResponse);
 
-            // Test handleException method
+            // Test handleException method — no wrapped cause, should forward the TransportException itself
             TransportException transportException = new TransportException("test exception");
             handler.handleException(transportException);
 
@@ -149,6 +149,35 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
         transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
 
         verify(transportChannel).sendResponse(any(TransportException.class));
+    }
+
+    @Test
+    public void testMessageReceivedHandlerUnwrapsWrappedCause() throws Exception {
+        // When TransportException wraps a real cause (e.g. OpenSearchStatusException from a remote handler),
+        // the channel must receive the unwrapped cause so callers see the real error rather than just
+        // the transport node-address string.
+        Task task = mock(Task.class);
+        org.opensearch.OpenSearchStatusException rootCause = new org.opensearch.OpenSearchStatusException(
+            "Memory container not found",
+            org.opensearch.core.rest.RestStatus.NOT_FOUND
+        );
+        TransportException wrapped = new TransportException(
+            "[integTest-0][127.0.0.1:9300][cluster:admin/opensearch/ml/execute/stream]",
+            rootCause
+        );
+
+        doAnswer(invocation -> {
+            TransportResponseHandler<MLExecuteTaskResponse> handler = invocation.getArgument(3);
+            handler.handleException(wrapped);
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any(TransportResponseHandler.class));
+
+        transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
+
+        ArgumentCaptor<Exception> sentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(transportChannel).sendResponse(sentCaptor.capture());
+        Exception sent = sentCaptor.getValue();
+        assertSame("expected unwrapped root cause, got: " + sent.getClass(), rootCause, sent);
     }
 
     @Test
