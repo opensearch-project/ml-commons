@@ -759,6 +759,64 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         assertTrue(content.contains("Something went wrong"));
     }
 
+    // ===== Error message propagation tests (issue #4749) =====
+
+    @Test
+    public void testBuildStreamErrorMessage_transportException() {
+        RuntimeException rootCause = new RuntimeException("Unable to access memory service");
+        org.opensearch.transport.RemoteTransportException transportException = new org.opensearch.transport.RemoteTransportException(
+            "node1",
+            null,
+            "cluster:admin/opensearch/ml/execute/stream",
+            rootCause
+        );
+
+        String message = restAction.buildStreamErrorMessage(transportException);
+
+        assertTrue(message.contains("Unable to access memory service"));
+        assertTrue(message.startsWith("Error processing request: "));
+        assertFalse(message.contains("node1"));
+    }
+
+    @Test
+    public void testBuildStreamErrorMessage_ioException() {
+        IOException ioException = new IOException("Malformed JSON");
+
+        String message = restAction.buildStreamErrorMessage(ioException);
+
+        assertTrue(message.startsWith("Failed to parse request: "));
+        assertTrue(message.contains("Malformed JSON"));
+    }
+
+    @Test
+    public void testBuildStreamErrorMessage_nestedTransportException() {
+        RuntimeException realCause = new RuntimeException("Error from remote service: Too many requests");
+        RuntimeException wrapper = new RuntimeException("wrapped", realCause);
+        org.opensearch.transport.RemoteTransportException transportException = new org.opensearch.transport.RemoteTransportException(
+            "node1",
+            null,
+            "cluster:admin/opensearch/ml/execute/stream",
+            wrapper
+        );
+
+        String message = restAction.buildStreamErrorMessage(transportException);
+
+        assertTrue(message.contains("Too many requests"));
+        assertFalse(message.contains("node1"));
+        assertFalse(message.contains("wrapped"));
+    }
+
+    @Test
+    public void testBuildStreamErrorMessage_nullMessage() {
+        RuntimeException noMessage = new RuntimeException((String) null);
+
+        String message = restAction.buildStreamErrorMessage(noMessage);
+
+        assertTrue(message.startsWith("Error processing request: "));
+        assertTrue(message.contains("RuntimeException"));
+        assertFalse(message.contains("null"));
+    }
+
     // ===== Reflection helpers for testing private methods =====
 
     @SuppressWarnings("unchecked")

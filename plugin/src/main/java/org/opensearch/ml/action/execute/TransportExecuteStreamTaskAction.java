@@ -91,7 +91,9 @@ public class TransportExecuteStreamTaskAction extends HandledTransportAction<Act
 
                     public void handleException(TransportException exp) {
                         try {
-                            channel.sendResponse(exp);
+                            Throwable cause = exp.getCause() != null ? exp.getCause() : exp;
+                            Exception toSend = cause instanceof Exception ? (Exception) cause : exp;
+                            channel.sendResponse(toSend);
                         } catch (Exception e) {
                             log.error("Failed to send error response", e);
                         }
