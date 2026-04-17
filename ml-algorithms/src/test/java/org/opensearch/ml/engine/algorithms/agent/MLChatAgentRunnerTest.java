@@ -317,6 +317,38 @@ public class MLChatAgentRunnerTest {
     }
 
     @Test
+    public void testRunWithToolMissingInputSchemaInFunctionCalling_PropagatesFailureToListener() {
+        // When using function calling (TOOL_TEMPLATE set in params), a tool missing input_schema
+        // must fail fast with an IllegalArgumentException routed to listener.onFailure, not hang
+        // the caller. Mimics the V2 propagation behavior for the V1 chat runner path.
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        // Tool attributes do NOT contain input_schema
+        when(firstTool.getAttributes()).thenReturn(null);
+        MLToolSpec toolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(toolSpec))
+            .parameters(ImmutableMap.of("_llm_interface", "bedrock/converse/claude"))
+            .build();
+        // Force the function-calling code path (addToolsToFunctionCalling) in addToolsToPrompt
+        Map<String, String> params = new HashMap<>();
+        params.put(AgentUtils.TOOL_TEMPLATE, "${tool.attributes.input_schema}");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        ArgumentCaptor<Exception> exCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(agentActionListener).onFailure(exCaptor.capture());
+        Exception thrown = exCaptor.getValue();
+        assertTrue("expected IllegalArgumentException but got " + thrown.getClass(), thrown instanceof IllegalArgumentException);
+        assertTrue("expected message to name the tool, got: " + thrown.getMessage(), thrown.getMessage().contains(FIRST_TOOL));
+        assertTrue("expected message to mention input_schema, got: " + thrown.getMessage(), thrown.getMessage().contains("input_schema"));
+    }
+
+    @Test
     public void testRunWithIncludeOutputMLModel() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         Mockito

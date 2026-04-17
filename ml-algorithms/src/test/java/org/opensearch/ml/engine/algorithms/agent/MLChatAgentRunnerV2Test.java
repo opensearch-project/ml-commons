@@ -202,6 +202,54 @@ public class MLChatAgentRunnerV2Test {
     }
 
     @Test
+    public void testExecuteAgentLogic_ToolMissingInputSchema_PropagatesExceptionToListener() {
+        // Arrange: register a tool whose attributes map does NOT contain input_schema.
+        // addToolsToFunctionCalling should throw IllegalArgumentException synchronously,
+        // which must be routed to listener.onFailure (not swallowed).
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+
+        List<Message> conversationHistory = createConversationHistory();
+
+        MLToolSpec toolSpec = new MLToolSpec(
+            "bad-tool",
+            "bad-tool",
+            "tool w/o input_schema",
+            Map.of(),
+            Map.of(),
+            false,
+            Map.of(),
+            null,
+            null
+        );
+        when(mlAgent.getTools()).thenReturn(List.of(toolSpec));
+        when(toolFactories.containsKey("bad-tool")).thenReturn(true);
+        when(toolFactories.get("bad-tool")).thenReturn(toolFactory);
+        when(toolFactory.create(anyMap())).thenReturn(tool);
+        when(tool.getName()).thenReturn("bad-tool");
+        when(tool.getDescription()).thenReturn("tool without input_schema");
+        when(tool.getAttributes()).thenReturn(null);
+
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        // Act
+        runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
+
+        // Assert: onFailure invoked with IllegalArgumentException whose message names the
+        // tool and the missing input_schema attribute — confirming propagation to the user.
+        ArgumentCaptor<Exception> exCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, timeout(5000)).onFailure(exCaptor.capture());
+        Exception thrown = exCaptor.getValue();
+        assertTrue("expected IllegalArgumentException but got " + thrown.getClass(), thrown instanceof IllegalArgumentException);
+        assertTrue("expected message to name the tool, got: " + thrown.getMessage(), thrown.getMessage().contains("bad-tool"));
+        assertTrue("expected message to mention input_schema, got: " + thrown.getMessage(), thrown.getMessage().contains("input_schema"));
+        // LLM must never be invoked when the function-calling payload cannot be built.
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    @Test
     public void testExecuteAgentLogic_TracksToolInteractions() {
         // Arrange
         Map<String, String> params = new HashMap<>();

@@ -517,7 +517,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId = memory != null ? memory.getId() : null;
 
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
-        String prompt = constructLLMPrompt(tools, tmpParameters);
+        String prompt;
+        try {
+            prompt = constructLLMPrompt(tools, tmpParameters);
+        } catch (Exception e) {
+            log.error("Failed to construct LLM prompt. agentId={}", agentId, e);
+            listener.onFailure(e);
+            return;
+        }
         tmpParameters.put(PROMPT, prompt);
         final String finalPrompt = prompt;
 
