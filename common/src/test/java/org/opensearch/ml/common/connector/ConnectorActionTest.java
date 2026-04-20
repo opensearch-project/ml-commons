@@ -68,8 +68,11 @@ public class ConnectorActionTest {
     private static final String TEST_REQUEST_BODY = "{\"input\": \"${parameters.input}\"}";
     private static final String URL = "https://test.com";
     private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-    private static final String COHERE_URL = "https://api.cohere.ai/v1/embed";
-    private static final String BEDROCK_URL = "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke";
+    private static final String COHERE_URL = "https://api.cohere.ai/v1/rerank";
+    private static final String COHERE_EMBED_URL = "https://api.cohere.ai/v1/embed";
+    private static final String BEDROCK_URL = "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke";
+    private static final String BEDROCK_EMBED_URL =
+        "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke";
     private static final String SAGEMAKER_URL =
         "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/lmi-model-2023-06-24-01-35-32-275/invocations";
     private static final Logger logger = LogManager.getLogger(ConnectorActionTest.class);
@@ -343,7 +346,7 @@ public class ConnectorActionTest {
             TEST_ACTION_TYPE,
             null,
             TEST_METHOD_HTTP,
-            COHERE_URL,
+            COHERE_EMBED_URL,
             null,
             TEST_REQUEST_BODY,
             TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
@@ -356,7 +359,7 @@ public class ConnectorActionTest {
             TEST_ACTION_TYPE,
             null,
             TEST_METHOD_HTTP,
-            COHERE_URL,
+            COHERE_EMBED_URL,
             null,
             TEST_REQUEST_BODY,
             IMAGE_TO_COHERE_MULTI_MODAL_EMBEDDING_INPUT,
@@ -385,7 +388,7 @@ public class ConnectorActionTest {
             TEST_ACTION_TYPE,
             null,
             TEST_METHOD_HTTP,
-            COHERE_URL,
+            COHERE_EMBED_URL,
             null,
             TEST_REQUEST_BODY,
             TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT,
@@ -411,7 +414,7 @@ public class ConnectorActionTest {
             TEST_ACTION_TYPE,
             null,
             TEST_METHOD_HTTP,
-            COHERE_URL,
+            COHERE_EMBED_URL,
             null,
             TEST_REQUEST_BODY,
             TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
@@ -432,12 +435,52 @@ public class ConnectorActionTest {
     }
 
     @Test
+    public void testValidatePrePostProcessFunctionsWithCohereConnectorWrongEmbedInBuiltPrePostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            COHERE_EMBED_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_SIMILARITY_TO_COHERE_RERANK_INPUT,
+            COHERE_RERANK
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains(
+                            "LLM service is cohere embedding, so PreProcessFunction should be corresponding to cohere embedding for better results."
+                        )
+            );
+        assertTrue(isWarningLogged);
+        isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains(
+                            "LLM service is cohere embedding, so PostProcessFunction should be corresponding to cohere embedding for better results."
+                        )
+            );
+        assertTrue(isWarningLogged);
+    }
+
+    @Test
     public void testValidatePrePostProcessFunctionsWithBedrockConnectorCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             null,
             TEST_METHOD_HTTP,
-            BEDROCK_URL,
+            BEDROCK_EMBED_URL,
             null,
             TEST_REQUEST_BODY,
             TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT,
@@ -479,7 +522,7 @@ public class ConnectorActionTest {
             TEST_ACTION_TYPE,
             null,
             TEST_METHOD_HTTP,
-            BEDROCK_URL,
+            BEDROCK_EMBED_URL,
             null,
             TEST_REQUEST_BODY,
             TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
@@ -505,7 +548,7 @@ public class ConnectorActionTest {
             TEST_ACTION_TYPE,
             null,
             TEST_METHOD_HTTP,
-            BEDROCK_URL,
+            BEDROCK_EMBED_URL,
             null,
             TEST_REQUEST_BODY,
             TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT,
