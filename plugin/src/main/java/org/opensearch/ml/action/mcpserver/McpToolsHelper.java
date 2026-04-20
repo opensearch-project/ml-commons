@@ -83,8 +83,8 @@ public class McpToolsHelper {
         return new McpStatelessServerFeatures.AsyncToolSpecification(
             new McpSchema.Tool(toolName, String.valueOf(description), schema),
             (ctx, request) -> Mono.create(sink -> {
-                ActionListener<String> actionListener = ActionListener
-                    .wrap(r -> sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r)), false)), e -> {
+                ActionListener<Object> actionListener = ActionListener
+                    .wrap(r -> sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r.toString())), false)), e -> {
                         log.error("Failed to execute tool, tool name: {}", toolName, e);
                         sink.error(e);
                     });
