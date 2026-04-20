@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -52,11 +53,24 @@ public class MLEngine {
 
     private Encryptor encryptor;
 
-    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
+    @Getter
+    private ClusterService clusterService;
+
+    public MLEngine(Path opensearchDataFolder, Encryptor encryptor, ClusterService clusterService) {
         this.mlCachePath = opensearchDataFolder.resolve("ml_cache");
         this.mlModelsCachePath = mlCachePath.resolve("models_cache");
         this.mlConfigPath = mlCachePath.resolve("config");
         this.encryptor = encryptor;
+        this.clusterService = clusterService;
+    }
+
+    /**
+     * @deprecated Retained for backward compatibility. Scheduled for removal. <br/>
+     * Use {@link #MLEngine(Path, Encryptor, ClusterService)} instead.
+     */
+    @Deprecated(forRemoval = true)
+    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
+        this(opensearchDataFolder, encryptor, null);
     }
 
     public String getPrebuiltModelMetaListPath() {
