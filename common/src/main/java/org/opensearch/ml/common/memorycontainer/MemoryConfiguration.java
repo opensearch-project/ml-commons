@@ -47,6 +47,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -86,6 +87,14 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private boolean useSystemIndex = true;
     private String tenantId;
 
+    // Transient fields for inline model creation (not stored in container document)
+    public static final String EMBEDDING_MODEL_SPEC_FIELD = "embedding_model";
+    public static final String LLM_SPEC_FIELD = "llm";
+    @EqualsAndHashCode.Exclude
+    private transient MLAgentModelSpec embeddingModelSpec;
+    @EqualsAndHashCode.Exclude
+    private transient MLAgentModelSpec llmSpec;
+
     public MemoryConfiguration(
         String indexPrefix,
         FunctionName embeddingModelType,
@@ -99,10 +108,14 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         boolean disableHistory,
         boolean disableSession,
         boolean useSystemIndex,
-        String tenantId
+        String tenantId,
+        MLAgentModelSpec embeddingModelSpec,
+        MLAgentModelSpec llmSpec
     ) {
-        // Validate first
-        validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
+        // Skip validation when inline model specs are present (models not yet created)
+        if (embeddingModelSpec == null && llmSpec == null) {
+            validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
+        }
 
         // Assign values after validation
         this.indexPrefix = buildIndexPrefix(indexPrefix, useSystemIndex);
@@ -127,6 +140,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.disableSession = disableSession;
         this.useSystemIndex = useSystemIndex;
         this.tenantId = tenantId;
+        this.embeddingModelSpec = embeddingModelSpec;
+        this.llmSpec = llmSpec;
     }
 
     private String buildIndexPrefix(String indexPrefix, boolean useSystemIndex) {
@@ -268,6 +283,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         boolean disableSession = false;
         boolean useSystemIndex = true;
         String tenantId = null;
+        MLAgentModelSpec embeddingModelSpec = null;
+        MLAgentModelSpec llmSpec = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -287,6 +304,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 case LLM_ID_FIELD:
                     llmId = parser.text();
                     break;
+                case EMBEDDING_MODEL_SPEC_FIELD:
+                    embeddingModelSpec = MLAgentModelSpec.parse(parser);
+                    break;
+                case LLM_SPEC_FIELD:
+                    llmSpec = MLAgentModelSpec.parse(parser);
+                    break;
                 case DIMENSION_FIELD:
                     // Handle explicit null: {"dimension": null}
                     if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
@@ -300,8 +323,16 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                     break;
                 case STRATEGIES_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        strategies.add(MemoryStrategy.parse(parser));
+                    XContentParser.Token nextToken = parser.nextToken();
+                    while (nextToken != XContentParser.Token.END_ARRAY) {
+                        if (nextToken == XContentParser.Token.VALUE_STRING) {
+                            // Strategy preset: "SEMANTIC" → auto-fill defaults
+                            strategies.add(MemoryStrategy.fromPreset(MemoryStrategyType.fromString(parser.text())));
+                        } else {
+                            // Full strategy object (existing behavior)
+                            strategies.add(MemoryStrategy.parse(parser));
+                        }
+                        nextToken = parser.nextToken();
                     }
                     break;
                 case INDEX_SETTINGS_FIELD:
@@ -341,7 +372,23 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .disableSession(disableSession)
             .useSystemIndex(useSystemIndex)
             .tenantId(tenantId)
+            .embeddingModelSpec(embeddingModelSpec)
+            .llmSpec(llmSpec)
             .build();
+    }
+
+    /**
+     * Returns true if inline embedding model spec is provided (needs auto-creation).
+     */
+    public boolean hasInlineEmbeddingModel() {
+        return embeddingModelSpec != null;
+    }
+
+    /**
+     * Returns true if inline LLM spec is provided (needs auto-creation).
+     */
+    public boolean hasInlineLlm() {
+        return llmSpec != null;
     }
 
     public String getFinalMemoryIndexPrefix() {
