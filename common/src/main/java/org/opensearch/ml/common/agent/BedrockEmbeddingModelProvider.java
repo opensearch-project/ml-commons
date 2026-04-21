@@ -93,12 +93,9 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
 
     @Override
     public MLRegisterModelInput createModelInput(String modelName, Connector connector, Map<String, String> modelParameters) {
-        EmbeddingModelInfo info = KNOWN_MODELS.get(modelName);
-        FunctionName functionName = info != null ? info.functionName : FunctionName.TEXT_EMBEDDING;
-
         return MLRegisterModelInput
             .builder()
-            .functionName(functionName)
+            .functionName(FunctionName.REMOTE)
             .modelName("Auto-generated embedding model for " + modelName)
             .description("Auto-generated embedding model for memory container")
             .connector(connector)
