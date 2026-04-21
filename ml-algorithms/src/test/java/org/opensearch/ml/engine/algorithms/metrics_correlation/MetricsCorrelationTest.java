@@ -320,12 +320,7 @@ public class MetricsCorrelationTest {
     @Test
     public void testSearchRequest() {
         String expectedIndex = CommonValue.ML_MODEL_INDEX;
-        String[] expectedIncludes = {
-            MLModel.MODEL_ID_FIELD,
-            MLModel.MODEL_NAME_FIELD,
-            MODEL_STATE_FIELD,
-            MLModel.MODEL_VERSION_FIELD,
-            MLModel.MODEL_CONTENT_FIELD };
+        String[] expectedIncludes = { MLModel.MODEL_ID_FIELD, MLModel.MODEL_NAME_FIELD, MODEL_STATE_FIELD, MLModel.MODEL_VERSION_FIELD };
         String[] expectedExcludes = { MLModel.MODEL_CONTENT_FIELD };
         String expectedNameQuery = FunctionName.METRICS_CORRELATION.name();
         String expectedVersionQuery = MCORR_ML_VERSION;

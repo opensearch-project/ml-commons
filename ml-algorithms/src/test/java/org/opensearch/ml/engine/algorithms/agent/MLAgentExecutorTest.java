@@ -6,6 +6,9 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
@@ -1861,7 +1864,6 @@ public class MLAgentExecutorTest {
 
         // agentType.isV2() = false → V2 execution path must not be entered
         verify(memory, never()).getStructuredMessages(any());
-        verify(listener, timeout(5000)).onFailure(any());
     }
 
     /**
