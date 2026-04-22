@@ -122,7 +122,7 @@ public class TransportCreateMemoryContainerAction extends
     private void createInlineModels(MemoryConfiguration config, String tenantId, ActionListener<Void> listener) {
         // Step 1: Create embedding model if inline spec provided
         if (config.hasInlineEmbeddingModel()) {
-            createModelFromSpec(config.getEmbeddingModelSpec(), ActionListener.wrap(embeddingModelId -> {
+            createModelFromSpec(config.getEmbeddingModelSpec(), false, ActionListener.wrap(embeddingModelId -> {
                 config.setEmbeddingModelId(embeddingModelId);
 
                 // Auto-detect type and dimension from known models
@@ -139,7 +139,7 @@ public class TransportCreateMemoryContainerAction extends
 
                 // Step 2: Create LLM model if inline spec provided
                 if (config.hasInlineLlm()) {
-                    createModelFromSpec(config.getLlmSpec(), ActionListener.wrap(llmModelId -> {
+                    createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
                         config.setLlmId(llmModelId);
                         log.info("Auto-created LLM model: {}", llmModelId);
                         listener.onResponse(null);
@@ -150,7 +150,7 @@ public class TransportCreateMemoryContainerAction extends
             }, listener::onFailure));
         } else if (config.hasInlineLlm()) {
             // Only LLM inline, no embedding
-            createModelFromSpec(config.getLlmSpec(), ActionListener.wrap(llmModelId -> {
+            createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
                 config.setLlmId(llmModelId);
                 log.info("Auto-created LLM model: {}", llmModelId);
                 listener.onResponse(null);
@@ -162,10 +162,11 @@ public class TransportCreateMemoryContainerAction extends
 
     private void createModelFromSpec(
         org.opensearch.ml.common.agent.MLAgentModelSpec modelSpec,
+        boolean isMemoryLlm,
         ActionListener<String> listener
     ) {
         try {
-            MLRegisterModelInput modelInput = MemoryModelService.createModelFromSpec(modelSpec);
+            MLRegisterModelInput modelInput = MemoryModelService.createModelFromSpec(modelSpec, isMemoryLlm);
             MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
             client.execute(MLRegisterModelAction.INSTANCE, modelRequest, ActionListener.wrap(response -> {
                 listener.onResponse(response.getModelId());
