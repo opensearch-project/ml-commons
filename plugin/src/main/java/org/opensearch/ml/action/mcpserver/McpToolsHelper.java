@@ -42,10 +42,12 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Helper for creating stateless MCP tool specifications.
@@ -81,13 +83,21 @@ public class McpToolsHelper {
         String description = Optional.ofNullable(tool.getDescription()).orElse(factory.getDefaultDescription());
 
         return new McpStatelessServerFeatures.AsyncToolSpecification(
-            new McpSchema.Tool(toolName, String.valueOf(description), schema),
+            McpSchema.Tool
+                .builder()
+                .name(toolName)
+                .description(String.valueOf(description))
+                .inputSchema(new JacksonMcpJsonMapper(JsonMapper.shared()), schema)
+                .build(),
             (ctx, request) -> Mono.create(sink -> {
                 ActionListener<String> actionListener = ActionListener
-                    .wrap(r -> sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r)), false)), e -> {
-                        log.error("Failed to execute tool, tool name: {}", toolName, e);
-                        sink.error(e);
-                    });
+                    .wrap(
+                        r -> sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r)), false, null, Map.of())),
+                        e -> {
+                            log.error("Failed to execute tool, tool name: {}", toolName, e);
+                            sink.error(e);
+                        }
+                    );
 
                 actualTool.run(StringUtils.getParameterMap(request.arguments()), actionListener);
             })
