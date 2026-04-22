@@ -145,6 +145,7 @@ public class AgentUtils {
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
     public static final String LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT = "gemini/v1beta/generatecontent";
+    public static final String LLM_INTERFACE_BEDROCK_INVOKE_CLAUDE = "bedrock/invoke/claude";
 
     public static final String TOOL_CALLS_PATH = "tool_calls_path";
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
@@ -509,13 +510,23 @@ public class AgentUtils {
                     }
                 }
             } else {
-                if (StringUtils.isJson(response.toString())) {
-                    Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
-                    modelOutput.put(FINAL_ANSWER, StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse)));
-                } else {
-                    modelOutput.put(FINAL_ANSWER, StringUtils.toJson(response));
-                }
+                // For Bedrock InvokeModel, preserve the full message structure so parseToUnifiedMessage
+                // can extract all content blocks (text, compaction, etc.)
+                boolean isBedrockInvoke =
+                    functionCalling instanceof org.opensearch.ml.engine.function_calling.BedrockInvokeClaudeFunctionCalling;
 
+                String finalAnswerJson;
+                if (isBedrockInvoke) {
+                    // Pass the full wrapped message JSON so parseToUnifiedMessage can extract all content blocks
+                    // Final response will also contain a compaction block if necessary. It won't simply be a text block.
+                    finalAnswerJson = StringUtils.toJson(dataAsMap);
+                } else if (StringUtils.isJson(response.toString())) {
+                    Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
+                    finalAnswerJson = StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse));
+                } else {
+                    finalAnswerJson = StringUtils.toJson(response);
+                }
+                modelOutput.put(FINAL_ANSWER, finalAnswerJson);
             }
         } else {
             extractParams(modelOutput, dataAsMap, THOUGHT);
