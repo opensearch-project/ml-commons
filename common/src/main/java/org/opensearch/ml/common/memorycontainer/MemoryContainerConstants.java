@@ -197,9 +197,8 @@ public class MemoryContainerConstants {
             Respond NOW with ONE LINE of valid JSON ONLY exactly as {"facts":["fact1","fact2",...]}. No extra text, no code fences, no newlines or tabs, no spaces after commas or colons.""";
 
     // JSON enforcement message for user preference extraction
-    public static final String USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE =
-        """
-            Return ONLY ONE LINE of valid JSON exactly as {"facts":["<Preference sentence>. Context: <why/how>. Categories: <cat1,cat2>"]}. Begin with { and end with }. No extra text.""";
+    public static final String USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE = """
+        Return ONLY ONE LINE of valid JSON exactly as {"facts":["<fact sentence>"]}. Begin with { and end with }. No extra text.""";
 
     public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
         """
@@ -216,12 +215,14 @@ public class MemoryContainerConstants {
             </EXTRACT>
 
             <STYLE & RULES>
-            • One sentence per preference; merge related details; no duplicates; preserve user wording and numbers; avoid relative time; keep each fact < 350 chars.
-            • Format: "Preference sentence. Context: <why/how>. Categories: cat1,cat2"
+            • One self-contained sentence per preference. Include the subject's name and enough context to be meaningful on its own.
+            • Merge closely related details into the same sentence. No duplicates.
+            • Preserve user wording, names, numbers, and units. Avoid relative time references; use absolute dates when available.
+            • Keep each fact under 350 characters.
             </STYLE & RULES>
 
             <OUTPUT>
-            Return ONLY one minified JSON object exactly as {"facts":["Preference sentence. Context: <why/how>. Categories: cat1,cat2"]}. If none, return {"facts":[]}. The first character MUST be '{' and the last MUST be '}'. No preambles, explanations, code fences, XML, or other text.
+            Return ONLY one minified JSON object exactly as {"facts":["fact sentence"]}. If none, return {"facts":[]}. The first character MUST be '{' and the last MUST be '}'. No preambles, explanations, code fences, XML, or other text.
             </OUTPUT>""";
 
     public static final String SUMMARY_FACTS_EXTRACTION_PROMPT =

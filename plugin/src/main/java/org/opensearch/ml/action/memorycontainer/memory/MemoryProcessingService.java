@@ -356,7 +356,7 @@ public class MemoryProcessingService {
                             }
                         }
                     } catch (IOException e) {
-                        log.error("Failed to extract content from dataMap", e);
+                        log.error("Failed to parse {} strategy LLM response as JSON", strategy.getType(), e);
                         throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
                     }
                 }
