@@ -539,4 +539,17 @@ public final class MLCommonsSettings {
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
+
+    /**
+     * Controls whether plaintext (unencrypted) credentials are allowed in connectors.
+     *
+     * When false (default for open source): All credentials are always encrypted regardless of connector configuration.
+     * When true (default for managed service): Connectors can specify encryption preference via the "encrypted" flag in credentials.
+     *
+     * Default: false (ensures security by default in open source)
+     *
+     * This is a dynamic setting that can be changed at runtime via cluster settings API.
+     */
+    public static final Setting<Boolean> ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "allow_plaintext_credentials", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

@@ -48,6 +48,7 @@ public abstract class AbstractConnector implements Connector {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";
+    public static final String ENCRYPTED_FIELD = "encrypted";
 
     protected String name;
     protected String description;
@@ -162,6 +163,14 @@ public abstract class AbstractConnector implements Connector {
         return predictEndpoint;
     }
 
+    /**
+     * Check if credentials are configured for plaintext storage (not encrypted).
+     * Returns true if the credential map contains "encrypted" = "false".
+     */
+    public boolean isPlaintextCredentials() {
+        return credential != null && "false".equalsIgnoreCase(credential.get(ENCRYPTED_FIELD));
+    }
+
     @Override
     public void encrypt(
         TriConsumer<List<String>, String, ActionListener<List<String>>> function,
@@ -172,9 +181,19 @@ public abstract class AbstractConnector implements Connector {
             listener.onResponse(true);
             return;
         }
+        // Skip encryption if credentials are configured for plaintext storage
+        if (isPlaintextCredentials()) {
+            log.warn("Connector credentials are configured for plaintext storage (not encrypted)");
+            listener.onResponse(true);
+            return;
+        }
         List<String> orderedEncryptKeys = new ArrayList<>();
         List<String> orderedToEncrypt = new ArrayList<>();
         for (String key : credential.keySet()) {
+            // Skip the encrypted flag itself
+            if (ENCRYPTED_FIELD.equals(key)) {
+                continue;
+            }
             orderedEncryptKeys.add(key);
             orderedToEncrypt.add(credential.get(key));
         }
@@ -204,9 +223,23 @@ public abstract class AbstractConnector implements Connector {
             listener.onResponse(true);
             return;
         }
+        // Skip decryption if credentials are configured for plaintext storage
+        if (isPlaintextCredentials()) {
+            log.debug("Connector credentials are in plaintext mode, using as-is");
+            decryptedCredential = new HashMap<>(credential);
+            // Remove the encrypted flag from decrypted credentials
+            decryptedCredential.remove(ENCRYPTED_FIELD);
+            this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
+            listener.onResponse(true);
+            return;
+        }
         List<String> orderedDecryptKeys = new ArrayList<>();
         List<String> orderedToDecrypt = new ArrayList<>();
         for (Map.Entry<String, String> entry : credential.entrySet()) {
+            // Skip the encrypted flag itself
+            if (ENCRYPTED_FIELD.equals(entry.getKey())) {
+                continue;
+            }
             orderedDecryptKeys.add(entry.getKey());
             orderedToDecrypt.add(entry.getValue());
         }

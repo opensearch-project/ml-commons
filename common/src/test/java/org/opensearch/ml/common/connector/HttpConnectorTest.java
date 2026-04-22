@@ -642,6 +642,126 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void testEncryptSkippedWhenIsEncryptedFalse() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        // Verify plaintext credentials is detected
+        Assert.assertTrue(connector.isPlaintextCredentials());
+        // Verify encrypted key stays in credential map
+        Assert.assertTrue(connector.getCredential().containsKey("encrypted"));
+
+        // Encryption should be skipped when credentials are plaintext
+        connector.encrypt(encryptFunction, null, listener);
+
+        // Credential should not be encrypted (still has original value)
+        Assert.assertEquals("test_key_value", connector.getCredential().get("key"));
+    }
+
+    @Test
+    public void testDecryptSkippedWhenIsEncryptedFalse() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "plaintext_value");
+        credential.put("encrypted", "false");
+
+        ConnectorAction action = new ConnectorAction(
+            ConnectorAction.ActionType.PREDICT,
+            null,
+            "POST",
+            "https://test.com",
+            null,
+            "{\"input\": \"test\"}",
+            null,
+            null
+        );
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector")
+            .protocol("http")
+            .credential(credential)
+            .actions(Arrays.asList(action))
+            .build();
+
+        Assert.assertTrue(connector.isPlaintextCredentials());
+
+        // Decryption should be skipped when credentials are plaintext
+        connector.decrypt(PREDICT.name(), decryptFunction, null, listener);
+
+        // Decrypted credential should be same as original (not passed through decrypt function)
+        Assert.assertEquals("plaintext_value", connector.getDecryptedCredential().get("key"));
+        // encrypted flag should be removed from decrypted credentials
+        Assert.assertFalse(connector.getDecryptedCredential().containsKey("encrypted"));
+    }
+
+    @Test
+    public void testPlaintextCredentialsDefaultsToFalse() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        // isPlaintextCredentials should default to false when not specified (meaning encrypted)
+        Assert.assertFalse(connector.isPlaintextCredentials());
+    }
+
+    @Test
+    public void testParseEncryptedFlagFromXContent() throws IOException {
+        String jsonStr = "{\"name\":\"test_connector\",\"protocol\":\"http\",\"credential\":{\"key\":\"value\",\"encrypted\":\"false\"}}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+
+        HttpConnector connector = new HttpConnector("http", parser);
+        Assert.assertTrue(connector.isPlaintextCredentials());
+        // encrypted key should remain in credential map
+        Assert.assertTrue(connector.getCredential().containsKey("encrypted"));
+    }
+
+    @Test
+    public void testToXContentIncludesEncryptedFlag() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert.assertTrue(content.contains("\"encrypted\":\"false\""));
+    }
+
+    @Test
+    public void testWriteToAndReadFromWithPlaintextCredentials() throws IOException {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("key", "test_key_value");
+        credential.put("encrypted", "false");
+
+        HttpConnector originalConnector = HttpConnector.builder().name("test_connector").protocol("http").credential(credential).build();
+
+        Assert.assertTrue(originalConnector.isPlaintextCredentials());
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalConnector.writeTo(output);
+
+        HttpConnector deserializedConnector = new HttpConnector(output.bytes().streamInput());
+        // encrypted flag is preserved in credential map through stream serialization
+        Assert.assertTrue(deserializedConnector.isPlaintextCredentials());
+        Assert.assertEquals(originalConnector.getCredential(), deserializedConnector.getCredential());
+    }
+
+    @Test
     public void testFindAction_MultipleActionsWithSameType() {
         ConnectorAction action1 = new ConnectorAction(
             PREDICT,

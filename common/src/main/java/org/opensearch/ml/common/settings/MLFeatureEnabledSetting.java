@@ -8,6 +8,7 @@ package org.opensearch.ml.common.settings;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
@@ -76,6 +77,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isAGUIEnabled;
 
+    private volatile Boolean isPlaintextCredentialsAllowed;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -101,6 +104,7 @@ public class MLFeatureEnabledSetting {
         maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
         isMcpHeaderPassthroughEnabled = ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.get(settings);
         isAGUIEnabled = ML_COMMONS_AG_UI_ENABLED.get(settings);
+        isPlaintextCredentialsAllowed = ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -140,6 +144,9 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED, it -> isMcpHeaderPassthroughEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AG_UI_ENABLED, it -> isAGUIEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_PLAINTEXT_CREDENTIALS, it -> isPlaintextCredentialsAllowed = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
             isStaticMetricCollectionEnabled = it;
             for (SettingsChangeListener listener : listeners) {
@@ -313,5 +320,15 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isAGUIEnabled() {
         return isAGUIEnabled;
+    }
+
+    /**
+     * Whether plaintext (unencrypted) credentials are allowed in connectors.
+     * When false (default): All credentials must be encrypted.
+     * When true: Connectors can optionally store credentials in plaintext.
+     * @return whether plaintext credentials are allowed.
+     */
+    public boolean isPlaintextCredentialsAllowed() {
+        return isPlaintextCredentialsAllowed;
     }
 }
