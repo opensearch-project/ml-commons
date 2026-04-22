@@ -8,6 +8,7 @@ package org.opensearch.ml.common.model;
 import org.opensearch.ml.common.agent.BedrockConverseModelProvider;
 import org.opensearch.ml.common.agent.BedrockEmbeddingModelProvider;
 import org.opensearch.ml.common.agent.GeminiV1BetaGenerateContentModelProvider;
+import org.opensearch.ml.common.agent.OpenaiEmbeddingModelProvider;
 import org.opensearch.ml.common.agent.OpenaiV1ChatCompletionsModelProvider;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 
@@ -29,6 +30,7 @@ public class ModelProviderFactory {
         return switch (type) {
             case BEDROCK_CONVERSE -> new BedrockConverseModelProvider();
             case BEDROCK_EMBEDDING -> new BedrockEmbeddingModelProvider();
+            case OPENAI_EMBEDDING -> new OpenaiEmbeddingModelProvider();
             case GEMINI_V1BETA_GENERATE_CONTENT -> new GeminiV1BetaGenerateContentModelProvider();
             case OPENAI_V1_CHAT_COMPLETIONS -> new OpenaiV1ChatCompletionsModelProvider();
             default -> throw new IllegalArgumentException("Unsupported model provider type");

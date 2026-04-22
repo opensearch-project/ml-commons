@@ -12,6 +12,7 @@ import java.util.Map;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.BedrockEmbeddingModelProvider;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
+import org.opensearch.ml.common.agent.OpenaiEmbeddingModelProvider;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -30,13 +31,18 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MemoryModelService {
 
-    /**
-     * Memory LLM request body template using system_prompt/user_prompt parameters.
-     * This differs from the agent template which uses body/_chat_history/_interactions.
-     * The memory processing service calls the LLM with system_prompt and user_prompt.
-     */
-    private static final String MEMORY_LLM_REQUEST_BODY = "{\"system\":[{\"text\":\"${parameters.system_prompt}\"}],"
-        + "\"messages\":[{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
+    // Memory LLM templates — use system_prompt/user_prompt (not agent-style body/_chat_history)
+    private static final String BEDROCK_CONVERSE_MEMORY_TEMPLATE =
+        "{\"system\":[{\"text\":\"${parameters.system_prompt}\"}],"
+            + "\"messages\":[{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
+
+    private static final String OPENAI_MEMORY_TEMPLATE =
+        "{\"model\":\"${parameters.model}\",\"messages\":[{\"role\":\"system\",\"content\":\"${parameters.system_prompt}\"},"
+            + "{\"role\":\"user\",\"content\":\"${parameters.user_prompt}\"}]}";
+
+    private static final String GEMINI_MEMORY_TEMPLATE =
+        "{\"system_instruction\":{\"parts\":[{\"text\":\"${parameters.system_prompt}\"}]},"
+            + "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
 
     private static final String DEFAULT_REGION = "us-east-1";
 
@@ -48,7 +54,7 @@ public class MemoryModelService {
     public static MLRegisterModelInput createModelFromSpec(MLAgentModelSpec modelSpec, boolean isMemoryLlm) {
         validateModelSpec(modelSpec);
 
-        if (isMemoryLlm && modelSpec.getModelProvider().equalsIgnoreCase("bedrock/converse")) {
+        if (isMemoryLlm) {
             return createMemoryLlmInput(modelSpec);
         }
 
@@ -67,37 +73,75 @@ public class MemoryModelService {
      * Uses system_prompt/user_prompt instead of agent-style body/_chat_history.
      */
     private static MLRegisterModelInput createMemoryLlmInput(MLAgentModelSpec modelSpec) {
+        String provider = modelSpec.getModelProvider().toLowerCase();
+        String url;
+        String requestBody;
+        String protocol;
+        Map<String, String> headers = new HashMap<>(Map.of("content-type", "application/json"));
+
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("region", DEFAULT_REGION);
-        parameters.put("service_name", "bedrock");
         parameters.put("model", modelSpec.getModelId());
         if (modelSpec.getModelParameters() != null) {
             parameters.putAll(modelSpec.getModelParameters());
+        }
+
+        if (provider.equals("bedrock/converse")) {
+            parameters.putIfAbsent("region", DEFAULT_REGION);
+            parameters.put("service_name", "bedrock");
+            url = "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse";
+            requestBody = BEDROCK_CONVERSE_MEMORY_TEMPLATE;
+            protocol = ConnectorProtocols.AWS_SIGV4;
+        } else if (provider.equals("openai/v1/chat/completions")) {
+            url = "https://api.openai.com/v1/chat/completions";
+            requestBody = OPENAI_MEMORY_TEMPLATE;
+            protocol = ConnectorProtocols.HTTP;
+            headers.put("Authorization", "Bearer ${credential.openAI_key}");
+        } else if (provider.equals("gemini/v1beta/generatecontent")) {
+            url = "https://generativelanguage.googleapis.com/v1beta/models/${parameters.model}:generateContent";
+            requestBody = GEMINI_MEMORY_TEMPLATE;
+            protocol = ConnectorProtocols.HTTP;
+        } else {
+            throw new IllegalArgumentException("Unsupported LLM provider for memory: " + modelSpec.getModelProvider());
         }
 
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse")
-            .headers(Map.of("content-type", "application/json"))
-            .requestBody(MEMORY_LLM_REQUEST_BODY)
+            .url(url)
+            .headers(headers)
+            .requestBody(requestBody)
             .build();
 
         ConnectorClientConfig clientConfig = new ConnectorClientConfig();
         clientConfig.setMaxRetryTimes(3);
 
-        Connector connector = AwsConnector
-            .awsConnectorBuilder()
-            .name("Auto-generated Bedrock Converse connector for Memory")
-            .description("Auto-generated LLM connector for memory container (uses system_prompt/user_prompt)")
-            .version("1")
-            .protocol(ConnectorProtocols.AWS_SIGV4)
-            .parameters(parameters)
-            .credential(modelSpec.getCredential() != null ? modelSpec.getCredential() : new HashMap<>())
-            .actions(List.of(predictAction))
-            .connectorClientConfig(clientConfig)
-            .build();
+        Connector connector;
+        if (protocol.equals(ConnectorProtocols.AWS_SIGV4)) {
+            connector = AwsConnector
+                .awsConnectorBuilder()
+                .name("Auto-generated " + modelSpec.getModelProvider() + " connector for Memory")
+                .description("Auto-generated LLM connector for memory container")
+                .version("1")
+                .protocol(protocol)
+                .parameters(parameters)
+                .credential(modelSpec.getCredential() != null ? modelSpec.getCredential() : new HashMap<>())
+                .actions(List.of(predictAction))
+                .connectorClientConfig(clientConfig)
+                .build();
+        } else {
+            connector = org.opensearch.ml.common.connector.HttpConnector
+                .builder()
+                .name("Auto-generated " + modelSpec.getModelProvider() + " connector for Memory")
+                .description("Auto-generated LLM connector for memory container")
+                .version("1")
+                .protocol(protocol)
+                .parameters(parameters)
+                .credential(modelSpec.getCredential() != null ? modelSpec.getCredential() : new HashMap<>())
+                .actions(List.of(predictAction))
+                .connectorClientConfig(clientConfig)
+                .build();
+        }
 
         return MLRegisterModelInput
             .builder()
@@ -114,16 +158,18 @@ public class MemoryModelService {
      */
     public static FunctionName detectEmbeddingType(String modelId) {
         BedrockEmbeddingModelProvider.EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
-        return info != null ? info.functionName : null;
+        if (info != null) return info.functionName;
+        OpenaiEmbeddingModelProvider.EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
+        if (openaiInfo != null) return openaiInfo.functionName;
+        return null;
     }
 
-    /**
-     * Auto-detect embedding dimension from model ID.
-     * @return dimension or null if unknown
-     */
     public static Integer detectEmbeddingDimension(String modelId) {
         BedrockEmbeddingModelProvider.EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
-        return info != null ? info.dimension : null;
+        if (info != null) return info.dimension;
+        OpenaiEmbeddingModelProvider.EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
+        if (openaiInfo != null) return openaiInfo.dimension;
+        return null;
     }
 
     private static void validateModelSpec(MLAgentModelSpec modelSpec) {
