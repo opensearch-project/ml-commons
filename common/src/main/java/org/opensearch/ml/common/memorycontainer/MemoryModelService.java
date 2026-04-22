@@ -172,6 +172,22 @@ public class MemoryModelService {
         return null;
     }
 
+    /**
+     * Returns the correct llm_result_path for a given LLM provider.
+     */
+    public static String getLlmResultPath(String modelProvider) {
+        if (modelProvider == null) return null;
+        String provider = modelProvider.toLowerCase();
+        if (provider.equals("bedrock/converse")) {
+            return "$.output.message.content[0].text";
+        } else if (provider.equals("openai/v1/chat/completions")) {
+            return "$.choices[0].message.content";
+        } else if (provider.equals("gemini/v1beta/generatecontent")) {
+            return "$.candidates[0].content.parts[0].text";
+        }
+        return null;
+    }
+
     private static void validateModelSpec(MLAgentModelSpec modelSpec) {
         if (modelSpec == null) {
             throw new IllegalArgumentException("Model specification not found");

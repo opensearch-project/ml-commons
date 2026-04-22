@@ -141,6 +141,7 @@ public class TransportCreateMemoryContainerAction extends
                 if (config.hasInlineLlm()) {
                     createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
                         config.setLlmId(llmModelId);
+                        setLlmResultPathFromProvider(config);
                         log.info("Auto-created LLM model: {}", llmModelId);
                         listener.onResponse(null);
                     }, listener::onFailure));
@@ -152,6 +153,7 @@ public class TransportCreateMemoryContainerAction extends
             // Only LLM inline, no embedding
             createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
                 config.setLlmId(llmModelId);
+                setLlmResultPathFromProvider(config);
                 log.info("Auto-created LLM model: {}", llmModelId);
                 listener.onResponse(null);
             }, listener::onFailure));
@@ -178,6 +180,16 @@ public class TransportCreateMemoryContainerAction extends
         } catch (Exception e) {
             log.error("Failed to build model registration input: {}", modelSpec.getModelId(), e);
             listener.onFailure(new IllegalArgumentException("Invalid model specification: " + e.getMessage()));
+        }
+    }
+
+    private void setLlmResultPathFromProvider(MemoryConfiguration config) {
+        String resultPath = MemoryModelService.getLlmResultPath(config.getLlmSpec().getModelProvider());
+        if (resultPath != null) {
+            config.getParameters().put(
+                org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD,
+                resultPath
+            );
         }
     }
 
