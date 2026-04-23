@@ -15,6 +15,7 @@ import java.util.Map;
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.memorycontainer.EmbeddingModelInfo;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class OpenaiEmbeddingModelProviderTest {
@@ -39,11 +40,11 @@ public class OpenaiEmbeddingModelProviderTest {
 
     @Test
     public void testGetModelInfo_knownModels() {
-        OpenaiEmbeddingModelProvider.EmbeddingModelInfo small = OpenaiEmbeddingModelProvider.getModelInfo("text-embedding-3-small");
+        EmbeddingModelInfo small = OpenaiEmbeddingModelProvider.getModelInfo("text-embedding-3-small");
         assertNotNull(small);
         assertEquals(1536, small.dimension);
 
-        OpenaiEmbeddingModelProvider.EmbeddingModelInfo large = OpenaiEmbeddingModelProvider.getModelInfo("text-embedding-3-large");
+        EmbeddingModelInfo large = OpenaiEmbeddingModelProvider.getModelInfo("text-embedding-3-large");
         assertNotNull(large);
         assertEquals(3072, large.dimension);
     }

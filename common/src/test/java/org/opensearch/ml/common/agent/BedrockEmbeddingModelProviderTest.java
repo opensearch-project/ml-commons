@@ -16,6 +16,7 @@ import java.util.Map;
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.memorycontainer.EmbeddingModelInfo;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class BedrockEmbeddingModelProviderTest {
@@ -63,17 +64,16 @@ public class BedrockEmbeddingModelProviderTest {
 
     @Test
     public void testGetModelInfo_knownModels() {
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo titanV2 = BedrockEmbeddingModelProvider
-            .getModelInfo("amazon.titan-embed-text-v2:0");
+        EmbeddingModelInfo titanV2 = BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v2:0");
         assertNotNull(titanV2);
         assertEquals(FunctionName.TEXT_EMBEDDING, titanV2.functionName);
         assertEquals(1024, titanV2.dimension);
 
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo titanV1 = BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v1");
+        EmbeddingModelInfo titanV1 = BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v1");
         assertNotNull(titanV1);
         assertEquals(1536, titanV1.dimension);
 
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo cohere = BedrockEmbeddingModelProvider.getModelInfo("cohere.embed-english-v3");
+        EmbeddingModelInfo cohere = BedrockEmbeddingModelProvider.getModelInfo("cohere.embed-english-v3");
         assertNotNull(cohere);
         assertEquals(1024, cohere.dimension);
     }

@@ -162,20 +162,20 @@ public class MemoryModelService {
      * @return FunctionName or null if unknown
      */
     public static FunctionName detectEmbeddingType(String modelId) {
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
+        EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
         if (info != null)
             return info.functionName;
-        OpenaiEmbeddingModelProvider.EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
+        EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
         if (openaiInfo != null)
             return openaiInfo.functionName;
         return null;
     }
 
     public static Integer detectEmbeddingDimension(String modelId) {
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
+        EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
         if (info != null)
             return info.dimension;
-        OpenaiEmbeddingModelProvider.EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
+        EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
         if (openaiInfo != null)
             return openaiInfo.dimension;
         return null;
