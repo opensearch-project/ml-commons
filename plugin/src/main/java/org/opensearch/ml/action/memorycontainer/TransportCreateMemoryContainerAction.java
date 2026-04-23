@@ -21,9 +21,8 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.agent.BedrockEmbeddingModelProvider;
+import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryModelService;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
@@ -107,9 +106,11 @@ public class TransportCreateMemoryContainerAction extends
         // Pre-process: if inline model specs are present, create models first
         MemoryConfiguration config = input.getConfiguration();
         if (config != null && (config.hasInlineEmbeddingModel() || config.hasInlineLlm())) {
-            createInlineModels(config, tenantId, ActionListener.wrap(v -> {
-                proceedWithContainerCreation(input, user, tenantId, listener);
-            }, listener::onFailure));
+            createInlineModels(
+                config,
+                tenantId,
+                ActionListener.wrap(v -> { proceedWithContainerCreation(input, user, tenantId, listener); }, listener::onFailure)
+            );
         } else {
             proceedWithContainerCreation(input, user, tenantId, listener);
         }
@@ -170,13 +171,18 @@ public class TransportCreateMemoryContainerAction extends
         try {
             MLRegisterModelInput modelInput = MemoryModelService.createModelFromSpec(modelSpec, isMemoryLlm);
             MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
-            client.execute(MLRegisterModelAction.INSTANCE, modelRequest, ActionListener.wrap(response -> {
-                listener.onResponse(response.getModelId());
-            }, e -> {
-                log.error("Failed to auto-create model for memory container: {}", modelSpec.getModelId(), e);
-                listener.onFailure(new OpenSearchStatusException(
-                    "Failed to create model: " + e.getMessage(), RestStatus.INTERNAL_SERVER_ERROR));
-            }));
+            client
+                .execute(
+                    MLRegisterModelAction.INSTANCE,
+                    modelRequest,
+                    ActionListener.wrap(response -> { listener.onResponse(response.getModelId()); }, e -> {
+                        log.error("Failed to auto-create model for memory container: {}", modelSpec.getModelId(), e);
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException("Failed to create model: " + e.getMessage(), RestStatus.INTERNAL_SERVER_ERROR)
+                            );
+                    })
+                );
         } catch (Exception e) {
             log.error("Failed to build model registration input: {}", modelSpec.getModelId(), e);
             listener.onFailure(new IllegalArgumentException("Invalid model specification: " + e.getMessage()));
@@ -186,10 +192,7 @@ public class TransportCreateMemoryContainerAction extends
     private void setLlmResultPathFromProvider(MemoryConfiguration config) {
         String resultPath = MemoryModelService.getLlmResultPath(config.getLlmSpec().getModelProvider());
         if (resultPath != null) {
-            config.getParameters().put(
-                org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD,
-                resultPath
-            );
+            config.getParameters().put(org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD, resultPath);
         }
     }
 

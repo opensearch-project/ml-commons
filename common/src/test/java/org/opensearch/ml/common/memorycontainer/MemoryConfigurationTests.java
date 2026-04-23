@@ -1101,14 +1101,13 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testInlineModelSpec_embeddingModel() {
-        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec.builder()
+        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
             .modelId("amazon.titan-embed-text-v2:0")
             .modelProvider("bedrock/embedding")
             .build();
 
-        MemoryConfiguration config = MemoryConfiguration.builder()
-            .embeddingModelSpec(embeddingSpec)
-            .build();
+        MemoryConfiguration config = MemoryConfiguration.builder().embeddingModelSpec(embeddingSpec).build();
 
         assertTrue(config.hasInlineEmbeddingModel());
         assertEquals("amazon.titan-embed-text-v2:0", config.getEmbeddingModelSpec().getModelId());
@@ -1116,14 +1115,13 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testInlineModelSpec_llm() {
-        org.opensearch.ml.common.agent.MLAgentModelSpec llmSpec = org.opensearch.ml.common.agent.MLAgentModelSpec.builder()
+        org.opensearch.ml.common.agent.MLAgentModelSpec llmSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
             .modelId("us.anthropic.claude-3-7-sonnet-20250219-v1:0")
             .modelProvider("bedrock/converse")
             .build();
 
-        MemoryConfiguration config = MemoryConfiguration.builder()
-            .llmSpec(llmSpec)
-            .build();
+        MemoryConfiguration config = MemoryConfiguration.builder().llmSpec(llmSpec).build();
 
         assertTrue(config.hasInlineLlm());
         assertNull(config.getLlmId()); // Not set yet — will be set after model creation
@@ -1132,13 +1130,15 @@ public class MemoryConfigurationTests {
     @Test
     public void testInlineModelSpec_skipsValidation() {
         // With inline specs, validation is skipped (no embeddingModelId/type yet)
-        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec.builder()
+        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
             .modelId("amazon.titan-embed-text-v2:0")
             .modelProvider("bedrock/embedding")
             .build();
 
         // This should NOT throw even though embeddingModelId/type are null
-        MemoryConfiguration config = MemoryConfiguration.builder()
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
             .embeddingModelSpec(embeddingSpec)
             .strategies(List.of(MemoryStrategy.fromPreset(MemoryStrategyType.SEMANTIC)))
             .build();
@@ -1149,12 +1149,11 @@ public class MemoryConfigurationTests {
 
     @Test
     public void testStrategyPreset_fromBuilder() {
-        List<MemoryStrategy> strategies = List.of(
-            MemoryStrategy.fromPreset(MemoryStrategyType.SEMANTIC),
-            MemoryStrategy.fromPreset(MemoryStrategyType.USER_PREFERENCE)
-        );
+        List<MemoryStrategy> strategies = List
+            .of(MemoryStrategy.fromPreset(MemoryStrategyType.SEMANTIC), MemoryStrategy.fromPreset(MemoryStrategyType.USER_PREFERENCE));
 
-        MemoryConfiguration config = MemoryConfiguration.builder()
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
             .embeddingModelId("test-model")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .dimension(1024)

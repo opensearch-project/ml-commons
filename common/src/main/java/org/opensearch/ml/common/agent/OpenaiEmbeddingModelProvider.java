@@ -28,11 +28,15 @@ public class OpenaiEmbeddingModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY = "{ \"input\": ${parameters.input}, \"model\": \"${parameters.model}\" }";
 
-    public static final Map<String, EmbeddingModelInfo> KNOWN_MODELS = Map.of(
-        "text-embedding-3-small", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536),
-        "text-embedding-3-large", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 3072),
-        "text-embedding-ada-002", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536)
-    );
+    public static final Map<String, EmbeddingModelInfo> KNOWN_MODELS = Map
+        .of(
+            "text-embedding-3-small",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536),
+            "text-embedding-3-large",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 3072),
+            "text-embedding-ada-002",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536)
+        );
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
@@ -88,16 +92,40 @@ public class OpenaiEmbeddingModelProvider extends ModelProvider {
     }
 
     // Embedding providers don't support agent operations
-    @Override public String getLLMInterface() { return null; }
-    @Override public Map<String, String> mapTextInput(String t, MLAgentType a) { throw new UnsupportedOperationException(); }
-    @Override public Map<String, String> mapContentBlocks(List<ContentBlock> c, MLAgentType a) { throw new UnsupportedOperationException(); }
-    @Override public Map<String, String> mapMessages(List<Message> m, MLAgentType a) { throw new UnsupportedOperationException(); }
-    @Override public String extractMessageFromResponse(Map<String, ?> r) { throw new UnsupportedOperationException(); }
-    @Override public Message parseToUnifiedMessage(String j) { throw new UnsupportedOperationException(); }
+    @Override
+    public String getLLMInterface() {
+        return null;
+    }
+
+    @Override
+    public Map<String, String> mapTextInput(String t, MLAgentType a) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Map<String, String> mapContentBlocks(List<ContentBlock> c, MLAgentType a) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Map<String, String> mapMessages(List<Message> m, MLAgentType a) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String extractMessageFromResponse(Map<String, ?> r) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Message parseToUnifiedMessage(String j) {
+        throw new UnsupportedOperationException();
+    }
 
     public static class EmbeddingModelInfo {
         public final FunctionName functionName;
         public final int dimension;
+
         public EmbeddingModelInfo(FunctionName functionName, int dimension) {
             this.functionName = functionName;
             this.dimension = dimension;
