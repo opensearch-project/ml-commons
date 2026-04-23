@@ -29,9 +29,12 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
 
     private static final String DEFAULT_REGION = "us-east-1";
 
-    private static final String REQUEST_BODY_TEMPLATE =
+    private static final String TITAN_REQUEST_BODY =
         "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions},"
             + " \"normalize\": ${parameters.normalize}, \"embeddingTypes\": ${parameters.embeddingTypes} }";
+
+    private static final String COHERE_REQUEST_BODY =
+        "{ \"texts\": ${parameters.texts}, \"input_type\": \"${parameters.input_type}\" }";
 
     /**
      * Known Bedrock embedding models with their type and default dimension.
@@ -47,14 +50,30 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
         EmbeddingModelInfo info = KNOWN_MODELS.get(modelId);
+        boolean isCohere = modelId != null && modelId.startsWith("cohere.");
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("region", DEFAULT_REGION);
         parameters.put("service_name", "bedrock");
         parameters.put("model", modelId);
-        parameters.put("dimensions", String.valueOf(info != null ? info.dimension : 1024));
-        parameters.put("normalize", "true");
-        parameters.put("embeddingTypes", "[\"float\"]");
+
+        String requestBody;
+        String preProcess;
+        String postProcess;
+
+        if (isCohere) {
+            parameters.put("input_type", "search_document");
+            requestBody = COHERE_REQUEST_BODY;
+            preProcess = "connector.pre_process.cohere.embedding";
+            postProcess = "connector.post_process.cohere.embedding";
+        } else {
+            parameters.put("dimensions", String.valueOf(info != null ? info.dimension : 1024));
+            parameters.put("normalize", "true");
+            parameters.put("embeddingTypes", "[\"float\"]");
+            requestBody = TITAN_REQUEST_BODY;
+            preProcess = "connector.pre_process.bedrock.embedding";
+            postProcess = "connector.post_process.bedrock.embedding";
+        }
 
         if (modelParameters != null) {
             parameters.putAll(modelParameters);
@@ -70,9 +89,9 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
             .method("POST")
             .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke")
             .headers(headers)
-            .requestBody(REQUEST_BODY_TEMPLATE)
-            .preProcessFunction("connector.pre_process.bedrock.embedding")
-            .postProcessFunction("connector.post_process.bedrock.embedding")
+            .requestBody(requestBody)
+            .preProcessFunction(preProcess)
+            .postProcessFunction(postProcess)
             .build();
 
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
