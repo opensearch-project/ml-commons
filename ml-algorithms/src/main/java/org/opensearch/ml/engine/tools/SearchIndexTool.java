@@ -327,17 +327,15 @@ public class SearchIndexTool implements Tool {
         int braceBalance = countBraces(fixed);
 
         if (braceBalance < 0) {
-            // Remove all extra closing braces from the end in a single pass
-            int extraClosing = -braceBalance;
-            int originalExtraClosing = extraClosing;
-            int endIndex = fixed.length();
-            while (extraClosing > 0 && endIndex > 0 && fixed.charAt(endIndex - 1) == '}') {
-                endIndex--;
-                extraClosing--;
+            // Count trailing closing braces and remove only the required number
+            int trailing = 0;
+            for (int i = fixed.length() - 1; i >= 0 && fixed.charAt(i) == '}'; i--) {
+                trailing++;
             }
-            fixed = fixed.substring(0, endIndex);
-            int bracesRemoved = originalExtraClosing - extraClosing;
-            log.debug("Removed {} extra closing brace(s) from malformed JSON", bracesRemoved);
+
+            int toRemove = Math.min(trailing, -braceBalance);
+            fixed = fixed.substring(0, fixed.length() - toRemove);
+            log.debug("Removed {} extra closing brace(s) from malformed JSON", toRemove);
 
         } else if (braceBalance > 0) {
             // Unbalanced: more opening braces

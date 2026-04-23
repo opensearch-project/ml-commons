@@ -10,10 +10,11 @@ import java.util.Map;
 
 import org.opensearch.ml.engine.annotation.Processor;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Processor that extracts JSON content from text strings.
@@ -94,7 +95,7 @@ public class MLExtractJsonProcessor extends AbstractMLProcessor {
         super(config);
         this.extractType = (String) config.getOrDefault("extract_type", EXTRACT_TYPE_AUTO);
         this.defaultValue = config.get("default");
-        this.mapper = new ObjectMapper();
+        this.mapper = JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     }
 
     @Override

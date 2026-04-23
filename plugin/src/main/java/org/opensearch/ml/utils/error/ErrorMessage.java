@@ -11,10 +11,9 @@ import java.util.Map;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.transport.ActionTransportException;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.Getter;
 import lombok.SneakyThrows;
+import tools.jackson.databind.ObjectMapper;
 
 /** Error Message. */
 public class ErrorMessage {

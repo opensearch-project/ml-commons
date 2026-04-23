@@ -40,10 +40,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -56,12 +52,19 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.Error;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.introspect.DefaultAccessorNamingStrategy;
+import tools.jackson.databind.json.JsonMapper;
 
 @Log4j2
 public class StringUtils {
@@ -112,9 +115,12 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    public static final ObjectMapper MAPPER = new ObjectMapper()
-        .configure(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION, true)
-        .configure(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY, true);
+    public static final ObjectMapper MAPPER = JsonMapper
+        .builder()
+        .accessorNaming(new DefaultAccessorNamingStrategy.Provider().withFirstCharAcceptance(true, true))
+        .configure(StreamReadFeature.STRICT_DUPLICATE_DETECTION, true)
+        .configure(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY, true)
+        .build();
 
     public static boolean isValidJsonString(String json) {
         if (json == null || json.isBlank()) {
@@ -235,7 +241,7 @@ public class StringUtils {
             } else {
                 throw new IllegalArgumentException("Unsupported response type");
             }
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
         }
     }
@@ -354,7 +360,7 @@ public class StringUtils {
                 } else {
                     try {
                         return MAPPER.writeValueAsString(value);
-                    } catch (JsonProcessingException e) {
+                    } catch (JacksonException e) {
                         throw new RuntimeException("Failed to serialize to JSON", e);
                     }
                 }
@@ -641,21 +647,21 @@ public class StringUtils {
         try {
             // parse the schema JSON as string
             JsonNode schemaNode = MAPPER.readTree(schemaString);
-            JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
+            Schema schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12).getSchema(schemaNode);
 
             // JSON data to validate
             JsonNode jsonNode = MAPPER.readTree(instanceString);
 
             // Validate JSON node against the schema
-            Set<ValidationMessage> errors = schema.validate(jsonNode);
+            List<Error> errors = schema.validate(jsonNode);
             if (!errors.isEmpty()) {
-                String errorMessage = errors.stream().map(ValidationMessage::getMessage).collect(Collectors.joining(", "));
+                String errorMessage = errors.stream().map(Error::getMessage).collect(Collectors.joining(", "));
 
                 throw new OpenSearchParseException(
                     "Validation failed: " + errorMessage + " for instance: " + instanceString + " with schema: " + schemaString
                 );
             }
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
         } catch (Exception e) {
             throw new OpenSearchParseException("Schema validation failed: " + e.getMessage(), e);

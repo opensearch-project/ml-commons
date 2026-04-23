@@ -22,6 +22,7 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | Austin Lee           | [austintlee](https://github.com/austintlee)         | Aryn      |
 | Henry Lindeman       | [HenryL27](https://github.com/HenryL27)             | Aryn      |
 | Samuel Herman        | [samuel-oci](https://github.com/sam-herman/)        | Oracle    |
+| Abdul Muneer Kolarkunnu | [akolarkunnu](https://github.com/akolarkunnu)    | NetApp    |
 
 ## Emeritus
 
