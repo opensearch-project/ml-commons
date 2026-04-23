@@ -1402,7 +1402,7 @@ public class StringUtilsTest {
             () -> StringUtils.fromJson(jsonWithDuplicateKeys, "response")
         );
         assertTrue(exception.getMessage().contains("Invalid JSON format"));
-        assertTrue(exception.getCause() instanceof com.fasterxml.jackson.core.JsonParseException);
+        assertTrue(exception.getCause() instanceof tools.jackson.core.exc.StreamReadException);
     }
 
     @Test

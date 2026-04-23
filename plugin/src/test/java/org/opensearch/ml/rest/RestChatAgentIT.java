@@ -65,7 +65,9 @@ public class RestChatAgentIT extends MLCommonsRestTestCase {
 
     @After
     public void deleteIndices() throws IOException {
-        deleteIndexWithAdminClient(irisIndex);
+        if (AWS_ACCESS_KEY_ID != null && AWS_SECRET_ACCESS_KEY != null) {
+            deleteIndexWithAdminClient(irisIndex);
+        }
     }
 
     public void testChatAgentWithAgentTool() throws IOException {

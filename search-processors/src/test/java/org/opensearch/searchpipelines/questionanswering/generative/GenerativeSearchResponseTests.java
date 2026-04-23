@@ -18,6 +18,7 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -69,7 +70,7 @@ public class GenerativeSearchResponseTests extends OpenSearchTestCase {
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);
         XContentGenerator generator = mock(XContentGenerator.class);
-        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
+        when(xc.createGenerator(any(), any(), any(), anyBoolean())).thenReturn(generator);
         XContentBuilder builder = new XContentBuilder(xc, os);
         XContentBuilder actual = searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(actual);
@@ -102,7 +103,7 @@ public class GenerativeSearchResponseTests extends OpenSearchTestCase {
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);
         XContentGenerator generator = mock(XContentGenerator.class);
-        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
+        when(xc.createGenerator(any(), any(), any(), anyBoolean())).thenReturn(generator);
         XContentBuilder builder = new XContentBuilder(xc, os);
         XContentBuilder actual = searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(actual);

@@ -29,16 +29,16 @@ import org.opensearch.ml.common.transport.mcpserver.responses.server.MLMcpServer
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.databind.json.JsonMapper;
 
 @Log4j2
 public class TransportMcpServerAction extends HandledTransportAction<ActionRequest, MLMcpServerResponse> {
 
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    ObjectMapper objectMapper;
+    JsonMapper objectMapper;
     McpStatelessServerHolder mcpStatelessServerHolder;
 
     @Inject
@@ -50,7 +50,7 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
     ) {
         super(MLMcpServerAction.NAME, transportService, actionFilters, MLMcpServerRequest::new);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = JsonMapper.builder().build();
         this.mcpStatelessServerHolder = mcpStatelessServerHolder;
     }
 
@@ -78,7 +78,7 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
 
             final McpSchema.JSONRPCMessage message;
             try {
-                message = McpSchema.deserializeJsonRpcMessage(objectMapper, mlMcpServerRequest.getRequestBody());
+                message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(objectMapper), mlMcpServerRequest.getRequestBody());
             } catch (Exception e) {
                 log.error("Parse error: " + e.getMessage(), e);
                 handleError(null, JSON_RPC_PARSE_ERROR, "Parse error: " + e.getMessage(), listener);
