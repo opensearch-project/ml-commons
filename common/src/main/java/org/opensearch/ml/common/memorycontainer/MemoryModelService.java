@@ -100,6 +100,7 @@ public class MemoryModelService {
             url = "https://generativelanguage.googleapis.com/v1beta/models/${parameters.model}:generateContent";
             requestBody = GEMINI_MEMORY_TEMPLATE;
             protocol = ConnectorProtocols.HTTP;
+            headers.put("x-goog-api-key", "${credential.gemini_api_key}");
         } else {
             throw new IllegalArgumentException("Unsupported LLM provider for memory: " + modelSpec.getModelProvider());
         }
