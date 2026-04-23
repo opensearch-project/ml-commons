@@ -89,4 +89,107 @@ public class MemoryModelServiceTest {
     public void testDetectEmbeddingDimension_unknownModel() {
         assertNull(MemoryModelService.detectEmbeddingDimension("unknown-model"));
     }
+
+    @Test
+    public void testCreateModelFromSpec_memoryLlm_bedrock() {
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
+            .modelId("us.anthropic.claude-sonnet-4-6")
+            .modelProvider("bedrock/converse")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        MLRegisterModelInput input = MemoryModelService.createModelFromSpec(spec, true);
+        assertNotNull(input);
+        assertEquals(FunctionName.REMOTE, input.getFunctionName());
+    }
+
+    @Test
+    public void testCreateModelFromSpec_memoryLlm_openai() {
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
+            .modelId("gpt-4o-mini")
+            .modelProvider("openai/v1/chat/completions")
+            .credential(Map.of("openAI_key", "test"))
+            .build();
+
+        MLRegisterModelInput input = MemoryModelService.createModelFromSpec(spec, true);
+        assertNotNull(input);
+        assertEquals(FunctionName.REMOTE, input.getFunctionName());
+    }
+
+    @Test
+    public void testCreateModelFromSpec_memoryLlm_gemini() {
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
+            .modelId("gemini-2.0-flash")
+            .modelProvider("gemini/v1beta/generatecontent")
+            .credential(Map.of("gemini_api_key", "test"))
+            .build();
+
+        MLRegisterModelInput input = MemoryModelService.createModelFromSpec(spec, true);
+        assertNotNull(input);
+        assertEquals(FunctionName.REMOTE, input.getFunctionName());
+    }
+
+    @Test
+    public void testCreateModelFromSpec_memoryLlm_unsupportedProvider() {
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
+            .modelId("test")
+            .modelProvider("unknown/provider")
+            .credential(Map.of("key", "test"))
+            .build();
+
+        assertThrows(IllegalArgumentException.class, () -> MemoryModelService.createModelFromSpec(spec, true));
+    }
+
+    @Test
+    public void testCreateModelFromSpec_memoryLlm_bedrockRegionValidation() {
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
+            .modelId("us.anthropic.claude-sonnet-4-6")
+            .modelProvider("bedrock/converse")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .modelParameters(Map.of("region", "attacker.com"))
+            .build();
+
+        assertThrows(IllegalArgumentException.class, () -> MemoryModelService.createModelFromSpec(spec, true));
+    }
+
+    @Test
+    public void testGetLlmResultPath_bedrock() {
+        assertEquals("$.output.message.content[0].text", MemoryModelService.getLlmResultPath("bedrock/converse"));
+    }
+
+    @Test
+    public void testGetLlmResultPath_openai() {
+        assertEquals("$.choices[0].message.content", MemoryModelService.getLlmResultPath("openai/v1/chat/completions"));
+    }
+
+    @Test
+    public void testGetLlmResultPath_gemini() {
+        assertEquals("$.candidates[0].content.parts[0].text", MemoryModelService.getLlmResultPath("gemini/v1beta/generatecontent"));
+    }
+
+    @Test
+    public void testGetLlmResultPath_unknown() {
+        assertNull(MemoryModelService.getLlmResultPath("unknown"));
+    }
+
+    @Test
+    public void testGetLlmResultPath_null() {
+        assertNull(MemoryModelService.getLlmResultPath(null));
+    }
+
+    @Test
+    public void testDetectEmbeddingType_openaiModel() {
+        assertEquals(FunctionName.TEXT_EMBEDDING, MemoryModelService.detectEmbeddingType("text-embedding-3-small"));
+    }
+
+    @Test
+    public void testDetectEmbeddingDimension_openaiModel() {
+        assertEquals(Integer.valueOf(1536), MemoryModelService.detectEmbeddingDimension("text-embedding-3-small"));
+        assertEquals(Integer.valueOf(3072), MemoryModelService.detectEmbeddingDimension("text-embedding-3-large"));
+    }
 }
