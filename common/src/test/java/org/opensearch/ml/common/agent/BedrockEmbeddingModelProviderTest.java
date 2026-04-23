@@ -63,19 +63,17 @@ public class BedrockEmbeddingModelProviderTest {
 
     @Test
     public void testGetModelInfo_knownModels() {
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo titanV2 =
-            BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v2:0");
+        BedrockEmbeddingModelProvider.EmbeddingModelInfo titanV2 = BedrockEmbeddingModelProvider
+            .getModelInfo("amazon.titan-embed-text-v2:0");
         assertNotNull(titanV2);
         assertEquals(FunctionName.TEXT_EMBEDDING, titanV2.functionName);
         assertEquals(1024, titanV2.dimension);
 
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo titanV1 =
-            BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v1");
+        BedrockEmbeddingModelProvider.EmbeddingModelInfo titanV1 = BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v1");
         assertNotNull(titanV1);
         assertEquals(1536, titanV1.dimension);
 
-        BedrockEmbeddingModelProvider.EmbeddingModelInfo cohere =
-            BedrockEmbeddingModelProvider.getModelInfo("cohere.embed-english-v3");
+        BedrockEmbeddingModelProvider.EmbeddingModelInfo cohere = BedrockEmbeddingModelProvider.getModelInfo("cohere.embed-english-v3");
         assertNotNull(cohere);
         assertEquals(1024, cohere.dimension);
     }

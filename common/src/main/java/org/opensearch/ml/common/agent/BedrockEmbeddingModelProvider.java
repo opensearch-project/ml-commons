@@ -28,24 +28,30 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 public class BedrockEmbeddingModelProvider extends ModelProvider {
 
     private static final String DEFAULT_REGION = "us-east-1";
+    private static final java.util.regex.Pattern REGION_PATTERN = java.util.regex.Pattern.compile("^[a-z]{2}(-[a-z]+-\\d+)?$");
 
     private static final String TITAN_REQUEST_BODY =
         "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions},"
             + " \"normalize\": ${parameters.normalize}, \"embeddingTypes\": ${parameters.embeddingTypes} }";
 
-    private static final String COHERE_REQUEST_BODY =
-        "{ \"texts\": ${parameters.texts}, \"input_type\": \"${parameters.input_type}\" }";
+    private static final String COHERE_REQUEST_BODY = "{ \"texts\": ${parameters.texts}, \"input_type\": \"${parameters.input_type}\" }";
 
     /**
      * Known Bedrock embedding models with their type and default dimension.
      */
-    public static final Map<String, EmbeddingModelInfo> KNOWN_MODELS = Map.of(
-        "amazon.titan-embed-text-v2:0", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
-        "amazon.titan-embed-text-v1", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536),
-        "amazon.titan-embed-image-v1", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
-        "cohere.embed-english-v3", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
-        "cohere.embed-multilingual-v3", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)
-    );
+    public static final Map<String, EmbeddingModelInfo> KNOWN_MODELS = Map
+        .of(
+            "amazon.titan-embed-text-v2:0",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
+            "amazon.titan-embed-text-v1",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536),
+            "amazon.titan-embed-image-v1",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
+            "cohere.embed-english-v3",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
+            "cohere.embed-multilingual-v3",
+            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)
+        );
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
@@ -77,6 +83,12 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
 
         if (modelParameters != null) {
             parameters.putAll(modelParameters);
+        }
+
+        // Validate region to prevent SSRF via URL injection
+        String region = parameters.get("region");
+        if (region != null && !REGION_PATTERN.matcher(region).matches()) {
+            throw new IllegalArgumentException("Invalid AWS region format: " + region);
         }
 
         Map<String, String> headers = new HashMap<>();

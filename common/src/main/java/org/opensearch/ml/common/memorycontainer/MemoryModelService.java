@@ -32,19 +32,18 @@ import lombok.extern.log4j.Log4j2;
 public class MemoryModelService {
 
     // Memory LLM templates — use system_prompt/user_prompt (not agent-style body/_chat_history)
-    private static final String BEDROCK_CONVERSE_MEMORY_TEMPLATE =
-        "{\"system\":[{\"text\":\"${parameters.system_prompt}\"}],"
-            + "\"messages\":[{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
+    private static final String BEDROCK_CONVERSE_MEMORY_TEMPLATE = "{\"system\":[{\"text\":\"${parameters.system_prompt}\"}],"
+        + "\"messages\":[{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
 
     private static final String OPENAI_MEMORY_TEMPLATE =
         "{\"model\":\"${parameters.model}\",\"messages\":[{\"role\":\"system\",\"content\":\"${parameters.system_prompt}\"},"
             + "{\"role\":\"user\",\"content\":\"${parameters.user_prompt}\"}]}";
 
-    private static final String GEMINI_MEMORY_TEMPLATE =
-        "{\"system_instruction\":{\"parts\":[{\"text\":\"${parameters.system_prompt}\"}]},"
-            + "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
+    private static final String GEMINI_MEMORY_TEMPLATE = "{\"system_instruction\":{\"parts\":[{\"text\":\"${parameters.system_prompt}\"}]},"
+        + "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
 
     private static final String DEFAULT_REGION = "us-east-1";
+    private static final java.util.regex.Pattern REGION_PATTERN = java.util.regex.Pattern.compile("^[a-z]{2}(-[a-z]+-\\d+)?$");
 
     /**
      * Creates a model registration input from an inline model spec.
@@ -88,6 +87,11 @@ public class MemoryModelService {
         if (provider.equals("bedrock/converse")) {
             parameters.putIfAbsent("region", DEFAULT_REGION);
             parameters.put("service_name", "bedrock");
+            // Validate region to prevent SSRF via URL injection
+            String region = parameters.get("region");
+            if (!REGION_PATTERN.matcher(region).matches()) {
+                throw new IllegalArgumentException("Invalid AWS region format: " + region);
+            }
             url = "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse";
             requestBody = BEDROCK_CONVERSE_MEMORY_TEMPLATE;
             protocol = ConnectorProtocols.AWS_SIGV4;
@@ -159,17 +163,21 @@ public class MemoryModelService {
      */
     public static FunctionName detectEmbeddingType(String modelId) {
         BedrockEmbeddingModelProvider.EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
-        if (info != null) return info.functionName;
+        if (info != null)
+            return info.functionName;
         OpenaiEmbeddingModelProvider.EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
-        if (openaiInfo != null) return openaiInfo.functionName;
+        if (openaiInfo != null)
+            return openaiInfo.functionName;
         return null;
     }
 
     public static Integer detectEmbeddingDimension(String modelId) {
         BedrockEmbeddingModelProvider.EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
-        if (info != null) return info.dimension;
+        if (info != null)
+            return info.dimension;
         OpenaiEmbeddingModelProvider.EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
-        if (openaiInfo != null) return openaiInfo.dimension;
+        if (openaiInfo != null)
+            return openaiInfo.dimension;
         return null;
     }
 
@@ -177,7 +185,8 @@ public class MemoryModelService {
      * Returns the correct llm_result_path for a given LLM provider.
      */
     public static String getLlmResultPath(String modelProvider) {
-        if (modelProvider == null) return null;
+        if (modelProvider == null)
+            return null;
         String provider = modelProvider.toLowerCase();
         if (provider.equals("bedrock/converse")) {
             return "$.output.message.content[0].text";

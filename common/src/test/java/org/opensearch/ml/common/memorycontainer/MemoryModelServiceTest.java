@@ -14,14 +14,15 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class MemoryModelServiceTest {
 
     @Test
     public void testCreateModelFromSpec_bedrockEmbedding() {
-        MLAgentModelSpec spec = MLAgentModelSpec.builder()
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
             .modelId("amazon.titan-embed-text-v2:0")
             .modelProvider("bedrock/embedding")
             .credential(Map.of("access_key", "test", "secret_key", "test"))
@@ -34,7 +35,8 @@ public class MemoryModelServiceTest {
 
     @Test
     public void testCreateModelFromSpec_bedrockConverseLLM() {
-        MLAgentModelSpec spec = MLAgentModelSpec.builder()
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
             .modelId("us.anthropic.claude-3-7-sonnet-20250219-v1:0")
             .modelProvider("bedrock/converse")
             .credential(Map.of("access_key", "test", "secret_key", "test"))
@@ -52,19 +54,18 @@ public class MemoryModelServiceTest {
 
     @Test
     public void testCreateModelFromSpec_nullModelId() {
-        assertThrows(IllegalArgumentException.class, () ->
-            MemoryModelService.createModelFromSpec(
-                MLAgentModelSpec.builder().modelId(null).modelProvider("bedrock/embedding").build()
-            )
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> MemoryModelService
+                .createModelFromSpec(MLAgentModelSpec.builder().modelId(null).modelProvider("bedrock/embedding").build())
         );
     }
 
     @Test
     public void testCreateModelFromSpec_nullProvider() {
-        assertThrows(IllegalArgumentException.class, () ->
-            MemoryModelService.createModelFromSpec(
-                MLAgentModelSpec.builder().modelId("test").modelProvider(null).build()
-            )
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> MemoryModelService.createModelFromSpec(MLAgentModelSpec.builder().modelId("test").modelProvider(null).build())
         );
     }
 
