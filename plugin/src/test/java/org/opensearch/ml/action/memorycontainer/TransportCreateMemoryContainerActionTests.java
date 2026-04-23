@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1955,5 +1956,259 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(embeddingModel);
             return null;
         }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+    }
+
+    @Test
+    public void testDoExecute_withInlineEmbeddingModel() {
+        // Setup inline embedding model spec
+        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("amazon.titan-embed-text-v2:0")
+            .modelProvider("bedrock/embedding")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        MemoryConfiguration inlineConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("inline-test")
+            .embeddingModelSpec(embeddingSpec)
+            .llmId("test-llm-model")
+            .strategies(
+                List
+                    .of(
+                        MemoryStrategy
+                            .builder()
+                            .namespace(List.of("user_id"))
+                            .id("strategy-id1")
+                            .enabled(true)
+                            .type(MemoryStrategyType.SEMANTIC)
+                            .build()
+                    )
+            )
+            .build();
+
+        MLCreateMemoryContainerInput inlineInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-inline")
+            .configuration(inlineConfig)
+            .build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(inlineInput);
+
+        // Mock model registration
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener
+                .onResponse(new org.opensearch.ml.common.transport.register.MLRegisterModelResponse("task-1", "CREATED", "auto-embed-id"));
+            return null;
+        })
+            .when(client)
+            .execute(
+                eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class),
+                any(ActionListener.class)
+            );
+
+        action.doExecute(null, request, actionListener);
+
+        // Verify embedding model ID was set from auto-creation
+        assertEquals("auto-embed-id", inlineConfig.getEmbeddingModelId());
+        assertEquals(FunctionName.TEXT_EMBEDDING, inlineConfig.getEmbeddingModelType());
+        assertEquals(Integer.valueOf(1024), inlineConfig.getDimension());
+    }
+
+    @Test
+    public void testDoExecute_withInlineLlmModel() {
+        org.opensearch.ml.common.agent.MLAgentModelSpec llmSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("us.anthropic.claude-sonnet-4-6")
+            .modelProvider("bedrock/converse")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        MemoryConfiguration inlineConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("inline-llm-test")
+            .embeddingModelId("test-embedding-model")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(768)
+            .llmSpec(llmSpec)
+            .strategies(
+                List
+                    .of(
+                        MemoryStrategy
+                            .builder()
+                            .namespace(List.of("user_id"))
+                            .id("strategy-id1")
+                            .enabled(true)
+                            .type(MemoryStrategyType.SEMANTIC)
+                            .build()
+                    )
+            )
+            .build();
+
+        MLCreateMemoryContainerInput inlineInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-inline-llm")
+            .configuration(inlineConfig)
+            .build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(inlineInput);
+
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener
+                .onResponse(new org.opensearch.ml.common.transport.register.MLRegisterModelResponse("task-2", "CREATED", "auto-llm-id"));
+            return null;
+        })
+            .when(client)
+            .execute(
+                eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class),
+                any(ActionListener.class)
+            );
+
+        action.doExecute(null, request, actionListener);
+
+        assertEquals("auto-llm-id", inlineConfig.getLlmId());
+        // Verify llm_result_path was auto-set for bedrock/converse
+        assertEquals("$.output.message.content[0].text", inlineConfig.getParameters().get("llm_result_path"));
+    }
+
+    @Test
+    public void testDoExecute_withBothInlineModels() {
+        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("amazon.titan-embed-text-v2:0")
+            .modelProvider("bedrock/embedding")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        org.opensearch.ml.common.agent.MLAgentModelSpec llmSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("us.anthropic.claude-sonnet-4-6")
+            .modelProvider("bedrock/converse")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        MemoryConfiguration inlineConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("both-inline")
+            .embeddingModelSpec(embeddingSpec)
+            .llmSpec(llmSpec)
+            .strategies(
+                List
+                    .of(
+                        MemoryStrategy
+                            .builder()
+                            .namespace(List.of("user_id"))
+                            .id("strategy-id1")
+                            .enabled(true)
+                            .type(MemoryStrategyType.SEMANTIC)
+                            .build()
+                    )
+            )
+            .build();
+
+        MLCreateMemoryContainerInput inlineInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-both-inline")
+            .configuration(inlineConfig)
+            .build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(inlineInput);
+
+        // Mock: first call returns embedding model ID, second returns LLM model ID
+        java.util.concurrent.atomic.AtomicInteger callCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            int count = callCount.getAndIncrement();
+            String modelId = count == 0 ? "auto-embed-id" : "auto-llm-id";
+            listener
+                .onResponse(new org.opensearch.ml.common.transport.register.MLRegisterModelResponse("task-" + count, "CREATED", modelId));
+            return null;
+        })
+            .when(client)
+            .execute(
+                eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class),
+                any(ActionListener.class)
+            );
+
+        action.doExecute(null, request, actionListener);
+
+        assertEquals("auto-embed-id", inlineConfig.getEmbeddingModelId());
+        assertEquals("auto-llm-id", inlineConfig.getLlmId());
+        assertEquals(FunctionName.TEXT_EMBEDDING, inlineConfig.getEmbeddingModelType());
+        assertEquals(Integer.valueOf(1024), inlineConfig.getDimension());
+    }
+
+    @Test
+    public void testDoExecute_inlineModelCreationFailure() {
+        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("amazon.titan-embed-text-v2:0")
+            .modelProvider("bedrock/embedding")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        MemoryConfiguration inlineConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("fail-test")
+            .embeddingModelSpec(embeddingSpec)
+            .llmId("test-llm-model")
+            .strategies(
+                List
+                    .of(
+                        MemoryStrategy
+                            .builder()
+                            .namespace(List.of("user_id"))
+                            .id("strategy-id1")
+                            .enabled(true)
+                            .type(MemoryStrategyType.SEMANTIC)
+                            .build()
+                    )
+            )
+            .build();
+
+        MLCreateMemoryContainerInput inlineInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-fail")
+            .configuration(inlineConfig)
+            .build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(inlineInput);
+
+        // Mock model registration failure
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Model creation failed"));
+            return null;
+        })
+            .when(client)
+            .execute(
+                eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class),
+                any(ActionListener.class)
+            );
+
+        action.doExecute(null, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue().getMessage().contains("Failed to create model"));
+    }
+
+    @Test
+    public void testDoExecute_noInlineModels_backwardCompat() {
+        // Standard request without inline specs — should work as before
+        action.doExecute(null, new MLCreateMemoryContainerRequest(input), actionListener);
+        // Should not call MLRegisterModelAction
+        verify(client, never())
+            .execute(
+                eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class),
+                any(ActionListener.class)
+            );
     }
 }
