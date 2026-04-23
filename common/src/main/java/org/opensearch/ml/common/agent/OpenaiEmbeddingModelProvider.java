@@ -18,6 +18,7 @@ import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.memorycontainer.EmbeddingModelInfo;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -122,13 +123,4 @@ public class OpenaiEmbeddingModelProvider extends ModelProvider {
         throw new UnsupportedOperationException();
     }
 
-    public static class EmbeddingModelInfo {
-        public final FunctionName functionName;
-        public final int dimension;
-
-        public EmbeddingModelInfo(FunctionName functionName, int dimension) {
-            this.functionName = functionName;
-            this.dimension = dimension;
-        }
-    }
 }
