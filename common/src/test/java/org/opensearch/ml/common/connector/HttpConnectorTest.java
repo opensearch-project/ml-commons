@@ -404,7 +404,17 @@ public class HttpConnectorTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
-        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30, 30, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
+        ConnectorClientConfig httpClientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(30)
+            .connectionTimeout(30000)
+            .readTimeout(30000)
+            .retryBackoffMillis(10)
+            .retryTimeoutSeconds(10)
+            .maxRetryTimes(-1)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .skipSslVerification(null)
+            .build();
 
         HttpConnector connector = HttpConnector
             .builder()

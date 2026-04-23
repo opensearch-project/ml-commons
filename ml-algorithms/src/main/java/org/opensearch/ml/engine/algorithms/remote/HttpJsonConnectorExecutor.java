@@ -20,6 +20,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.support.ThreadedActionListener;
@@ -27,6 +31,7 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
@@ -77,6 +82,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private MLGuard mlGuard;
     @Setter
     private volatile boolean connectorPrivateIpEnabled;
+
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+    private final CertificateProcessor certificateProcessor = new CertificateProcessor();
 
     @Setter
     @Getter
@@ -194,18 +202,68 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
             Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
+            Boolean mutualTlsEnabled = super.getConnectorClientConfig().getMutualTlsEnabled();
+
             boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
+            boolean mutualTlsEnabledValue = mutualTlsEnabled != null ? mutualTlsEnabled : false;
+
             if (skipSslVerificationValue) {
                 log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
             }
+
+            SSLContext sslContext = null;
+            KeyManager[] keyManagers = null;
+            TrustManager[] trustManagers = null;
+            String clientDescription = "standard";
+
+            // Build SSL context for mutual TLS if enabled
+            if (mutualTlsEnabledValue) {
+                try {
+                    // Validate certificate configuration first
+                    certificateProcessor.validateCertificateConfig(super.getConnectorClientConfig(), connector.getDecryptedCredential());
+
+                    // Enforce certificate-only authentication (no mixed auth methods)
+                    certificateProcessor
+                        .validateCertificateOnlyAuthentication(super.getConnectorClientConfig(), connector.getDecryptedCredential());
+
+                    // Build SSL context with certificates and get managers directly
+                    CertificateProcessor.SSLContextWithManagers contextWithManagers = certificateProcessor
+                        .buildSSLContextWithManagers(super.getConnectorClientConfig(), connector.getDecryptedCredential());
+
+                    if (contextWithManagers != null) {
+                        sslContext = contextWithManagers.getSslContext();
+                        keyManagers = contextWithManagers.getKeyManagers();
+                        trustManagers = contextWithManagers.getTrustManagers();
+
+                        log.info("Successfully extracted SSL context and managers for connector: {}", connector.getName());
+                        log
+                            .info(
+                                "Key managers: {}, Trust managers: {}",
+                                keyManagers != null ? keyManagers.length : 0,
+                                trustManagers != null ? trustManagers.length : 0
+                            );
+                    }
+
+                    clientDescription = "mutual-TLS";
+                    log.info("Successfully configured certificate-only mutual TLS for connector: {}", connector.getName());
+
+                } catch (Exception e) {
+                    log.error("Failed to configure mutual TLS for connector {}: {}", connector.getName(), e.getMessage());
+                    throw new MLException("Failed to configure mutual TLS: " + e.getMessage(), e);
+                }
+            }
+
             log
                 .info(
-                    "HttpJsonConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    "HttpJsonConnectorExecutor creating {} HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s, mutualTLS: {}",
+                    clientDescription,
                     connector.getName(),
                     maxConnection,
                     super.getConnectorClientConfig().getConnectionTimeout(),
-                    super.getConnectorClientConfig().getReadTimeout()
+                    super.getConnectorClientConfig().getReadTimeout(),
+                    mutualTlsEnabledValue
                 );
+
             this.httpClientRef
                 .compareAndSet(
                     null,
@@ -215,7 +273,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                             readTimeout,
                             maxConnection,
                             connectorPrivateIpEnabled,
-                            skipSslVerificationValue
+                            skipSslVerificationValue,
+                            sslContext,
+                            clientDescription,
+                            keyManagers,
+                            trustManagers
                         )
                 );
         }
