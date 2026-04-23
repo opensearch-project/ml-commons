@@ -42,8 +42,8 @@ public class MemoryModelService {
     private static final String GEMINI_MEMORY_TEMPLATE = "{\"system_instruction\":{\"parts\":[{\"text\":\"${parameters.system_prompt}\"}]},"
         + "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.user_prompt}\"}]}]}";
 
-    private static final String DEFAULT_REGION = "us-east-1";
-    private static final java.util.regex.Pattern REGION_PATTERN = java.util.regex.Pattern.compile("^[a-z]{2}(-[a-z]+-\\d+)?$");
+    private static final String DEFAULT_REGION = MemoryContainerConstants.DEFAULT_AWS_REGION;
+    private static final java.util.regex.Pattern REGION_PATTERN = MemoryContainerConstants.AWS_REGION_PATTERN;
 
     /**
      * Creates a model registration input from an inline model spec.

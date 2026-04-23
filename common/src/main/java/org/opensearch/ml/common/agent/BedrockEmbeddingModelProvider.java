@@ -18,17 +18,17 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.memorycontainer.MemoryContainerConstants;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
-/**
- * Model provider for Bedrock Embedding API (Titan, Cohere).
- * Uses the /invoke endpoint (not /converse) with inputText-based request body.
- */
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public class BedrockEmbeddingModelProvider extends ModelProvider {
 
-    private static final String DEFAULT_REGION = "us-east-1";
-    private static final java.util.regex.Pattern REGION_PATTERN = java.util.regex.Pattern.compile("^[a-z]{2}(-[a-z]+-\\d+)?$");
+    private static final String DEFAULT_REGION = MemoryContainerConstants.DEFAULT_AWS_REGION;
+    private static final java.util.regex.Pattern REGION_PATTERN = MemoryContainerConstants.AWS_REGION_PATTERN;
 
     private static final String TITAN_REQUEST_BODY =
         "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions},"
@@ -73,6 +73,13 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
             preProcess = "connector.pre_process.cohere.embedding";
             postProcess = "connector.post_process.cohere.embedding";
         } else {
+            if (info == null) {
+                log
+                    .warn(
+                        "Unknown Bedrock embedding model: {}. Defaulting to dimension 1024. " + "Override via model_parameters if needed.",
+                        modelId
+                    );
+            }
             parameters.put("dimensions", String.valueOf(info != null ? info.dimension : 1024));
             parameters.put("normalize", "true");
             parameters.put("embeddingTypes", "[\"float\"]");
