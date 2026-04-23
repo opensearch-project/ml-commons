@@ -10,6 +10,10 @@ package org.opensearch.ml.common.memorycontainer;
  */
 public class MemoryContainerConstants {
 
+    // AWS region constants for inline model creation
+    public static final String DEFAULT_AWS_REGION = "us-east-1";
+    public static final java.util.regex.Pattern AWS_REGION_PATTERN = java.util.regex.Pattern.compile("^[a-z]{2}(-[a-z]+-\\d+)?$");
+
     public static final String DEFAULT_LLM_RESULT_PATH = "$.output.message.content[0].text";
     public static final String LLM_RESULT_PATH_FIELD = "llm_result_path";
 
