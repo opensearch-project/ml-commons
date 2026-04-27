@@ -9,7 +9,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.io.IOException;
@@ -17,9 +19,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.search.SearchRequest;
@@ -39,6 +43,8 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.stats.otel.counters.MLAdoptionMetricsCounter;
+import org.opensearch.ml.stats.otel.counters.MLMcpConnectorMetricsCounter;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
@@ -97,14 +103,26 @@ public class MLStatsJobProcessorTests {
 
         // Reset singletons before each test
         MLAdoptionMetricsCounter.reset();
+        MLMcpConnectorMetricsCounter.reset();
+        MLMcpServerMetricsCounter.reset();
         MLStatsJobProcessor.reset();
 
-        // Initialize MLAdoptionMetricsCounter with proper mocking
+        // Initialize counters with a shared mock so any metric emission lands on mockCounter.
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(metricsRegistry.createCounter(any(), any(), any())).thenReturn(mockCounter);
         MLAdoptionMetricsCounter.initialize("test-cluster", metricsRegistry, mlFeatureEnabledSetting);
+        MLMcpConnectorMetricsCounter.initialize("test-cluster", metricsRegistry, mlFeatureEnabledSetting);
+        MLMcpServerMetricsCounter.initialize("test-cluster", metricsRegistry, mlFeatureEnabledSetting);
 
         processor = MLStatsJobProcessor.getInstance(clusterService, client, threadPool, connectorAccessControlHelper, sdkClient);
+    }
+
+    @After
+    public void tearDown() {
+        MLAdoptionMetricsCounter.reset();
+        MLMcpConnectorMetricsCounter.reset();
+        MLMcpServerMetricsCounter.reset();
+        MLStatsJobProcessor.reset();
     }
 
     @Test
@@ -464,6 +482,63 @@ public class MLStatsJobProcessorTests {
         SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
         when(searchResponse.getHits()).thenReturn(hits);
         return searchResponse;
+    }
+
+    @Test
+    public void testCollectMcpConnectorMetrics_emitsOnePerHitTaggedByProtocol() throws IOException {
+        when(metadata.indices()).thenReturn(Map.of(ML_CONNECTOR_INDEX, mock(IndexMetadata.class)));
+        String sse = "{\"protocol\":\"mcp_sse\",\"name\":\"c1\"}";
+        String streamable = "{\"protocol\":\"mcp_streamable_http\",\"name\":\"c2\"}";
+        SearchResponse resp = mock(SearchResponse.class);
+        SearchHit h1 = new SearchHit(1);
+        h1.sourceRef(new BytesArray(sse));
+        SearchHit h2 = new SearchHit(2);
+        h2.sourceRef(new BytesArray(streamable));
+        when(resp.getHits()).thenReturn(new SearchHits(new SearchHit[] { h1, h2 }, new TotalHits(2, TotalHits.Relation.EQUAL_TO), Float.NaN));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> l = invocation.getArgument(1);
+            l.onResponse(resp);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.collectMcpConnectorMetrics();
+
+        ArgumentCaptor<Tags> tagsCaptor = ArgumentCaptor.forClass(Tags.class);
+        verify(mockCounter, times(2)).add(eq(1.0), tagsCaptor.capture());
+        Assert.assertTrue(tagsCaptor.getAllValues().stream().anyMatch(t -> "mcp_sse".equals(t.getTagsMap().get("protocol"))));
+        Assert
+            .assertTrue(tagsCaptor.getAllValues().stream().anyMatch(t -> "mcp_streamable_http".equals(t.getTagsMap().get("protocol"))));
+    }
+
+    @Test
+    public void testCollectMcpServerRegisteredToolMetrics_emitsOnePerHitTaggedByToolType() throws IOException {
+        when(metadata.indices()).thenReturn(Map.of(MCP_TOOLS_INDEX, mock(IndexMetadata.class)));
+        String tool = "{\"type\":\"ListIndexTool\",\"name\":\"ListIndexTool\"}";
+        SearchResponse resp = mock(SearchResponse.class);
+        SearchHit h = new SearchHit(1);
+        h.sourceRef(new BytesArray(tool));
+        when(resp.getHits()).thenReturn(new SearchHits(new SearchHit[] { h }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> l = invocation.getArgument(1);
+            l.onResponse(resp);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.collectMcpServerRegisteredToolMetrics();
+
+        ArgumentCaptor<Tags> tagsCaptor = ArgumentCaptor.forClass(Tags.class);
+        verify(mockCounter, times(1)).add(eq(1.0), tagsCaptor.capture());
+        Assert.assertEquals("ListIndexTool", tagsCaptor.getValue().getTagsMap().get("tool_type"));
+    }
+
+    @Test
+    public void testCollectMcp_skipsWhenIndicesAbsent() {
+        when(metadata.indices()).thenReturn(Map.of(ML_MODEL_INDEX, mock(IndexMetadata.class)));
+        processor.collectMcpConnectorMetrics();
+        processor.collectMcpServerRegisteredToolMetrics();
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
     }
 
     @Test

@@ -26,7 +26,10 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpServerAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.server.MLMcpServerRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.server.MLMcpServerResponse;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
+import org.opensearch.ml.stats.otel.metrics.McpServerMetric;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.transport.TransportService;
 
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
@@ -81,11 +84,15 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
                 message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(objectMapper), mlMcpServerRequest.getRequestBody());
             } catch (Exception e) {
                 log.error("Parse error: " + e.getMessage(), e);
+                recordRequest("unknown", "failure");
                 handleError(null, JSON_RPC_PARSE_ERROR, "Parse error: " + e.getMessage(), listener);
                 return;
             }
 
+            final String method = extractMethod(message);
+
             if (message instanceof McpSchema.JSONRPCNotification) {
+                recordRequest(method, "success");
                 listener.onResponse(new MLMcpServerResponse(true, null, null));
                 return;
             }
@@ -96,19 +103,38 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
             transportProvider.handleRequest(message).subscribe(response -> {
                 try {
                     String responseJson = objectMapper.writeValueAsString(response);
+                    recordRequest(method, "success");
                     listener.onResponse(new MLMcpServerResponse(true, responseJson, null));
                 } catch (Exception e) {
                     log.error("Response serialization failed: " + e.getMessage(), e);
+                    recordRequest(method, "failure");
                     handleError(id, JSON_RPC_INTERNAL_ERROR, "Response serialization failed: " + e.getMessage(), listener);
                 }
             }, error -> {
                 log.error("Internal server error: " + error.getMessage(), error);
+                recordRequest(method, "failure");
                 handleError(id, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + error.getMessage(), listener);
             });
         } catch (Exception e) {
             log.error("Failed to handle stateless MCP request", e);
+            recordRequest("unknown", "failure");
             handleError(null, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + e.getMessage(), listener);
         }
+    }
+
+    private static String extractMethod(McpSchema.JSONRPCMessage message) {
+        if (message instanceof McpSchema.JSONRPCRequest) {
+            return ((McpSchema.JSONRPCRequest) message).method();
+        }
+        if (message instanceof McpSchema.JSONRPCNotification) {
+            return ((McpSchema.JSONRPCNotification) message).method();
+        }
+        return "unknown";
+    }
+
+    private static void recordRequest(String method, String status) {
+        Tags tags = Tags.create().addTag("method", method).addTag("status", status);
+        MLMcpServerMetricsCounter.getInstance().incrementCounter(McpServerMetric.MCP_SERVER_REQUEST_COUNT, tags);
     }
 
     /**

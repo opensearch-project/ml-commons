@@ -10,6 +10,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,12 +20,18 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.stats.otel.counters.MLMcpConnectorMetricsCounter;
+import org.opensearch.telemetry.metrics.Counter;
+import org.opensearch.telemetry.metrics.Histogram;
+import org.opensearch.telemetry.metrics.MetricsRegistry;
 
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -43,9 +50,21 @@ public class McpStreamableHttpToolTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        // Initialize the tool with the mocked mcp client
+        MLFeatureEnabledSetting featureFlag = mock(MLFeatureEnabledSetting.class);
+        when(featureFlag.isMetricCollectionEnabled()).thenReturn(true);
+        MetricsRegistry registry = mock(MetricsRegistry.class);
+        when(registry.createCounter(any(), any(), any())).thenReturn(mock(Counter.class));
+        when(registry.createHistogram(any(), any(), any())).thenReturn(mock(Histogram.class));
+        MLMcpConnectorMetricsCounter.reset();
+        MLMcpConnectorMetricsCounter.initialize("test-cluster", registry, featureFlag);
+
         tool = McpStreamableHttpTool.Factory.getInstance().create(Map.of(MCP_SYNC_CLIENT, mcpSyncClient));
         validParams = Map.of("input", "{\"foo\":\"bar\"}");
+    }
+
+    @After
+    public void tearDown() {
+        MLMcpConnectorMetricsCounter.reset();
     }
 
     @Test
@@ -116,4 +135,5 @@ public class McpStreamableHttpToolTests {
         assertNull(factory.getDefaultVersion());
         assertTrue(factory.getAllModelKeys().isEmpty());
     }
+
 }
