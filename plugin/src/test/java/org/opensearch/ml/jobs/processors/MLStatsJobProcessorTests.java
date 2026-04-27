@@ -19,7 +19,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -115,14 +114,6 @@ public class MLStatsJobProcessorTests {
         MLMcpServerMetricsCounter.initialize("test-cluster", metricsRegistry, mlFeatureEnabledSetting);
 
         processor = MLStatsJobProcessor.getInstance(clusterService, client, threadPool, connectorAccessControlHelper, sdkClient);
-    }
-
-    @After
-    public void tearDown() {
-        MLAdoptionMetricsCounter.reset();
-        MLMcpConnectorMetricsCounter.reset();
-        MLMcpServerMetricsCounter.reset();
-        MLStatsJobProcessor.reset();
     }
 
     @Test
