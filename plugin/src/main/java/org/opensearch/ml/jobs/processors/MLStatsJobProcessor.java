@@ -5,9 +5,12 @@
 
 package org.opensearch.ml.jobs.processors;
 
+import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,7 +34,11 @@ import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.stats.otel.counters.MLAdoptionMetricsCounter;
+import org.opensearch.ml.stats.otel.counters.MLMcpConnectorMetricsCounter;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
 import org.opensearch.ml.stats.otel.metrics.AdoptionMetric;
+import org.opensearch.ml.stats.otel.metrics.McpConnectorMetric;
+import org.opensearch.ml.stats.otel.metrics.McpServerMetric;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
@@ -109,6 +116,8 @@ public class MLStatsJobProcessor extends MLJobProcessor {
     public void run() {
         modelTagsCache.clear();
         collectModelAndAgentMetrics();
+        collectMcpConnectorMetrics();
+        collectMcpServerRegisteredToolMetrics();
     }
 
     private void collectModelAndAgentMetrics() {
@@ -249,5 +258,66 @@ public class MLStatsJobProcessor extends MLJobProcessor {
             return targetTags.addTag(targetKey, (String) sourceTagsMap.get(sourceKey));
         }
         return targetTags;
+    }
+
+    @VisibleForTesting
+    void collectMcpConnectorMetrics() {
+        if (!clusterService.state().metadata().indices().containsKey(ML_CONNECTOR_INDEX)) {
+            log.info("Skipping MCP connector metrics collection - ML connector index not found");
+            return;
+        }
+
+        SearchRequest searchRequest = new SearchRequest(ML_CONNECTOR_INDEX);
+        SearchSourceBuilder source = new SearchSourceBuilder();
+        source.query(QueryBuilders.termsQuery("protocol", MCP_SSE, MCP_STREAMABLE_HTTP));
+        source.size(BATCH_SIZE);
+        searchRequest.source(source);
+
+        client.search(searchRequest, new ActionListener<SearchResponse>() {
+            @Override
+            public void onResponse(SearchResponse searchResponse) {
+                for (SearchHit hit : searchResponse.getHits()) {
+                    Object protocolObj = hit.getSourceAsMap().get("protocol");
+                    String protocol = protocolObj == null ? "unknown" : protocolObj.toString();
+                    Tags tags = Tags.create().addTag("protocol", protocol);
+                    MLMcpConnectorMetricsCounter.getInstance().incrementCounter(McpConnectorMetric.MCP_CONNECTOR_COUNT, tags);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.error("Failed to fetch MCP connectors for metrics collection", e);
+            }
+        });
+    }
+
+    @VisibleForTesting
+    void collectMcpServerRegisteredToolMetrics() {
+        if (!clusterService.state().metadata().indices().containsKey(MCP_TOOLS_INDEX)) {
+            log.info("Skipping MCP server registered tool metrics collection - MCP tools index not found");
+            return;
+        }
+
+        SearchRequest searchRequest = new SearchRequest(MCP_TOOLS_INDEX);
+        SearchSourceBuilder source = new SearchSourceBuilder();
+        source.size(BATCH_SIZE);
+        searchRequest.source(source);
+
+        client.search(searchRequest, new ActionListener<SearchResponse>() {
+            @Override
+            public void onResponse(SearchResponse searchResponse) {
+                for (SearchHit hit : searchResponse.getHits()) {
+                    Object typeObj = hit.getSourceAsMap().get("type");
+                    String toolType = typeObj == null ? "unknown" : typeObj.toString();
+                    Tags tags = Tags.create().addTag("tool_type", toolType);
+                    MLMcpServerMetricsCounter.getInstance().incrementCounter(McpServerMetric.MCP_SERVER_REGISTERED_TOOL_COUNT, tags);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.error("Failed to fetch MCP server registered tools for metrics collection", e);
+            }
+        });
     }
 }

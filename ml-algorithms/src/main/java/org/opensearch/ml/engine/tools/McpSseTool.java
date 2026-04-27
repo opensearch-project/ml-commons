@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,9 @@ import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.stats.otel.counters.MLMcpConnectorMetricsCounter;
+import org.opensearch.ml.stats.otel.metrics.McpConnectorMetric;
+import org.opensearch.telemetry.metrics.tags.Tags;
 
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -58,17 +62,33 @@ public class McpSseTool implements WithModelTool {
 
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
+        long startNanos = System.nanoTime();
         try {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get("input");
             Map<String, Object> inputArgs = StringUtils.fromJson(input, "input");
             McpSchema.CallToolResult result = mcpSyncClient.callTool(new McpSchema.CallToolRequest(this.name, inputArgs));
             String resultJson = StringUtils.toJson(result.content());
+            recordInvocation(startNanos, "success");
             listener.onResponse((T) resultJson);
         } catch (Exception e) {
+            recordInvocation(startNanos, "failure");
             log.error("Failed to call MCP tool: {}", this.getName(), e);
             listener.onFailure(e);
         }
+    }
+
+    private void recordInvocation(long startNanos, String status) {
+        double latencyMs = (System.nanoTime() - startNanos) / 1_000_000.0;
+        Tags tags = Tags.create().addTag("protocol", MCP_SSE).addTag("status", status);
+        MLMcpConnectorMetricsCounter.getInstance().incrementCounter(McpConnectorMetric.MCP_CONNECTOR_TOOL_INVOCATION_COUNT, tags);
+        MLMcpConnectorMetricsCounter
+            .getInstance()
+            .recordHistogram(
+                McpConnectorMetric.MCP_CONNECTOR_TOOL_INVOCATION_LATENCY,
+                latencyMs,
+                Tags.create().addTag("protocol", MCP_SSE)
+            );
     }
 
     @Override

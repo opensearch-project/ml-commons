@@ -37,7 +37,10 @@ import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
+import org.opensearch.ml.stats.otel.metrics.McpServerMetric;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
@@ -74,6 +77,7 @@ public class McpToolsHelper {
         }
 
         Tool actualTool = factory.create(Optional.ofNullable(tool.getParameters()).orElse(ImmutableMap.of()));
+        String toolType = tool.getType();
 
         // MCP server doesn't allow null schema
         String schema = Optional
@@ -90,18 +94,28 @@ public class McpToolsHelper {
                 .inputSchema(new JacksonMcpJsonMapper(JsonMapper.shared()), schema)
                 .build(),
             (ctx, request) -> Mono.create(sink -> {
-                ActionListener<String> actionListener = ActionListener
-                    .wrap(
-                        r -> sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r)), false, null, Map.of())),
-                        e -> {
-                            log.error("Failed to execute tool, tool name: {}", toolName, e);
-                            sink.error(e);
-                        }
-                    );
+                long startNanos = System.nanoTime();
+                ActionListener<String> actionListener = ActionListener.wrap(r -> {
+                    recordToolCall(toolType, "success", startNanos);
+                    sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r)), false, null, Map.of()));
+                }, e -> {
+                    recordToolCall(toolType, "failure", startNanos);
+                    log.error("Failed to execute tool, tool name: {}", toolName, e);
+                    sink.error(e);
+                });
 
                 actualTool.run(StringUtils.getParameterMap(request.arguments()), actionListener);
             })
         );
+    }
+
+    private static void recordToolCall(String toolType, String status, long startNanos) {
+        double latencyMs = (System.nanoTime() - startNanos) / 1_000_000.0;
+        Tags countTags = Tags.create().addTag("tool_type", toolType).addTag("status", status);
+        MLMcpServerMetricsCounter.getInstance().incrementCounter(McpServerMetric.MCP_SERVER_TOOL_CALL_COUNT, countTags);
+        MLMcpServerMetricsCounter
+            .getInstance()
+            .recordHistogram(McpServerMetric.MCP_SERVER_TOOL_CALL_LATENCY, latencyMs, Tags.create().addTag("tool_type", toolType));
     }
 
     private static String getSchema(Map<String, Object> attrs) {

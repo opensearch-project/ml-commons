@@ -6,7 +6,10 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
@@ -28,7 +31,12 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.requests.server.MLMcpServerRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.server.MLMcpServerResponse;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.metrics.Counter;
+import org.opensearch.telemetry.metrics.Histogram;
+import org.opensearch.telemetry.metrics.MetricsRegistry;
+import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
 
@@ -59,11 +67,25 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
     private ActionListener<MLMcpServerResponse> listener;
 
     private TransportMcpServerAction action;
+    private Counter mcpCounter;
 
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
+        mcpCounter = mock(Counter.class);
+        MLFeatureEnabledSetting metricsFlag = mock(MLFeatureEnabledSetting.class);
+        when(metricsFlag.isMetricCollectionEnabled()).thenReturn(true);
+        MetricsRegistry registry = mock(MetricsRegistry.class);
+        when(registry.createCounter(any(), any(), any())).thenReturn(mcpCounter);
+        when(registry.createHistogram(any(), any(), any())).thenReturn(mock(Histogram.class));
+        MLMcpServerMetricsCounter.reset();
+        MLMcpServerMetricsCounter.initialize("test-cluster", registry, metricsFlag);
         action = new TransportMcpServerAction(transportService, actionFilters, mlFeatureEnabledSetting, mcpStatelessServerHolder);
+    }
+
+    public void tearDown() throws Exception {
+        MLMcpServerMetricsCounter.reset();
+        super.tearDown();
     }
 
     public void test_doExecute_mcpServerDisabled() {
@@ -216,7 +238,7 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
     public void test_doExecute_generalException() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
         when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenThrow(new RuntimeException("General error"));
-        
+
         MLMcpServerRequest request = new MLMcpServerRequest(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"
         );
@@ -225,12 +247,69 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
         verify(listener).onResponse(responseCaptor.capture());
-        
+
         MLMcpServerResponse response = responseCaptor.getValue();
         assertFalse(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
         assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get(ERROR_CODE_FIELD));
         assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Internal server error"));
+    }
+
+    public void test_doExecute_succeedsWhenMetricCollectionDisabled() {
+        // Verifies the metrics gate: with collection disabled the counter no-ops, but the request
+        // still succeeds. Regression guard for a bug where getInstance() was unguarded.
+        Counter gatedCounter = mock(Counter.class);
+        MLFeatureEnabledSetting disabledFlag = mock(MLFeatureEnabledSetting.class);
+        when(disabledFlag.isMetricCollectionEnabled()).thenReturn(false);
+        MetricsRegistry reg = mock(MetricsRegistry.class);
+        when(reg.createCounter(any(), any(), any())).thenReturn(gatedCounter);
+        when(reg.createHistogram(any(), any(), any())).thenReturn(mock(Histogram.class));
+        MLMcpServerMetricsCounter.reset();
+        MLMcpServerMetricsCounter.initialize("test-cluster", reg, disabledFlag);
+
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
+        when(transportProvider.handleRequest(any(McpSchema.JSONRPCMessage.class)))
+            .thenReturn(Mono.just(new McpSchema.JSONRPCResponse("2.0", "1", "ok", null)));
+
+        action.doExecute(task, new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"), listener);
+
+        ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
+        verify(listener).onResponse(responseCaptor.capture());
+        assertTrue(responseCaptor.getValue().getAcknowledgedResponse());
+        verify(gatedCounter, never()).add(any(Double.class), any(Tags.class));
+    }
+
+    public void test_doExecute_emitsRequestMetric_withMethodAndStatusTags() {
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
+
+        // 1) success: tools/list + success
+        when(transportProvider.handleRequest(any(McpSchema.JSONRPCMessage.class)))
+            .thenReturn(Mono.just(new McpSchema.JSONRPCResponse("2.0", "1", "ok", null)));
+        action.doExecute(task, new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"), listener);
+
+        // 2) parse error before method is known: "unknown" + failure
+        action.doExecute(task, new MLMcpServerRequest("not json"), listener);
+
+        // 3) transport error after method is extracted: tools/call + failure
+        when(transportProvider.handleRequest(any(McpSchema.JSONRPCMessage.class))).thenReturn(Mono.error(new RuntimeException("boom")));
+        action.doExecute(task, new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{}}"), listener);
+
+        ArgumentCaptor<Tags> tagsCaptor = ArgumentCaptor.forClass(Tags.class);
+        verify(mcpCounter, times(3)).add(eq(1.0), tagsCaptor.capture());
+
+        Map<String, ?> t0 = tagsCaptor.getAllValues().get(0).getTagsMap();
+        assertEquals("tools/list", t0.get("method"));
+        assertEquals("success", t0.get("status"));
+
+        Map<String, ?> t1 = tagsCaptor.getAllValues().get(1).getTagsMap();
+        assertEquals("unknown", t1.get("method"));
+        assertEquals("failure", t1.get("status"));
+
+        Map<String, ?> t2 = tagsCaptor.getAllValues().get(2).getTagsMap();
+        assertEquals("tools/call", t2.get("method"));
+        assertEquals("failure", t2.get("status"));
     }
 }
