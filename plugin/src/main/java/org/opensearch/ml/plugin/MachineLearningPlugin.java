@@ -950,20 +950,8 @@ public class MachineLearningPlugin extends Plugin
             .getInstance()
             .initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper, mlFeatureEnabledSetting);
 
-        // Always initialize counters so call sites can getInstance() safely. Emission is gated
-        // inside AbstractMLMetricsCounter by MLFeatureEnabledSetting#isMetricCollectionEnabled().
-        //
-        // Previously this block was wrapped in `if (mlFeatureEnabledSetting.isMetricCollectionEnabled())`.
-        // That guarded only the registration step, but every runtime call site (e.g. TransportMcpServerAction,
-        // McpToolsHelper, McpSseTool) calls <counter>.getInstance() unconditionally. On the default install
-        // where plugins.ml_commons.metrics_collection_enabled=false (a Final setting), the counters were
-        // never initialized, so getInstance() threw IllegalStateException from inside the MCP request path
-        // and broke `POST /_plugins/_ml/mcp` entirely. Reproduced live: first tools/list call returned
-        // JSON_RPC_INTERNAL_ERROR with "MLMcpServerMetricsCounter is not initialized".
-        //
-        // Initializing eagerly is safe because the MetricsRegistry is always supplied by the framework
-        // (no-op registry when telemetry isn't configured) and the feature-flag check inside
-        // incrementCounter/recordHistogram still suppresses emission when the flag is off.
+        // Always initialize counters so call sites can getInstance() safely. Emission itself is
+        // gated inside AbstractMLMetricsCounter by MLFeatureEnabledSetting#isMetricCollectionEnabled().
         MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
         MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
         MLMcpConnectorMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
