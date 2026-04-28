@@ -414,6 +414,8 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.otel.counters.MLAdoptionMetricsCounter;
+import org.opensearch.ml.stats.otel.counters.MLMcpConnectorMetricsCounter;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
 import org.opensearch.ml.stats.otel.counters.MLOperationalMetricsCounter;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.IndexStatusSupplier;
@@ -948,10 +950,12 @@ public class MachineLearningPlugin extends Plugin
             .getInstance()
             .initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper, mlFeatureEnabledSetting);
 
-        if (mlFeatureEnabledSetting.isMetricCollectionEnabled()) {
-            MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
-            MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
-        }
+        // Always initialize counters so call sites can getInstance() safely. Emission itself is
+        // gated inside AbstractMLMetricsCounter by MLFeatureEnabledSetting#isMetricCollectionEnabled().
+        MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
+        MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
+        MLMcpConnectorMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
+        MLMcpServerMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
 
         mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);

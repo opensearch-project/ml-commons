@@ -6,9 +6,11 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,11 +42,13 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -52,6 +56,10 @@ import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
+import org.opensearch.telemetry.metrics.Counter;
+import org.opensearch.telemetry.metrics.Histogram;
+import org.opensearch.telemetry.metrics.MetricsRegistry;
+import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.client.Client;
 
@@ -68,6 +76,8 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     @SuppressWarnings("rawtypes")
     private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("ListIndexTool", ListIndexTool.Factory.getInstance());
     private McpToolsHelper mcpToolsHelper;
+    private Counter serverCounter;
+    private Histogram serverHistogram;
 
     @Before
     public void setUp() throws Exception {
@@ -76,6 +86,16 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
 
         // Reset the singleton state before each test to ensure test isolation
         TestHelper.resetMcpStatelessServerHolder();
+
+        serverCounter = mock(Counter.class);
+        serverHistogram = mock(Histogram.class);
+        MLFeatureEnabledSetting featureFlag = mock(MLFeatureEnabledSetting.class);
+        when(featureFlag.isMetricCollectionEnabled()).thenReturn(true);
+        MetricsRegistry metricsRegistry = mock(MetricsRegistry.class);
+        when(metricsRegistry.createCounter(any(), any(), any())).thenReturn(serverCounter);
+        when(metricsRegistry.createHistogram(any(), any(), any())).thenReturn(serverHistogram);
+        MLMcpServerMetricsCounter.reset();
+        MLMcpServerMetricsCounter.initialize("test-cluster", metricsRegistry, featureFlag);
 
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
@@ -98,6 +118,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     public void tearDown() throws Exception {
         // Reset all static fields to ensure clean test isolation
         TestHelper.resetMcpStatelessServerHolder();
+        MLMcpServerMetricsCounter.reset();
         super.tearDown();
     }
 
@@ -256,6 +277,36 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     public void test_createToolSpecification_factoryNotFound() {
         McpToolBaseInput tool = new McpToolRegisterInput("NonExistentTool", "NonExistentTool", "Test tool", Map.of(), Map.of(), null, null);
         assertThrows(RuntimeException.class, () -> mcpToolsHelper.createToolSpecification(tool));
+    }
+
+    @Test
+    public void test_createToolSpecification_callHandler_recordsMetricsWithToolTypeTag() {
+        McpToolBaseInput tool = new McpToolRegisterInput("ListIndexTool", "ListIndexTool", "Test tool", Map.of(), Map.of(), null, null);
+        var spec = mcpToolsHelper.createToolSpecification(tool);
+
+        // Invoke the call handler. ListIndexTool fails fast without a cluster; we only assert that
+        // the wrapping emits exactly one counter + histogram tagged with tool_type, regardless of branch.
+        try {
+            spec
+                .callHandler()
+                .apply(
+                    null,
+                    new io.modelcontextprotocol.spec.McpSchema.CallToolRequest(
+                        "ListIndexTool",
+                        Map.of("input", "{\"indices\":[]}"),
+                        Map.of()
+                    )
+                )
+                .block();
+        } catch (Throwable ignored) {
+            // metrics fire on both branches
+        }
+
+        ArgumentCaptor<Tags> tagsCaptor = ArgumentCaptor.forClass(Tags.class);
+        verify(serverCounter, times(1)).add(eq(1.0), tagsCaptor.capture());
+        verify(serverHistogram, times(1)).record(any(Double.class), any(Tags.class));
+        assertEquals("ListIndexTool", tagsCaptor.getValue().getTagsMap().get("tool_type"));
+        assertNotNull(tagsCaptor.getValue().getTagsMap().get("status"));
     }
 
     // ==================== HELPER METHODS ====================
