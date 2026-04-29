@@ -42,11 +42,11 @@ public class OpenaiEmbeddingModelProviderTest {
     public void testGetModelInfo_knownModels() {
         EmbeddingModelInfo small = OpenaiEmbeddingModelProvider.getModelInfo("text-embedding-3-small");
         assertNotNull(small);
-        assertEquals(1536, small.dimension);
+        assertEquals(1536, small.dimension());
 
         EmbeddingModelInfo large = OpenaiEmbeddingModelProvider.getModelInfo("text-embedding-3-large");
         assertNotNull(large);
-        assertEquals(3072, large.dimension);
+        assertEquals(3072, large.dimension());
     }
 
     @Test

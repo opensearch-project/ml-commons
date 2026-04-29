@@ -57,7 +57,7 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
         EmbeddingModelInfo info = KNOWN_MODELS.get(modelId);
-        boolean isCohere = modelId != null && modelId.startsWith("cohere.");
+        boolean isCohere = info != null && modelId.startsWith("cohere.embed");
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("region", DEFAULT_REGION);
@@ -74,14 +74,12 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
             preProcess = "connector.pre_process.cohere.embedding";
             postProcess = "connector.post_process.cohere.embedding";
         } else {
-            if (info == null) {
-                log
-                    .warn(
-                        "Unknown Bedrock embedding model: {}. Defaulting to dimension 1024. " + "Override via model_parameters if needed.",
-                        modelId
-                    );
+            if (info == null && (modelParameters == null || !modelParameters.containsKey("dimensions"))) {
+                throw new IllegalArgumentException(
+                    "Unknown Bedrock embedding model: " + modelId + ". Please provide 'dimensions' in model_parameters."
+                );
             }
-            parameters.put("dimensions", String.valueOf(info != null ? info.dimension : 1024));
+            parameters.put("dimensions", String.valueOf(info != null ? info.dimension() : 1024));
             parameters.put("normalize", "true");
             parameters.put("embeddingTypes", "[\"float\"]");
             requestBody = TITAN_REQUEST_BODY;
@@ -94,10 +92,7 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
         }
 
         // Validate region to prevent SSRF via URL injection
-        String region = parameters.get("region");
-        if (region != null && !REGION_PATTERN.matcher(region).matches()) {
-            throw new IllegalArgumentException("Invalid AWS region format: " + region);
-        }
+        MemoryContainerConstants.requireValidAwsRegion(parameters.get("region"));
 
         Map<String, String> headers = new HashMap<>();
         headers.put("content-type", "application/json");

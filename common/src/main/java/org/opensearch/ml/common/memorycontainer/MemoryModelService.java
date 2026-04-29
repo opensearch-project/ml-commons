@@ -18,6 +18,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.model.ModelProviderFactory;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -72,7 +73,7 @@ public class MemoryModelService {
      * Uses system_prompt/user_prompt instead of agent-style body/_chat_history.
      */
     private static MLRegisterModelInput createMemoryLlmInput(MLAgentModelSpec modelSpec) {
-        String provider = modelSpec.getModelProvider().toLowerCase();
+        ModelProviderType providerType = ModelProviderType.from(modelSpec.getModelProvider());
         String url;
         String requestBody;
         String protocol;
@@ -84,29 +85,29 @@ public class MemoryModelService {
             parameters.putAll(modelSpec.getModelParameters());
         }
 
-        if (provider.equals("bedrock/converse")) {
-            parameters.putIfAbsent("region", DEFAULT_REGION);
-            parameters.put("service_name", "bedrock");
-            // Validate region to prevent SSRF via URL injection
-            String region = parameters.get("region");
-            if (!REGION_PATTERN.matcher(region).matches()) {
-                throw new IllegalArgumentException("Invalid AWS region format: " + region);
-            }
-            url = "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse";
-            requestBody = BEDROCK_CONVERSE_MEMORY_TEMPLATE;
-            protocol = ConnectorProtocols.AWS_SIGV4;
-        } else if (provider.equals("openai/v1/chat/completions")) {
-            url = "https://api.openai.com/v1/chat/completions";
-            requestBody = OPENAI_MEMORY_TEMPLATE;
-            protocol = ConnectorProtocols.HTTP;
-            headers.put("Authorization", "Bearer ${credential.openAI_key}");
-        } else if (provider.equals("gemini/v1beta/generatecontent")) {
-            url = "https://generativelanguage.googleapis.com/v1beta/models/${parameters.model}:generateContent";
-            requestBody = GEMINI_MEMORY_TEMPLATE;
-            protocol = ConnectorProtocols.HTTP;
-            headers.put("x-goog-api-key", "${credential.gemini_api_key}");
-        } else {
-            throw new IllegalArgumentException("Unsupported LLM provider for memory: " + modelSpec.getModelProvider());
+        switch (providerType) {
+            case BEDROCK_CONVERSE:
+                parameters.putIfAbsent("region", DEFAULT_REGION);
+                parameters.put("service_name", "bedrock");
+                MemoryContainerConstants.requireValidAwsRegion(parameters.get("region"));
+                url = "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse";
+                requestBody = BEDROCK_CONVERSE_MEMORY_TEMPLATE;
+                protocol = ConnectorProtocols.AWS_SIGV4;
+                break;
+            case OPENAI_V1_CHAT_COMPLETIONS:
+                url = "https://api.openai.com/v1/chat/completions";
+                requestBody = OPENAI_MEMORY_TEMPLATE;
+                protocol = ConnectorProtocols.HTTP;
+                headers.put("Authorization", "Bearer ${credential.openAI_key}");
+                break;
+            case GEMINI_V1BETA_GENERATE_CONTENT:
+                url = "https://generativelanguage.googleapis.com/v1beta/models/${parameters.model}:generateContent";
+                requestBody = GEMINI_MEMORY_TEMPLATE;
+                protocol = ConnectorProtocols.HTTP;
+                headers.put("x-goog-api-key", "${credential.gemini_api_key}");
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported LLM provider for memory: " + modelSpec.getModelProvider());
         }
 
         ConnectorAction predictAction = ConnectorAction
@@ -164,20 +165,20 @@ public class MemoryModelService {
     public static FunctionName detectEmbeddingType(String modelId) {
         EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
         if (info != null)
-            return info.functionName;
+            return info.functionName();
         EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
         if (openaiInfo != null)
-            return openaiInfo.functionName;
+            return openaiInfo.functionName();
         return null;
     }
 
     public static Integer detectEmbeddingDimension(String modelId) {
         EmbeddingModelInfo info = BedrockEmbeddingModelProvider.getModelInfo(modelId);
         if (info != null)
-            return info.dimension;
+            return info.dimension();
         EmbeddingModelInfo openaiInfo = OpenaiEmbeddingModelProvider.getModelInfo(modelId);
         if (openaiInfo != null)
-            return openaiInfo.dimension;
+            return openaiInfo.dimension();
         return null;
     }
 
@@ -187,15 +188,17 @@ public class MemoryModelService {
     public static String getLlmResultPath(String modelProvider) {
         if (modelProvider == null)
             return null;
-        String provider = modelProvider.toLowerCase();
-        if (provider.equals("bedrock/converse")) {
-            return "$.output.message.content[0].text";
-        } else if (provider.equals("openai/v1/chat/completions")) {
-            return "$.choices[0].message.content";
-        } else if (provider.equals("gemini/v1beta/generatecontent")) {
-            return "$.candidates[0].content.parts[0].text";
+        try {
+            ModelProviderType type = ModelProviderType.from(modelProvider);
+            return switch (type) {
+                case BEDROCK_CONVERSE -> "$.output.message.content[0].text";
+                case OPENAI_V1_CHAT_COMPLETIONS -> "$.choices[0].message.content";
+                case GEMINI_V1BETA_GENERATE_CONTENT -> "$.candidates[0].content.parts[0].text";
+                default -> null;
+            };
+        } catch (IllegalArgumentException e) {
+            return null;
         }
-        return null;
     }
 
     private static void validateModelSpec(MLAgentModelSpec modelSpec) {

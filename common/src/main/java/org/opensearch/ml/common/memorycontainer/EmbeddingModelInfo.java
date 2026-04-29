@@ -10,12 +10,5 @@ import org.opensearch.ml.common.FunctionName;
 /**
  * Info about a known embedding model — type (dense/sparse) and default dimension.
  */
-public class EmbeddingModelInfo {
-    public final FunctionName functionName;
-    public final int dimension;
-
-    public EmbeddingModelInfo(FunctionName functionName, int dimension) {
-        this.functionName = functionName;
-        this.dimension = dimension;
-    }
+public record EmbeddingModelInfo(FunctionName functionName, int dimension) {
 }

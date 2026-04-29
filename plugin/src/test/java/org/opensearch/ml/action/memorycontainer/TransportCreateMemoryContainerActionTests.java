@@ -2211,4 +2211,54 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
                 any(ActionListener.class)
             );
     }
+
+    @Test
+    public void testDoExecute_inlineModel_preValidationFails_maxInferSize() {
+        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("amazon.titan-embed-text-v2:0")
+            .modelProvider("bedrock/embedding")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        MemoryConfiguration inlineConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("pre-val-test")
+            .embeddingModelSpec(embeddingSpec)
+            .llmId("test-llm-model")
+            .maxInferSize(999)
+            .strategies(
+                List
+                    .of(
+                        MemoryStrategy
+                            .builder()
+                            .namespace(List.of("user_id"))
+                            .id("strategy-id1")
+                            .enabled(true)
+                            .type(MemoryStrategyType.SEMANTIC)
+                            .build()
+                    )
+            )
+            .build();
+
+        MLCreateMemoryContainerInput inlineInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-pre-val")
+            .configuration(inlineConfig)
+            .build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(inlineInput);
+        action.doExecute(null, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        // No models should have been created
+        verify(client, never())
+            .execute(
+                eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class),
+                any(ActionListener.class)
+            );
+    }
 }
