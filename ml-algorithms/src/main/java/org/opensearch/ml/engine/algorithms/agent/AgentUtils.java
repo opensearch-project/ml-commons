@@ -56,6 +56,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -168,6 +169,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String TOOL_DESCRIPTIONS_FIELD = "tool_descriptions";
     public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
     public static final String AGENT_TYPE_PARAM = "agent_type";
 
@@ -814,11 +816,15 @@ public class AgentUtils {
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
             List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
+            Map<String, String> toolDescriptionOverrides = toStringMap(mcpConnectorConfig.get(TOOL_DESCRIPTIONS_FIELD));
 
             getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
                 List<MLToolSpec> filteredTools;
                 if (toolFilters == null || toolFilters.isEmpty()) {
-                    filteredTools = mcpToolspecs;
+                    filteredTools = mcpToolspecs
+                        .stream()
+                        .map(toolSpec -> applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides))
+                        .collect(Collectors.toList());
                 } else {
                     filteredTools = new ArrayList<>();
                     List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
@@ -826,13 +832,13 @@ public class AgentUtils {
                     for (MLToolSpec toolSpec : mcpToolspecs) {
                         for (Pattern pattern : compiledPatterns) {
                             if (pattern.matcher(toolSpec.getName()).matches()) {
-                                filteredTools.add(toolSpec);
+                                filteredTools.add(applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides));
                                 break;
                             }
                         }
                     }
                 }
-
+                warnUnusedToolDescriptionOverrides(connectorId, toolDescriptionOverrides, filteredTools);
                 finalToolSpecs.addAll(filteredTools);
 
                 // If this is the last connector, send the final response
@@ -847,6 +853,78 @@ public class AgentUtils {
                 }
             }));
         }
+    }
+
+    /**
+     * Warns when {@code tool_descriptions} contains keys that do not match any tool returned for the connector.
+     * Skips all work when WARN is not enabled, including scanning {@code filteredTools}.
+     */
+    private static void warnUnusedToolDescriptionOverrides(
+        String connectorId,
+        Map<String, String> toolDescriptionOverrides,
+        List<MLToolSpec> filteredTools
+    ) {
+        if (!log.isWarnEnabled()) {
+            return;
+        }
+        if (toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty()) {
+            return;
+        }
+        Set<String> knownToolNames = filteredTools
+            .stream()
+            .filter(Objects::nonNull)
+            .map(MLToolSpec::getName)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        for (String overrideToolName : toolDescriptionOverrides.keySet()) {
+            if (!knownToolNames.contains(overrideToolName)) {
+                log
+                    .warn(
+                        "MCP connector [{}]: tool_descriptions override for [{}] does not match any tool from this connector; override is ignored",
+                        connectorId,
+                        overrideToolName
+                    );
+            }
+        }
+    }
+
+    private static Map<String, String> toStringMap(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> merged = new HashMap<>();
+        for (Object item : list) {
+            if ((item instanceof Map<?, ?> map)) {
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    Object key = entry.getKey();
+                    Object value = entry.getValue();
+                    if (key != null && value != null) {
+                        String keyStr = key.toString();
+                        if (!(value instanceof String)) {
+                            log
+                                .warn(
+                                    "Tool description override for tool [{}] is non-string type [{}]; coercing with toString() may hide configuration errors",
+                                    keyStr,
+                                    value.getClass().getName()
+                                );
+                        }
+                        merged.put(keyStr, value.toString());
+                    }
+                }
+            }
+        }
+        return merged;
+    }
+
+    private static MLToolSpec applyToolDescriptionOverride(MLToolSpec toolSpec, Map<String, String> toolDescriptionOverrides) {
+        if (toolSpec == null || toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty()) {
+            return toolSpec;
+        }
+        String overrideDescription = toolDescriptionOverrides.get(toolSpec.getName());
+        if (Strings.isNullOrEmpty(overrideDescription)) {
+            return toolSpec;
+        }
+        return toolSpec.toBuilder().description(overrideDescription).build();
     }
 
     private static void getMCPToolSpecsFromConnector(
