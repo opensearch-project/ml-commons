@@ -66,6 +66,7 @@ public class ProtoRequestConverter {
 
         // Convert to string map for RemoteInferenceInputDataSet
         Map<String, String> remoteParams = convertToStringMap(parametersMap);
+        convertLlmInterfaceParam(remoteParams);
         remoteParams.put("stream", String.valueOf(true));
 
         // Create MLInput
@@ -103,6 +104,7 @@ public class ProtoRequestConverter {
 
         // Convert to string map for RemoteInferenceInputDataSet
         Map<String, String> remoteParams = convertToStringMap(parametersMap);
+        convertLlmInterfaceParam(remoteParams);
         remoteParams.put("stream", String.valueOf(true));
 
         // Create input dataset
@@ -136,7 +138,7 @@ public class ProtoRequestConverter {
             Object value = entry.getValue();
 
             // Convert field name to the appropriate format
-            String fieldName = field.getJsonName();
+            String fieldName = field.getName();
 
             // Convert field value to appropriate Java type
             Object convertedValue = convertProtoValue(field, value);
@@ -231,6 +233,15 @@ public class ProtoRequestConverter {
         } catch (JsonProcessingException e) {
             log.error("Failed to convert value to JSON string", e);
             throw new IllegalArgumentException("Failed to serialize value to JSON", e);
+        }
+    }
+
+    /**
+     * Converts x_llm_interface to _llm_interface for ML Commons compatibility.
+     */
+    private static void convertLlmInterfaceParam(Map<String, String> params) {
+        if (params.containsKey("x_llm_interface")) {
+            params.put("_llm_interface", params.remove("x_llm_interface"));
         }
     }
 }
