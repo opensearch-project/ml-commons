@@ -5,10 +5,22 @@
 
 package org.opensearch.ml.common.memorycontainer;
 
+import java.util.regex.Pattern;
+
 /**
  * Constants for Memory Container feature
  */
 public class MemoryContainerConstants {
+
+    // AWS region constants for inline model creation
+    public static final String DEFAULT_AWS_REGION = "us-east-1";
+    public static final Pattern AWS_REGION_PATTERN = Pattern.compile("^[a-z]{2}(-[a-z]+-\\d+)?$");
+
+    public static void requireValidAwsRegion(String region) {
+        if (region == null || !AWS_REGION_PATTERN.matcher(region).matches()) {
+            throw new IllegalArgumentException("Invalid AWS region format: " + region);
+        }
+    }
 
     public static final String DEFAULT_LLM_RESULT_PATH = "$.output.message.content[0].text";
     public static final String LLM_RESULT_PATH_FIELD = "llm_result_path";

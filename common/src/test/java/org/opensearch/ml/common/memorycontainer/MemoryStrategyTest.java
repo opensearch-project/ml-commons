@@ -7,6 +7,7 @@ package org.opensearch.ml.common.memorycontainer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.memorycontainer.MemoryStrategy.generateStrategyId;
 
@@ -181,5 +182,30 @@ public class MemoryStrategyTest {
             .build();
 
         assertEquals(customId, strategy.getId());
+    }
+
+    @Test
+    public void testFromPreset_semantic() {
+        MemoryStrategy strategy = MemoryStrategy.fromPreset(MemoryStrategyType.SEMANTIC);
+        assertEquals(MemoryStrategyType.SEMANTIC, strategy.getType());
+        assertTrue(strategy.getEnabled());
+        assertEquals(List.of("user_id"), strategy.getNamespace());
+        assertNull(strategy.getStrategyConfig());
+    }
+
+    @Test
+    public void testFromPreset_userPreference() {
+        MemoryStrategy strategy = MemoryStrategy.fromPreset(MemoryStrategyType.USER_PREFERENCE);
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, strategy.getType());
+        assertTrue(strategy.getEnabled());
+        assertEquals(List.of("user_id"), strategy.getNamespace());
+    }
+
+    @Test
+    public void testFromPreset_summary() {
+        MemoryStrategy strategy = MemoryStrategy.fromPreset(MemoryStrategyType.SUMMARY);
+        assertEquals(MemoryStrategyType.SUMMARY, strategy.getType());
+        assertTrue(strategy.getEnabled());
+        assertEquals(List.of("user_id", "session_id"), strategy.getNamespace());
     }
 }

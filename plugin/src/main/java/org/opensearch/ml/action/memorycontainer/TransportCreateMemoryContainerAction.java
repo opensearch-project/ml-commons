@@ -21,14 +21,20 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryModelService;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerModelValidator;
@@ -97,6 +103,144 @@ public class TransportCreateMemoryContainerAction extends
 
         User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
+
+        // Pre-process: if inline model specs are present, create models first
+        MemoryConfiguration config = input.getConfiguration();
+        if (config != null && (config.hasInlineEmbeddingModel() || config.hasInlineLlm())) {
+            // Run cheap validations before creating models to avoid orphans
+            try {
+                config.validateNonModelInputs();
+            } catch (Exception e) {
+                listener.onFailure(e);
+                return;
+            }
+
+            createInlineModels(
+                config,
+                tenantId,
+                ActionListener.wrap(v -> { proceedWithContainerCreation(input, user, tenantId, listener); }, e -> {
+                    // Best-effort cleanup of any models created before failure
+                    cleanupOrphanModels(config);
+                    listener.onFailure(e);
+                })
+            );
+        } else {
+            proceedWithContainerCreation(input, user, tenantId, listener);
+        }
+    }
+
+    /**
+     * Pre-processing step: create models from inline specs, then set the resulting IDs
+     * on the configuration. After this, the config looks identical to one created the old way.
+     */
+    private void createInlineModels(MemoryConfiguration config, String tenantId, ActionListener<Void> listener) {
+        createInlineEmbeddingModel(config, ActionListener.wrap(v -> createInlineLlmModel(config, listener), listener::onFailure));
+    }
+
+    private void createInlineEmbeddingModel(MemoryConfiguration config, ActionListener<Void> listener) {
+        if (!config.hasInlineEmbeddingModel()) {
+            listener.onResponse(null);
+            return;
+        }
+        createModelFromSpec(config.getEmbeddingModelSpec(), false, ActionListener.wrap(embeddingModelId -> {
+            config.setEmbeddingModelId(embeddingModelId);
+            FunctionName detectedType = MemoryModelService.detectEmbeddingType(config.getEmbeddingModelSpec().getModelId());
+            Integer detectedDimension = MemoryModelService.detectEmbeddingDimension(config.getEmbeddingModelSpec().getModelId());
+            if (detectedType != null) {
+                config.setEmbeddingModelType(detectedType);
+            }
+            if (detectedDimension != null) {
+                config.setDimension(detectedDimension);
+            }
+            log.info("Auto-created embedding model: {}, type: {}, dimension: {}", embeddingModelId, detectedType, detectedDimension);
+            listener.onResponse(null);
+        }, listener::onFailure));
+    }
+
+    private void createInlineLlmModel(MemoryConfiguration config, ActionListener<Void> listener) {
+        if (!config.hasInlineLlm()) {
+            listener.onResponse(null);
+            return;
+        }
+        createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
+            config.setLlmId(llmModelId);
+            setLlmResultPathFromProvider(config);
+            log.info("Auto-created LLM model: {}", llmModelId);
+            listener.onResponse(null);
+        }, listener::onFailure));
+    }
+
+    private void createModelFromSpec(MLAgentModelSpec modelSpec, boolean isMemoryLlm, ActionListener<String> listener) {
+        try {
+            MLRegisterModelInput modelInput = MemoryModelService.createModelFromSpec(modelSpec, isMemoryLlm);
+            MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
+            client
+                .execute(
+                    MLRegisterModelAction.INSTANCE,
+                    modelRequest,
+                    ActionListener.wrap(response -> { listener.onResponse(response.getModelId()); }, e -> {
+                        log.error("Failed to auto-create model for memory container: {}", modelSpec.getModelId(), e);
+                        listener
+                            .onFailure(
+                                e instanceof IllegalArgumentException
+                                    ? e
+                                    : new OpenSearchStatusException("Failed to create model", RestStatus.INTERNAL_SERVER_ERROR)
+                            );
+                    })
+                );
+        } catch (Exception e) {
+            log.error("Failed to build model registration input: {}", modelSpec.getModelId(), e);
+            listener.onFailure(new IllegalArgumentException("Invalid model specification: " + e.getMessage()));
+        }
+    }
+
+    private void cleanupOrphanModels(MemoryConfiguration config) {
+        if (config.getEmbeddingModelId() != null && config.hasInlineEmbeddingModel()) {
+            log.info("Cleaning up orphan embedding model: {}", config.getEmbeddingModelId());
+            try {
+                client
+                    .execute(
+                        org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE,
+                        new org.opensearch.ml.common.transport.model.MLModelDeleteRequest(config.getEmbeddingModelId(), null),
+                        ActionListener
+                            .wrap(
+                                r -> log.info("Cleaned up orphan embedding model"),
+                                e -> log.warn("Failed to cleanup orphan embedding model", e)
+                            )
+                    );
+            } catch (Exception e) {
+                log.warn("Failed to cleanup orphan embedding model: {}", config.getEmbeddingModelId(), e);
+            }
+        }
+        if (config.getLlmId() != null && config.hasInlineLlm()) {
+            log.info("Cleaning up orphan LLM model: {}", config.getLlmId());
+            try {
+                client
+                    .execute(
+                        org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE,
+                        new org.opensearch.ml.common.transport.model.MLModelDeleteRequest(config.getLlmId(), null),
+                        ActionListener
+                            .wrap(r -> log.info("Cleaned up orphan LLM model"), e -> log.warn("Failed to cleanup orphan LLM model", e))
+                    );
+            } catch (Exception e) {
+                log.warn("Failed to cleanup orphan LLM model: {}", config.getLlmId(), e);
+            }
+        }
+    }
+
+    private void setLlmResultPathFromProvider(MemoryConfiguration config) {
+        String resultPath = MemoryModelService.getLlmResultPath(config.getLlmSpec().getModelProvider());
+        if (resultPath != null) {
+            config.getParameters().put(org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD, resultPath);
+        }
+    }
+
+    private void proceedWithContainerCreation(
+        MLCreateMemoryContainerInput input,
+        User user,
+        String tenantId,
+        ActionListener<MLCreateMemoryContainerResponse> listener
+    ) {
 
         // Validate configuration before creating memory container
         validateConfiguration(input.getConfiguration(), ActionListener.wrap(isValid -> {

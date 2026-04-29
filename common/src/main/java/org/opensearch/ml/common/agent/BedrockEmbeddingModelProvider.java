@@ -1,0 +1,174 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common.agent;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.connector.AwsConnector;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.memorycontainer.EmbeddingModelInfo;
+import org.opensearch.ml.common.memorycontainer.MemoryContainerConstants;
+import org.opensearch.ml.common.model.ModelProvider;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
+public class BedrockEmbeddingModelProvider extends ModelProvider {
+
+    private static final String DEFAULT_REGION = MemoryContainerConstants.DEFAULT_AWS_REGION;
+    private static final java.util.regex.Pattern REGION_PATTERN = MemoryContainerConstants.AWS_REGION_PATTERN;
+
+    private static final String TITAN_REQUEST_BODY =
+        "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions},"
+            + " \"normalize\": ${parameters.normalize}, \"embeddingTypes\": ${parameters.embeddingTypes} }";
+
+    private static final String COHERE_REQUEST_BODY = "{ \"texts\": ${parameters.texts}, \"input_type\": \"${parameters.input_type}\" }";
+
+    /**
+     * Known Bedrock embedding models with their type and default dimension.
+     */
+    public static final Map<String, EmbeddingModelInfo> KNOWN_MODELS = Map
+        .ofEntries(
+            Map.entry("amazon.titan-embed-text-v2:0", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)),
+            Map.entry("amazon.titan-embed-text-v1", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536)),
+            Map.entry("amazon.titan-embed-image-v1", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)),
+            Map.entry("cohere.embed-english-v3", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)),
+            Map.entry("cohere.embed-multilingual-v3", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024))
+        );
+
+    @Override
+    public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
+        EmbeddingModelInfo info = KNOWN_MODELS.get(modelId);
+        boolean isCohere = info != null && modelId.startsWith("cohere.embed");
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("region", DEFAULT_REGION);
+        parameters.put("service_name", "bedrock");
+        parameters.put("model", modelId);
+
+        String requestBody;
+        String preProcess;
+        String postProcess;
+
+        if (isCohere) {
+            parameters.put("input_type", "search_document");
+            requestBody = COHERE_REQUEST_BODY;
+            preProcess = "connector.pre_process.cohere.embedding";
+            postProcess = "connector.post_process.cohere.embedding";
+        } else {
+            if (info == null && (modelParameters == null || !modelParameters.containsKey("dimensions"))) {
+                throw new IllegalArgumentException(
+                    "Unknown Bedrock embedding model: " + modelId + ". Please provide 'dimensions' in model_parameters."
+                );
+            }
+            parameters.put("dimensions", String.valueOf(info != null ? info.dimension() : 1024));
+            parameters.put("normalize", "true");
+            parameters.put("embeddingTypes", "[\"float\"]");
+            requestBody = TITAN_REQUEST_BODY;
+            preProcess = "connector.pre_process.bedrock.embedding";
+            postProcess = "connector.post_process.bedrock.embedding";
+        }
+
+        if (modelParameters != null) {
+            parameters.putAll(modelParameters);
+        }
+
+        // Validate region to prevent SSRF via URL injection
+        MemoryContainerConstants.requireValidAwsRegion(parameters.get("region"));
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("content-type", "application/json");
+        headers.put("x-amz-content-sha256", "required");
+
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke")
+            .headers(headers)
+            .requestBody(requestBody)
+            .preProcessFunction(preProcess)
+            .postProcessFunction(postProcess)
+            .build();
+
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
+        connectorClientConfig.setMaxRetryTimes(3);
+
+        return AwsConnector
+            .awsConnectorBuilder()
+            .name("Auto-generated Bedrock Embedding connector")
+            .description("Auto-generated connector for Bedrock Embedding API")
+            .version("1")
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .parameters(parameters)
+            .credential(credential != null ? credential : new HashMap<>())
+            .actions(List.of(predictAction))
+            .connectorClientConfig(connectorClientConfig)
+            .build();
+    }
+
+    @Override
+    public MLRegisterModelInput createModelInput(String modelName, Connector connector, Map<String, String> modelParameters) {
+        return MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .modelName("Auto-generated embedding model for " + modelName)
+            .description("Auto-generated embedding model for memory container")
+            .connector(connector)
+            .build();
+    }
+
+    @Override
+    public String getLLMInterface() {
+        return null; // Embedding models don't have an LLM interface
+    }
+
+    // Embedding models don't support agent input mapping — these are LLM-only operations
+    @Override
+    public Map<String, String> mapTextInput(String text, MLAgentType type) {
+        throw new UnsupportedOperationException("Embedding model providers do not support agent input mapping");
+    }
+
+    @Override
+    public Map<String, String> mapContentBlocks(List<ContentBlock> contentBlocks, MLAgentType type) {
+        throw new UnsupportedOperationException("Embedding model providers do not support agent input mapping");
+    }
+
+    @Override
+    public Map<String, String> mapMessages(List<Message> messages, MLAgentType type) {
+        throw new UnsupportedOperationException("Embedding model providers do not support agent input mapping");
+    }
+
+    @Override
+    public String extractMessageFromResponse(Map<String, ?> responseData) {
+        throw new UnsupportedOperationException("Embedding model providers do not support response extraction");
+    }
+
+    @Override
+    public Message parseToUnifiedMessage(String json) {
+        throw new UnsupportedOperationException("Embedding model providers do not support message parsing");
+    }
+
+    /**
+     * Look up embedding model info from known models registry.
+     * @param modelId the Bedrock model ID
+     * @return EmbeddingModelInfo if known, null otherwise
+     */
+    public static EmbeddingModelInfo getModelInfo(String modelId) {
+        return KNOWN_MODELS.get(modelId);
+    }
+
+}
