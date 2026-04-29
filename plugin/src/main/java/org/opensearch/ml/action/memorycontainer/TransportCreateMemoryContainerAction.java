@@ -134,46 +134,40 @@ public class TransportCreateMemoryContainerAction extends
      * on the configuration. After this, the config looks identical to one created the old way.
      */
     private void createInlineModels(MemoryConfiguration config, String tenantId, ActionListener<Void> listener) {
-        // Step 1: Create embedding model if inline spec provided
-        if (config.hasInlineEmbeddingModel()) {
-            createModelFromSpec(config.getEmbeddingModelSpec(), false, ActionListener.wrap(embeddingModelId -> {
-                config.setEmbeddingModelId(embeddingModelId);
+        createInlineEmbeddingModel(config, ActionListener.wrap(v -> createInlineLlmModel(config, listener), listener::onFailure));
+    }
 
-                // Auto-detect type and dimension from known models
-                FunctionName detectedType = MemoryModelService.detectEmbeddingType(config.getEmbeddingModelSpec().getModelId());
-                Integer detectedDimension = MemoryModelService.detectEmbeddingDimension(config.getEmbeddingModelSpec().getModelId());
-                if (detectedType != null) {
-                    config.setEmbeddingModelType(detectedType);
-                }
-                if (detectedDimension != null) {
-                    config.setDimension(detectedDimension);
-                }
-
-                log.info("Auto-created embedding model: {}, type: {}, dimension: {}", embeddingModelId, detectedType, detectedDimension);
-
-                // Step 2: Create LLM model if inline spec provided
-                if (config.hasInlineLlm()) {
-                    createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
-                        config.setLlmId(llmModelId);
-                        setLlmResultPathFromProvider(config);
-                        log.info("Auto-created LLM model: {}", llmModelId);
-                        listener.onResponse(null);
-                    }, listener::onFailure));
-                } else {
-                    listener.onResponse(null);
-                }
-            }, listener::onFailure));
-        } else if (config.hasInlineLlm()) {
-            // Only LLM inline, no embedding
-            createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
-                config.setLlmId(llmModelId);
-                setLlmResultPathFromProvider(config);
-                log.info("Auto-created LLM model: {}", llmModelId);
-                listener.onResponse(null);
-            }, listener::onFailure));
-        } else {
+    private void createInlineEmbeddingModel(MemoryConfiguration config, ActionListener<Void> listener) {
+        if (!config.hasInlineEmbeddingModel()) {
             listener.onResponse(null);
+            return;
         }
+        createModelFromSpec(config.getEmbeddingModelSpec(), false, ActionListener.wrap(embeddingModelId -> {
+            config.setEmbeddingModelId(embeddingModelId);
+            FunctionName detectedType = MemoryModelService.detectEmbeddingType(config.getEmbeddingModelSpec().getModelId());
+            Integer detectedDimension = MemoryModelService.detectEmbeddingDimension(config.getEmbeddingModelSpec().getModelId());
+            if (detectedType != null) {
+                config.setEmbeddingModelType(detectedType);
+            }
+            if (detectedDimension != null) {
+                config.setDimension(detectedDimension);
+            }
+            log.info("Auto-created embedding model: {}, type: {}, dimension: {}", embeddingModelId, detectedType, detectedDimension);
+            listener.onResponse(null);
+        }, listener::onFailure));
+    }
+
+    private void createInlineLlmModel(MemoryConfiguration config, ActionListener<Void> listener) {
+        if (!config.hasInlineLlm()) {
+            listener.onResponse(null);
+            return;
+        }
+        createModelFromSpec(config.getLlmSpec(), true, ActionListener.wrap(llmModelId -> {
+            config.setLlmId(llmModelId);
+            setLlmResultPathFromProvider(config);
+            log.info("Auto-created LLM model: {}", llmModelId);
+            listener.onResponse(null);
+        }, listener::onFailure));
     }
 
     private void createModelFromSpec(MLAgentModelSpec modelSpec, boolean isMemoryLlm, ActionListener<String> listener) {
