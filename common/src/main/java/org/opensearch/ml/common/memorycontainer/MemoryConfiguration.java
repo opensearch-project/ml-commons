@@ -123,7 +123,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.embeddingModelId = embeddingModelId;
         this.llmId = llmId;
         this.dimension = dimension;
-        this.maxInferSize = (llmId != null) ? (maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE) : null;
+        this.maxInferSize = (llmId != null || llmSpec != null)
+            ? (maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE)
+            : null;
         this.strategies = new ArrayList<>();
         if (strategies != null && !strategies.isEmpty()) {
             this.strategies.addAll(strategies);
