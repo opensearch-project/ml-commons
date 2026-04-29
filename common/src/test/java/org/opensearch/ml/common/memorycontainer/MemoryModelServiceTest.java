@@ -6,15 +6,18 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class MemoryModelServiceTest {
@@ -102,6 +105,10 @@ public class MemoryModelServiceTest {
         MLRegisterModelInput input = MemoryModelService.createModelFromSpec(spec, true);
         assertNotNull(input);
         assertEquals(FunctionName.REMOTE, input.getFunctionName());
+        ConnectorAction action = input.getConnector().getActions().get(0);
+        assertTrue(action.getUrl().contains("/converse"));
+        assertTrue(action.getRequestBody().contains("${parameters.system_prompt}"));
+        assertTrue(action.getRequestBody().contains("${parameters.user_prompt}"));
     }
 
     @Test
@@ -116,6 +123,10 @@ public class MemoryModelServiceTest {
         MLRegisterModelInput input = MemoryModelService.createModelFromSpec(spec, true);
         assertNotNull(input);
         assertEquals(FunctionName.REMOTE, input.getFunctionName());
+        ConnectorAction action = input.getConnector().getActions().get(0);
+        assertTrue(action.getUrl().contains("api.openai.com"));
+        assertTrue(action.getHeaders().containsKey("Authorization"));
+        assertTrue(action.getRequestBody().contains("${parameters.system_prompt}"));
     }
 
     @Test
@@ -130,6 +141,11 @@ public class MemoryModelServiceTest {
         MLRegisterModelInput input = MemoryModelService.createModelFromSpec(spec, true);
         assertNotNull(input);
         assertEquals(FunctionName.REMOTE, input.getFunctionName());
+        ConnectorAction action = input.getConnector().getActions().get(0);
+        assertTrue(action.getUrl().contains("generativelanguage.googleapis.com"));
+        assertTrue(action.getHeaders().containsKey("x-goog-api-key"));
+        assertFalse(action.getUrl().contains("key="));
+        assertTrue(action.getRequestBody().contains("${parameters.system_prompt}"));
     }
 
     @Test

@@ -18,6 +18,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.model.ModelProviderFactory;
@@ -136,7 +137,7 @@ public class MemoryModelService {
                 .connectorClientConfig(clientConfig)
                 .build();
         } else {
-            connector = org.opensearch.ml.common.connector.HttpConnector
+            connector = HttpConnector
                 .builder()
                 .name("Auto-generated " + modelSpec.getModelProvider() + " connector for Memory")
                 .description("Auto-generated LLM connector for memory container")
