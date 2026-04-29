@@ -91,9 +91,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     public static final String EMBEDDING_MODEL_SPEC_FIELD = "embedding_model";
     public static final String LLM_SPEC_FIELD = "llm";
     @EqualsAndHashCode.Exclude
-    private transient MLAgentModelSpec embeddingModelSpec;
+    private MLAgentModelSpec embeddingModelSpec;
     @EqualsAndHashCode.Exclude
-    private transient MLAgentModelSpec llmSpec;
+    private MLAgentModelSpec llmSpec;
 
     public MemoryConfiguration(
         String indexPrefix,
@@ -183,6 +183,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.disableSession = input.readBoolean();
         this.useSystemIndex = input.readBoolean();
         this.tenantId = input.readOptionalString();
+        if (input.readBoolean()) {
+            this.embeddingModelSpec = new MLAgentModelSpec(input);
+        }
+        if (input.readBoolean()) {
+            this.llmSpec = new MLAgentModelSpec(input);
+        }
     }
 
     @Override
@@ -215,6 +221,18 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         out.writeBoolean(disableSession);
         out.writeBoolean(useSystemIndex);
         out.writeOptionalString(tenantId);
+        if (embeddingModelSpec != null) {
+            out.writeBoolean(true);
+            embeddingModelSpec.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (llmSpec != null) {
+            out.writeBoolean(true);
+            llmSpec.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -380,6 +398,34 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     /**
      * Returns true if inline embedding model spec is provided (needs auto-creation).
      */
+    /**
+     * Validates inputs that don't depend on model creation (maxInferSize, strategies, index prefix).
+     * Called before inline model creation to catch user errors early and avoid orphan models.
+     */
+    public void validateNonModelInputs() {
+        if (maxInferSize != null && maxInferSize > 10) {
+            throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
+        }
+        if (strategies != null) {
+            for (MemoryStrategy strategy : strategies) {
+                MemoryStrategy.validate(strategy);
+            }
+        }
+        if (indexPrefix != null) {
+            validateIndexPrefix(indexPrefix);
+        }
+    }
+
+    private static void validateIndexPrefix(String prefix) {
+        if (prefix != null && !prefix.isEmpty()) {
+            for (char c : prefix.toCharArray()) {
+                if (Character.isISOControl(c)) {
+                    throw new IllegalArgumentException(INDEX_PREFIX_INVALID_CHARACTERS_ERROR);
+                }
+            }
+        }
+    }
+
     public boolean hasInlineEmbeddingModel() {
         return embeddingModelSpec != null;
     }

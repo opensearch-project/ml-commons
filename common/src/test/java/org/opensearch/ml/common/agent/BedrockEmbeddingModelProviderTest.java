@@ -55,27 +55,33 @@ public class BedrockEmbeddingModelProviderTest {
     }
 
     @Test
-    public void testCreateModelInput_unknownModel_defaultsToRemote() {
-        Connector connector = provider.createConnector("some.unknown-model", testCredential, null);
-        MLRegisterModelInput input = provider.createModelInput("some.unknown-model", connector, null);
+    public void testCreateConnector_unknownModel_requiresDimension() {
+        assertThrows(IllegalArgumentException.class, () -> provider.createConnector("some.unknown-model", testCredential, null));
+    }
 
-        assertEquals(FunctionName.REMOTE, input.getFunctionName());
+    @Test
+    public void testCreateConnector_unknownModel_withDimensionProvided() {
+        Map<String, String> params = new HashMap<>();
+        params.put("dimensions", "768");
+        Connector connector = provider.createConnector("some.unknown-model", testCredential, params);
+        assertNotNull(connector);
+        assertEquals("768", connector.getParameters().get("dimensions"));
     }
 
     @Test
     public void testGetModelInfo_knownModels() {
         EmbeddingModelInfo titanV2 = BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v2:0");
         assertNotNull(titanV2);
-        assertEquals(FunctionName.TEXT_EMBEDDING, titanV2.functionName);
-        assertEquals(1024, titanV2.dimension);
+        assertEquals(FunctionName.TEXT_EMBEDDING, titanV2.functionName());
+        assertEquals(1024, titanV2.dimension());
 
         EmbeddingModelInfo titanV1 = BedrockEmbeddingModelProvider.getModelInfo("amazon.titan-embed-text-v1");
         assertNotNull(titanV1);
-        assertEquals(1536, titanV1.dimension);
+        assertEquals(1536, titanV1.dimension());
 
         EmbeddingModelInfo cohere = BedrockEmbeddingModelProvider.getModelInfo("cohere.embed-english-v3");
         assertNotNull(cohere);
-        assertEquals(1024, cohere.dimension);
+        assertEquals(1024, cohere.dimension());
     }
 
     @Test

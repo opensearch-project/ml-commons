@@ -22,6 +22,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryModelService;
@@ -106,10 +107,22 @@ public class TransportCreateMemoryContainerAction extends
         // Pre-process: if inline model specs are present, create models first
         MemoryConfiguration config = input.getConfiguration();
         if (config != null && (config.hasInlineEmbeddingModel() || config.hasInlineLlm())) {
+            // Run cheap validations before creating models to avoid orphans
+            try {
+                config.validateNonModelInputs();
+            } catch (Exception e) {
+                listener.onFailure(e);
+                return;
+            }
+
             createInlineModels(
                 config,
                 tenantId,
-                ActionListener.wrap(v -> { proceedWithContainerCreation(input, user, tenantId, listener); }, listener::onFailure)
+                ActionListener.wrap(v -> { proceedWithContainerCreation(input, user, tenantId, listener); }, e -> {
+                    // Best-effort cleanup of any models created before failure
+                    cleanupOrphanModels(config);
+                    listener.onFailure(e);
+                })
             );
         } else {
             proceedWithContainerCreation(input, user, tenantId, listener);
@@ -163,11 +176,7 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private void createModelFromSpec(
-        org.opensearch.ml.common.agent.MLAgentModelSpec modelSpec,
-        boolean isMemoryLlm,
-        ActionListener<String> listener
-    ) {
+    private void createModelFromSpec(MLAgentModelSpec modelSpec, boolean isMemoryLlm, ActionListener<String> listener) {
         try {
             MLRegisterModelInput modelInput = MemoryModelService.createModelFromSpec(modelSpec, isMemoryLlm);
             MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
@@ -179,13 +188,49 @@ public class TransportCreateMemoryContainerAction extends
                         log.error("Failed to auto-create model for memory container: {}", modelSpec.getModelId(), e);
                         listener
                             .onFailure(
-                                new OpenSearchStatusException("Failed to create model: " + e.getMessage(), RestStatus.INTERNAL_SERVER_ERROR)
+                                e instanceof IllegalArgumentException
+                                    ? e
+                                    : new OpenSearchStatusException("Failed to create model", RestStatus.INTERNAL_SERVER_ERROR)
                             );
                     })
                 );
         } catch (Exception e) {
             log.error("Failed to build model registration input: {}", modelSpec.getModelId(), e);
             listener.onFailure(new IllegalArgumentException("Invalid model specification: " + e.getMessage()));
+        }
+    }
+
+    private void cleanupOrphanModels(MemoryConfiguration config) {
+        if (config.getEmbeddingModelId() != null && config.hasInlineEmbeddingModel()) {
+            log.info("Cleaning up orphan embedding model: {}", config.getEmbeddingModelId());
+            try {
+                client
+                    .execute(
+                        org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE,
+                        new org.opensearch.ml.common.transport.model.MLModelDeleteRequest(config.getEmbeddingModelId(), null),
+                        ActionListener
+                            .wrap(
+                                r -> log.info("Cleaned up orphan embedding model"),
+                                e -> log.warn("Failed to cleanup orphan embedding model", e)
+                            )
+                    );
+            } catch (Exception e) {
+                log.warn("Failed to cleanup orphan embedding model: {}", config.getEmbeddingModelId(), e);
+            }
+        }
+        if (config.getLlmId() != null && config.hasInlineLlm()) {
+            log.info("Cleaning up orphan LLM model: {}", config.getLlmId());
+            try {
+                client
+                    .execute(
+                        org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE,
+                        new org.opensearch.ml.common.transport.model.MLModelDeleteRequest(config.getLlmId(), null),
+                        ActionListener
+                            .wrap(r -> log.info("Cleaned up orphan LLM model"), e -> log.warn("Failed to cleanup orphan LLM model", e))
+                    );
+            } catch (Exception e) {
+                log.warn("Failed to cleanup orphan LLM model: {}", config.getLlmId(), e);
+            }
         }
     }
 
