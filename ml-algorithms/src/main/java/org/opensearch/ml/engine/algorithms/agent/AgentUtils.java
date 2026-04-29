@@ -56,6 +56,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -837,7 +838,7 @@ public class AgentUtils {
                         }
                     }
                 }
-
+                warnUnusedToolDescriptionOverrides(connectorId, toolDescriptionOverrides, filteredTools);
                 finalToolSpecs.addAll(filteredTools);
 
                 // If this is the last connector, send the final response
@@ -854,15 +855,65 @@ public class AgentUtils {
         }
     }
 
-    private static Map<String, String> toStringMap(Object rawMap) {
-        if (!(rawMap instanceof Map<?, ?>)) {
+    /**
+     * Warns when {@code tool_descriptions} contains keys that do not match any tool returned for the connector.
+     * Skips all work when WARN is not enabled, including scanning {@code filteredTools}.
+     */
+    private static void warnUnusedToolDescriptionOverrides(
+        String connectorId,
+        Map<String, String> toolDescriptionOverrides,
+        List<MLToolSpec> filteredTools
+    ) {
+        if (!log.isWarnEnabled()) {
+            return;
+        }
+        if (toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty()) {
+            return;
+        }
+        Set<String> knownToolNames = filteredTools
+            .stream()
+            .filter(Objects::nonNull)
+            .map(MLToolSpec::getName)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        for (String overrideToolName : toolDescriptionOverrides.keySet()) {
+            if (!knownToolNames.contains(overrideToolName)) {
+                log
+                    .warn(
+                        "MCP connector [{}]: tool_descriptions override for [{}] does not match any tool from this connector; override is ignored",
+                        connectorId,
+                        overrideToolName
+                    );
+            }
+        }
+    }
+
+    private static Map<String, String> toStringMap(Object raw) {
+        if (!(raw instanceof List<?> list)) {
             return Collections.emptyMap();
         }
-        return ((Map<?, ?>) rawMap)
-            .entrySet()
-            .stream()
-            .filter(entry -> entry.getKey() != null && entry.getValue() != null)
-            .collect(Collectors.toMap(entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
+        Map<String, String> merged = new HashMap<>();
+        for (Object item : list) {
+            if ((item instanceof Map<?, ?> map)) {
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    Object key = entry.getKey();
+                    Object value = entry.getValue();
+                    if (key != null && value != null) {
+                        String keyStr = key.toString();
+                        if (!(value instanceof String)) {
+                            log
+                                .warn(
+                                    "Tool description override for tool [{}] is non-string type [{}]; coercing with toString() may hide configuration errors",
+                                    keyStr,
+                                    value.getClass().getName()
+                                );
+                        }
+                        merged.put(keyStr, value.toString());
+                    }
+                }
+            }
+        }
+        return merged;
     }
 
     private static MLToolSpec applyToolDescriptionOverride(MLToolSpec toolSpec, Map<String, String> toolDescriptionOverrides) {
