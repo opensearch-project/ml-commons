@@ -74,19 +74,25 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
      */
     @Override
     public final void onResponse(Response response) {
-        onStreamResponse(response, false);
-
         if (agentListener != null) {
             agentListener.onResponse(response);
+        } else {
+            onStreamResponse(response, false);
         }
     }
 
     @Override
     public void onFailure(Exception e) {
         try {
-            MLTaskResponse errorResponse = createErrorResponse(e);
-            channel.sendResponseBatch(errorResponse);
-            channel.completeStream();
+            // For gRPC, send the exception directly
+            // For REST SSE (which doesn't support error propagation), convert to error chunk
+            if (isGrpcChannel()) {
+                channel.sendResponse(e);
+            } else {
+                MLTaskResponse errorResponse = createErrorResponse(e);
+                channel.sendResponseBatch(errorResponse);
+                channel.completeStream();
+            }
         } catch (Exception exc) {
             try {
                 channel.completeStream();
@@ -94,6 +100,13 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
                 log.error("Failed to complete stream", streamException);
             }
         }
+    }
+
+    /**
+     * Checks if the channel is a gRPC channel that supports proper error propagation.
+     */
+    private boolean isGrpcChannel() {
+        return channel != null && "grpc".equals(channel.getChannelType());
     }
 
     /**
