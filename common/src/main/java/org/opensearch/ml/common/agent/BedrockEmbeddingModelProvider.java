@@ -41,17 +41,12 @@ public class BedrockEmbeddingModelProvider extends ModelProvider {
      * Known Bedrock embedding models with their type and default dimension.
      */
     public static final Map<String, EmbeddingModelInfo> KNOWN_MODELS = Map
-        .of(
-            "amazon.titan-embed-text-v2:0",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
-            "amazon.titan-embed-text-v1",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536),
-            "amazon.titan-embed-image-v1",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
-            "cohere.embed-english-v3",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024),
-            "cohere.embed-multilingual-v3",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)
+        .ofEntries(
+            Map.entry("amazon.titan-embed-text-v2:0", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)),
+            Map.entry("amazon.titan-embed-text-v1", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536)),
+            Map.entry("amazon.titan-embed-image-v1", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)),
+            Map.entry("cohere.embed-english-v3", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024)),
+            Map.entry("cohere.embed-multilingual-v3", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1024))
         );
 
     @Override

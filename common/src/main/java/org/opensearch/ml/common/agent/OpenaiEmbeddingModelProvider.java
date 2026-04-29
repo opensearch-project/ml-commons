@@ -22,21 +22,21 @@ import org.opensearch.ml.common.memorycontainer.EmbeddingModelInfo;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
+import lombok.extern.log4j.Log4j2;
+
 /**
  * Model provider for OpenAI Embedding API (text-embedding-3-small, text-embedding-3-large, etc.)
  */
+@Log4j2
 public class OpenaiEmbeddingModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY = "{ \"input\": ${parameters.input}, \"model\": \"${parameters.model}\" }";
 
     public static final Map<String, EmbeddingModelInfo> KNOWN_MODELS = Map
-        .of(
-            "text-embedding-3-small",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536),
-            "text-embedding-3-large",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 3072),
-            "text-embedding-ada-002",
-            new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536)
+        .ofEntries(
+            Map.entry("text-embedding-3-small", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536)),
+            Map.entry("text-embedding-3-large", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 3072)),
+            Map.entry("text-embedding-ada-002", new EmbeddingModelInfo(FunctionName.TEXT_EMBEDDING, 1536))
         );
 
     @Override
