@@ -6,7 +6,9 @@
 package org.opensearch.ml.common.settings;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_NAME_UNIQUENESS_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_NAME_UNIQUENESS_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
@@ -76,6 +78,10 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isAGUIEnabled;
 
+    private volatile Boolean isAgentNameUniquenessEnabled;
+
+    private volatile Boolean isAgenticMemoryNameUniquenessEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -101,6 +107,8 @@ public class MLFeatureEnabledSetting {
         maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
         isMcpHeaderPassthroughEnabled = ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.get(settings);
         isAGUIEnabled = ML_COMMONS_AG_UI_ENABLED.get(settings);
+        isAgentNameUniquenessEnabled = ML_COMMONS_AGENT_NAME_UNIQUENESS_ENABLED.get(settings);
+        isAgenticMemoryNameUniquenessEnabled = ML_COMMONS_AGENTIC_MEMORY_NAME_UNIQUENESS_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -140,6 +148,12 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED, it -> isMcpHeaderPassthroughEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AG_UI_ENABLED, it -> isAGUIEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_AGENT_NAME_UNIQUENESS_ENABLED, it -> isAgentNameUniquenessEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_MEMORY_NAME_UNIQUENESS_ENABLED, it -> isAgenticMemoryNameUniquenessEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
             isStaticMetricCollectionEnabled = it;
             for (SettingsChangeListener listener : listeners) {
@@ -313,5 +327,25 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isAGUIEnabled() {
         return isAGUIEnabled;
+    }
+
+    /**
+     * Whether agent name uniqueness is enforced. When enabled, registering an agent with a name
+     * that already exists within the same tenant is rejected. Defaults to false for backward
+     * compatibility.
+     * @return whether agent name uniqueness is enforced.
+     */
+    public boolean isAgentNameUniquenessEnabled() {
+        return isAgentNameUniquenessEnabled;
+    }
+
+    /**
+     * Whether agentic memory container name uniqueness is enforced. When enabled, creating a
+     * memory container with a name that already exists within the same tenant is rejected.
+     * Defaults to false for backward compatibility.
+     * @return whether agentic memory container name uniqueness is enforced.
+     */
+    public boolean isAgenticMemoryNameUniquenessEnabled() {
+        return isAgenticMemoryNameUniquenessEnabled;
     }
 }
