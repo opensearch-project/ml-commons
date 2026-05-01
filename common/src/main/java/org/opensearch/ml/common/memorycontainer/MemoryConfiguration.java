@@ -370,6 +370,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 case USE_SYSTEM_INDEX_FIELD:
                     useSystemIndex = parser.booleanValue();
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;

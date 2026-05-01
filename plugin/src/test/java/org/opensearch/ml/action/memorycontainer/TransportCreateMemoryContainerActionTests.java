@@ -2261,4 +2261,97 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
                 any(ActionListener.class)
             );
     }
+
+    @Test
+    public void testDoExecute_embeddingSucceeds_llmFails_cleanupInvoked() {
+        org.opensearch.ml.common.agent.MLAgentModelSpec embeddingSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("amazon.titan-embed-text-v2:0")
+            .modelProvider("bedrock/embedding")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        org.opensearch.ml.common.agent.MLAgentModelSpec llmSpec = org.opensearch.ml.common.agent.MLAgentModelSpec
+            .builder()
+            .modelId("us.anthropic.claude-sonnet-4-6")
+            .modelProvider("bedrock/converse")
+            .credential(Map.of("access_key", "test", "secret_key", "test"))
+            .build();
+
+        MemoryConfiguration inlineConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("cleanup-test")
+            .embeddingModelSpec(embeddingSpec)
+            .llmSpec(llmSpec)
+            .strategies(
+                List
+                    .of(
+                        MemoryStrategy
+                            .builder()
+                            .namespace(List.of("user_id"))
+                            .id("strategy-id1")
+                            .enabled(true)
+                            .type(MemoryStrategyType.SEMANTIC)
+                            .build()
+                    )
+            )
+            .build();
+
+        MLCreateMemoryContainerInput inlineInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-cleanup")
+            .configuration(inlineConfig)
+            .build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(inlineInput);
+
+        // First call (embedding) succeeds, second call (LLM) fails
+        java.util.concurrent.atomic.AtomicInteger callCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            if (callCount.getAndIncrement() == 0) {
+                listener
+                    .onResponse(
+                        new org.opensearch.ml.common.transport.register.MLRegisterModelResponse("task-1", "CREATED", "auto-embed-id")
+                    );
+            } else {
+                listener.onFailure(new RuntimeException("LLM creation failed"));
+            }
+            return null;
+        })
+            .when(client)
+            .execute(
+                eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class),
+                any(ActionListener.class)
+            );
+
+        // Mock delete to succeed
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onResponse(null);
+            return null;
+        })
+            .when(client)
+            .execute(
+                eq(org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.model.MLModelDeleteRequest.class),
+                any(ActionListener.class)
+            );
+
+        action.doExecute(null, request, actionListener);
+
+        // Verify failure surfaced
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue().getMessage().contains("Failed to create model"));
+
+        // Verify cleanup was invoked for the orphan embedding model
+        verify(client)
+            .execute(
+                eq(org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE),
+                any(org.opensearch.ml.common.transport.model.MLModelDeleteRequest.class),
+                any(ActionListener.class)
+            );
+    }
 }

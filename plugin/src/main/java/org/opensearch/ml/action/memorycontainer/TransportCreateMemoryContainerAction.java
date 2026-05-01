@@ -118,15 +118,16 @@ public class TransportCreateMemoryContainerAction extends
                 return;
             }
 
-            createInlineModels(
-                config,
-                tenantId,
-                ActionListener.wrap(v -> { proceedWithContainerCreation(input, user, tenantId, listener); }, e -> {
-                    // Best-effort cleanup of any models created before failure
-                    cleanupOrphanModels(config);
-                    listener.onFailure(e);
-                })
-            );
+            createInlineModels(config, tenantId, ActionListener.wrap(v -> {
+                // TODO: Wire cleanupOrphanModels into proceedWithContainerCreation failure paths
+                // (validateConfiguration, initMemoryContainerIndex, indexMemoryContainer, createMemoryDataIndices)
+                // to clean up auto-created models if downstream steps fail.
+                proceedWithContainerCreation(input, user, tenantId, listener);
+            }, e -> {
+                // Best-effort cleanup of any models created before failure
+                cleanupOrphanModels(config);
+                listener.onFailure(e);
+            }));
         } else {
             proceedWithContainerCreation(input, user, tenantId, listener);
         }
@@ -191,9 +192,11 @@ public class TransportCreateMemoryContainerAction extends
                             );
                     })
                 );
+        } catch (IllegalArgumentException e) {
+            listener.onFailure(e);
         } catch (Exception e) {
             log.error("Failed to build model registration input: {}", modelSpec.getModelId(), e);
-            listener.onFailure(new IllegalArgumentException("Invalid model specification: " + e.getMessage()));
+            listener.onFailure(new OpenSearchStatusException("Failed to build model registration input", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -204,7 +207,7 @@ public class TransportCreateMemoryContainerAction extends
                 client
                     .execute(
                         MLModelDeleteAction.INSTANCE,
-                        new MLModelDeleteRequest(config.getEmbeddingModelId(), null),
+                        new MLModelDeleteRequest(config.getEmbeddingModelId(), config.getTenantId()),
                         ActionListener
                             .wrap(
                                 r -> log.info("Cleaned up orphan embedding model"),
@@ -221,7 +224,7 @@ public class TransportCreateMemoryContainerAction extends
                 client
                     .execute(
                         MLModelDeleteAction.INSTANCE,
-                        new MLModelDeleteRequest(config.getLlmId(), null),
+                        new MLModelDeleteRequest(config.getLlmId(), config.getTenantId()),
                         ActionListener
                             .wrap(r -> log.info("Cleaned up orphan LLM model"), e -> log.warn("Failed to cleanup orphan LLM model", e))
                     );
