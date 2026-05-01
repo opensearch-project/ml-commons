@@ -405,6 +405,15 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
      * Called before inline model creation to catch user errors early and avoid orphan models.
      */
     public void validateNonModelInputs() {
+        // Reject conflicting configurations
+        if (embeddingModelSpec != null && embeddingModelId != null) {
+            throw new IllegalArgumentException(
+                "Cannot specify both 'embedding_model' (inline) and 'embedding_model_id'. Use one or the other."
+            );
+        }
+        if (llmSpec != null && llmId != null) {
+            throw new IllegalArgumentException("Cannot specify both 'llm' (inline) and 'llm_id'. Use one or the other.");
+        }
         if (maxInferSize != null && maxInferSize > 10) {
             throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
         }
