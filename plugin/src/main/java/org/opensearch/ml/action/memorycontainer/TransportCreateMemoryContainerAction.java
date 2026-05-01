@@ -25,6 +25,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryContainerConstants;
 import org.opensearch.ml.common.memorycontainer.MemoryModelService;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -32,6 +33,8 @@ import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContaine
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
+import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
+import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
@@ -200,8 +203,8 @@ public class TransportCreateMemoryContainerAction extends
             try {
                 client
                     .execute(
-                        org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE,
-                        new org.opensearch.ml.common.transport.model.MLModelDeleteRequest(config.getEmbeddingModelId(), null),
+                        MLModelDeleteAction.INSTANCE,
+                        new MLModelDeleteRequest(config.getEmbeddingModelId(), null),
                         ActionListener
                             .wrap(
                                 r -> log.info("Cleaned up orphan embedding model"),
@@ -217,8 +220,8 @@ public class TransportCreateMemoryContainerAction extends
             try {
                 client
                     .execute(
-                        org.opensearch.ml.common.transport.model.MLModelDeleteAction.INSTANCE,
-                        new org.opensearch.ml.common.transport.model.MLModelDeleteRequest(config.getLlmId(), null),
+                        MLModelDeleteAction.INSTANCE,
+                        new MLModelDeleteRequest(config.getLlmId(), null),
                         ActionListener
                             .wrap(r -> log.info("Cleaned up orphan LLM model"), e -> log.warn("Failed to cleanup orphan LLM model", e))
                     );
@@ -231,7 +234,7 @@ public class TransportCreateMemoryContainerAction extends
     private void setLlmResultPathFromProvider(MemoryConfiguration config) {
         String resultPath = MemoryModelService.getLlmResultPath(config.getLlmSpec().getModelProvider());
         if (resultPath != null) {
-            config.getParameters().put(org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD, resultPath);
+            config.getParameters().put(MemoryContainerConstants.LLM_RESULT_PATH_FIELD, resultPath);
         }
     }
 
