@@ -29,7 +29,6 @@ import lombok.extern.log4j.Log4j2;
 public class BedrockEmbeddingModelProvider extends ModelProvider {
 
     private static final String DEFAULT_REGION = MemoryContainerConstants.DEFAULT_AWS_REGION;
-    private static final java.util.regex.Pattern REGION_PATTERN = MemoryContainerConstants.AWS_REGION_PATTERN;
 
     private static final String TITAN_REQUEST_BODY =
         "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions},"
