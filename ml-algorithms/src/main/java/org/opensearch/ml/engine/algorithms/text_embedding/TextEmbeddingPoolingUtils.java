@@ -28,11 +28,31 @@ final class TextEmbeddingPoolingUtils {
      * @return the embedding at the last non-padding token position
      */
     static NDArray lastTokenPool(NDArray embeddings, NDArray attentionMask) {
-        long seqLen = attentionMask.getShape().get(0);
-        NDArray mask = attentionMask.toType(DataType.INT64, false);
-        // positions[i] = i+1 for real tokens, 0 for padding; the max reveals the last real index
-        NDArray indices = attentionMask.getManager().arange(1L, seqLen + 1L).toType(DataType.INT64, false);
-        long lastTokenIdx = Math.max(indices.mul(mask).max().toLongArray()[0] - 1, 0L);
-        return embeddings.get(lastTokenIdx);
+        return embeddings.get(findLastRealTokenIndex(attentionMask));
+    }
+
+    /**
+     * Scans the attention mask from the end for the first non-zero entry. Done in Java
+     * rather than via NDArray arithmetic because the DJL ONNX runtime engine does not
+     * implement {@code arange}, {@code mul}, or {@code max}. Returns 0 as a safe fallback
+     * when the mask is all padding.
+     */
+    private static long findLastRealTokenIndex(NDArray attentionMask) {
+        if (attentionMask.getDataType() == DataType.FLOAT32) {
+            float[] mask = attentionMask.toFloatArray();
+            for (int i = mask.length - 1; i >= 0; i--) {
+                if (mask[i] != 0f) {
+                    return i;
+                }
+            }
+        } else {
+            long[] mask = attentionMask.toLongArray();
+            for (int i = mask.length - 1; i >= 0; i--) {
+                if (mask[i] != 0L) {
+                    return i;
+                }
+            }
+        }
+        return 0L;
     }
 }
