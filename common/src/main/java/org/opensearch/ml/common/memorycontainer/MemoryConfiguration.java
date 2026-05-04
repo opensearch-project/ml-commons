@@ -401,9 +401,6 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     }
 
     /**
-     * Returns true if inline embedding model spec is provided (needs auto-creation).
-     */
-    /**
      * Validates inputs that don't depend on model creation (maxInferSize, strategies, index prefix).
      * Called before inline model creation to catch user errors early and avoid orphan models.
      */
@@ -440,6 +437,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
     }
 
+    /**
+     * Returns true if inline embedding model spec is provided (needs auto-creation).
+     */
     public boolean hasInlineEmbeddingModel() {
         return embeddingModelSpec != null;
     }
