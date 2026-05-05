@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -52,8 +53,8 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         String tenantId,
         List<String> backendRoles
     ) {
-        if (name == null) {
-            throw new IllegalArgumentException("name is null");
+        if (StringUtils.isBlank(name)) {
+            throw new IllegalArgumentException("name cannot be null or blank");
         }
         this.name = name;
         this.description = description;

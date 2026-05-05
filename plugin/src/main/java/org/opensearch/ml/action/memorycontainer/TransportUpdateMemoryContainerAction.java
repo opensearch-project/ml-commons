@@ -154,7 +154,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         try {
             // Prepare the update
             Map<String, Object> updateFields = new HashMap<>();
-            if (newName != null) {
+            if (StringUtils.isNotBlank(newName)) {
                 updateFields.put(NAME_FIELD, newName);
             }
             if (newDescription != null) {

@@ -218,7 +218,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
         }
 
         NameUniquenessHelper
-            .searchByExactName(client, sdkClient, ML_AGENT_INDEX, newName, updateInput.getTenantId(), ActionListener.wrap(response -> {
+            .searchByExactName(client, sdkClient, ML_AGENT_INDEX, newName, originalAgent.getTenantId(), ActionListener.wrap(response -> {
                 if (response == null) {
                     listener.onResponse(null);
                     return;

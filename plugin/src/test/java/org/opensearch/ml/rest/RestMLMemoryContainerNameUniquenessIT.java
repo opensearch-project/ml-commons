@@ -102,8 +102,10 @@ public class RestMLMemoryContainerNameUniquenessIT extends MLCommonsRestTestCase
         String id = (String) parseResponseToMap(r).get("memory_container_id");
         assertNotNull(id);
 
-        Response renamed = updateMemoryContainer(id, "{\"name\":\"it-memc-rename-dst-" + System.nanoTime() + "\"}");
+        String newName = "it-memc-rename-dst-" + System.nanoTime();
+        Response renamed = updateMemoryContainer(id, "{\"name\":\"" + newName + "\"}");
         assertEquals(200, renamed.getStatusLine().getStatusCode());
+        assertEquals("Rename should have been persisted", newName, getMemoryContainerName(id));
     }
 
     public void testRename_ToExistingName_Rejected_WhenFlagOn() throws IOException {
@@ -132,17 +134,24 @@ public class RestMLMemoryContainerNameUniquenessIT extends MLCommonsRestTestCase
         }
     }
 
-    public void testRename_BlankName_NoOp_Accepted_WhenFlagOn() throws IOException {
-        // A PUT with a blank name must be treated as "no rename" (mirrors the StringUtils.isNotBlank
-        // gate in TransportUpdateModelGroupAction.updateModelGroup) - must not 409.
+    public void testRename_BlankName_Rejected_WhenFlagOn() throws IOException {
+        // A PUT with a blank name must be rejected up front (mirrors MLAgentUpdateInput.validate()):
+        // we'd rather 400 than silently either 409 or overwrite the stored name with whitespace.
         updateClusterSettings(SETTING_KEY, true);
 
         Response r = createMemoryContainer(createMemoryContainerBody("it-memc-rename-blank-src"));
         String id = (String) parseResponseToMap(r).get("memory_container_id");
         assertNotNull(id);
 
-        Response blank = updateMemoryContainer(id, "{\"name\":\"   \"}");
-        assertEquals(200, blank.getStatusLine().getStatusCode());
+        try {
+            updateMemoryContainer(id, "{\"name\":\"   \"}");
+            fail("Expected blank name on rename to be rejected");
+        } catch (ResponseException e) {
+            assertEquals(400, e.getResponse().getStatusLine().getStatusCode());
+        }
+
+        // Confirm the stored name was not mutated.
+        assertEquals("it-memc-rename-blank-src", getMemoryContainerName(id));
     }
 
     public void testRename_SameName_NoOp_Accepted_WhenFlagOn() throws IOException {
@@ -175,6 +184,12 @@ public class RestMLMemoryContainerNameUniquenessIT extends MLCommonsRestTestCase
 
     private static Response updateMemoryContainer(String id, String body) throws IOException {
         return TestHelper.makeRequest(client(), "PUT", "/_plugins/_ml/memory_containers/" + id, null, TestHelper.toHttpEntity(body), null);
+    }
+
+    private String getMemoryContainerName(String id) throws IOException {
+        Response r = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/memory_containers/" + id, null, "", null);
+        assertEquals(200, r.getStatusLine().getStatusCode());
+        return (String) parseResponseToMap(r).get("name");
     }
 
     private static String createMemoryContainerBody(String name) {

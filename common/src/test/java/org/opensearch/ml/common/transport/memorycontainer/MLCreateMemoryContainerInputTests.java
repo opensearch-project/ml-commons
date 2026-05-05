@@ -131,6 +131,16 @@ public class MLCreateMemoryContainerInputTests {
             .build();
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testConstructorWithBlankName() {
+        MLCreateMemoryContainerInput.builder().name("   ").description("blank name").build();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testConstructorWithEmptyName() {
+        MLCreateMemoryContainerInput.builder().name("").description("empty name").build();
+    }
+
     @Test
     public void testStreamInputOutput() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
