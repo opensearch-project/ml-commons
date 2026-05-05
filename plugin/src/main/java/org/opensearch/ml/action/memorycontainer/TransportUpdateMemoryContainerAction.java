@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -42,6 +43,7 @@ import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.helper.MemoryContainerModelValidator;
 import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
 import org.opensearch.ml.helper.MemoryContainerSharedIndexValidator;
+import org.opensearch.ml.helper.NameUniquenessHelper;
 import org.opensearch.ml.helper.StrategyMergeHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -123,6 +125,33 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                 return;
             }
 
+            validateMemoryContainerNameUniquenessForUpdate(newName, container, ActionListener.wrap(unused -> {
+                continueUpdate(
+                    container,
+                    newName,
+                    newDescription,
+                    allowedBackendRoles,
+                    updateConfiguration,
+                    memoryContainerId,
+                    actionListener
+                );
+            }, actionListener::onFailure));
+        }, e -> {
+            log.error("Failed to get memory container for update", e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+        }));
+    }
+
+    private void continueUpdate(
+        MLMemoryContainer container,
+        String newName,
+        String newDescription,
+        List<String> allowedBackendRoles,
+        MemoryConfiguration updateConfiguration,
+        String memoryContainerId,
+        ActionListener<UpdateResponse> actionListener
+    ) {
+        try {
             // Prepare the update
             Map<String, Object> updateFields = new HashMap<>();
             if (newName != null) {
@@ -195,10 +224,63 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
 
             updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
             performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, actionListener);
-        }, e -> {
-            log.error("Failed to get memory container for update", e);
+        } catch (Exception e) {
+            log.error("Failed to update memory container {}", memoryContainerId, e);
             actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
-        }));
+        }
+    }
+
+    /**
+     * When {@code plugins.ml_commons.agentic_memory_name_uniqueness_enabled} is enabled and the
+     * update would rename the container to a new value, reject the update if another memory
+     * container in the same tenant already has that name. Skipped if the setting is off, if the
+     * update omits a new name (or provides a blank one), or if the new name equals the existing
+     * name. Mirrors the gate shape used by {@code TransportUpdateModelGroupAction#updateModelGroup}.
+     *
+     * <p>Same best-effort semantics as the create path: two concurrent updates racing on the
+     * same name can both see zero hits and both succeed.
+     */
+    private void validateMemoryContainerNameUniquenessForUpdate(
+        String newName,
+        MLMemoryContainer originalContainer,
+        ActionListener<Void> listener
+    ) {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()) {
+            listener.onResponse(null);
+            return;
+        }
+        if (StringUtils.isBlank(newName) || newName.equals(originalContainer.getName())) {
+            // No rename (name omitted/blank), or a no-op rename to the current name.
+            listener.onResponse(null);
+            return;
+        }
+
+        NameUniquenessHelper
+            .searchByExactName(
+                client,
+                sdkClient,
+                ML_MEMORY_CONTAINER_INDEX,
+                newName,
+                originalContainer.getTenantId(),
+                ActionListener.wrap(response -> {
+                    if (response == null) {
+                        listener.onResponse(null);
+                        return;
+                    }
+                    long totalHits = response.getHits().getTotalHits() == null ? 0 : response.getHits().getTotalHits().value();
+                    if (totalHits > 0) {
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "A memory container with name [" + newName + "] already exists. Memory container names must be unique.",
+                                    RestStatus.CONFLICT
+                                )
+                            );
+                    } else {
+                        listener.onResponse(null);
+                    }
+                }, listener::onFailure)
+            );
     }
 
     /**

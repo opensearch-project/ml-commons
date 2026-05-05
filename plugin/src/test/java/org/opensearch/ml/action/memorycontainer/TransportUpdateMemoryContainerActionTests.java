@@ -2283,4 +2283,251 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener, never()).onResponse(any());
     }
 
+    public void testDoExecute_uniquenessEnforced_renameToExistingName_rejected() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(true);
+
+        String containerId = "test-container-id";
+        String newName = "taken-name";
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name(newName).build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("old-name")
+            .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        java.util.concurrent.CompletableFuture<
+            org.opensearch.remote.metadata.client.SearchDataObjectResponse
+        > future = java.util.concurrent.CompletableFuture.completedFuture(searchDataObjectResponseWithHit("conflicting-container-id"));
+        when(sdkClient.searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        Exception exception = captor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("already exists"));
+        assertTrue(exception.getMessage().contains(newName));
+        assertFalse(exception.getMessage().contains("conflicting-container-id"));
+        // Must not have attempted a write when a duplicate is found.
+        verify(client, never()).update(any(), any());
+    }
+
+    public void testDoExecute_uniquenessEnforced_renameToUnusedName_allowed() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(true);
+
+        String containerId = "test-container-id";
+        String newName = "brand-new-name";
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name(newName).build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("old-name")
+            .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        java.util.concurrent.CompletableFuture<
+            org.opensearch.remote.metadata.client.SearchDataObjectResponse
+        > future = java.util.concurrent.CompletableFuture.completedFuture(searchDataObjectResponseWithHits(0L));
+        when(sdkClient.searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class))).thenReturn(future);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(sdkClient).searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class));
+        verify(listener).onResponse(updateResponse);
+    }
+
+    public void testDoExecute_uniquenessEnforced_sameNameNoOp_skipsSearch() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(true);
+
+        String containerId = "test-container-id";
+        // A PUT that re-specifies the existing name must be a no-op rename (no search, no 409).
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("old-name").description("new desc").build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("old-name")
+            .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(sdkClient, never()).searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class));
+        verify(listener).onResponse(updateResponse);
+    }
+
+    public void testDoExecute_uniquenessDisabled_renameSkipsSearch() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(false);
+
+        String containerId = "test-container-id";
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("renamed-but-flag-off").build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("old-name")
+            .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(sdkClient, never()).searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class));
+        verify(listener).onResponse(updateResponse);
+    }
+
+    private org.opensearch.remote.metadata.client.SearchDataObjectResponse searchDataObjectResponseWithHits(long hitCount) {
+        org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+            hitCount,
+            org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+        );
+        org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+            new org.opensearch.search.SearchHit[0],
+            totalHits,
+            Float.NaN
+        );
+        return buildSdkSearchResponse(hits);
+    }
+
+    private org.opensearch.remote.metadata.client.SearchDataObjectResponse searchDataObjectResponseWithHit(String conflictingId) {
+        org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+            1L,
+            org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+        );
+        org.opensearch.search.SearchHit hit = new org.opensearch.search.SearchHit(0, conflictingId, null, null);
+        org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+            new org.opensearch.search.SearchHit[] { hit },
+            totalHits,
+            Float.NaN
+        );
+        return buildSdkSearchResponse(hits);
+    }
+
+    private org.opensearch.remote.metadata.client.SearchDataObjectResponse buildSdkSearchResponse(org.opensearch.search.SearchHits hits) {
+        org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+            hits,
+            org.opensearch.search.aggregations.InternalAggregations.EMPTY,
+            null,
+            null,
+            false,
+            null,
+            0
+        );
+        org.opensearch.action.search.SearchResponse searchResponse = new org.opensearch.action.search.SearchResponse(
+            internal,
+            null,
+            1,
+            1,
+            0,
+            1,
+            org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+            org.opensearch.action.search.SearchResponse.Clusters.EMPTY
+        );
+        org.opensearch.remote.metadata.client.SearchDataObjectResponse sdkResp = mock(
+            org.opensearch.remote.metadata.client.SearchDataObjectResponse.class
+        );
+        when(sdkResp.searchResponse()).thenReturn(searchResponse);
+        return sdkResp;
+    }
+
 }

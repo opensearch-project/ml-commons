@@ -15,12 +15,10 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
@@ -29,9 +27,6 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.action.agent.MLAgentRegistrationValidator;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.MLAgentType;
@@ -50,13 +45,12 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.helper.NameUniquenessHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
-import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -159,54 +153,25 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void checkAgentNameAvailable(String name, String tenantId, ActionListener<Void> listener) {
-        BoolQueryBuilder query = new BoolQueryBuilder().filter(new TermQueryBuilder("name.keyword", name));
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder().query(query).size(1).fetchSource(false);
-        SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX).source(sourceBuilder);
-        SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-            .builder()
-            .indices(searchRequest.indices())
-            .searchSourceBuilder(searchRequest.source())
-            .tenantId(tenantId)
-            .build();
-
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                context.restore();
-                if (throwable != null) {
-                    if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
-                        // Index not yet created - no duplicate possible
-                        listener.onResponse(null);
-                        return;
-                    }
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    log.error("Failed to search ML agent index for name uniqueness check", cause);
-                    listener.onFailure(cause);
-                    return;
-                }
-                try {
-                    long totalHits = r.searchResponse().getHits().getTotalHits() == null
-                        ? 0
-                        : r.searchResponse().getHits().getTotalHits().value();
-                    if (totalHits > 0) {
-                        listener
-                            .onFailure(
-                                new OpenSearchStatusException(
-                                    "An agent with name [" + name + "] already exists. Agent names must be unique.",
-                                    RestStatus.CONFLICT
-                                )
-                            );
-                    } else {
-                        listener.onResponse(null);
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to parse search response for agent name uniqueness check", e);
-                    listener.onFailure(e);
-                }
-            });
-        } catch (Exception e) {
-            log.error("Failed to execute agent name uniqueness check", e);
-            listener.onFailure(e);
-        }
+        NameUniquenessHelper.searchByExactName(client, sdkClient, ML_AGENT_INDEX, name, tenantId, ActionListener.wrap(response -> {
+            if (response == null) {
+                // Index not yet created - no duplicate possible.
+                listener.onResponse(null);
+                return;
+            }
+            long totalHits = response.getHits().getTotalHits() == null ? 0 : response.getHits().getTotalHits().value();
+            if (totalHits > 0) {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "An agent with name [" + name + "] already exists. Agent names must be unique.",
+                            RestStatus.CONFLICT
+                        )
+                    );
+            } else {
+                listener.onResponse(null);
+            }
+        }, listener::onFailure));
     }
 
     private void createModelAndRegisterAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
