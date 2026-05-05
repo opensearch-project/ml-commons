@@ -26,8 +26,10 @@ import org.opensearch.ml.engine.MLStaticMockBase;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
+import tools.jackson.databind.json.JsonMapper;
 
 public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
 
@@ -58,7 +60,12 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
         String inputSchemaJSON =
             "{\"type\":\"object\",\"properties\":{\"state\":{\"title\":\"State\",\"type\":\"string\"}},\"required\":[\"state\"],\"additionalProperties\":false}";
 
-        McpSchema.Tool tool = new McpSchema.Tool("tool1", "desc1", inputSchemaJSON);
+        McpSchema.Tool tool = McpSchema.Tool
+            .builder()
+            .name("tool1")
+            .description("desc1")
+            .inputSchema(new JacksonMcpJsonMapper(JsonMapper.shared()), inputSchemaJSON)
+            .build();
         McpSchema.ListToolsResult mockTools = new McpSchema.ListToolsResult(List.of(tool), null);
 
         when(mcpClient.listTools()).thenReturn(mockTools);

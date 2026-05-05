@@ -39,8 +39,7 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTen
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.search.SearchModule;
-
-import com.fasterxml.jackson.core.JsonParseException;
+import org.opensearch.tools.jackson.core.JsonParseException;
 
 public class MLCommonsClassLoaderTests {
 

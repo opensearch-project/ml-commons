@@ -15,11 +15,10 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Log4j2
 public class NovaMultiModalEmbeddingPreProcessFunction extends ConnectorPreProcessFunction {
@@ -65,16 +64,16 @@ public class NovaMultiModalEmbeddingPreProcessFunction extends ConnectorPreProce
             JsonNode value;
 
             if ((value = node.get("text")) != null)
-                return value.asText();
+                return value.asString();
             if ((value = node.get("image")) != null)
-                return value.asText();
+                return value.asString();
             if ((value = node.get("audio")) != null)
-                return value.asText();
+                return value.asString();
             if ((value = node.get("video")) != null)
-                return value.asText();
+                return value.asString();
 
             return input;
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Failed to parse JSON: {}", e.getMessage());
             return input;
         }
@@ -92,7 +91,7 @@ public class NovaMultiModalEmbeddingPreProcessFunction extends ConnectorPreProce
             if (node.has("audio"))
                 return "audio";
             return "text";
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Failed to detect modality from input, defaulting to text: {}", e.getMessage());
             return "text";
         }

@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -50,7 +51,12 @@ public class McpStreamableHttpToolTests {
     @Test
     public void testRunSuccess() {
         // create a CallToolResult wrapping a JSON string
-        McpSchema.CallToolResult result = new McpSchema.CallToolResult("{\"foo\":\"bar\"}", false);
+        McpSchema.CallToolResult result = new McpSchema.CallToolResult(
+            List.of(new McpSchema.TextContent("{\"foo\":\"bar\"}")),
+            false,
+            null,
+            Map.of()
+        );
         when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenReturn(result);
 
         tool.run(validParams, listener);

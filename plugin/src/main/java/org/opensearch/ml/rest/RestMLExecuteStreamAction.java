@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
@@ -203,12 +204,14 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 );
             channel.prepareResponse(RestStatus.OK, headers);
 
+            AtomicBoolean isAGUIRef = new AtomicBoolean(false);
             Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
                 try (ThreadContext.StoredContext context = supplier.get()) {
 
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
+                    isAGUIRef.set(isAGUI);
                     String threadId = extractThreadId(mlExecuteTaskRequest);
                     String runId = extractRunId(mlExecuteTaskRequest);
 
@@ -281,10 +284,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }).doOnNext(channel::sendChunk).onErrorResume(ex -> {
                 log.error("Error occurred", ex);
                 try {
-                    String errorMessage = ex instanceof IOException
-                        ? "Failed to parse request: " + ex.getMessage()
-                        : "Error processing request: " + ex.getMessage();
-                    HttpChunk errorChunk = createHttpChunk("data: {\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}\n\n", true);
+                    HttpChunk errorChunk = buildStreamErrorChunk(ex, isAGUIRef.get());
                     channel.sendChunk(errorChunk);
                 } catch (Exception e) {
                     log.error("Failed to send error chunk", e);
@@ -622,6 +622,27 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         } catch (IOException e) {
             log.error("Failed to combine chunks", e);
             throw new OpenSearchStatusException("Failed to combine request chunks", RestStatus.INTERNAL_SERVER_ERROR, e);
+        }
+    }
+
+    @VisibleForTesting
+    HttpChunk buildStreamErrorChunk(Throwable ex, boolean isAGUI) {
+        // Unwrap to get the actual root cause message and status
+        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+        String errorMessage;
+        if (ex instanceof IOException) {
+            errorMessage = "Failed to parse request: " + ex.getMessage();
+        } else if (cause instanceof OpenSearchStatusException statusEx) {
+            errorMessage = statusEx.getMessage();
+        } else {
+            errorMessage = cause.getMessage() != null ? cause.getMessage() : ex.getMessage();
+        }
+        if (isAGUI) {
+            // Emit a RunErrorEvent so the AG-UI client receives a structured error
+            BaseEvent runErrorEvent = new RunErrorEvent(errorMessage, null);
+            return createHttpChunk("data: " + runErrorEvent.toJsonString() + "\n\n", true);
+        } else {
+            return createHttpChunk("data: {\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}\n\n", true);
         }
     }
 

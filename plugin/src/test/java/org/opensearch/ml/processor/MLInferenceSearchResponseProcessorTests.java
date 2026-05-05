@@ -2501,14 +2501,12 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
             @Override
             public void onFailure(Exception e) {
+                System.out.println("Message: " + e.getMessage());
                 assertEquals(
                     "cannot find all required input fields: [text] in hit:{\n"
                         + "  \"_id\" : \"doc 0\",\n"
                         + "  \"_score\" : 0.0,\n"
-                        + "  \"_source\" : {\n"
-                        + "    \"texttypo\" : \"value 0\",\n"
-                        + "    \"image\" : \"value 0\"\n"
-                        + "  }\n"
+                        + "  \"_source\":{ \"texttypo\" : \"value 0\", \"image\" : \"value 0\"  }\n"
                         + "} and query body:{\"size\":5,\"query\":{\"term\":{\"text\":{\"value\":\"foo\",\"boost\":1.0}}},\"sort\":[{\"text\":{\"order\":\"asc\"}}]}",
                     e.getMessage()
                 );
@@ -3314,9 +3312,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                     "cannot find all required input fields: [text] in hit:{\n"
                         + "  \"_id\" : \"doc 2\",\n"
                         + "  \"_score\" : 2.0,\n"
-                        + "  \"_source\" : {\n"
-                        + "    \"textMissing\" : \"value 2\"\n"
-                        + "  }\n"
+                        + "  \"_source\":{ \"textMissing\" : \"value 2\" }\n"
                         + "} and query body:{\"size\":5,\"query\":{\"term\":{\"text\":{\"value\":\"foo\",\"boost\":1.0}}},\"sort\":[{\"text\":{\"order\":\"asc\"}}]}",
                     e.getMessage()
                 );

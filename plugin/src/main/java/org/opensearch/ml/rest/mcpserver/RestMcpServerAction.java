@@ -32,9 +32,8 @@ import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.transport.client.node.NodeClient;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.databind.ObjectMapper;
 
 @Log4j2
 public class RestMcpServerAction extends BaseRestHandler {

@@ -5,9 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -540,5 +542,101 @@ public class MLFlowAgentRunnerTest {
         runner.run(flowAgent, params, agentActionListener);
 
         verify(agentActionListener).onResponse(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testToolOutputJsonIsEscapedForNextTool() {
+        // This test verifies that when a tool returns valid JSON, it is properly escaped
+        // before being stored in params, so it can be safely used in string substitution
+        // by subsequent tools (e.g., in connector request body templates).
+        final Map<String, String> params = new HashMap<>();
+
+        // First tool returns valid JSON
+        String jsonToolOutput = "{\"logs\":[{\"message\":\"error occurred\",\"level\":\"ERROR\"}]}";
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(jsonToolOutput);
+            return null;
+        }).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
+
+        // Capture the params passed to second tool to verify escaping
+        ArgumentCaptor<Map<String, String>> secondToolParamsCaptor = ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(SECOND_TOOL_RESPONSE);
+            return null;
+        }).when(secondTool).run(secondToolParamsCaptor.capture(), any());
+
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify the first tool's JSON output is escaped when passed to second tool
+        Map<String, String> secondToolParams = secondToolParamsCaptor.getValue();
+        String escapedOutput = secondToolParams.get(FIRST_TOOL + ".output");
+        assertNotNull("First tool output should be present in second tool params", escapedOutput);
+
+        // The JSON should be escaped (quotes become \", etc.)
+        String expectedEscaped = escapeJson(jsonToolOutput);
+        assertEquals("Tool output should be JSON-escaped", expectedEscaped, escapedOutput);
+
+        // Verify the escaped string contains escaped quotes
+        assertTrue("Escaped output should contain escaped quotes", escapedOutput.contains("\\\""));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testToolOutputPlainTextIsEscapedForNextTool() {
+        // This test verifies that plain text tool output is also properly escaped
+        final Map<String, String> params = new HashMap<>();
+
+        // First tool returns plain text with special characters
+        String plainTextOutput = "Line1\nLine2\tTabbed \"quoted\"";
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(plainTextOutput);
+            return null;
+        }).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
+
+        // Capture the params passed to second tool to verify escaping
+        ArgumentCaptor<Map<String, String>> secondToolParamsCaptor = ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(SECOND_TOOL_RESPONSE);
+            return null;
+        }).when(secondTool).run(secondToolParamsCaptor.capture(), any());
+
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify the first tool's output is escaped when passed to second tool
+        Map<String, String> secondToolParams = secondToolParamsCaptor.getValue();
+        String escapedOutput = secondToolParams.get(FIRST_TOOL + ".output");
+        assertNotNull("First tool output should be present in second tool params", escapedOutput);
+
+        // The plain text should be escaped (newlines become \n, tabs become \t, quotes become \")
+        String expectedEscaped = escapeJson(plainTextOutput);
+        assertEquals("Tool output should be JSON-escaped", expectedEscaped, escapedOutput);
+
+        // Verify the escaped string contains escaped special characters
+        assertTrue("Escaped output should contain escaped newline", escapedOutput.contains("\\n"));
+        assertTrue("Escaped output should contain escaped tab", escapedOutput.contains("\\t"));
+        assertTrue("Escaped output should contain escaped quotes", escapedOutput.contains("\\\""));
     }
 }

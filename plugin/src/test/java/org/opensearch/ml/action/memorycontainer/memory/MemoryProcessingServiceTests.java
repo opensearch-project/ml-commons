@@ -1027,8 +1027,8 @@ public class MemoryProcessingServiceTests {
         assertTrue("Should be role-based", prompt.contains("USER PREFERENCE EXTRACTOR"));
 
         // Verify key requirements
-        assertTrue("Should have character limit", prompt.contains("< 350 chars"));
-        assertTrue("Should specify context format", prompt.contains("Context: <why/how>"));
+        assertTrue("Should have character limit", prompt.contains("350 characters"));
+        assertTrue("Should specify self-contained sentences", prompt.contains("self-contained sentence"));
 
         // Verify old problematic format is removed
         assertFalse("Should not use pipe delimiters", prompt.contains("preference | context:"));
@@ -1039,7 +1039,7 @@ public class MemoryProcessingServiceTests {
         // Test that enforcement message matches the new format
         String enforcement = USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE;
 
-        assertTrue("Should specify natural language format", enforcement.contains("Context: <why/how>. Categories:"));
+        assertTrue("Should specify fact sentence format", enforcement.contains("fact sentence"));
         assertFalse("Should not use old pipe format", enforcement.contains("preference | context:"));
     }
 
@@ -1070,8 +1070,8 @@ public class MemoryProcessingServiceTests {
         );
 
         assertTrue(
-            "User preference enforcement should be for natural format",
-            USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE.contains("Context: <why/how>")
+            "User preference enforcement should be for plain fact format",
+            USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE.contains("fact sentence")
         );
         assertTrue("Semantic enforcement should be for standard format", JSON_ENFORCEMENT_MESSAGE.contains("fact1"));
     }
@@ -1087,8 +1087,8 @@ public class MemoryProcessingServiceTests {
 
         // Verify format requirements
         assertTrue("Should require JSON format", prompt.contains("{\"facts\":["));
-        assertTrue("Should specify context format", prompt.contains("Context: <why/how>"));
-        assertTrue("Should limit character count", prompt.contains("< 350 chars"));
+        assertTrue("Should specify self-contained sentences", prompt.contains("self-contained sentence"));
+        assertTrue("Should limit character count", prompt.contains("350 characters"));
     }
 
     @Test

@@ -18,13 +18,14 @@ import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolReg
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.json.schema.jackson3.DefaultJsonSchemaValidator;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessAsyncServer;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.json.JsonMapper;
 
 @Log4j2
 public class McpStatelessServerHolder {
@@ -53,7 +54,7 @@ public class McpStatelessServerHolder {
                 return;
             }
             try {
-                mcpStatelessServerTransportProvider = new OpenSearchMcpStatelessServerTransportProvider(new ObjectMapper());
+                mcpStatelessServerTransportProvider = new OpenSearchMcpStatelessServerTransportProvider();
 
                 McpSchema.ServerCapabilities serverCapabilities = McpSchema.ServerCapabilities
                     .builder()
@@ -66,6 +67,8 @@ public class McpStatelessServerHolder {
                 log.info("Building MCP server ...");
                 mcpStatelessAsyncServer = McpServer
                     .async(mcpStatelessServerTransportProvider)
+                    .jsonMapper(new JacksonMcpJsonMapper(JsonMapper.shared()))
+                    .jsonSchemaValidator(new DefaultJsonSchemaValidator())
                     .serverInfo("OpenSearch-MCP-Stateless-Server", "0.1.0")
                     .capabilities(serverCapabilities)
                     .instructions("OpenSearch MCP Stateless Server - provides access to ML tools without sessions")

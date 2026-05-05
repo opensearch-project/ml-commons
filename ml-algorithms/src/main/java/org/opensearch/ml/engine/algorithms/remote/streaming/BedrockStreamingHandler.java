@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -40,11 +39,6 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorThrottlingException;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
@@ -78,6 +72,12 @@ import software.amazon.awssdk.services.bedrockruntime.model.ToolResultContentBlo
 import software.amazon.awssdk.services.bedrockruntime.model.ToolSpecification;
 import software.amazon.awssdk.services.bedrockruntime.model.ValidationException;
 import software.amazon.awssdk.services.s3.model.InvalidRequestException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.core.JsonToken;
+import tools.jackson.core.exc.StreamReadException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Bedrock ConverseStream handler supporting three streaming paths:
@@ -645,7 +645,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         String accumulated = toolInputAccumulator.toString();
 
         try {
-            JsonParser parser = objectMapper.getFactory().createParser(accumulated);
+            JsonParser parser = objectMapper.createParser(accumulated);
             JsonToken firstToken = parser.nextToken();
 
             // Check if it starts with an object
@@ -657,7 +657,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             // Parse through the entire structure
             int objectDepth = 1;
             while (parser.nextToken() != null) {
-                JsonToken currentToken = parser.getCurrentToken();
+                JsonToken currentToken = parser.currentToken();
                 if (currentToken == JsonToken.START_OBJECT) {
                     objectDepth++;
                 } else if (currentToken == JsonToken.END_OBJECT) {
@@ -683,9 +683,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             // JSON is incomplete
             log.debug("Incomplete JSON object: {}", accumulated);
 
-        } catch (JsonParseException e) {
+        } catch (StreamReadException e) {
             log.debug("Invalid or incomplete JSON: {}", accumulated);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             log.error("Error parsing JSON input", e);
         }
     }
@@ -708,7 +708,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private List<SystemContentBlock> parseSystemMessages(JsonNode systemArray) {
         return systemArray
-            .findValuesAsText("text")
+            .findValuesAsString("text")
             .stream()
             .map(text -> SystemContentBlock.builder().text(text).build())
             .collect(Collectors.toList());
@@ -868,7 +868,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private Document buildDocumentFromJsonNode(JsonNode node) {
         if (node.isObject()) {
             Map<String, Document> map = new HashMap<>();
-            node.fields().forEachRemaining(entry -> map.put(entry.getKey(), buildDocumentFromJsonNode(entry.getValue())));
+            node.properties().spliterator().forEachRemaining(entry -> map.put(entry.getKey(), buildDocumentFromJsonNode(entry.getValue())));
             return Document.fromMap(map);
         }
         if (node.isArray()) {

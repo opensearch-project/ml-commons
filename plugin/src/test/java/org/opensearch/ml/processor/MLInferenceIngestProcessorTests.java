@@ -45,11 +45,12 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.client.Client;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
 
@@ -771,7 +772,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
 
     }
 
-    public void testExecute_IOExceptionWithIgnoreMissingFalse() throws JsonProcessingException {
+    public void testExecute_IOExceptionWithIgnoreMissingFalse() {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String documentFieldPath = "text";
@@ -785,7 +786,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         model_config.put("position_embedding_type", "absolute");
 
         ObjectMapper mapper = mock(ObjectMapper.class);
-        when(mapper.readValue(Mockito.anyString(), eq(Object.class))).thenThrow(JsonProcessingException.class);
+        when(mapper.readValue(Mockito.anyString(), eq(Object.class))).thenThrow(JacksonException.class);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor(
             "model1",

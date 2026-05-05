@@ -22,9 +22,8 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.core.type.TypeReference;
 
 /** Check whether the index is log-related for downstream task：Log-based RCA analysis
 1. Judge whether the index is related to log

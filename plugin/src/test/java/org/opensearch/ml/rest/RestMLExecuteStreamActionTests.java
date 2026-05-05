@@ -759,6 +759,118 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         assertTrue(content.contains("Something went wrong"));
     }
 
+    // ===== buildStreamErrorChunk tests =====
+
+    @Test
+    public void testBuildStreamErrorChunk_nonAGUI_opensearchStatusException() {
+        OpenSearchStatusException rootCause = new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND);
+        RuntimeException wrapper = new RuntimeException(rootCause);
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(wrapper, false);
+
+        assertNotNull(chunk);
+        assertTrue(chunk.isLast());
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("Memory container not found"));
+        assertTrue(content.startsWith("data: {\"error\":"));
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_nonAGUI_runtimeException() {
+        RuntimeException ex = new RuntimeException("Something went wrong");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        assertNotNull(chunk);
+        assertTrue(chunk.isLast());
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("Something went wrong"));
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_nonAGUI_ioException() {
+        IOException ex = new IOException("bad input");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        assertNotNull(chunk);
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("Failed to parse request: bad input"));
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_AGUI_emitsRunErrorEvent() {
+        OpenSearchStatusException rootCause = new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND);
+        RuntimeException wrapper = new RuntimeException(rootCause);
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(wrapper, true);
+
+        assertNotNull(chunk);
+        assertTrue(chunk.isLast());
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("RUN_ERROR"));
+        assertTrue(content.contains("Memory container not found"));
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_noCause_usesExMessage() {
+        RuntimeException ex = new RuntimeException("top level error");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        assertNotNull(chunk);
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        // RuntimeException has no cause, but it IS its own "cause" fallback, so its message is used
+        assertTrue(content.contains("top level error"));
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_causeWithNullMessage_fallsBackToExMessage() {
+        RuntimeException cause = new RuntimeException((String) null);
+        RuntimeException ex = new RuntimeException("outer message", cause);
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        assertNotNull(chunk);
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.contains("outer message"));
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_nonAGUI_exactFormat() {
+        RuntimeException ex = new RuntimeException("test error");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertEquals("data: {\"error\": \"test error\"}\n\n", content);
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_nonAGUI_escapesQuotesInMessage() {
+        RuntimeException ex = new RuntimeException("field \"name\" is invalid");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, false);
+
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertEquals("data: {\"error\": \"field \\\"name\\\" is invalid\"}\n\n", content);
+    }
+
+    @Test
+    public void testBuildStreamErrorChunk_AGUI_exactFormat() {
+        RuntimeException ex = new RuntimeException("test error");
+
+        HttpChunk chunk = restAction.buildStreamErrorChunk(ex, true);
+
+        String content = new String(BytesReference.toBytes(chunk.content()));
+        assertTrue(content.startsWith("data: "));
+        assertTrue(content.endsWith("\n\n"));
+        // Verify it's valid JSON by extracting the data payload
+        String jsonPayload = content.substring("data: ".length(), content.length() - 2);
+        assertTrue(jsonPayload.contains("\"type\":\"RUN_ERROR\""));
+        assertTrue(jsonPayload.contains("\"message\":\"test error\""));
+    }
+
     // ===== Reflection helpers for testing private methods =====
 
     @SuppressWarnings("unchecked")

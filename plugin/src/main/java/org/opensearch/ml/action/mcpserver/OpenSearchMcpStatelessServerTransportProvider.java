@@ -5,13 +5,10 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpStatelessServerTransport;
-import io.modelcontextprotocol.util.Assert;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
 
@@ -20,14 +17,7 @@ import reactor.core.publisher.Mono;
  */
 @Log4j2
 public class OpenSearchMcpStatelessServerTransportProvider implements McpStatelessServerTransport {
-
-    private final ObjectMapper objectMapper;
     private McpStatelessServerHandler mcpHandler;
-
-    public OpenSearchMcpStatelessServerTransportProvider(ObjectMapper objectMapper) {
-        Assert.notNull(objectMapper, "ObjectMapper must not be null");
-        this.objectMapper = objectMapper;
-    }
 
     @Override
     public void setMcpHandler(McpStatelessServerHandler mcpHandler) {

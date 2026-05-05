@@ -29,7 +29,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.fasterxml.jackson.core.JsonParseException;
+import tools.jackson.core.JacksonException;
 
 public class MLNodeUtilsTests extends OpenSearchTestCase {
 
@@ -128,7 +128,7 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
     public void testProcessRemoteInferenceInputDataSetInvalidJson() {
         String schema = "{\"type\": \"object\",\"properties\": {}}";
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"a\"}}";
-        assertThrows(JsonParseException.class, () -> MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema));
+        assertThrows(JacksonException.class, () -> MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema));
     }
 
     @Test

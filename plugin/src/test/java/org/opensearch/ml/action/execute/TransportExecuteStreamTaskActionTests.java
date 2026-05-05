@@ -37,6 +37,7 @@ import org.opensearch.ml.task.MLExecuteTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.RemoteTransportException;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.TransportException;
@@ -139,8 +140,14 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
             MLExecuteTaskResponse mockResponse = mock(MLExecuteTaskResponse.class);
             handler.handleResponse(mockResponse);
 
-            // Test handleException method
-            TransportException transportException = new TransportException("test exception");
+            // Test handleException - should unwrap TransportException to send root cause
+            Exception rootCause = new RuntimeException("Memory container not found");
+            RemoteTransportException transportException = new RemoteTransportException(
+                "node1",
+                null,
+                "cluster:admin/opensearch/ml/execute/stream",
+                rootCause
+            );
             handler.handleException(transportException);
 
             return null;
@@ -148,7 +155,10 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
 
         transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
 
-        verify(transportChannel).sendResponse(any(TransportException.class));
+        // Verify the unwrapped root cause is sent, not the TransportException wrapper
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(transportChannel).sendResponse(captor.capture());
+        assertEquals("Memory container not found", captor.getValue().getMessage());
     }
 
     @Test
@@ -159,14 +169,41 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             TransportResponseHandler<MLExecuteTaskResponse> handler = invocation.getArgument(3);
 
-            TransportException transportException = new TransportException("test exception");
+            Exception rootCause = new RuntimeException("test error");
+            RemoteTransportException transportException = new RemoteTransportException(
+                "node1",
+                null,
+                "cluster:admin/opensearch/ml/execute/stream",
+                rootCause
+            );
             handler.handleException(transportException);
 
             return null;
         }).when(transportService).sendRequest(any(), any(), any(), any(TransportResponseHandler.class));
 
         transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
-        verify(transportChannel).sendResponse(any(TransportException.class));
+        verify(transportChannel).sendResponse(any(Exception.class));
+    }
+
+    @Test
+    public void testMessageReceivedHandlerPlainTransportException() throws Exception {
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            TransportResponseHandler<MLExecuteTaskResponse> handler = invocation.getArgument(3);
+
+            // Plain TransportException without OpenSearchWrapperException - unwrapCause returns itself
+            TransportException transportException = new TransportException("plain error");
+            handler.handleException(transportException);
+
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any(TransportResponseHandler.class));
+
+        transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(transportChannel).sendResponse(captor.capture());
+        assertEquals("plain error", captor.getValue().getMessage());
     }
 
     @Test

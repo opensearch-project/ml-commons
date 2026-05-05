@@ -317,12 +317,7 @@ public class MetricsCorrelation extends DLModelExecute {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder
             .fetchSource(
-                new String[] {
-                    MLModel.MODEL_ID_FIELD,
-                    MLModel.MODEL_NAME_FIELD,
-                    MODEL_STATE_FIELD,
-                    MLModel.MODEL_VERSION_FIELD,
-                    MLModel.MODEL_CONTENT_FIELD },
+                new String[] { MLModel.MODEL_ID_FIELD, MLModel.MODEL_NAME_FIELD, MODEL_STATE_FIELD, MLModel.MODEL_VERSION_FIELD },
                 new String[] { MLModel.MODEL_CONTENT_FIELD }
             );
 
