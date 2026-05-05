@@ -463,6 +463,53 @@ public class BedrockConverseModelProviderTest {
     }
 
     @Test
+    public void testCreateConnector_CacheEnabledByDefault() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_key");
+        credential.put("secret_key", "test_secret");
+
+        Connector connector = provider.createConnector("model-id", credential, null);
+
+        AwsConnector awsConnector = (AwsConnector) connector;
+        String cachePoint = awsConnector.getParameters().get("cache_point");
+        assertNotNull(cachePoint);
+        assertTrue(cachePoint.contains("\"type\": \"default\""));
+        assertTrue(cachePoint.contains("\"ttl\": \"1h\""));
+    }
+
+    @Test
+    public void testCreateConnector_CacheDisabled() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_key");
+        credential.put("secret_key", "test_secret");
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("system_prompt_cache_enabled", "false");
+
+        Connector connector = provider.createConnector("model-id", credential, modelParameters);
+
+        AwsConnector awsConnector = (AwsConnector) connector;
+        assertNull(awsConnector.getParameters().get("cache_point"));
+    }
+
+    @Test
+    public void testCreateConnector_CustomCacheTypeAndTtl() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_key");
+        credential.put("secret_key", "test_secret");
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("system_prompt_cache_type", "ephemeral");
+        modelParameters.put("system_prompt_cache_ttl", "30m");
+
+        Connector connector = provider.createConnector("model-id", credential, modelParameters);
+
+        AwsConnector awsConnector = (AwsConnector) connector;
+        String cachePoint = awsConnector.getParameters().get("cache_point");
+        assertNotNull(cachePoint);
+        assertTrue(cachePoint.contains("\"type\": \"ephemeral\""));
+        assertTrue(cachePoint.contains("\"ttl\": \"30m\""));
+    }
+
+    @Test
     public void testCreateConnector_VerifyRetryConfiguration() {
         // Arrange
         String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
