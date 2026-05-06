@@ -5,27 +5,36 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.BEDROCK_NOVA_MODEL;
 
 import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -41,17 +50,32 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
+import org.opensearch.script.TemplateScript;
 
 import com.google.common.collect.ImmutableMap;
 
 import okhttp3.Request;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpMethod;
 
 public class ConnectorUtilsTest {
+    private static final String TEST_MOCK_URL = "http://test.com/mock";
+    private static final String SAGEMAKER_CREATE_TRANSFORM_JOB_URL = "https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob";
+    private static final String OPENAI_BATCHES_URL = "https://api.openai.com/v1/batches";
+    private static final String BEDROCK_BATCH_URL_TEMPLATE = "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job";
+    private static final String BEDROCK_BATCH_URL_RESOLVED = "https://bedrock.us-east-1.amazonaws.com/model-invocation-job";
+    private static final String BEDROCK_RUNTIME_INVOKE_URL = "https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke";
+    private static final String OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
+    private static final String OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
+    private static final String COHERE_BATCHES_URL = "https://api.cohere.ai/v1/batches";
+    private static final String UNSUPPORTED_BATCH_URL = "https://unsupported.server.com/batch";
 
     @Mock
     ScriptService scriptService;
@@ -80,7 +104,7 @@ public class ConnectorUtilsTest {
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url(TEST_MOCK_URL)
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Connector connector = HttpConnector
@@ -300,7 +324,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                .url(SAGEMAKER_CREATE_TRANSFORM_JOB_URL)
                                 .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
                                 .requestBody("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}")
                                 .build()
@@ -336,7 +360,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.openai.com/v1/batches")
+                                .url(OPENAI_BATCHES_URL)
                                 .headers(Map.of("Authorization", "Bearer ${credential.openAI_key}"))
                                 .requestBody("{ \\\"input_file_id\\\": \\\"${parameters.input_file_id}\\\" }")
                                 .build()
@@ -349,7 +373,7 @@ public class ConnectorUtilsTest {
 
         assertEquals(ConnectorAction.ActionType.BATCH_PREDICT_STATUS, result.getActionType());
         assertEquals("GET", result.getMethod());
-        assertEquals("https://api.openai.com/v1/batches/${parameters.id}", result.getUrl());
+        assertEquals(OPENAI_BATCHES_URL + "/${parameters.id}", result.getUrl());
         assertNull(result.getRequestBody());
         assertTrue(result.getHeaders().containsKey("Authorization"));
     }
@@ -371,7 +395,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job")
+                                .url(BEDROCK_BATCH_URL_TEMPLATE)
                                 .requestBody(
                                     "{\\\"inputDataConfig\\\":{\\\"s3InputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.input_s3Uri}\\\"}},\\\"jobName\\\":\\\"${parameters.job_name}\\\",\\\"modelId\\\":\\\"${parameters.model}\\\",\\\"outputDataConfig\\\":{\\\"s3OutputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.output_s3Uri}\\\"}},\\\"roleArn\\\":\\\"${parameters.role_arn}\\\"}"
                                 )
@@ -386,10 +410,7 @@ public class ConnectorUtilsTest {
 
         assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
         assertEquals("POST", result.getMethod());
-        assertEquals(
-            "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job/${parameters.processedJobArn}/stop",
-            result.getUrl()
-        );
+        assertEquals(BEDROCK_BATCH_URL_TEMPLATE + "/${parameters.processedJobArn}/stop", result.getUrl());
         assertNull(result.getRequestBody());
     }
 
@@ -718,11 +739,29 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processInput_TextSimilarityInputDataSet() {
-        // Test TextSimilarityInputDataSet processing indirectly by testing escapeMLInput behavior
-        // Since TextSimilarityInputDataSet might not be available, we'll test the logic path
-        TextDocsInputDataSet dataSet = TextDocsInputDataSet
+        AtomicReference<Map<String, Object>> scriptParamsRef = new AtomicReference<>();
+        when(scriptService.compile(any(), any())).thenAnswer(invocation -> new TemplateScript.Factory() {
+            @Override
+            public TemplateScript newInstance(Map<String, Object> params) {
+                scriptParamsRef.set(params);
+                return new TemplateScript(params) {
+                    @Override
+                    public String execute() {
+                        List<String> docs = (List<String>) params.get("text_docs");
+                        Map<String, Object> output = new HashMap<>();
+                        output.put("query", params.get("query_text"));
+                        output.put("first", docs.get(0));
+                        output.put("second", docs.get(1));
+                        return gson.toJson(Map.of("parameters", output));
+                    }
+                };
+            }
+        });
+
+        TextSimilarityInputDataSet dataSet = TextSimilarityInputDataSet
             .builder()
-            .docs(Arrays.asList("doc1 with \"quotes\"", "doc2 with \n newlines"))
+            .queryText("query \"with quotes\"")
+            .textDocs(Arrays.asList("doc1 with \"quotes\"", "doc2 with \n newlines"))
             .build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
@@ -742,14 +781,20 @@ public class ConnectorUtilsTest {
             .actions(Arrays.asList(predictAction))
             .build();
 
-        try {
-            RemoteInferenceInputDataSet result = ConnectorUtils
-                .processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
-            assertNotNull(result);
-        } catch (Exception e) {
-            // If the test fails due to missing dependencies, just verify the method was called
-            assertTrue("Method executed without major errors", true);
-        }
+        RemoteInferenceInputDataSet result = ConnectorUtils
+            .processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
+        assertNotNull(result);
+        Map<String, Object> scriptParams = scriptParamsRef.get();
+        assertNotNull(scriptParams);
+        assertEquals(processTextDoc("query \"with quotes\""), scriptParams.get("query_text"));
+        assertEquals(processTextDoc("doc1 with \"quotes\""), ((List<String>) scriptParams.get("text_docs")).get(0));
+        assertEquals(processTextDoc("doc2 with \n newlines"), ((List<String>) scriptParams.get("text_docs")).get(1));
+        String expectedQuery = escapeJson(processTextDoc("query \"with quotes\""));
+        String expectedFirstDoc = escapeJson(processTextDoc("doc1 with \"quotes\""));
+        String expectedSecondDoc = escapeJson(processTextDoc("doc2 with \n newlines"));
+        assertEquals(expectedQuery, result.getParameters().get("query"));
+        assertEquals(expectedFirstDoc, result.getParameters().get("first"));
+        assertEquals(expectedSecondDoc, result.getParameters().get("second"));
     }
 
     @Test
@@ -816,13 +861,13 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void processOutput_WithMLGuard_ValidationFails() throws IOException {
+    public void processOutput_WithMLGuard_AsNull() throws IOException {
         // Test MLGuard validation failure path - just test that null MLGuard works
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url(TEST_MOCK_URL)
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Connector connector = HttpConnector
@@ -836,40 +881,60 @@ public class ConnectorUtilsTest {
         // Test with null MLGuard (should pass validation)
         String modelResponse = "{\"result\":\"test response\"}";
         ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), null);
-
         assertEquals(1, tensors.getMlModelTensors().size());
     }
 
     @Test
+    public void processOutput_WithMLGuard_ValidationFails() throws IOException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url(TEST_MOCK_URL)
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        MLGuard mlGuard = mock(MLGuard.class);
+        when(mlGuard.validate(any(), any(), any())).thenReturn(false);
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("guardrails triggered for LLM output");
+        String modelResponse = "{\"result\":\"test response\"}";
+        ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), mlGuard);
+    }
+
+    @Test
     public void processOutput_WithMLGuard_ValidationPasses() throws IOException {
-        // Test MLGuard validation success path - skip if MLGuard not available
-        try {
-            Class.forName("org.opensearch.ml.common.model.MLGuard");
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url(TEST_MOCK_URL)
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
 
-            ConnectorAction predictAction = ConnectorAction
-                .builder()
-                .actionType(PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody("{\"input\": \"${parameters.input}\"}")
-                .build();
-            Connector connector = HttpConnector
-                .builder()
-                .name("test connector")
-                .version("1")
-                .protocol("http")
-                .actions(Arrays.asList(predictAction))
-                .build();
+        MLGuard mlGuard = mock(MLGuard.class);
+        when(mlGuard.validate(any(), any(), any())).thenReturn(true);
 
-            String modelResponse = "{\"result\":\"test response\"}";
-            ModelTensors tensors = ConnectorUtils
-                .processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), null);
-
-            assertEquals(1, tensors.getMlModelTensors().size());
-        } catch (ClassNotFoundException e) {
-            // MLGuard not available, skip this test
-            assertTrue("MLGuard class not available, skipping test", true);
-        }
+        String modelResponse = "{\"result\":\"test response\"}";
+        ModelTensors tensors = ConnectorUtils
+            .processOutput(PREDICT.name(), modelResponse, connector, scriptService, new HashMap<>(), mlGuard);
+        assertEquals(1, tensors.getMlModelTensors().size());
+        verify(mlGuard).validate(eq(modelResponse), eq(MLGuard.Type.OUTPUT), any());
     }
 
     @Test
@@ -997,76 +1062,94 @@ public class ConnectorUtilsTest {
 
     @Test
     public void signRequest_WithSessionToken() {
-        // Test AWS signing with session token - skip if AWS SDK not available
-        try {
-            Class.forName("software.amazon.awssdk.http.SdkHttpFullRequest");
-            // AWS SDK available, but we'll test indirectly since we can't easily mock SdkHttpFullRequest
-            assertTrue("AWS SDK available for signing", true);
-        } catch (ClassNotFoundException e) {
-            // AWS SDK not available, skip this test
-            assertTrue("AWS SDK not available, skipping test", true);
-        }
+        SdkHttpFullRequest request = SdkHttpFullRequest
+            .builder()
+            .method(SdkHttpMethod.POST)
+            .uri(URI.create(BEDROCK_RUNTIME_INVOKE_URL))
+            .putHeader("Content-Type", "application/json")
+            .contentStreamProvider(RequestBody.fromString("{\"input\":\"hello\"}", StandardCharsets.UTF_8).contentStreamProvider())
+            .build();
+
+        SdkHttpFullRequest signedRequest = ConnectorUtils
+            .signRequest(request, "test-access", "test-secret", "test-session-token", "bedrock", "us-east-1");
+
+        assertNotNull(signedRequest);
+        assertEquals("test-session-token", signedRequest.firstMatchingHeader("X-Amz-Security-Token").orElse(null));
+        String authorization = signedRequest.firstMatchingHeader("Authorization").orElse(null);
+        assertNotNull(authorization);
+        assertTrue(authorization.contains("/us-east-1/bedrock/aws4_request"));
     }
 
     @Test
     public void signRequest_WithoutSessionToken() {
-        // Test AWS signing without session token - skip if AWS SDK not available
-        try {
-            Class.forName("software.amazon.awssdk.http.SdkHttpFullRequest");
-            // AWS SDK available, but we'll test indirectly since we can't easily mock SdkHttpFullRequest
-            assertTrue("AWS SDK available for signing", true);
-        } catch (ClassNotFoundException e) {
-            // AWS SDK not available, skip this test
-            assertTrue("AWS SDK not available, skipping test", true);
-        }
+        SdkHttpFullRequest request = SdkHttpFullRequest
+            .builder()
+            .method(SdkHttpMethod.POST)
+            .uri(URI.create(BEDROCK_RUNTIME_INVOKE_URL))
+            .putHeader("Content-Type", "application/json")
+            .contentStreamProvider(RequestBody.fromString("{\"input\":\"hello\"}", StandardCharsets.UTF_8).contentStreamProvider())
+            .build();
+
+        SdkHttpFullRequest signedRequest = ConnectorUtils.signRequest(request, "test-access", "test-secret", null, "bedrock", "us-east-1");
+
+        assertNotNull(signedRequest);
+        String authorization = signedRequest.firstMatchingHeader("Authorization").orElse(null);
+        assertNotNull(authorization);
+        assertTrue(authorization.contains("/us-east-1/bedrock/aws4_request"));
+        assertTrue(signedRequest.matchingHeaders("X-Amz-Security-Token").isEmpty());
     }
 
     @Test
     public void buildSdkRequest_WithHeaders() {
-        // Test buildSdkRequest with headers - skip if AWS SDK not available
-        try {
-            Class.forName("software.amazon.awssdk.http.SdkHttpFullRequest");
-            // AWS SDK available, but we'll test indirectly since we can't easily use SdkHttpMethod
-            assertTrue("AWS SDK available for buildSdkRequest", true);
-        } catch (ClassNotFoundException e) {
-            // AWS SDK not available, skip this test
-            assertTrue("AWS SDK not available, skipping test", true);
-        }
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
+        when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
+        when(connector.getDecryptedHeaders())
+            .thenReturn(Map.of("Content-Type", "application/custom-json", "Authorization", "Bearer token"));
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
+
+        assertEquals(OPENAI_EMBEDDINGS_URL, request.getUri().toString());
+        assertEquals("application/custom-json", request.firstMatchingHeader("Content-Type").orElse(null));
+        assertEquals("Bearer token", request.firstMatchingHeader("Authorization").orElse(null));
+        assertEquals("16", request.firstMatchingHeader("Content-Length").orElse(null));
     }
 
     @Test
     public void buildSdkRequest_WithCustomCharset() {
-        // Test buildSdkRequest with custom charset - skip if AWS SDK not available
-        try {
-            Class.forName("software.amazon.awssdk.http.SdkHttpFullRequest");
-            // AWS SDK available, but we'll test indirectly since we can't easily use SdkHttpMethod
-            assertTrue("AWS SDK available for buildSdkRequest", true);
-        } catch (ClassNotFoundException e) {
-            // AWS SDK not available, skip this test
-            assertTrue("AWS SDK not available, skipping test", true);
-        }
+        Connector connector = mock(Connector.class);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("charset", "ISO-8859-1");
+        when(connector.getActionEndpoint(PREDICT.name(), parameters)).thenReturn(OPENAI_EMBEDDINGS_URL);
+        when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
+        when(connector.getDecryptedHeaders()).thenReturn(null);
+
+        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(PREDICT.name(), connector, parameters, "é", SdkHttpMethod.POST);
+
+        assertEquals("1", request.firstMatchingHeader("Content-Length").orElse(null));
     }
 
     @Test
     public void buildSdkRequest_CancelBatchPredictWithEmptyPayload() {
-        // Test buildSdkRequest for cancel batch predict - skip if AWS SDK not available
-        try {
-            Class.forName("software.amazon.awssdk.http.SdkHttpFullRequest");
-            // AWS SDK available, but we'll test indirectly since we can't easily use SdkHttpMethod
-            assertTrue("AWS SDK available for buildSdkRequest", true);
-        } catch (ClassNotFoundException e) {
-            // AWS SDK not available, skip this test
-            assertTrue("AWS SDK not available, skipping test", true);
-        }
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(CANCEL_BATCH_PREDICT.name(), Map.of())).thenReturn(OPENAI_BATCHES_URL + "/123/cancel");
+        when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Authorization", "Bearer token"));
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest(CANCEL_BATCH_PREDICT.name(), connector, Map.of(), null, SdkHttpMethod.POST);
+
+        assertEquals("0", request.firstMatchingHeader("Content-Length").orElse(null));
+        assertEquals("Bearer token", request.firstMatchingHeader("Authorization").orElse(null));
     }
 
     @Test
     public void buildSdkRequest_NovaModelCleansJson() throws IOException {
         Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
-        when(connector.getActionEndpoint("predict", parameters))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+        when(connector.getParameters()).thenReturn(parameters);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payloadWithNulls =
@@ -1089,8 +1172,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NovaMalformedJson() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String malformedJson = "{ invalid json }";
@@ -1110,8 +1192,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NovaMissingSingleEmbeddingParams() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String jsonWithoutParams = "{\"taskType\":\"SINGLE_EMBEDDING\"}";
@@ -1131,7 +1212,7 @@ public class ConnectorUtilsTest {
     public void testBuildSdkRequest_NonNovaModelSkipsCleaning() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", "gpt-3.5-turbo"));
-        when(connector.getActionEndpoint("predict", Map.of())).thenReturn("https://api.openai.com/v1/chat/completions");
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(OPENAI_CHAT_COMPLETIONS_URL);
         when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
 
         String payloadWithNulls = "{\"video\":{\"source\":{\"bytes\":null}}}";
@@ -1164,7 +1245,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                .url(SAGEMAKER_CREATE_TRANSFORM_JOB_URL)
                                 .build()
                         )
                 )
@@ -1193,7 +1274,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                .url(SAGEMAKER_CREATE_TRANSFORM_JOB_URL)
                                 .build()
                         )
                 )
@@ -1223,7 +1304,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://api.openai.com/v1/batches")
+                                .url(OPENAI_BATCHES_URL)
                                 .build()
                         )
                 )
@@ -1234,7 +1315,7 @@ public class ConnectorUtilsTest {
 
         assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
         assertEquals("POST", result.getMethod());
-        assertEquals("https://api.openai.com/v1/batches/${parameters.id}/cancel", result.getUrl());
+        assertEquals(OPENAI_BATCHES_URL + "/${parameters.id}/cancel", result.getUrl());
         assertNull(result.getRequestBody());
     }
 
@@ -1256,7 +1337,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://unsupported.server.com/batch")
+                                .url(UNSUPPORTED_BATCH_URL)
                                 .build()
                         )
                 )
@@ -1284,7 +1365,7 @@ public class ConnectorUtilsTest {
                                 .builder()
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
-                                .url("https://unsupported.server.com/batch")
+                                .url(UNSUPPORTED_BATCH_URL)
                                 .build()
                         )
                 )
@@ -1346,5 +1427,261 @@ public class ConnectorUtilsTest {
 
         assertEquals(1, tensors.getMlModelTensors().size());
         assertEquals("response", tensors.getMlModelTensors().get(0).getName());
+    }
+
+    @Test
+    public void processInput_ActionMissing_Throws() {
+        RemoteInferenceInputDataSet dataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("input", "test")).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Collections.emptyList())
+            .build();
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("no PREDICT action found");
+        ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
+    }
+
+    @Test
+    public void processInput_RemoteInferenceInputDataSet_WithProcessRemoteInferenceInputFalse_ReturnsOriginalDataSet() {
+        Map<String, String> params = new HashMap<>();
+        params.put("input", "test input");
+        RemoteInferenceInputDataSet dataSet = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
+
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .preProcessFunction("custom_preprocess_function")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        Map<String, String> requestParameters = new HashMap<>();
+        requestParameters.put("process_remote_inference_input", "false");
+
+        RemoteInferenceInputDataSet result = ConnectorUtils
+            .processInput(PREDICT.name(), mlInput, connector, requestParameters, scriptService);
+        assertSame(dataSet, result);
+    }
+
+    @Test
+    public void processOutput_ActionMissing_Throws() throws IOException {
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Collections.emptyList())
+            .build();
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("no PREDICT action found");
+        ConnectorUtils.processOutput(PREDICT.name(), "{\"result\":\"test\"}", connector, scriptService, new HashMap<>(), null);
+    }
+
+    @Test
+    public void buildSdkRequest_PostWithEmptyPayload_ThrowsForNonCancelAction() {
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
+        when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
+        when(connector.getDecryptedHeaders()).thenReturn(null);
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Content length is 0. Aborting request to remote model");
+        ConnectorUtils.buildSdkRequest(PREDICT.name(), connector, Map.of(), null, SdkHttpMethod.POST);
+    }
+
+    @Test
+    public void buildSdkRequest_AddsDefaultHeadersWhenMissing() {
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
+        when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Authorization", "Bearer token"));
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
+
+        assertEquals("application/json", request.firstMatchingHeader("Content-Type").orElse(null));
+        assertEquals("16", request.firstMatchingHeader("Content-Length").orElse(null));
+        assertEquals("Bearer token", request.firstMatchingHeader("Authorization").orElse(null));
+    }
+
+    @Test
+    public void buildSdkRequest_PreservesExistingContentLengthAndType() {
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(PREDICT.name(), Map.of())).thenReturn(OPENAI_EMBEDDINGS_URL);
+        when(connector.getParameters()).thenReturn(Map.of("model", "text-embedding-3-small"));
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "text/plain", "Content-Length", "999"));
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest(PREDICT.name(), connector, Map.of(), "{\"input\":\"test\"}", SdkHttpMethod.POST);
+
+        assertEquals("text/plain", request.firstMatchingHeader("Content-Type").orElse(null));
+        assertEquals("999", request.firstMatchingHeader("Content-Length").orElse(null));
+    }
+
+    @Test
+    public void testBuildOKHttpStreamingRequest_InvalidEndpoint_ThrowException() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("invalid-endpoint")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule
+            .expectMessage(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration:"
+            );
+        ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, Collections.emptyMap(), "{\"input\":\"v\"}");
+    }
+
+    @Test
+    public void createConnectorAction_BedrockStatus() {
+        Connector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                            .method("POST")
+                            .url(BEDROCK_BATCH_URL_RESOLVED)
+                            .build()
+                    )
+            )
+            .build();
+
+        ConnectorAction result = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
+        assertEquals("GET", result.getMethod());
+        assertEquals(BEDROCK_BATCH_URL_RESOLVED + "/${parameters.processedJobArn}", result.getUrl());
+    }
+
+    @Test
+    public void createConnectorAction_CohereStatusAndCancel() {
+        Connector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                            .method("POST")
+                            .url(COHERE_BATCHES_URL)
+                            .build()
+                    )
+            )
+            .build();
+
+        ConnectorAction statusAction = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
+        ConnectorAction cancelAction = ConnectorUtils.createConnectorAction(connector, CANCEL_BATCH_PREDICT);
+        assertEquals("GET", statusAction.getMethod());
+        assertEquals(COHERE_BATCHES_URL + "/${parameters.id}", statusAction.getUrl());
+        assertEquals("POST", cancelAction.getMethod());
+        assertEquals(COHERE_BATCHES_URL + "/${parameters.id}/cancel", cancelAction.getUrl());
+    }
+
+    @Test
+    public void createConnectorAction_AppliesParameterSubstitutionInEndpoint() {
+        Connector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .parameters(Map.of("region", "us-east-1"))
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                            .method("POST")
+                            .url(BEDROCK_BATCH_URL_TEMPLATE)
+                            .build()
+                    )
+            )
+            .build();
+
+        ConnectorAction result = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
+        assertEquals(BEDROCK_BATCH_URL_RESOLVED + "/${parameters.processedJobArn}", result.getUrl());
+    }
+
+    @Test
+    public void testBuildSdkRequest_NovaRemovesTextWhenValueNull() throws IOException {
+        Connector connector = mock(Connector.class);
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+
+        String payload = "{\"singleEmbeddingParams\":{\"text\":{\"value\":null},\"audio\":{\"source\":{\"bytes\":\"abc\"}}}}";
+        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, parameters, payload, SdkHttpMethod.POST);
+        String actualPayload = readPayload(request);
+
+        assertFalse(actualPayload.contains("\"text\""));
+        assertTrue(actualPayload.contains("\"audio\""));
+    }
+
+    @Test
+    public void testBuildSdkRequest_NovaRemovesImageWhenBytesNull() throws IOException {
+        Connector connector = mock(Connector.class);
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+
+        String payload = "{\"singleEmbeddingParams\":{\"image\":{\"source\":{\"bytes\":null}},\"text\":{\"value\":\"keep\"}}}";
+        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, parameters, payload, SdkHttpMethod.POST);
+        String actualPayload = readPayload(request);
+
+        assertFalse(actualPayload.contains("\"image\""));
+        assertTrue(actualPayload.contains("\"text\""));
+    }
+
+    @Test
+    public void testBuildSdkRequest_NovaKeepsImageWhenSourceMissing() throws IOException {
+        Connector connector = mock(Connector.class);
+        Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
+        when(connector.getActionEndpoint("predict", parameters)).thenReturn(BEDROCK_RUNTIME_INVOKE_URL);
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+
+        String payload = "{\"singleEmbeddingParams\":{\"image\":{},\"text\":{\"value\":\"keep\"}}}";
+        SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest("predict", connector, parameters, payload, SdkHttpMethod.POST);
+        String actualPayload = readPayload(request);
+
+        assertTrue(actualPayload.contains("\"image\""));
+        assertTrue(actualPayload.contains("\"text\""));
+    }
+
+    private String readPayload(SdkHttpFullRequest request) throws IOException {
+        return new String(request.contentStreamProvider().get().newStream().readAllBytes(), StandardCharsets.UTF_8);
     }
 }
