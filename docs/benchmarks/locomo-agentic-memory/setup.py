@@ -49,7 +49,10 @@ def enable_agentic_memory():
             "persistent": {
                 "plugins.ml_commons.agentic_memory_enabled": True,
                 "plugins.ml_commons.only_run_on_ml_node": False,
-                "plugins.ml_commons.trusted_connector_endpoints_regex": ["^.*$"],
+                "plugins.ml_commons.trusted_connector_endpoints_regex": [
+                    "^https://bedrock-runtime\\..*\\.amazonaws\\.com/.*$",
+                    "^https://api\\.openai\\.com/.*$",
+                ],
             }
         },
     )
