@@ -810,42 +810,53 @@ public class AgentUtils {
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
         List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
 
+        // Guarantees final listener fires exactly once; every code path decrements via try/finally.
+        Runnable completeIfLast = () -> {
+            if (remainingConnectors.decrementAndGet() == 0) {
+                finalListener.onResponse(finalToolSpecs);
+            }
+        };
+
         // We make multiple Async calls in for loop, which happen in parallel
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
             List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
 
-            getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
-                List<MLToolSpec> filteredTools;
-                if (toolFilters == null || toolFilters.isEmpty()) {
-                    filteredTools = mcpToolspecs;
-                } else {
-                    filteredTools = new ArrayList<>();
-                    List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
+            try {
+                getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
+                    try {
+                        List<MLToolSpec> filteredTools;
+                        if (toolFilters == null || toolFilters.isEmpty()) {
+                            filteredTools = mcpToolspecs;
+                        } else {
+                            filteredTools = new ArrayList<>();
+                            List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
 
-                    for (MLToolSpec toolSpec : mcpToolspecs) {
-                        for (Pattern pattern : compiledPatterns) {
-                            if (pattern.matcher(toolSpec.getName()).matches()) {
-                                filteredTools.add(toolSpec);
-                                break;
+                            for (MLToolSpec toolSpec : mcpToolspecs) {
+                                for (Pattern pattern : compiledPatterns) {
+                                    if (pattern.matcher(toolSpec.getName()).matches()) {
+                                        filteredTools.add(toolSpec);
+                                        break;
+                                    }
+                                }
                             }
                         }
+
+                        finalToolSpecs.addAll(filteredTools);
+                    } catch (Throwable t) {
+                        log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);
+                    } finally {
+                        completeIfLast.run();
                     }
-                }
-
-                finalToolSpecs.addAll(filteredTools);
-
-                // If this is the last connector, send the final response
-                if (remainingConnectors.decrementAndGet() == 0) {
-                    finalListener.onResponse(finalToolSpecs);
-                }
-            }, e -> {
-                log.error("Error processing connector: " + connectorId, e);
-                // Even on error, we need to check if this is the last connector
-                if (remainingConnectors.decrementAndGet() == 0) {
-                    finalListener.onResponse(finalToolSpecs);
-                }
-            }));
+                }, e -> {
+                    log.error("Error processing connector: " + connectorId, e);
+                    completeIfLast.run();
+                }));
+            } catch (Throwable t) {
+                // Catch synchronous throws (including Errors) so one bad connector can't strand the counter.
+                log.error("Synchronous failure initiating MCP tool spec lookup for connector: " + connectorId, t);
+                completeIfLast.run();
+            }
         }
     }
 
@@ -893,12 +904,13 @@ public class AgentUtils {
                     toolListener.onFailure(e);
                 });
                 connector.decrypt("", encryptor::decrypt, tenantId, decryptSuccessfulListener);
-            } catch (Exception e) {
-                log.error("Failed to get tools from connector: " + connectorId, e);
+            } catch (Throwable t) {
+                // Throwable, not Exception: ServiceConfigurationError would otherwise stall the async chain.
+                log.error("Error retrieving MCP tool specs from connector: " + connectorId, t);
                 toolListener.onResponse(Collections.emptyList());
             }
         }, e -> {
-            log.error("Failed to get the MCP Connector: " + connectorId, e);
+            log.error("Failed to get connector for MCP tool specs, connectorId=" + connectorId, e);
             toolListener.onResponse(Collections.emptyList());
         }));
 

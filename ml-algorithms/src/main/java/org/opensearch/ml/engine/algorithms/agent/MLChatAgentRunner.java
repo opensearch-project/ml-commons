@@ -1695,7 +1695,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
         }, e -> {
             // Even if MCP tools fail, continue with base backend tools
-
+            log.warn("Failed to load MCP tools, continuing with backend tools only", e);
             Map<String, Tool> backendToolsMap = new HashMap<>();
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
             createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);

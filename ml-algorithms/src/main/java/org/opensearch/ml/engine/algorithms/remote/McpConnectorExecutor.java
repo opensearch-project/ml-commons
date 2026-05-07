@@ -47,6 +47,8 @@ import com.google.gson.Gson;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapperSupplier;
+import io.modelcontextprotocol.json.schema.jackson3.JacksonJsonSchemaValidatorSupplier;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.Getter;
@@ -88,9 +90,10 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                 getMcpRequestHeaders(builder);
             };
 
-            // Create transport
+            // Explicit jsonMapper() bypasses MCP SDK's ServiceLoader lookup, which fails under plugin classloader isolation.
             McpClientTransport transport = HttpClientSseClientTransport
                 .builder(mcpServerUrl)
+                .jsonMapper(new JacksonMcpJsonMapperSupplier().get())
                 .sseEndpoint(sseEndpoint)
                 .customizeClient(clientBuilder -> {
                     clientBuilder.connectTimeout(connectionTimeout);
@@ -98,11 +101,12 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                 .customizeRequest(headerConfig)
                 .build();
 
-            // Create and initialize client
+            // Explicit jsonSchemaValidator() bypasses another ServiceLoader lookup under plugin classloader isolation.
             McpSyncClient client = McpClient
                 .sync(transport)
                 .requestTimeout(readTimeout)
                 .capabilities(McpSchema.ClientCapabilities.builder().roots(false).build())
+                .jsonSchemaValidator(new JacksonJsonSchemaValidatorSupplier().get())
                 .build();
 
             client.initialize();
