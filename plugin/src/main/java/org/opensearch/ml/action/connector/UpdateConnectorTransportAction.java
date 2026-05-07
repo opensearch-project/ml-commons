@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -33,6 +34,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -40,6 +42,7 @@ import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -121,6 +124,10 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
+                            for (ConnectorAction action : connector.getActions()) {
+                                Map<String, String> headers = action.getHeaders();
+                                RestActionUtils.validateHeaderSecurity(headers);
+                            }
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
                                 connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                                 connector.setLastUpdateTime(Instant.now());

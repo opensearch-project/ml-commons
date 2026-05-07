@@ -88,13 +88,27 @@ public abstract class AbstractConnector implements Connector {
         for (String key : headers.keySet()) {
             decryptedHeaders.put(key, substitutor.replace(headers.get(key)));
         }
-        if (parameters != null && !parameters.isEmpty()) {
-            substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            for (String key : decryptedHeaders.keySet()) {
-                decryptedHeaders.put(key, substitutor.replace(decryptedHeaders.get(key)));
+        return decryptedHeaders;
+    }
+
+    public Map<String, String> substituteHeadersWithRuntimeParameters(Map<String, String> headers, Map<String, String> runtimeParameters) {
+        if (headers == null || headers.isEmpty()) {
+            return headers;
+        }
+
+        Map<String, String> substitutedHeaders = new HashMap<>();
+        StringSubstitutor substitutor = new StringSubstitutor(runtimeParameters, "${parameters.", "}");
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String value = entry.getValue();
+            if (value != null && value.contains("${parameters.")) {
+                substitutedHeaders.put(entry.getKey(), substitutor.replace(value));
+            } else {
+                substitutedHeaders.put(entry.getKey(), value);
             }
         }
-        return decryptedHeaders;
+
+        return substitutedHeaders;
     }
 
     @SuppressWarnings("unchecked")

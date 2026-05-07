@@ -36,6 +36,7 @@ import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -53,6 +54,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -377,6 +379,10 @@ public class ConnectorUtils {
             .uri(uri)
             .contentStreamProvider(requestBody.contentStreamProvider());
         Map<String, String> headers = connector.getDecryptedHeaders();
+        if (connector instanceof AbstractConnector) {
+            headers = ((AbstractConnector) connector).substituteHeadersWithRuntimeParameters(headers, parameters);
+            validateSubstitutedHeaders(headers);
+        }
         if (headers != null) {
             for (String key : headers.keySet()) {
                 builder.putHeader(key, headers.get(key));
@@ -414,6 +420,10 @@ public class ConnectorUtils {
         }
         Request.Builder requestBuilder = new Request.Builder();
         Map<String, String> headers = connector.getDecryptedHeaders();
+        if (connector instanceof AbstractConnector) {
+            headers = ((AbstractConnector) connector).substituteHeadersWithRuntimeParameters(headers, parameters);
+            validateSubstitutedHeaders(headers);
+        }
         if (headers != null) {
             for (String key : headers.keySet()) {
                 requestBuilder.addHeader(key, headers.get(key));
@@ -525,6 +535,36 @@ public class ConnectorUtils {
 
         if (element != null && element.isJsonNull()) {
             parent.remove(fieldName);
+        }
+    }
+
+    @VisibleForTesting
+    static void validateSubstitutedHeaders(Map<String, String> headers) {
+        if (headers == null)
+            return;
+
+        int totalSize = 0;
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String value = entry.getValue();
+            if (value == null)
+                continue;
+
+            // Check for header injection
+            if (value.contains("\r") || value.contains("\n")) {
+                throw new IllegalArgumentException("Header value contains invalid characters (CR/LF)");
+            }
+
+            // Check per-header size
+            if (value.length() > 8192) {
+                throw new IllegalArgumentException("Header value exceeds 8KB limit");
+            }
+
+            totalSize += entry.getKey().length() + value.length();
+        }
+
+        // Check total size
+        if (totalSize > 65536) {
+            throw new IllegalArgumentException("Total headers size exceeds 64KB limit");
         }
     }
 }

@@ -561,4 +561,121 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         assertNull(threadContext.getHeader(MCP_HEADER_AWS_SERVICE_NAME));
         assertNull(threadContext.getHeader(MCP_HEADER_OPENSEARCH_URL));
     }
+
+    @Test
+    public void testValidateHeaderSecurity_ValidHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("X-Request-ID", "${parameters.request_id}");
+
+        // Should not throw exception
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_NullHeaders() {
+        // Should not throw exception
+        RestActionUtils.validateHeaderSecurity(null);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_EmptyHeaders() {
+        // Should not throw exception
+        RestActionUtils.validateHeaderSecurity(new HashMap<>());
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_AuthorizationWithParameters() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header 'Authorization' cannot use ${parameters.*} placeholders");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer ${parameters.token}");
+
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_AuthorizationWithCredential() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer ${credential.secretArn.token}");
+
+        // Should not throw exception - credential placeholders are allowed
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_ProxyAuthorizationWithParameters() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header 'Proxy-Authorization' cannot use ${parameters.*} placeholders");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Proxy-Authorization", "Basic ${parameters.proxy_auth}");
+
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_CookieWithParameters() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header 'Cookie' cannot use ${parameters.*} placeholders");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cookie", "session=${parameters.session_id}");
+
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_XApiKeyWithParameters() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header 'X-API-Key' cannot use ${parameters.*} placeholders");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-API-Key", "${parameters.api_key}");
+
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_HostWithParameters() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header 'Host' cannot use ${parameters.*} placeholders");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Host", "${parameters.host}");
+
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_CaseInsensitive() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("cannot use ${parameters.*} placeholders");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("authorization", "Bearer ${parameters.token}"); // lowercase
+
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_MixedHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer ${credential.secretArn.token}");
+        headers.put("X-Request-ID", "${parameters.request_id}");
+        headers.put("Content-Type", "application/json");
+
+        // Should not throw exception
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
+
+    @Test
+    public void testValidateHeaderSecurity_StaticAuthorizationHeader() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer static-token-value");
+
+        // Should not throw exception - static values are allowed
+        RestActionUtils.validateHeaderSecurity(headers);
+    }
 }

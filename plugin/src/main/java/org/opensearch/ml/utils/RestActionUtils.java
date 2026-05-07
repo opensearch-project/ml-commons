@@ -17,8 +17,11 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
@@ -384,4 +387,40 @@ public class RestActionUtils {
         }
     }
 
+    /**
+     * Validates that authorization-related headers do not use ${parameters.*} placeholders.
+     * This prevents users from overriding authorization via runtime parameters.
+     *
+     * @param headers Connector headers to validate
+     * @throws IllegalArgumentException if validation fails
+     */
+    public static void validateHeaderSecurity(Map<String, String> headers) {
+        if (headers == null || headers.isEmpty()) {
+            return;
+        }
+
+        // Headers that should NOT allow ${parameters.*} substitution
+        Set<String> blockedHeaders = Set
+            .of("authorization", "proxy-authorization", "cookie", "x-api-key", "x-auth-token", "x-auth-header", "host", "x-forwarded-host");
+
+        Pattern parameterPattern = Pattern.compile("\\$\\{parameters\\.[^}]+\\}");
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String headerName = entry.getKey().toLowerCase(Locale.ROOT);
+            String headerValue = entry.getValue();
+
+            if (blockedHeaders.contains(headerName) && headerValue != null) {
+                Matcher matcher = parameterPattern.matcher(headerValue);
+                if (matcher.find()) {
+                    throw new IllegalArgumentException(
+                        String
+                            .format(
+                                "Header '%s' cannot use ${parameters.*} placeholders. Use ${credential.*} instead for sensitive values.",
+                                entry.getKey()
+                            )
+                    );
+                }
+            }
+        }
+    }
 }
