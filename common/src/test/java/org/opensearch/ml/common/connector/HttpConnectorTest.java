@@ -754,4 +754,126 @@ public class HttpConnectorTest {
         Assert.assertNull(deserialized.getProvisionedBy());
     }
 
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_WithRuntimeValue() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "${parameters.request_id}");
+        headers.put("Content-Type", "application/json");
+
+        Map<String, String> runtimeParameters = new HashMap<>();
+        runtimeParameters.put("request_id", "req-12345");
+
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+
+        Assert.assertEquals("req-12345", result.get("X-Request-ID"));
+        Assert.assertEquals("application/json", result.get("Content-Type"));
+    }
+
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_WithDefaultValue() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "${parameters.request_id}");
+
+        Map<String, String> runtimeParameters = new HashMap<>();
+        runtimeParameters.put("request_id", "default-value");
+
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+
+        Assert.assertEquals("default-value", result.get("X-Request-ID"));
+    }
+
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_NoPlaceholder() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Authorization", "Bearer static-token");
+
+        Map<String, String> runtimeParameters = new HashMap<>();
+
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+
+        Assert.assertEquals("application/json", result.get("Content-Type"));
+        Assert.assertEquals("Bearer static-token", result.get("Authorization"));
+    }
+
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_MultipleHeaders() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "${parameters.request_id}");
+        headers.put("X-User-ID", "${parameters.user_id}");
+        headers.put("X-Trace-ID", "${parameters.trace_id}");
+
+        Map<String, String> runtimeParameters = new HashMap<>();
+        runtimeParameters.put("request_id", "req-123");
+        runtimeParameters.put("user_id", "user-456");
+        runtimeParameters.put("trace_id", "trace-789");
+
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+
+        Assert.assertEquals("req-123", result.get("X-Request-ID"));
+        Assert.assertEquals("user-456", result.get("X-User-ID"));
+        Assert.assertEquals("trace-789", result.get("X-Trace-ID"));
+    }
+
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_NullHeaders() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(null, new HashMap<>());
+
+        Assert.assertNull(result);
+    }
+
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_EmptyHeaders() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> headers = new HashMap<>();
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, new HashMap<>());
+
+        Assert.assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_UnresolvedPlaceholder() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "${parameters.request_id}");
+
+        Map<String, String> runtimeParameters = new HashMap<>();
+        // No request_id provided
+
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+
+        // Placeholder remains unresolved
+        Assert.assertEquals("${parameters.request_id}", result.get("X-Request-ID"));
+    }
+
+    @Test
+    public void testSubstituteHeadersWithRuntimeParameters_MixedStaticAndDynamic() {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer ${credential.token}");
+        headers.put("X-Request-ID", "${parameters.request_id}");
+        headers.put("Content-Type", "application/json");
+
+        Map<String, String> runtimeParameters = new HashMap<>();
+        runtimeParameters.put("request_id", "req-999");
+
+        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+
+        Assert.assertEquals("Bearer ${credential.token}", result.get("Authorization"));
+        Assert.assertEquals("req-999", result.get("X-Request-ID"));
+        Assert.assertEquals("application/json", result.get("Content-Type"));
+    }
 }
