@@ -124,9 +124,11 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
-                            for (ConnectorAction action : connector.getActions()) {
-                                Map<String, String> headers = action.getHeaders();
-                                RestActionUtils.validateHeaderSecurity(headers);
+                            if (connector.getActions() != null) {
+                                for (ConnectorAction action : connector.getActions()) {
+                                    Map<String, String> headers = action.getHeaders();
+                                    RestActionUtils.validateHeaderSecurity(headers);
+                                }
                             }
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
                                 connector.validateConnectorURL(trustedConnectorEndpointsRegex);

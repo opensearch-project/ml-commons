@@ -385,11 +385,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         // model, so no need to verify the connector endpoint as trusted or not
         if (!registerModelInput.getIsHidden()) {
             registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+        }
 
-            for (ConnectorAction action : registerModelInput.getConnector().getActions()) {
-                Map<String, String> headers = action.getHeaders();
-                RestActionUtils.validateHeaderSecurity(headers);
-            }
+        for (ConnectorAction action : registerModelInput.getConnector().getActions()) {
+            Map<String, String> headers = action.getHeaders();
+            RestActionUtils.validateHeaderSecurity(headers);
         }
     }
 

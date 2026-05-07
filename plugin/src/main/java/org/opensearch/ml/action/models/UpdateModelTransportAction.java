@@ -341,9 +341,11 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         return;
                     }
                     connector.update(updateModelInput.getConnector());
-                    for (ConnectorAction action : connector.getActions()) {
-                        Map<String, String> headers = action.getHeaders();
-                        RestActionUtils.validateHeaderSecurity(headers);
+                    if (connector.getActions() != null) {
+                        for (ConnectorAction action : connector.getActions()) {
+                            Map<String, String> headers = action.getHeaders();
+                            RestActionUtils.validateHeaderSecurity(headers);
+                        }
                     }
                     ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(r -> {
                         connector.validateConnectorURL(trustedConnectorEndpointsRegex);
