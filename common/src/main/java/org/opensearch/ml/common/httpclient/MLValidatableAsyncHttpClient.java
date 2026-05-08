@@ -9,8 +9,10 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
@@ -20,10 +22,19 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
     private final SdkAsyncHttpClient delegate;
     private final boolean connectorPrivateIpEnabled;
+    private final List<Pattern> connectorTrustedPrivateEndpoints;
+    private final List<Pattern> connectorRestrictedIpPatterns;
 
-    protected MLValidatableAsyncHttpClient(SdkAsyncHttpClient client, boolean connectorPrivateIpEnabled) {
+    protected MLValidatableAsyncHttpClient(
+        SdkAsyncHttpClient client,
+        boolean connectorPrivateIpEnabled,
+        List<Pattern> connectorTrustedPrivateEndpoints,
+        List<Pattern> connectorRestrictedIpPatterns
+    ) {
         this.delegate = client;
         this.connectorPrivateIpEnabled = connectorPrivateIpEnabled;
+        this.connectorTrustedPrivateEndpoints = connectorTrustedPrivateEndpoints;
+        this.connectorRestrictedIpPatterns = connectorRestrictedIpPatterns;
     }
 
     @Override
@@ -31,8 +42,9 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         String protocol = request.request().protocol();
         String host = request.request().host();
         int port = request.request().port();
+        String endpoint = request.request().getUri().toString();
         try {
-            validate(protocol, host, port, connectorPrivateIpEnabled);
+            validate(endpoint, protocol, host, port, connectorPrivateIpEnabled);
             return delegate.execute(request);
         } catch (Exception e) {
             log.error("Failed to validate request!", e);
@@ -53,7 +65,8 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
      * @param connectorPrivateIpEnabled The port number of the remote inference server, port number must be in range [0, 65536].
      * @throws UnknownHostException Allow to use private IP or not.
      */
-    public void validate(String protocol, String host, int port, boolean connectorPrivateIpEnabled) throws UnknownHostException {
+    public void validate(String endpoint, String protocol, String host, int port, boolean connectorPrivateIpEnabled)
+        throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
             log.error("Remote inference protocol is not http or https: {}", protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
@@ -70,14 +83,28 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
             log.error("Remote inference port out of range: {}", port);
             throw new IllegalArgumentException("Port out of range: " + port);
         }
-        validateIp(host, connectorPrivateIpEnabled);
+        validateIp(endpoint, host, connectorPrivateIpEnabled);
     }
 
-    private void validateIp(String hostName, boolean connectorPrivateIpEnabled) throws UnknownHostException {
+    private void validateIp(String endpoint, String hostName, boolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
-        if (!connectorPrivateIpEnabled && hasPrivateIpAddress(addresses)) {
+        boolean hasPrivateIpAddress = hasPrivateIpAddress(addresses);
+
+        boolean hasRestrictedAddress = Arrays
+            .stream(addresses)
+            .anyMatch(addr -> connectorRestrictedIpPatterns.stream().anyMatch(pattern -> pattern.matcher(addr.getHostAddress()).matches()));
+        if (hasRestrictedAddress) {
+            log.error("Remote inference host name has restricted ip address: {}", hostName);
+            throw new IllegalArgumentException("Remote inference host name has restricted ip address: " + hostName);
+        }
+
+        if (!connectorPrivateIpEnabled && hasPrivateIpAddress) {
             log.error("Remote inference host name has private ip address: {}", hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
+        }
+        boolean hasMatchedUrl = connectorTrustedPrivateEndpoints.stream().anyMatch(pattern -> pattern.matcher(endpoint).matches());
+        if (hasPrivateIpAddress && !connectorTrustedPrivateEndpoints.isEmpty() && !hasMatchedUrl) {
+            throw new IllegalArgumentException("Connector URL is not matching the trusted connector private endpoint regex");
         }
     }
 

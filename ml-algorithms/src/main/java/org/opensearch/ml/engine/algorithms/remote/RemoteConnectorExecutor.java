@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
@@ -187,6 +188,10 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
     default void setClient(Client client) {}
 
     default void setConnectorPrivateIpEnabled(boolean connectorPrivateIpEnabled) {}
+
+    default void setConnectorTrustedPrivateEndpoints(List<Pattern> connectorTrustedPrivateEndpoints) {}
+
+    default void setConnectorRestrictedIpPatterns(List<Pattern> connectorRestrictedIpPatterns) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 

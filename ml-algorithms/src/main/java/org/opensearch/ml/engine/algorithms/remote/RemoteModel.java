@@ -8,6 +8,8 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.cluster.service.ClusterService;
@@ -51,6 +53,8 @@ public class RemoteModel implements Predictable {
     public static final String USER_RATE_LIMITER_MAP = "user_rate_limiter_map";
     public static final String GUARDRAILS = "guardrails";
     public static final String CONNECTOR_PRIVATE_IP_ENABLED = "connectorPrivateIpEnabled";
+    public static final String CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS = "connectorTrustedPrivateEndpoints";
+    public static final String CONNECTOR_RESTRICTED_IP_PATTERNS = "connectorRestrictedIpPatterns";
     public static final String SDK_CLIENT = "sdk_client";
     public static final String SETTINGS = "settings";
 
@@ -149,6 +153,14 @@ public class RemoteModel implements Predictable {
                 this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
                 this.connectorExecutor.setMlGuard((MLGuard) params.get(GUARDRAILS));
                 this.connectorExecutor.setConnectorPrivateIpEnabled((boolean) params.getOrDefault(CONNECTOR_PRIVATE_IP_ENABLED, false));
+                this.connectorExecutor
+                    .setConnectorTrustedPrivateEndpoints(
+                        (List) params.getOrDefault(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS, Collections.emptyList())
+                    );
+                this.connectorExecutor
+                    .setConnectorRestrictedIpPatterns(
+                        (List) params.getOrDefault(CONNECTOR_RESTRICTED_IP_PATTERNS, Collections.emptyList())
+                    );
                 listener.onResponse(this);
             }, e -> {
                 log.error("Failed to init remote model.", e);

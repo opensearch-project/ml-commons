@@ -21,6 +21,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -123,6 +124,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setConnectorPrivateIpEnabled(false);
+        executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
+        executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
         executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -159,6 +162,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setConnectorPrivateIpEnabled(true);
+        executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
+        executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
         executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -192,6 +197,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setConnectorPrivateIpEnabled(false);
+        executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
+        executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
         executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -304,7 +311,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -331,6 +338,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
@@ -362,7 +371,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -389,6 +398,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
@@ -420,7 +431,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -447,6 +458,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
