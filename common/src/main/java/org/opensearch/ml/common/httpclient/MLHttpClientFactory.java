@@ -118,6 +118,18 @@ public class MLHttpClientFactory {
 
             String description = clientDescription != null ? clientDescription : "standard";
             boolean hasMutualTls = sslContext != null;
+            boolean hasMutualTlsManagers = keyManagers != null && keyManagers.length > 0;
+
+            // Critical security warning: mTLS + skipSslVerification defeats server certificate validation
+            if (hasMutualTlsManagers && skipSslVerification) {
+                log
+                    .error(
+                        "CRITICAL SECURITY WARNING: mutual_tls_enabled=true with skip_ssl_verification=true. "
+                            + "Client certificate will be presented but server certificate validation is DISABLED. "
+                            + "This defeats half the purpose of mutual TLS and allows man-in-the-middle attacks. "
+                            + "Consider using proper trust managers or disable mTLS for development/testing."
+                    );
+            }
 
             log
                 .debug(
@@ -140,7 +152,7 @@ public class MLHttpClientFactory {
 
             if (keyManagers != null || trustManagers != null) {
                 // Configure mutual TLS using AWS SDK v2 proper approach
-                log.info("Configuring HTTP client with mutual TLS authentication using AWS SDK TLS providers");
+                log.debug("Configuring HTTP client with mutual TLS authentication using AWS SDK TLS providers");
 
                 try {
                     // Configure the client builder with TLS providers
@@ -148,27 +160,34 @@ public class MLHttpClientFactory {
                         // Create TLS key managers provider
                         TlsKeyManagersProvider keyManagersProvider = () -> keyManagers;
                         clientBuilder.tlsKeyManagersProvider(keyManagersProvider);
-                        log.info("Configured TLS key managers provider for client certificate authentication");
+                        log.debug("Configured TLS key managers provider for client certificate authentication");
                     }
 
                     if (trustManagers != null && trustManagers.length > 0 && !skipSslVerification) {
                         // Create TLS trust managers provider
                         TlsTrustManagersProvider trustManagersProvider = () -> trustManagers;
                         clientBuilder.tlsTrustManagersProvider(trustManagersProvider);
-                        log.info("Configured TLS trust managers provider for server certificate validation");
+                        log.debug("Configured TLS trust managers provider for server certificate validation");
                     }
 
                     // Create client with SSL verification settings
                     if (skipSslVerification) {
                         delegate = clientBuilder
                             .buildWithDefaults(AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, true).build());
-                        log.info("Built HTTP client with SSL verification disabled");
+                        log.debug("Built HTTP client with SSL verification disabled");
                     } else {
                         delegate = clientBuilder.build();
-                        log.info("Built HTTP client with custom TLS configuration");
+                        log.debug("Built HTTP client with custom TLS configuration");
                     }
 
-                    log.info("Successfully configured HTTP client with AWS SDK TLS providers for mutual TLS");
+                    // Consolidated INFO log with relevant configuration details
+                    log
+                        .info(
+                            "HTTP client configured with mTLS - keyManagers: {}, trustManagers: {}, skipSslVerification: {}",
+                            keyManagers != null ? keyManagers.length : 0,
+                            trustManagers != null ? trustManagers.length : 0,
+                            skipSslVerification
+                        );
 
                 } catch (Exception e) {
                     log.error("Failed to configure AWS SDK TLS providers, falling back to default", e);

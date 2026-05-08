@@ -138,4 +138,23 @@ public class MLHttpClientFactoryTests {
             );
         assertNotNull(client);
     }
+
+    @Test
+    public void test_getAsyncHttpClient_mTlsWithSkipSslVerification_success() {
+        KeyManager[] keyManagers = new KeyManager[0];
+
+        SdkAsyncHttpClient client = MLHttpClientFactory
+            .getAsyncHttpClient(
+                Duration.ofSeconds(100),
+                Duration.ofSeconds(100),
+                100,
+                false,
+                true, // skipSslVerification = true
+                null,
+                "test-mtls-skip-ssl-client",
+                keyManagers, // mTLS enabled
+                null
+            );
+        assertNotNull(client);
+    }
 }

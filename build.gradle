@@ -82,7 +82,7 @@ allprojects {
     }
 
     plugins.withId('jacoco') {
-        jacoco.toolVersion = '0.8.13'
+        jacoco.toolVersion = '0.8.14'
     }
 
     project.getExtensions().getExtraProperties().set("versions", VersionProperties.getVersions());

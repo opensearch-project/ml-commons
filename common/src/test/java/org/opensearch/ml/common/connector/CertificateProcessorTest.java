@@ -6,21 +6,24 @@
 package org.opensearch.ml.common.connector;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.CertificateProcessor.CA_CERT_PEM_FIELD;
 import static org.opensearch.ml.common.connector.CertificateProcessor.CLIENT_CERT_PEM_FIELD;
 import static org.opensearch.ml.common.connector.CertificateProcessor.CLIENT_CERT_PKCS12_FIELD;
 import static org.opensearch.ml.common.connector.CertificateProcessor.CLIENT_KEY_PEM_FIELD;
 import static org.opensearch.ml.common.connector.CertificateProcessor.KEYSTORE_PASSWORD_FIELD;
-import static org.opensearch.ml.common.connector.CertificateProcessor.KEYSTORE_TYPE_JKS;
-import static org.opensearch.ml.common.connector.CertificateProcessor.KEYSTORE_TYPE_PEM;
-import static org.opensearch.ml.common.connector.CertificateProcessor.KEYSTORE_TYPE_PKCS12;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.net.ssl.SSLContext;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.TrustManager;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -42,13 +45,13 @@ public class CertificateProcessorTest {
     public void testBuildSSLContext_MutualTlsDisabled_ReturnsNull() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(false).build();
 
-        SSLContext result = certificateProcessor.buildSSLContext(config, credentials);
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
         assertNull("SSL context should be null when mutual TLS is disabled", result);
     }
 
     @Test
     public void testBuildSSLContext_MutualTlsEnabled_NoCredentials_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         assertThrows(
             "Should throw MLValidationException when credentials are missing",
@@ -67,7 +70,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateConfig_PemType_MissingCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
         // Missing certificate
@@ -81,7 +84,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateConfig_PemType_MissingPrivateKey_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         // Missing private key
@@ -95,7 +98,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateConfig_PemType_ValidCredentials_NoException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
@@ -128,7 +131,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateOnlyAuthentication_MixedAuth_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
@@ -143,7 +146,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateOnlyAuthentication_CertificateOnly_NoException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
@@ -155,7 +158,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testIsCertificateOnlyAuthentication_WithCertificatesOnly_ReturnsTrue() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
@@ -165,15 +168,18 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testIsCertificateOnlyAuthentication_WithMixedAuth_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+    public void testIsCertificateOnlyAuthentication_WithMixedAuth_ThrowsException() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
         credentials.put("api_key", "test-api-key");
 
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false when both certificates and API key are present", result);
+        assertThrows(
+            "Should throw MLValidationException when both certificates and API key are present",
+            MLValidationException.class,
+            () -> certificateProcessor.isCertificateOnlyAuthentication(config, credentials)
+        );
     }
 
     @Test
@@ -189,7 +195,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateConfig_PKCS12Type_MissingCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         assertThrows(
             "Should throw MLValidationException when PKCS12 certificate is missing",
@@ -200,7 +206,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateConfig_PKCS12Type_ValidCredentials_NoException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         credentials.put(CLIENT_CERT_PKCS12_FIELD, "test-pkcs12-cert");
 
@@ -210,7 +216,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateConfig_EmptyCredentials_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         assertThrows(
             "Should throw MLValidationException when credentials are empty",
@@ -232,39 +238,45 @@ public class CertificateProcessorTest {
 
     @Test
     public void testIsCertificateOnlyAuthentication_NullCredentials_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, null);
         assertFalse("Should return false when credentials are null", result);
     }
 
     @Test
-    public void testIsCertificateOnlyAuthentication_EmptyApiKey_ReturnsTrue() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+    public void testIsCertificateOnlyAuthentication_EmptyApiKey_ThrowsException() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-        credentials.put("api_key", ""); // Empty API key should be treated as no API key
+        credentials.put("api_key", ""); // Empty API key is still not allowed
 
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertTrue("Should return true when API key is empty", result);
+        assertThrows(
+            "Should throw MLValidationException when API key field is present even if empty",
+            MLValidationException.class,
+            () -> certificateProcessor.isCertificateOnlyAuthentication(config, credentials)
+        );
     }
 
     @Test
-    public void testIsCertificateOnlyAuthentication_WhitespaceApiKey_ReturnsTrue() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+    public void testIsCertificateOnlyAuthentication_WhitespaceApiKey_ThrowsException() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-        credentials.put("api_key", "   "); // Whitespace-only API key should be treated as no API key
+        credentials.put("api_key", "   "); // Whitespace-only API key is still not allowed
 
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertTrue("Should return true when API key is whitespace only", result);
+        assertThrows(
+            "Should throw MLValidationException when API key field is present even if whitespace only",
+            MLValidationException.class,
+            () -> certificateProcessor.isCertificateOnlyAuthentication(config, credentials)
+        );
     }
 
     @Test
     public void testIsCertificateOnlyAuthentication_PKCS12Type_ReturnsTrue() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         credentials.put(CLIENT_CERT_PKCS12_FIELD, "test-pkcs12-cert");
 
@@ -273,23 +285,29 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testIsCertificateOnlyAuthentication_JKSType_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_JKS).build();
+    public void testIsCertificateOnlyAuthentication_JKSType_ThrowsException() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("JKS").build();
 
         credentials.put("some_jks_field", "test-jks-cert");
 
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false for JKS type (not implemented)", result);
+        assertThrows(
+            "Should throw MLValidationException for unsupported JKS keystore type",
+            MLValidationException.class,
+            () -> certificateProcessor.isCertificateOnlyAuthentication(config, credentials)
+        );
     }
 
     @Test
-    public void testIsCertificateOnlyAuthentication_UnsupportedKeystoreType_ReturnsFalse() {
+    public void testIsCertificateOnlyAuthentication_UnsupportedKeystoreType_ThrowsException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("UNSUPPORTED").build();
 
         credentials.put("some_field", "test-cert");
 
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false for unsupported keystore type", result);
+        assertThrows(
+            "Should throw MLValidationException for non-certificate credential field",
+            MLValidationException.class,
+            () -> certificateProcessor.isCertificateOnlyAuthentication(config, credentials)
+        );
     }
 
     @Test
@@ -302,7 +320,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateOnlyAuthentication_NullCredentials_NoValidation() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Should not throw any exception
         certificateProcessor.validateCertificateOnlyAuthentication(config, null);
@@ -310,7 +328,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateOnlyAuthentication_NoCertificates_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // No certificates provided
         assertThrows(
@@ -322,7 +340,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateOnlyAuthentication_EmptyApiKey_NoException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
@@ -334,7 +352,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testValidateCertificateOnlyAuthentication_WhitespaceApiKey_NoException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
         credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
@@ -346,13 +364,13 @@ public class CertificateProcessorTest {
 
     @Test
     public void testBuildSSLContext_NullConfig_ReturnsNull() {
-        SSLContext result = certificateProcessor.buildSSLContext(null, credentials);
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(null, credentials);
         assertNull("SSL context should be null when config is null", result);
     }
 
     @Test
     public void testBuildSSLContext_EmptyCredentials_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         assertThrows(
             "Should throw MLValidationException when credentials are empty",
@@ -365,42 +383,42 @@ public class CertificateProcessorTest {
     public void testBuildSSLContextWithManagers_MutualTlsDisabled_ReturnsNull() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(false).build();
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContextWithManagers(config, credentials);
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
         assertNull("SSL context with managers should be null when mutual TLS is disabled", result);
     }
 
     @Test
     public void testBuildSSLContextWithManagers_NullConfig_ReturnsNull() {
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContextWithManagers(null, credentials);
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(null, credentials);
         assertNull("SSL context with managers should be null when config is null", result);
     }
 
     @Test
     public void testBuildSSLContextWithManagers_NoCredentials_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         assertThrows(
             "Should throw MLValidationException when credentials are missing",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContextWithManagers(config, null)
+            () -> certificateProcessor.buildSSLContext(config, null)
         );
     }
 
     @Test
     public void testBuildSSLContextWithManagers_EmptyCredentials_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         assertThrows(
             "Should throw MLValidationException when credentials are empty",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContextWithManagers(config, new HashMap<>())
+            () -> certificateProcessor.buildSSLContext(config, new HashMap<>())
         );
     }
 
     // Tests for certificate parsing methods to increase coverage
     @Test
     public void testCreatePemKeyManagers_InvalidCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidCertificateData\n-----END CERTIFICATE-----");
         credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidKeyData\n-----END PRIVATE KEY-----");
@@ -414,7 +432,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testCreatePemKeyManagers_Base64EncodedCertificate_ParsesCorrectly() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Base64 encoded invalid certificate data (will trigger parsing but fail validation)
         String base64Cert = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkludmFsaWRDZXJ0aWZpY2F0ZURhdGEKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==";
@@ -432,7 +450,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testCreatePkcs12KeyManagers_InvalidCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         credentials.put(CLIENT_CERT_PKCS12_FIELD, "InvalidPKCS12Data");
 
@@ -445,7 +463,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testCreatePkcs12KeyManagers_Base64EncodedCertificate_ParsesCorrectly() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         // Base64 encoded invalid PKCS12 data (will trigger parsing but fail validation)
         String base64Pkcs12 = "SW52YWxpZFBLQ1MxMkRhdGE=";
@@ -461,7 +479,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testGetCertificateContent_Base64Content_DecodesCorrectly() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Test with base64 content that decodes to PEM format
         String base64Content = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkludmFsaWRDZXJ0aWZpY2F0ZURhdGEKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==";
@@ -477,7 +495,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testGetCertificateContent_NonBase64Content_ReturnsAsIs() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Test with non-base64 content (PEM format)
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidCertificateData\n-----END CERTIFICATE-----");
@@ -492,7 +510,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testParsePemCertificate_InvalidFormat_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Test with malformed PEM certificate
         credentials.put(CLIENT_CERT_PEM_FIELD, "INVALID_PEM_FORMAT");
@@ -507,7 +525,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testParsePemPrivateKey_InvalidFormat_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Test with malformed PEM private key
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidCertificateData\n-----END CERTIFICATE-----");
@@ -522,7 +540,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testIsBase64EncodedContent_ValidBase64_ReturnsTrue() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Test with valid base64 content
         String base64Content = "SGVsbG8gV29ybGQ="; // "Hello World" in base64
@@ -538,7 +556,7 @@ public class CertificateProcessorTest {
 
     @Test
     public void testIsBase64EncodedContent_PemFormat_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Test with PEM format (should not be treated as base64)
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nSomeData\n-----END CERTIFICATE-----");
@@ -553,35 +571,35 @@ public class CertificateProcessorTest {
 
     @Test
     public void testBuildSSLContextWithManagers_PemType_InvalidCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidData\n-----END CERTIFICATE-----");
         credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidData\n-----END PRIVATE KEY-----");
 
         assertThrows(
-            "Should throw MLValidationException for invalid certificate in buildSSLContextWithManagers",
+            "Should throw MLValidationException for invalid certificate in buildSSLContext",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContextWithManagers(config, credentials)
+            () -> certificateProcessor.buildSSLContext(config, credentials)
         );
     }
 
     @Test
     public void testBuildSSLContextWithManagers_Pkcs12Type_InvalidCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         credentials.put(CLIENT_CERT_PKCS12_FIELD, "InvalidPKCS12Data");
 
         assertThrows(
-            "Should throw MLValidationException for invalid PKCS12 in buildSSLContextWithManagers",
+            "Should throw MLValidationException for invalid PKCS12 in buildSSLContext",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContextWithManagers(config, credentials)
+            () -> certificateProcessor.buildSSLContext(config, credentials)
         );
     }
 
     // Additional tests to reach 78% coverage target - testing deeper certificate processing paths
     @Test
     public void testCreateKeyManagers_PemType_ExercisesCreatePemKeyManagers() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Use properly formatted but invalid certificate data to exercise more code paths
         String validFormatCert = "-----BEGIN CERTIFICATE-----\n"
@@ -594,237 +612,104 @@ public class CertificateProcessorTest {
 
         String validFormatKey = "-----BEGIN PRIVATE KEY-----\n"
             + "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB\n"
-            + "wjKquxdBNQOSHINbxBqXKE2kQFLfT3BlbkFfYPTUF9QjE6P0D/JvjvOoVqBcuFmu\n"
-            + "oupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvs\n"
-            + "BdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKhYSdqIVDx\n"
+            + "wjIy881GTHFoUYpPUOI9nzHRSda2WtlaSBVGYSBDvZf36q77jLDSPrqlNpjH7tgX\n"
+            + "ms9lBh1PVVgkX9zgeWKxstSutzDqFoVqWpXln+G+ILWstApsgs7SuPiAkHKGX+fq\n"
+            + "ollVJt3UJpbP1Y3+Dz5rZrOjwta1WoFhNVGDGaHWn+lLllP+D8ykQs0DdDVUlZe9\n"
+            + "uuMiLiMXw2Fg5A8HFx3+7G8VWiOzxBNBtfnt0FueAjBvUb1v3VRIma/OGqcQDjXq\n"
+            + "VSHXyqJVoGq2AcVXIuuTt/R5n4XyqeXBGAYBdHNmHpzd4mu4S8X1Q5IwIwYJKoZI\n"
+            + "hvcNAQkBFgUrZXhhbXBsZUBleGFtcGxlLmNvbTAeFw0yMzAxMDEwMDAwMDBaFw0y\n"
             + "-----END PRIVATE KEY-----";
 
         credentials.put(CLIENT_CERT_PEM_FIELD, validFormatCert);
         credentials.put(CLIENT_KEY_PEM_FIELD, validFormatKey);
 
         assertThrows(
-            "Should throw MLValidationException when processing invalid but well-formatted certificates",
+            "Should throw MLValidationException for invalid certificate data",
             MLValidationException.class,
             () -> certificateProcessor.buildSSLContext(config, credentials)
         );
     }
 
+    // ========== POSITIVE PATH TESTS ==========
+    // These tests verify successful certificate processing with real certificate fixtures
+
+    private String loadCertificateFromFile(String filename) throws IOException {
+        return new String(Files.readAllBytes(Paths.get("src/test/resources/certificates/" + filename)));
+    }
+
     @Test
-    public void testCreateKeyManagers_PKCS12Type_ExercisesCreatePkcs12KeyManagers() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
+    public void testBuildSSLContext_ValidPemCertificates_Success() throws IOException {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        // Use base64 encoded data that looks like PKCS12 but is invalid
-        String mockPkcs12 = "MIIJiAIBAzCCCUQGCSqGSIb3DQEHAaCCCTUEggkxMIIJLTCCBXEGCSqGSIb3DQEHAaCCBWIEggVe"
-            + "MIIFWjCCBVYGCyqGSIb3DQEMCgECoIIE+jCCBPYwHAYKKoZIhvcNAQwBAzAOBAhQdOOBNOmCxgIC"
-            + "B9AEggTUMockCS7T9pKuC5R7C7+8TANBgkqhkiG9w0BAQsFADCBjDELMAkGA1UEBhMCVVMxCzAJ";
+        // Load real certificate fixtures
+        String clientCert = loadCertificateFromFile("test-client-cert.pem");
+        String clientKey = loadCertificateFromFile("test-client-key-pkcs8.pem");
+        String caCert = loadCertificateFromFile("test-ca-cert.pem");
 
-        credentials.put(CLIENT_CERT_PKCS12_FIELD, mockPkcs12);
+        credentials.put(CLIENT_CERT_PEM_FIELD, clientCert);
+        credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
+        credentials.put(CA_CERT_PEM_FIELD, caCert);
+
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
+        assertNotNull("SSL context should be created successfully with valid PEM certificates", result);
+        assertNotNull("SSL context should not be null", result.getSslContext());
+    }
+
+    @Test
+    public void testBuildSSLContextWithManagers_ValidPemCertificates_Success() throws IOException {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+
+        // Load real certificate fixtures
+        String clientCert = loadCertificateFromFile("test-client-cert.pem");
+        String clientKey = loadCertificateFromFile("test-client-key-pkcs8.pem");
+        String caCert = loadCertificateFromFile("test-ca-cert.pem");
+
+        credentials.put(CLIENT_CERT_PEM_FIELD, clientCert);
+        credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
+        credentials.put(CA_CERT_PEM_FIELD, caCert);
+
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
+
+        assertNotNull("SSL context with managers should be created successfully", result);
+        assertNotNull("SSL context should not be null", result.getSslContext());
+
+        KeyManager[] keyManagers = result.getKeyManagers();
+        TrustManager[] trustManagers = result.getTrustManagers();
+
+        assertNotNull("Key managers should not be null", keyManagers);
+        assertNotNull("Trust managers should not be null", trustManagers);
+        assertTrue("Key managers array should not be empty", keyManagers.length > 0);
+        assertTrue("Trust managers array should not be empty", trustManagers.length > 0);
+    }
+
+    @Test
+    public void testBuildSSLContext_ValidPkcs12Certificate_Success() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
+
+        // Use the base64 encoded PKCS12 content from our fixtures
+        String pkcs12Content =
+            "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";
+
+        credentials.put(CLIENT_CERT_PKCS12_FIELD, pkcs12Content);
         credentials.put(KEYSTORE_PASSWORD_FIELD, "testpass");
 
-        assertThrows(
-            "Should throw MLValidationException when processing invalid PKCS12 data",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
+        assertNotNull("SSL context should be created successfully with valid PKCS12 certificate", result);
+        assertNotNull("SSL context should not be null", result.getSslContext());
     }
 
     @Test
-    public void testCreateKeyManagers_JKSType_ThrowsNotImplementedException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_JKS).build();
+    public void testValidateCertificateConfig_ValidPemCertificates_NoException() throws IOException {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        credentials.put("jks_keystore", "mock-jks-data");
+        // Load real certificate fixtures
+        String clientCert = loadCertificateFromFile("test-client-cert.pem");
+        String clientKey = loadCertificateFromFile("test-client-key-pkcs8.pem");
 
-        assertThrows(
-            "Should throw MLValidationException for JKS type (not implemented)",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
-    }
+        credentials.put(CLIENT_CERT_PEM_FIELD, clientCert);
+        credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
 
-    @Test
-    public void testGetCertificateContent_EmptyField_ReturnsNull() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-
-        assertThrows(
-            "Should throw MLValidationException when certificate field is empty",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
-    }
-
-    // Additional tests to exercise the remaining uncovered methods and reach 78% target
-    @Test
-    public void testCreateTrustManagers_DefaultTruststore_ExercisesDefaultPath() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
-
-        // Use a valid certificate format that will pass initial parsing to reach trust manager creation
-        String validCert = "-----BEGIN CERTIFICATE-----\n"
-            + "MIICljCCAX4CCQCKuC5R7C7+8TANBgkqhkiG9w0BAQsFADCBjDELMAkGA1UEBhMC\n"
-            + "VVMxCzAJBgNVBAgMAkNBMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMQ8wDQYDVQQK\n"
-            + "DAZUZXN0Q28xDzANBgNVBAsMBlRlc3RVbml0MRAwDgYDVQQDDAdUZXN0Q2VydDEk\n"
-            + "MCIGCSqGSIb3DQEJARYVdGVzdEBleGFtcGxlLmNvbS5jb20wHhcNMjMwMTAxMDAw\n"
-            + "MDAwWhcNMjQwMTAxMDAwMDAwWjCBjDELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNB\n"
-            + "MRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMQ8wDQYDVQQKDAZUZXN0Q28xDzANBgNV\n"
-            + "BAsMBlRlc3RVbml0MRAwDgYDVQQDDAdUZXN0Q2VydDEkMCIGCSqGSIb3DQEJARYV\n"
-            + "dGVzdEBleGFtcGxlLmNvbS5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK\n"
-            + "AoIBAQC7VJTUt9Us8cKBwjKquxdBNQOSHINbxBqXKE2kQFLfT3BlbkFfYPTUF9Qj\n"
-            + "E6P0D/JvjvOoVqBcuFmuoupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwR\n"
-            + "cTxwdN+CFwpVYdXzzxvsBdsgAYiuTwIDAQABo1MwUTAdBgNVHQ4EFgQUuSBU7r4V\n"
-            + "54+3SMALxb5haQdnfkYwHwYDVR0jBBgwFoAUuSBU7r4V54+3SMALxb5haQdnfkYw\n"
-            + "DwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAtWqaQni2FpRu1iqA\n"
-            + "BRy7kNROzv6e+xzadWUBiGjCRSqaMF/XwBrXneO4zzufEiuQkQxHh+Z7/iiwxs8E\n"
-            + "-----END CERTIFICATE-----";
-
-        String validKey = "-----BEGIN PRIVATE KEY-----\n"
-            + "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB\n"
-            + "wjKquxdBNQOSHINbxBqXKE2kQFLfT3BlbkFfYPTUF9QjE6P0D/JvjvOoVqBcuFmu\n"
-            + "oupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvs\n"
-            + "BdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKhYSdqIVDx\n"
-            + "TE8NcJoyhfHhMQoVqBcuFmuoupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6\n"
-            + "nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKug\n"
-            + "lAkuYzuuUiUk9JKhYSdqIVDxTE8NcJoyhfHhMQoVqBcuFmuoupg+biQ62AG8l5f0\n"
-            + "tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiuTwIDAQAB\n"
-            + "AoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKhYSdqIVDxTE8NcJoyhfHhMQoV\n"
-            + "qBcuFmuoupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVY\n"
-            + "dXzzxvsBdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKh\n"
-            + "YSdqIVDxTE8NcJoyhfHhMQoVqBcuFmuoupg+biQ62AG8l5f0tVTVHxZz1oaHe6nO\n"
-            + "XLH1ksU6nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiuTwIDAQABAoIBABdwrDz5vY2x\n"
-            + "Ezp2yKuglAkuYzuuUiUk9JKhYSdqIVDxTE8NcJoyhfHhMQoVqBcuFmuoupg+biQ6\n"
-            + "2AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiu\n"
-            + "-----END PRIVATE KEY-----";
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, validCert);
-        credentials.put(CLIENT_KEY_PEM_FIELD, validKey);
-        // No CA cert or truststore path - should use default truststore
-
-        assertThrows(
-            "Should throw MLValidationException when processing certificates with default truststore",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
-    }
-
-    @Test
-    public void testParsePemPrivateKey_MultipleAlgorithms_ExercisesAlgorithmLoop() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
-
-        String validCert = "-----BEGIN CERTIFICATE-----\n"
-            + "MIICljCCAX4CCQCKuC5R7C7+8TANBgkqhkiG9w0BAQsFADCBjDELMAkGA1UEBhMC\n"
-            + "VVMxCzAJBgNVBAgMAkNBMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMQ8wDQYDVQQK\n"
-            + "DAZUZXN0Q28xDzANBgNVBAsMBlRlc3RVbml0MRAwDgYDVQQDDAdUZXN0Q2VydDEk\n"
-            + "MCIGCSqGSIb3DQEJARYVdGVzdEBleGFtcGxlLmNvbS5jb20wHhcNMjMwMTAxMDAw\n"
-            + "MDAwWhcNMjQwMTAxMDAwMDAwWjCBjDELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNB\n"
-            + "-----END CERTIFICATE-----";
-
-        // Use a private key that will pass regex matching but fail algorithm parsing
-        String keyWithValidFormat = "-----BEGIN PRIVATE KEY-----\n"
-            + "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB\n"
-            + "wjKquxdBNQOSHINbxBqXKE2kQFLfT3BlbkFfYPTUF9QjE6P0D/JvjvOoVqBcuFmu\n"
-            + "oupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvs\n"
-            + "BdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKhYSdqIVDx\n"
-            + "TE8NcJoyhfHhMQoVqBcuFmuoupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6\n"
-            + "nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKug\n"
-            + "lAkuYzuuUiUk9JKhYSdqIVDxTE8NcJoyhfHhMQoVqBcuFmuoupg+biQ62AG8l5f0\n"
-            + "tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiuTwIDAQAB\n"
-            + "AoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKhYSdqIVDxTE8NcJoyhfHhMQoV\n"
-            + "qBcuFmuoupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVY\n"
-            + "dXzzxvsBdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKh\n"
-            + "YSdqIVDxTE8NcJoyhfHhMQoVqBcuFmuoupg+biQ62AG8l5f0tVTVHxZz1oaHe6nO\n"
-            + "XLH1ksU6nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiuTwIDAQABAoIBABdwrDz5vY2x\n"
-            + "Ezp2yKuglAkuYzuuUiUk9JKhYSdqIVDxTE8NcJoyhfHhMQoVqBcuFmuoupg+biQ6\n"
-            + "2AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvsBdsgAYiu\n"
-            + "-----END PRIVATE KEY-----";
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, validCert);
-        credentials.put(CLIENT_KEY_PEM_FIELD, keyWithValidFormat);
-
-        assertThrows(
-            "Should throw MLValidationException when private key parsing fails across algorithms",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
-    }
-
-    @Test
-    public void testCreatePemKeyManagers_WithPassword_ExercisesPasswordPath() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PEM).build();
-
-        String validCert = "-----BEGIN CERTIFICATE-----\n"
-            + "MIICljCCAX4CCQCKuC5R7C7+8TANBgkqhkiG9w0BAQsFADCBjDELMAkGA1UEBhMC\n"
-            + "VVMxCzAJBgNVBAgMAkNBMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMQ8wDQYDVQQK\n"
-            + "DAZUZXN0Q28xDzANBgNVBAsMBlRlc3RVbml0MRAwDgYDVQQDDAdUZXN0Q2VydDEk\n"
-            + "MCIGCSqGSIb3DQEJARYVdGVzdEBleGFtcGxlLmNvbS5jb20wHhcNMjMwMTAxMDAw\n"
-            + "MDAwWhcNMjQwMTAxMDAwMDAwWjCBjDELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNB\n"
-            + "-----END CERTIFICATE-----";
-
-        String validKey = "-----BEGIN PRIVATE KEY-----\n"
-            + "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB\n"
-            + "wjKquxdBNQOSHINbxBqXKE2kQFLfT3BlbkFfYPTUF9QjE6P0D/JvjvOoVqBcuFmu\n"
-            + "oupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvs\n"
-            + "BdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKhYSdqIVDx\n"
-            + "-----END PRIVATE KEY-----";
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, validCert);
-        credentials.put(CLIENT_KEY_PEM_FIELD, validKey);
-        credentials.put(KEYSTORE_PASSWORD_FIELD, "mypassword123");
-
-        assertThrows(
-            "Should throw MLValidationException when processing PEM with password",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
-    }
-
-    @Test
-    public void testCreatePkcs12KeyManagers_WithoutPassword_ExercisesEmptyPasswordPath() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(KEYSTORE_TYPE_PKCS12).build();
-
-        // Use a longer, more realistic PKCS12 base64 string
-        String mockPkcs12 = "MIIJiAIBAzCCCUQGCSqGSIb3DQEHAaCCCTUEggkxMIIJLTCCBXEGCSqGSIb3DQEHAaCCBWIEggVe"
-            + "MIIFWjCCBVYGCyqGSIb3DQEMCgECoIIE+jCCBPYwHAYKKoZIhvcNAQwBAzAOBAhQdOOBNOmCxgIC"
-            + "B9AEggTUMockCS7T9pKuC5R7C7+8TANBgkqhkiG9w0BAQsFADCBjDELMAkGA1UEBhMCVVMxCzAJ"
-            + "BgNVBAgMAkNBMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMQ8wDQYDVQQKDAZUZXN0Q28xDzANBgNV"
-            + "BAsMBlRlc3RVbml0MRAwDgYDVQQDDAdUZXN0Q2VydDEkMCIGCSqGSIb3DQEJARYV";
-
-        credentials.put(CLIENT_CERT_PKCS12_FIELD, mockPkcs12);
-        // No password provided - should use empty password
-
-        assertThrows(
-            "Should throw MLValidationException when processing PKCS12 without password",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
-    }
-
-    @Test
-    public void testBuildSSLContextWithManagers_NullKeystoreType_ExercisesDefaultPath() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType(null).build();
-
-        String validCert = "-----BEGIN CERTIFICATE-----\n"
-            + "MIICljCCAX4CCQCKuC5R7C7+8TANBgkqhkiG9w0BAQsFADCBjDELMAkGA1UEBhMC\n"
-            + "VVMxCzAJBgNVBAgMAkNBMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMQ8wDQYDVQQK\n"
-            + "DAZUZXN0Q28xDzANBgNVBAsMBlRlc3RVbml0MRAwDgYDVQQDDAdUZXN0Q2VydDEk\n"
-            + "MCIGCSqGSIb3DQEJARYVdGVzdEBleGFtcGxlLmNvbS5jb20wHhcNMjMwMTAxMDAw\n"
-            + "MDAwWhcNMjQwMTAxMDAwMDAwWjCBjDELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNB\n"
-            + "-----END CERTIFICATE-----";
-
-        String validKey = "-----BEGIN PRIVATE KEY-----\n"
-            + "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB\n"
-            + "wjKquxdBNQOSHINbxBqXKE2kQFLfT3BlbkFfYPTUF9QjE6P0D/JvjvOoVqBcuFmu\n"
-            + "oupg+biQ62AG8l5f0tVTVHxZz1oaHe6nOXLH1ksU6nwRcTxwdN+CFwpVYdXzzxvs\n"
-            + "BdsgAYiuTwIDAQABAoIBABdwrDz5vY2xEzp2yKuglAkuYzuuUiUk9JKhYSdqIVDx\n"
-            + "-----END PRIVATE KEY-----";
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, validCert);
-        credentials.put(CLIENT_KEY_PEM_FIELD, validKey);
-
-        assertThrows(
-            "Should throw MLValidationException when keystore type is null (defaults to PEM)",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContextWithManagers(config, credentials)
-        );
+        // Should not throw any exception with valid certificates
+        certificateProcessor.validateCertificateConfig(config, credentials);
     }
 }

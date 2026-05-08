@@ -39,7 +39,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
     public static final String MUTUAL_TLS_ENABLED_FIELD = "mutual_tls_enabled";
     public static final String KEYSTORE_TYPE_FIELD = "keystore_type";
-    public static final String TRUSTSTORE_PATH_FIELD = "truststore_path";
+    // Note: TRUSTSTORE_PATH_FIELD was removed as file-based truststores are not supported
+    // Use ca_cert_pem in credentials for custom CA certificates instead
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
     public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
@@ -50,7 +51,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
     public static final Boolean SKIP_SSL_VERIFICATION_DEFAULT_VALUE = Boolean.FALSE;
     public static final Boolean MUTUAL_TLS_ENABLED_DEFAULT_VALUE = Boolean.FALSE;
-    public static final String KEYSTORE_TYPE_DEFAULT_VALUE = "PEM";
+    // Note: No default value for keystoreType to prevent field pollution in connector configs
+    // CertificateProcessor applies PEM fallback when needed (line 91 in CertificateProcessor.java)
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = Version.V_2_19_0;
     private Integer maxConnections;
@@ -63,7 +65,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     private Boolean skipSslVerification;
     private Boolean mutualTlsEnabled;
     private String keystoreType;
-    private String truststorePath;
+    // Note: truststorePath field was removed as file-based truststores are not supported
+    // Use ca_cert_pem in credentials for custom CA certificates instead
 
     @Builder(toBuilder = true)
     public ConnectorClientConfig(
@@ -76,8 +79,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         RetryBackoffPolicy retryBackoffPolicy,
         Boolean skipSslVerification,
         Boolean mutualTlsEnabled,
-        String keystoreType,
-        String truststorePath
+        String keystoreType
     ) {
         this.maxConnections = maxConnections;
         this.connectionTimeout = connectionTimeout;
@@ -89,7 +91,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.skipSslVerification = skipSslVerification;
         this.mutualTlsEnabled = mutualTlsEnabled;
         this.keystoreType = keystoreType;
-        this.truststorePath = truststorePath;
     }
 
     public ConnectorClientConfig(StreamInput input) throws IOException {
@@ -108,7 +109,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
                 this.mutualTlsEnabled = input.readOptionalBoolean();
                 this.keystoreType = input.readOptionalString();
-                this.truststorePath = input.readOptionalString();
+                // Note: truststorePath was removed - skip reading it for backward compatibility
+                input.readOptionalString(); // Skip the truststorePath field
             }
         }
     }
@@ -123,8 +125,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
         this.skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
         this.mutualTlsEnabled = MUTUAL_TLS_ENABLED_DEFAULT_VALUE;
-        this.keystoreType = KEYSTORE_TYPE_DEFAULT_VALUE;
-        this.truststorePath = null;
+        this.keystoreType = null; // No default - prevents field pollution in serialized output
+        // Note: truststorePath field was removed
     }
 
     @Override
@@ -147,7 +149,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
                 out.writeOptionalBoolean(mutualTlsEnabled);
                 out.writeOptionalString(keystoreType);
-                out.writeOptionalString(truststorePath);
+                // Note: truststorePath was removed - write null for backward compatibility
+                out.writeOptionalString(null);
             }
         }
     }
@@ -205,8 +208,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         RetryBackoffPolicy retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
         Boolean skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
         Boolean mutualTlsEnabled = MUTUAL_TLS_ENABLED_DEFAULT_VALUE;
-        String keystoreType = KEYSTORE_TYPE_DEFAULT_VALUE;
-        String truststorePath = null;
+        String keystoreType = null; // No default - CertificateProcessor handles PEM fallback
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -244,11 +246,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 case KEYSTORE_TYPE_FIELD:
                     keystoreType = parser.text();
                     break;
-                case TRUSTSTORE_PATH_FIELD:
-                    // Security: Skip parsing truststorePath from XContent to prevent path injection
-                    // File-based truststores are not supported in the current implementation
-                    parser.skipChildren();
-                    break;
+                // Note: TRUSTSTORE_PATH_FIELD case was removed as the field is no longer supported
+                // File-based truststores are not supported - use ca_cert_pem in credentials instead
                 default:
                     parser.skipChildren();
                     break;
@@ -266,7 +265,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             .skipSslVerification(skipSslVerification)
             .mutualTlsEnabled(mutualTlsEnabled)
             .keystoreType(keystoreType)
-            .truststorePath(truststorePath)
             .build();
     }
 }

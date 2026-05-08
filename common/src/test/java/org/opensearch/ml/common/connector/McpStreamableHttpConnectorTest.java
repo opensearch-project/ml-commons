@@ -290,8 +290,8 @@ public class McpStreamableHttpConnectorTest {
         ConnectorClientConfig clientConfig = ConnectorClientConfig
             .builder()
             .maxConnections(30)
-            .connectionTimeout(30000)
-            .readTimeout(30000)
+            .connectionTimeout(30)
+            .readTimeout(30)
             .retryBackoffMillis(10)
             .retryTimeoutSeconds(10)
             .maxRetryTimes(-1)

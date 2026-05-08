@@ -7,6 +7,8 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -622,6 +624,266 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         verify(streamActionListener, times(1)).onFailure(captor.capture());
         assertTrue(captor.getValue() instanceof MLException);
         assertEquals("Fail to execute streaming", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testHttpClientCacheInvalidation_CredentialRotation() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+
+        ConnectorClientConfig clientConfig = new ConnectorClientConfig(
+            10,
+            10,
+            10,
+            1,
+            1,
+            0,
+            RetryBackoffPolicy.CONSTANT,
+            false, // skipSslVerification
+            false, // mutualTlsEnabled - disabled to avoid certificate validation
+            null,
+            null
+        );
+
+        // Initial credentials
+        Map<String, String> initialCredentials = new HashMap<>();
+        initialCredentials.put("access_key", "initial-access-key");
+        initialCredentials.put("secret_key", "initial-secret-key");
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(clientConfig)
+            .actions(Arrays.asList(predictAction))
+            .credential(initialCredentials)
+            .build();
+
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+
+        SdkAsyncHttpClient client1 = executor.getHttpClient();
+
+        SdkAsyncHttpClient client2 = executor.getHttpClient();
+        assertSame("HTTP client should be cached", client1, client2);
+
+        Map<String, String> rotatedCredentials = new HashMap<>();
+        rotatedCredentials.put("access_key", "rotated-access-key");
+        rotatedCredentials.put("secret_key", "rotated-secret-key");
+
+        HttpConnector rotatedConnector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(clientConfig)
+            .actions(Arrays.asList(predictAction))
+            .credential(rotatedCredentials)
+            .build();
+
+        HttpJsonConnectorExecutor rotatedExecutor = spy(new HttpJsonConnectorExecutor(rotatedConnector));
+
+        SdkAsyncHttpClient client3 = rotatedExecutor.getHttpClient();
+        assertNotSame("HTTP client should be recreated after credential rotation", client1, client3);
+    }
+
+    @Test
+    public void testHttpClientCacheInvalidation_ConfigurationChange() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+
+        ConnectorClientConfig initialConfig = new ConnectorClientConfig(
+            10,  // maxConnections
+            10,  // connectionTimeout
+            10,  // readTimeout
+            1,
+            1,
+            0,
+            RetryBackoffPolicy.CONSTANT,
+            false, // skipSslVerification
+            false, // mutualTlsEnabled
+            null,
+            null
+        );
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(initialConfig)
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+
+        SdkAsyncHttpClient client1 = executor.getHttpClient();
+
+        SdkAsyncHttpClient client2 = executor.getHttpClient();
+        assertSame("HTTP client should be cached", client1, client2);
+
+        ConnectorClientConfig updatedConfig = new ConnectorClientConfig(
+            20,  // different maxConnections
+            15,  // different connectionTimeout
+            15,  // different readTimeout
+            1,
+            1,
+            0,
+            RetryBackoffPolicy.CONSTANT,
+            true,  // different skipSslVerification
+            false, // mutualTlsEnabled
+            null,
+            null
+        );
+
+        HttpConnector updatedConnector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(updatedConfig)
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        HttpJsonConnectorExecutor updatedExecutor = spy(new HttpJsonConnectorExecutor(updatedConnector));
+
+        SdkAsyncHttpClient client3 = updatedExecutor.getHttpClient();
+        assertNotSame("HTTP client should be recreated after configuration change", client1, client3);
+    }
+
+    @Test
+    public void testHttpClientCacheKey_Generation() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+
+        ConnectorClientConfig clientConfig = new ConnectorClientConfig(
+            10,
+            10,
+            10,
+            1,
+            1,
+            0,
+            RetryBackoffPolicy.CONSTANT,
+            false,
+            false, // mTLS disabled to avoid certificate validation
+            null,
+            null
+        );
+
+        Map<String, String> credentials = new HashMap<>();
+        credentials.put("access_key", "test-access-key");
+        credentials.put("secret_key", "test-secret-key");
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(clientConfig)
+            .actions(Arrays.asList(predictAction))
+            .credential(credentials)
+            .build();
+
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+
+        try {
+            java.lang.reflect.Method method = HttpJsonConnectorExecutor.class.getDeclaredMethod("generateHttpClientCacheKey");
+            method.setAccessible(true);
+
+            String cacheKey1 = (String) method.invoke(executor);
+            String cacheKey2 = (String) method.invoke(executor);
+
+            assertEquals("Cache key should be consistent", cacheKey1, cacheKey2);
+
+            assertTrue("Cache key should contain connection timeout", cacheKey1.contains("conn:10"));
+            assertTrue("Cache key should contain read timeout", cacheKey1.contains("read:10"));
+            assertTrue("Cache key should contain max connections", cacheKey1.contains("max:10"));
+            assertTrue("Cache key should contain SSL settings", cacheKey1.contains("skipSsl:false"));
+            assertTrue("Cache key should contain mTLS settings", cacheKey1.contains("mtls:false"));
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to test cache key generation", e);
+        }
+    }
+
+    @Test
+    public void testHttpClientCacheInvalidation_MtlsToggle() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+
+        ConnectorClientConfig configWithoutMtls = new ConnectorClientConfig(
+            10,
+            10,
+            10,
+            1,
+            1,
+            0,
+            RetryBackoffPolicy.CONSTANT,
+            false, // skipSslVerification
+            false, // mutualTlsEnabled = false
+            null,
+            null
+        );
+
+        HttpConnector connectorWithoutMtls = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(configWithoutMtls)
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        HttpJsonConnectorExecutor executorWithoutMtls = spy(new HttpJsonConnectorExecutor(connectorWithoutMtls));
+        SdkAsyncHttpClient clientWithoutMtls = executorWithoutMtls.getHttpClient();
+
+        ConnectorClientConfig configWithDifferentSettings = new ConnectorClientConfig(
+            20,
+            20,
+            20,
+            1,
+            1,
+            0, // Different connection settings
+            RetryBackoffPolicy.CONSTANT,
+            true,  // Different skipSslVerification
+            false, // mutualTlsEnabled = false (to avoid certificate validation)
+            null,
+            null
+        );
+
+        HttpConnector connectorWithDifferentSettings = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(configWithDifferentSettings)
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        HttpJsonConnectorExecutor executorWithDifferentSettings = spy(new HttpJsonConnectorExecutor(connectorWithDifferentSettings));
+        SdkAsyncHttpClient clientWithDifferentSettings = executorWithDifferentSettings.getHttpClient();
+
+        assertNotSame("HTTP client should be different when configuration is changed", clientWithoutMtls, clientWithDifferentSettings);
     }
 
     private MLInput createMLInput() {
