@@ -183,7 +183,7 @@ public class SearchIndexTool implements Tool {
             log.debug("Initial query parsing failed, attempting to fix common LLM formatting issues: {}", e.getMessage());
         }
 
-        // Try conservative fixes first: outer quote removal and brace balancing
+        // Try conservative query-string fixes
         String fixedQuery = queryString.trim();
 
         // 1. Remove multiple outer quotes (handles single and multiple layers)
@@ -317,6 +317,9 @@ public class SearchIndexTool implements Tool {
     /**
      * Fixes common JSON malformation issues in input strings.
      * Only removes extra closing braces - does not add missing structure to avoid changing query semantics.
+     *
+     * Note: This method should preferably be applied to individual JSON components (like query strings)
+     * rather than entire structured JSON to avoid corrupting outer structure fields.
      */
     private String fixMalformedJson(String input) {
         if (StringUtils.isEmpty(input)) {
@@ -440,8 +443,7 @@ public class SearchIndexTool implements Tool {
 
             if (!StringUtils.isEmpty(input)) {
                 try {
-                    String fixedInput = fixMalformedJson(input);
-                    JsonObject jsonObject = GSON.fromJson(fixedInput, JsonObject.class);
+                    JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
                     if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
                         index = jsonObject.get(INDEX_FIELD).getAsString();
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
@@ -451,7 +453,7 @@ public class SearchIndexTool implements Tool {
                         }
                     }
                 } catch (JsonSyntaxException e) {
-                    log.error("Invalid JSON input (length: {}): {}", input != null ? input.length() : 0, e.getMessage());
+                    log.error("Invalid input JSON (length: {}): {}", input != null ? input.length() : 0, e.getMessage());
                 }
             }
 

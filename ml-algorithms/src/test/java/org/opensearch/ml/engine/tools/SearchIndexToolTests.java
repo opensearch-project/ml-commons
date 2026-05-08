@@ -36,6 +36,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.ParsingException;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -1153,6 +1154,182 @@ public class SearchIndexToolTests {
 
         Object result = future.join();
         assertEquals("", result); // Should return empty string for no hits
+    }
+
+    @Test
+    @SneakyThrows
+    public void testSetDescription() {
+        // Test setDescription method
+        String newDescription = "New custom description";
+        mockedSearchIndexTool.setDescription(newDescription);
+        assertEquals(newDescription, mockedSearchIndexTool.getDescription());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testNormalizeQueryParameter_withNonStringJsonPrimitive() {
+        // Test normalizeQueryParameter with non-string JsonPrimitive (like number)
+        SearchIndexTool realTool = new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        // Use reflection to access the private method
+        java.lang.reflect.Method method = SearchIndexTool.class
+            .getDeclaredMethod("normalizeQueryParameter", com.google.gson.JsonElement.class);
+        method.setAccessible(true);
+
+        // Test with JsonPrimitive number
+        com.google.gson.JsonPrimitive numberElement = new com.google.gson.JsonPrimitive(123);
+        String result = (String) method.invoke(realTool, numberElement);
+        assertEquals("123", result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testNormalizeQueryString_withSuccessfulQuoteRemoval() {
+        // Test successful quote removal path - use a simpler approach
+        String quotedJson = "\"{'query':{'match_all':{}}}\"";
+        String result = mockedSearchIndexTool.normalizeQueryString(quotedJson);
+        assertTrue("Should contain query structure", result.contains("query"));
+        assertTrue("Should contain match_all", result.contains("match_all"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRemoveMultipleOuterQuotes_withEmptyInput() {
+        // Test removeMultipleOuterQuotes with empty input using reflection
+        SearchIndexTool realTool = new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        java.lang.reflect.Method method = SearchIndexTool.class.getDeclaredMethod("removeMultipleOuterQuotes", String.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(realTool, "");
+        assertEquals("", result);
+
+        result = (String) method.invoke(realTool, (String) null);
+        assertNull(result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testCountMatchingOuterQuotes_withEdgeCases() {
+        // Test countMatchingOuterQuotes with edge cases using reflection
+        SearchIndexTool realTool = new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        java.lang.reflect.Method method = SearchIndexTool.class.getDeclaredMethod("countMatchingOuterQuotes", String.class);
+        method.setAccessible(true);
+
+        // Test with empty string
+        int result = (Integer) method.invoke(realTool, "");
+        assertEquals(0, result);
+
+        // Test with single character
+        result = (Integer) method.invoke(realTool, "a");
+        assertEquals(0, result);
+
+        // Test with null
+        result = (Integer) method.invoke(realTool, (String) null);
+        assertEquals(0, result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testFixEscapeSequencesConservatively_withEmptyInput() {
+        // Test fixEscapeSequencesConservatively with empty input using reflection
+        SearchIndexTool realTool = new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        java.lang.reflect.Method method = SearchIndexTool.class.getDeclaredMethod("fixEscapeSequencesConservatively", String.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(realTool, "");
+        assertEquals("", result);
+
+        result = (String) method.invoke(realTool, (String) null);
+        assertNull(result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testFixMalformedJson_withEmptyInput() {
+        // Test fixMalformedJson with empty input using reflection
+        SearchIndexTool realTool = new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        java.lang.reflect.Method method = SearchIndexTool.class.getDeclaredMethod("fixMalformedJson", String.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(realTool, "");
+        assertEquals("", result);
+
+        result = (String) method.invoke(realTool, (String) null);
+        assertNull(result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRun_withInvalidQueryFormat() {
+        // Test run method when query format is invalid (triggers ParsingException path)
+        String inputString = "{\"index\": \"test-index\", \"query\": \"invalid-query-format\"}";
+        Map<String, String> parameters = Map.of("input", inputString);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+
+        // Should call onFailure with ParsingException
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        Exception caughtException = exceptionCaptor.getValue();
+        assertTrue("Should be ParsingException", caughtException instanceof ParsingException);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testFactoryGetInstance_doubleCheckLocking() {
+        // Test the double-check locking in Factory.getInstance()
+        // This is tricky to test, but we can at least verify the method works correctly
+        SearchIndexTool.Factory instance1 = SearchIndexTool.Factory.getInstance();
+        SearchIndexTool.Factory instance2 = SearchIndexTool.Factory.getInstance();
+        assertSame("Should return same singleton instance", instance1, instance2);
+
+        // Reset the singleton using reflection to test the synchronized block
+        java.lang.reflect.Field instanceField = SearchIndexTool.Factory.class.getDeclaredField("INSTANCE");
+        instanceField.setAccessible(true);
+        instanceField.set(null, null);
+
+        // Now test getInstance again
+        SearchIndexTool.Factory newInstance = SearchIndexTool.Factory.getInstance();
+        assertNotNull("Should create new instance", newInstance);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testValidate_withEmptyInputField() {
+        // Test validate method with empty input field to cover missing branch
+        Map<String, String> parameters = Map.of("input", "");
+        assertFalse("Should return false for empty input", mockedSearchIndexTool.validate(parameters));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testValidate_withEmptyQueryField() {
+        // Test validate method with empty query field to cover missing branch
+        Map<String, String> parameters = Map.of("index", "test-index", "query", "");
+        assertFalse("Should return false for empty query", mockedSearchIndexTool.validate(parameters));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testNormalizeQueryParameter_withNullElement() {
+        // Test normalizeQueryParameter with null JsonElement
+        SearchIndexTool realTool = new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        java.lang.reflect.Method method = SearchIndexTool.class
+            .getDeclaredMethod("normalizeQueryParameter", com.google.gson.JsonElement.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(realTool, (com.google.gson.JsonElement) null);
+        assertNull("Should return null for null input", result);
+
+        // Test with JsonNull
+        result = (String) method.invoke(realTool, com.google.gson.JsonNull.INSTANCE);
+        assertNull("Should return null for JsonNull", result);
     }
 
 }
