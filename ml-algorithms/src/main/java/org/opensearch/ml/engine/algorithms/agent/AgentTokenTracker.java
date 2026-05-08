@@ -213,6 +213,24 @@ public class AgentTokenTracker {
     }
 
     /**
+     * Returns the cumulative total tokens consumed across all recorded turns.
+     * Used for enforcing agent-level token budgets.
+     *
+     * @return Total tokens consumed, or 0 if no usage has been recorded
+     */
+    public long getCumulativeTotalTokens() {
+        long total = 0;
+        for (ModelUsageAggregation agg : perModelUsage.values()) {
+            TokenUsage usage = agg.getAggregatedUsage();
+            Long effectiveTotal = usage.getEffectiveTotalTokens();
+            if (effectiveTotal != null) {
+                total += effectiveTotal;
+            }
+        }
+        return total;
+    }
+
+    /**
      * Internal class to track aggregated usage for a specific model
      */
     private static class ModelUsageAggregation {

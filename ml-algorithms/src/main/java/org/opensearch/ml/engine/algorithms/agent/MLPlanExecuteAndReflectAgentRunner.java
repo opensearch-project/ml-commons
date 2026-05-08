@@ -546,6 +546,42 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 }
             }
 
+            // Check agent-level token budget
+            long maxTokensBudget = getMaxTokensBudget(allParams);
+            if (maxTokensBudget > 0 && tokenTracker.hasUsage()) {
+                long consumed = tokenTracker.getCumulativeTotalTokens();
+                if (consumed >= maxTokensBudget) {
+                    log
+                        .warn(
+                            "PER loop stopped (token budget exhausted). maxTokens={}, consumedTokens={}",
+                            maxTokensBudget,
+                            consumed
+                        );
+                    boolean includeTokenUsage = Boolean.parseBoolean(allParams.getOrDefault(AgentUtils.INCLUDE_TOKEN_USAGE, "false"));
+                    String budgetExhaustedMsg = String
+                        .format(
+                            Locale.ROOT,
+                            "Agent execution stopped: token budget exhausted (%d/%d tokens used). Completed steps: %s",
+                            consumed,
+                            maxTokensBudget,
+                            completedSteps
+                        );
+                    saveAndReturnFinalResult(
+                        memory,
+                        parentInteractionId,
+                        allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
+                        allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
+                        budgetExhaustedMsg,
+                        null,
+                        finalListener,
+                        tokenTracker,
+                        allParams.get(TENANT_ID_FIELD),
+                        includeTokenUsage
+                    );
+                    return;
+                }
+            }
+
             Map<String, Object> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
@@ -956,6 +992,28 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     @VisibleForTesting
     Map<String, Object> getTaskUpdates() {
         return taskUpdates;
+    }
+
+    /**
+     * Get agent-level token budget from parameters.
+     * Returns -1 if no budget is configured (unlimited).
+     *
+     * @param params Execution parameters (merged agent + runtime params)
+     * @return Maximum total tokens allowed for the agent execution, or -1 for unlimited
+     */
+    private long getMaxTokensBudget(Map<String, String> params) {
+        String maxTokensStr = params.get("max_tokens");
+        if (maxTokensStr != null) {
+            try {
+                long value = Long.parseLong(maxTokensStr);
+                if (value > 0) {
+                    return value;
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Invalid max_tokens value: {}", maxTokensStr);
+            }
+        }
+        return -1; // unlimited
     }
 
     private void handleMaxStepsReached(

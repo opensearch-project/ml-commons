@@ -245,6 +245,72 @@ public class AbstractV2AgentRunnerTest {
         assertEquals(3, result);
     }
 
+    // ==================== Tests for getMaxTokensBudget ====================
+
+    @Test
+    public void testGetMaxTokensBudget_FromParams() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_tokens", "5000");
+
+        // Act
+        long result = runner.getMaxTokensBudget(params);
+
+        // Assert
+        assertEquals(5000L, result);
+    }
+
+    @Test
+    public void testGetMaxTokensBudget_InvalidValue_ReturnsUnlimited() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_tokens", "not-a-number");
+
+        // Act
+        long result = runner.getMaxTokensBudget(params);
+
+        // Assert
+        assertEquals(-1L, result); // unlimited
+    }
+
+    @Test
+    public void testGetMaxTokensBudget_NoParam_ReturnsUnlimited() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+
+        // Act
+        long result = runner.getMaxTokensBudget(params);
+
+        // Assert
+        assertEquals(-1L, result); // unlimited
+    }
+
+    @Test
+    public void testGetMaxTokensBudget_ZeroValue_ReturnsUnlimited() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_tokens", "0");
+
+        // Act
+        long result = runner.getMaxTokensBudget(params);
+
+        // Assert
+        assertEquals(-1L, result); // zero treated as unlimited
+    }
+
+    @Test
+    public void testGetMaxTokensBudget_NegativeValue_ReturnsUnlimited() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_tokens", "-100");
+
+        // Act
+        long result = runner.getMaxTokensBudget(params);
+
+        // Assert
+        assertEquals(-1L, result); // negative treated as unlimited
+    }
+
     // ==================== Tests for getSystemPrompt ====================
 
     @Test

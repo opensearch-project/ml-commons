@@ -590,6 +590,49 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }
                     }
 
+                    // Check agent-level token budget
+                    long maxTokensBudget = getMaxTokensBudget(tmpParameters);
+                    if (maxTokensBudget > 0 && tokenTracker.hasUsage()) {
+                        long consumed = tokenTracker.getCumulativeTotalTokens();
+                        if (consumed >= maxTokensBudget) {
+                            log
+                                .warn(
+                                    "ReAct loop stopped (token budget exhausted). agentId={}, maxTokens={}, consumedTokens={}",
+                                    agentId,
+                                    maxTokensBudget,
+                                    consumed
+                                );
+                            String budgetExhaustedMsg = String
+                                .format(
+                                    Locale.ROOT,
+                                    "Agent execution stopped: token budget exhausted (%d/%d tokens used)",
+                                    consumed,
+                                    maxTokensBudget
+                                );
+                            sendFinalAnswer(
+                                sessionId,
+                                listener,
+                                question,
+                                parentInteractionId,
+                                verbose,
+                                traceDisabled,
+                                traceTensors,
+                                memory,
+                                traceNumber,
+                                additionalInfo,
+                                budgetExhaustedMsg,
+                                usesUnifiedInterface,
+                                new ArrayList<>(interactions),
+                                modelProvider,
+                                tokenTracker,
+                                tenantId,
+                                includeTokenUsage
+                            );
+                            cleanUpResource(tools);
+                            return;
+                        }
+                    }
+
                     streamingWrapper.fixInteractionRole(interactions);
                     String thought = String.valueOf(modelOutput.get(THOUGHT));
                     String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
@@ -1059,6 +1102,28 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), origin);
             }
         }
+    }
+
+    /**
+     * Get agent-level token budget from parameters.
+     * Returns -1 if no budget is configured (unlimited).
+     *
+     * @param params Execution parameters (merged agent + runtime params)
+     * @return Maximum total tokens allowed for the agent execution, or -1 for unlimited
+     */
+    private long getMaxTokensBudget(Map<String, String> params) {
+        String maxTokensStr = params.get("max_tokens");
+        if (maxTokensStr != null) {
+            try {
+                long value = Long.parseLong(maxTokensStr);
+                if (value > 0) {
+                    return value;
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Invalid max_tokens value: {}", maxTokensStr);
+            }
+        }
+        return -1; // unlimited
     }
 
     private void sendFinalAnswer(

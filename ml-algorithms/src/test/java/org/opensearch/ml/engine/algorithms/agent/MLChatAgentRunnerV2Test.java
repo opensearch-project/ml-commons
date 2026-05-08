@@ -245,6 +245,132 @@ public class MLChatAgentRunnerV2Test {
         assertTrue(result.toolInteractionMessages.size() > 0); // Should have tracked tool interactions
     }
 
+    // ==================== Tests for agent-level token budget ====================
+
+    @Test
+    public void testExecuteAgentLogic_TokenBudgetExhausted_StopsExecution() {
+        // Arrange: set max_tokens budget lower than what the LLM will consume
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        params.put("max_tokens", "100"); // Budget of 100 tokens
+
+        List<Message> conversationHistory = createConversationHistory();
+
+        // Mock LLM response that consumes 150 tokens (exceeds budget of 100)
+        TokenUsage tokenUsage = TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build();
+        mockLLMResponseWithTokenUsageAndToolCall(tokenUsage);
+
+        // Mock ModelProvider
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        // Act
+        runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
+
+        // Assert: should stop with max_tokens stop reason
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> resultCaptor = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(resultCaptor.capture());
+
+        AbstractV2AgentRunner.AgentLogicResult result = resultCaptor.getValue();
+        assertNotNull(result);
+        assertEquals("max_tokens", result.stopReason);
+        assertNotNull(result.tokenUsage);
+        assertEquals(Long.valueOf(150L), result.tokenUsage.getEffectiveTotalTokens());
+    }
+
+    @Test
+    public void testExecuteAgentLogic_TokenBudgetNotSet_Unlimited() {
+        // Arrange: no max_tokens parameter (unlimited)
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+
+        List<Message> conversationHistory = createConversationHistory();
+
+        // Mock LLM response with large token usage - should still complete normally
+        TokenUsage tokenUsage = TokenUsage.builder().inputTokens(5000L).outputTokens(2000L).totalTokens(7000L).build();
+        mockLLMResponseWithTokenUsage(tokenUsage);
+
+        // Mock ModelProvider
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        // Act
+        runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
+
+        // Assert: should complete normally with end_turn (not max_tokens)
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> resultCaptor = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(resultCaptor.capture());
+
+        AbstractV2AgentRunner.AgentLogicResult result = resultCaptor.getValue();
+        assertNotNull(result);
+        assertEquals("end_turn", result.stopReason);
+    }
+
+    @Test
+    public void testExecuteAgentLogic_TokenBudgetNotExceeded_ContinuesExecution() {
+        // Arrange: set max_tokens budget higher than what the LLM will consume
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        params.put("max_tokens", "10000"); // Large budget
+
+        List<Message> conversationHistory = createConversationHistory();
+
+        // Mock LLM response with small token usage (well within budget)
+        TokenUsage tokenUsage = TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build();
+        mockLLMResponseWithTokenUsage(tokenUsage);
+
+        // Mock ModelProvider
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        // Act
+        runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
+
+        // Assert: should complete normally (end_turn), not stopped by budget
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> resultCaptor = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(resultCaptor.capture());
+
+        AbstractV2AgentRunner.AgentLogicResult result = resultCaptor.getValue();
+        assertNotNull(result);
+        assertEquals("end_turn", result.stopReason);
+    }
+
+    @Test
+    public void testExecuteAgentLogic_InvalidMaxTokens_TreatedAsUnlimited() {
+        // Arrange: invalid max_tokens value
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        params.put("max_tokens", "not-a-number");
+
+        List<Message> conversationHistory = createConversationHistory();
+
+        TokenUsage tokenUsage = TokenUsage.builder().inputTokens(5000L).outputTokens(2000L).totalTokens(7000L).build();
+        mockLLMResponseWithTokenUsage(tokenUsage);
+
+        // Mock ModelProvider
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        // Act
+        runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
+
+        // Assert: should complete normally (invalid value treated as unlimited)
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> resultCaptor = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(resultCaptor.capture());
+
+        AbstractV2AgentRunner.AgentLogicResult result = resultCaptor.getValue();
+        assertNotNull(result);
+        assertEquals("end_turn", result.stopReason);
+    }
+
     // ==================== Helper Methods ====================
 
     private List<Message> createConversationHistory() {
@@ -419,6 +545,41 @@ public class MLChatAgentRunnerV2Test {
 
                 listener.onResponse(response);
             }
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    /**
+     * Mock LLM response that returns token usage AND a tool call.
+     * Used to test that the token budget check fires before tool execution.
+     */
+    private void mockLLMResponseWithTokenUsageAndToolCall(TokenUsage tokenUsage) {
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+
+            Message assistantMessage = new Message();
+            assistantMessage.setRole("assistant");
+            ContentBlock block = new ContentBlock();
+            block.setType(ContentType.TEXT);
+            block.setText("Let me use a tool.");
+            assistantMessage.setContent(List.of(block));
+
+            String messageJson = "{\"role\":\"assistant\",\"content\":[{\"text\":\"Let me use a tool.\"}]}";
+            when(modelProvider.extractMessageFromResponse(any())).thenReturn(messageJson);
+            when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(assistantMessage);
+
+            // Return tool calls (but budget should stop execution before tools run)
+            List<Map<String, String>> toolCalls = List
+                .of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+            when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(toolCalls);
+            when(functionCalling.extractTokenUsage(anyMap())).thenReturn(tokenUsage);
+
+            ModelTensor tensor = ModelTensor.builder().dataAsMap(Map.of("response", "test")).build();
+            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+            ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+            MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+            listener.onResponse(response);
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
     }

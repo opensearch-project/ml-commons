@@ -51,6 +51,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
 
     // Chat-specific constants
     private static final String STOP_REASON_MAX_ITERATIONS = "max_iterations";
+    private static final String STOP_REASON_MAX_TOKENS = "max_tokens";
     private static final String STOP_REASON_END_TURN = "end_turn";
 
     public MLChatAgentRunnerV2(
@@ -206,6 +207,36 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                         accumulatedTokenUsage[0] = accumulatedTokenUsage[0] == null
                             ? currentTokenUsage
                             : accumulatedTokenUsage[0].addTokens(currentTokenUsage);
+                    }
+
+                    // Check agent-level token budget
+                    long maxTokensBudget = getMaxTokensBudget(params);
+                    if (maxTokensBudget > 0 && accumulatedTokenUsage[0] != null) {
+                        Long consumed = accumulatedTokenUsage[0].getEffectiveTotalTokens();
+                        if (consumed != null && consumed >= maxTokensBudget) {
+                            log
+                                .warn(
+                                    "ReAct loop stopped (token budget exhausted). agentId={}, maxTokens={}, consumedTokens={}",
+                                    agentId,
+                                    maxTokensBudget,
+                                    consumed
+                                );
+                            List<Message> toolInteractionMessages = toolInteractionJsonList.isEmpty()
+                                ? null
+                                : parseToolInteractionsForPersistence(toolInteractionJsonList, modelProvider);
+                            Message assistantMsg = extractAssistantMessage(output, modelProvider);
+                            messages.add(assistantMsg);
+                            listener
+                                .onResponse(
+                                    new AgentLogicResult(
+                                        assistantMsg,
+                                        STOP_REASON_MAX_TOKENS,
+                                        accumulatedTokenUsage[0],
+                                        toolInteractionMessages
+                                    )
+                                );
+                            return;
+                        }
                     }
 
                     // Parse response for tool calls
