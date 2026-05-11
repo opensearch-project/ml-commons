@@ -29,6 +29,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agent.TokenUsage;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.Message;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -255,6 +257,10 @@ public class MLChatAgentRunnerV2Test {
         params.put("max_tokens", "100"); // Budget of 100 tokens
 
         List<Message> conversationHistory = createConversationHistory();
+        MLToolSpec toolSpec = new MLToolSpec("test-tool", "test-tool", "test tool", Map.of(), Map.of(), false, Map.of(), null, null);
+        when(mlAgent.getTools()).thenReturn(List.of(toolSpec));
+        when(toolFactories.get("test-tool")).thenReturn(toolFactory);
+        when(toolFactory.create(anyMap())).thenReturn(tool);
 
         // Mock LLM response that consumes 150 tokens (exceeds budget of 100)
         TokenUsage tokenUsage = TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build();
@@ -278,6 +284,49 @@ public class MLChatAgentRunnerV2Test {
         assertEquals("max_tokens", result.stopReason);
         assertNotNull(result.tokenUsage);
         assertEquals(Long.valueOf(150L), result.tokenUsage.getEffectiveTotalTokens());
+        assertEquals(
+            "Agent execution stopped: token budget exhausted (150/100 tokens used)",
+            result.assistantMessage.getContent().getFirst().getText()
+        );
+        verify(tool, never()).run(anyMap(), any());
+    }
+
+    @Test
+    public void testExecuteAgentLogic_AppliesRemainingBudgetToSubsequentLLMRequest() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        params.put("max_tokens", "100");
+
+        List<Message> conversationHistory = createConversationHistory();
+
+        MLToolSpec toolSpec = new MLToolSpec("test-tool", "test-tool", "test tool", Map.of(), Map.of(), false, Map.of(), null, null);
+        when(mlAgent.getTools()).thenReturn(List.of(toolSpec));
+        when(toolFactories.get("test-tool")).thenReturn(toolFactory);
+        when(toolFactory.create(anyMap())).thenReturn(tool);
+        doAnswer(invocation -> {
+            ActionListener<String> toolListener = invocation.getArgument(1);
+            toolListener.onResponse("Tool output");
+            return null;
+        }).when(tool).run(anyMap(), any());
+
+        TokenUsage firstCallUsage = TokenUsage.builder().inputTokens(20L).outputTokens(10L).totalTokens(30L).build();
+        mockLLMResponseWithToolCallThenFinalAnswer(firstCallUsage);
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        // Act
+        runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
+
+        // Assert
+        verify(listener, timeout(5000)).onResponse(any());
+        ArgumentCaptor<ActionRequest> requestCaptor = ArgumentCaptor.forClass(ActionRequest.class);
+        verify(client, timeout(5000).times(2)).execute(eq(MLPredictionTaskAction.INSTANCE), requestCaptor.capture(), any());
+
+        List<ActionRequest> requests = requestCaptor.getAllValues();
+        assertEquals("100", getRequestParameters(requests.get(0)).get("max_tokens"));
+        assertEquals("70", getRequestParameters(requests.get(1)).get("max_tokens"));
     }
 
     @Test
@@ -478,6 +527,10 @@ public class MLChatAgentRunnerV2Test {
     }
 
     private void mockLLMResponseWithToolCallThenFinalAnswer() {
+        mockLLMResponseWithToolCallThenFinalAnswer(null);
+    }
+
+    private void mockLLMResponseWithToolCallThenFinalAnswer(TokenUsage firstCallUsage) {
         final boolean[] firstCall = { true };
 
         doAnswer(invocation -> {
@@ -502,6 +555,7 @@ public class MLChatAgentRunnerV2Test {
                 List<Map<String, String>> toolCalls = List
                     .of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
                 when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(toolCalls);
+                when(functionCalling.extractTokenUsage(anyMap())).thenReturn(firstCallUsage);
 
                 // Mock supply for tool results
                 org.opensearch.ml.engine.function_calling.LLMMessage llmMsg = mock(
@@ -537,6 +591,7 @@ public class MLChatAgentRunnerV2Test {
 
                 // No tool calls this time
                 when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(null);
+                when(functionCalling.extractTokenUsage(anyMap())).thenReturn(null);
 
                 ModelTensor tensor = ModelTensor.builder().dataAsMap(Map.of("response", "test")).build();
                 ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
@@ -547,6 +602,12 @@ public class MLChatAgentRunnerV2Test {
             }
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    private Map<String, String> getRequestParameters(ActionRequest actionRequest) {
+        MLPredictionTaskRequest request = (MLPredictionTaskRequest) actionRequest;
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+        return inputDataSet.getParameters();
     }
 
     /**
@@ -569,8 +630,7 @@ public class MLChatAgentRunnerV2Test {
             when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(assistantMessage);
 
             // Return tool calls (but budget should stop execution before tools run)
-            List<Map<String, String>> toolCalls = List
-                .of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+            List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
             when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(toolCalls);
             when(functionCalling.extractTokenUsage(anyMap())).thenReturn(tokenUsage);
 
