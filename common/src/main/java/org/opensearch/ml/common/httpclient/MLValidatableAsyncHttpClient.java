@@ -90,21 +90,28 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         boolean hasPrivateIpAddress = hasPrivateIpAddress(addresses);
 
-        boolean hasRestrictedAddress = Arrays
-            .stream(addresses)
-            .anyMatch(addr -> connectorRestrictedIpPatterns.stream().anyMatch(pattern -> pattern.matcher(addr.getHostAddress()).matches()));
-        if (hasRestrictedAddress) {
-            log.error("Remote inference host name has restricted ip address: {}", hostName);
-            throw new IllegalArgumentException("Remote inference host name has restricted ip address: " + hostName);
+        if (connectorRestrictedIpPatterns != null && !connectorRestrictedIpPatterns.isEmpty()) {
+            boolean hasRestrictedAddress = Arrays
+                .stream(addresses)
+                .anyMatch(
+                    addr -> connectorRestrictedIpPatterns.stream().anyMatch(pattern -> pattern.matcher(addr.getHostAddress()).matches())
+                );
+            if (hasRestrictedAddress) {
+                log.error("Remote inference host name has restricted ip address: {}", hostName);
+                throw new IllegalArgumentException("Remote inference host name has restricted ip address: " + hostName);
+            }
         }
 
         if (!connectorPrivateIpEnabled && hasPrivateIpAddress) {
             log.error("Remote inference host name has private ip address: {}", hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
-        boolean hasMatchedUrl = connectorTrustedPrivateEndpoints.stream().anyMatch(pattern -> pattern.matcher(endpoint).matches());
-        if (hasPrivateIpAddress && !connectorTrustedPrivateEndpoints.isEmpty() && !hasMatchedUrl) {
-            throw new IllegalArgumentException("Connector URL is not matching the trusted connector private endpoint regex");
+
+        if (connectorTrustedPrivateEndpoints != null && !connectorTrustedPrivateEndpoints.isEmpty()) {
+            boolean hasMatchedUrl = connectorTrustedPrivateEndpoints.stream().anyMatch(pattern -> pattern.matcher(endpoint).matches());
+            if (hasPrivateIpAddress && !hasMatchedUrl) {
+                throw new IllegalArgumentException("Connector URL is not matching the trusted connector private endpoint regex");
+            }
         }
     }
 
