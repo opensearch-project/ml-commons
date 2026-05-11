@@ -509,18 +509,7 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
      * @return Maximum total tokens allowed for the agent execution, or -1 for unlimited
      */
     protected long getMaxTokensBudget(Map<String, String> params) {
-        String maxTokensStr = params.get("max_tokens");
-        if (maxTokensStr != null) {
-            try {
-                long value = Long.parseLong(maxTokensStr);
-                if (value > 0) {
-                    return value;
-                }
-            } catch (NumberFormatException e) {
-                log.warn("Invalid max_tokens value: {}", maxTokensStr);
-            }
-        }
-        return -1; // unlimited
+        return AgentTokenBudget.fromExecutionParams(params).getMaxTokens();
     }
 
     protected FunctionCalling getFunctionCalling(MLAgent mlAgent, Map<String, String> params) {

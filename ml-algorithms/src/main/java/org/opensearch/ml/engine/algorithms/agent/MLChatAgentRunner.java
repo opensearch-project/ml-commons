@@ -517,6 +517,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId = memory != null ? memory.getId() : null;
 
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
+        AgentTokenBudget tokenBudget = AgentTokenBudget.fromExecutionParams(parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
         tmpParameters.put(PROMPT, prompt);
         final String finalPrompt = prompt;
@@ -590,47 +591,36 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }
                     }
 
-                    // Check agent-level token budget
-                    long maxTokensBudget = getMaxTokensBudget(tmpParameters);
-                    if (maxTokensBudget > 0 && tokenTracker.hasUsage()) {
+                    if (tokenBudget.isExhausted(tokenTracker)) {
                         long consumed = tokenTracker.getCumulativeTotalTokens();
-                        if (consumed >= maxTokensBudget) {
-                            log
-                                .warn(
-                                    "ReAct loop stopped (token budget exhausted). agentId={}, maxTokens={}, consumedTokens={}",
-                                    agentId,
-                                    maxTokensBudget,
-                                    consumed
-                                );
-                            String budgetExhaustedMsg = String
-                                .format(
-                                    Locale.ROOT,
-                                    "Agent execution stopped: token budget exhausted (%d/%d tokens used)",
-                                    consumed,
-                                    maxTokensBudget
-                                );
-                            sendFinalAnswer(
-                                sessionId,
-                                listener,
-                                question,
-                                parentInteractionId,
-                                verbose,
-                                traceDisabled,
-                                traceTensors,
-                                memory,
-                                traceNumber,
-                                additionalInfo,
-                                budgetExhaustedMsg,
-                                usesUnifiedInterface,
-                                new ArrayList<>(interactions),
-                                modelProvider,
-                                tokenTracker,
-                                tenantId,
-                                includeTokenUsage
+                        log
+                            .warn(
+                                "ReAct loop stopped (token budget exhausted). agentId={}, maxTokens={}, consumedTokens={}",
+                                agentId,
+                                tokenBudget.getMaxTokens(),
+                                consumed
                             );
-                            cleanUpResource(tools);
-                            return;
-                        }
+                        sendFinalAnswer(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            memory,
+                            traceNumber,
+                            additionalInfo,
+                            tokenBudget.exhaustedMessage(consumed),
+                            usesUnifiedInterface,
+                            new ArrayList<>(interactions),
+                            modelProvider,
+                            tokenTracker,
+                            tenantId,
+                            includeTokenUsage
+                        );
+                        cleanUpResource(tools);
+                        return;
                     }
 
                     streamingWrapper.fixInteractionRole(interactions);
@@ -716,6 +706,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             modelProvider,
                             tokenTracker,
                             functionCalling,
+                            tokenBudget,
                             includeTokenUsage
                         );
                         return;
@@ -864,12 +855,38 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             modelProvider,
                             tokenTracker,
                             functionCalling,
+                            tokenBudget,
                             includeTokenUsage
                         );
                         return;
                     }
                     // Emit PRE_LLM hook event
                     processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
+                    if (tokenBudget.isExhausted(tokenTracker)) {
+                        long consumed = tokenTracker.getCumulativeTotalTokens();
+                        sendFinalAnswer(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            memory,
+                            traceNumber,
+                            additionalInfo,
+                            tokenBudget.exhaustedMessage(consumed),
+                            usesUnifiedInterface,
+                            new ArrayList<>(interactions),
+                            modelProvider,
+                            tokenTracker,
+                            tenantId,
+                            includeTokenUsage
+                        );
+                        cleanUpResource(tools);
+                        return;
+                    }
+                    tokenBudget.applyRemainingToParams(tmpParameters, llm.getParameters(), tokenTracker);
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
@@ -885,6 +902,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Emit PRE_LLM hook event for initial LLM call
         tmpParameters.put("_llm_model_id", llm.getModelId());
         processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
+        tokenBudget.applyRemainingToParams(tmpParameters, llm.getParameters(), tokenTracker);
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         streamingWrapper.executeRequest(request, firstListener);
 
@@ -1112,18 +1130,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
      * @return Maximum total tokens allowed for the agent execution, or -1 for unlimited
      */
     private long getMaxTokensBudget(Map<String, String> params) {
-        String maxTokensStr = params.get("max_tokens");
-        if (maxTokensStr != null) {
-            try {
-                long value = Long.parseLong(maxTokensStr);
-                if (value > 0) {
-                    return value;
-                }
-            } catch (NumberFormatException e) {
-                log.warn("Invalid max_tokens value: {}", maxTokensStr);
-            }
-        }
-        return -1; // unlimited
+        return AgentTokenBudget.fromExecutionParams(params).getMaxTokens();
     }
 
     private void sendFinalAnswer(
@@ -1473,6 +1480,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ModelProvider modelProvider,
         AgentTokenTracker tokenTracker,
         FunctionCalling functionCalling,
+        AgentTokenBudget tokenBudget,
         boolean includeTokenUsage
     ) {
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
@@ -1498,6 +1506,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
             );
         }, listener::onFailure);
 
+        if (tokenBudget.isExhausted(tokenTracker)) {
+            String fallbackResponse = buildMaxIterationsFallbackResponse(maxIterations, lastThought);
+            responseListener.onResponse(fallbackResponse);
+            return;
+        }
+
         generateLLMSummary(
             traceTensors,
             llmSpec,
@@ -1520,8 +1534,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                 ),
             tokenTracker,
-            functionCalling
+            functionCalling,
+            tokenBudget
         );
+    }
+
+    private String buildMaxIterationsFallbackResponse(int maxIterations, AtomicReference<String> lastThought) {
+        return (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
     }
 
     private void sendTraditionalMaxIterationsResponse(
@@ -1574,10 +1595,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> parameter,
         ActionListener<String> listener,
         AgentTokenTracker tokenTracker,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        AgentTokenBudget tokenBudget
     ) {
         if (stepsSummary == null || stepsSummary.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Steps summary cannot be null or empty"));
+            return;
+        }
+
+        if (tokenBudget.isExhausted(tokenTracker)) {
+            listener.onFailure(new IllegalStateException(tokenBudget.exhaustedMessage(tokenTracker)));
             return;
         }
 
@@ -1609,6 +1636,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             String steps = String.format(Locale.ROOT, "Question: %s\n\nCompleted Steps:\n%s", question, String.join("\n", stepStrings));
             summaryParams.put(PROMPT, steps);
             summaryParams.put(SYSTEM_PROMPT_FIELD, MAX_STEP_SUMMARY_CHAT_AGENT_SYSTEM_PROMPT);
+            tokenBudget.applyRemainingToParams(summaryParams, llmSpec.getParameters(), tokenTracker);
 
             ActionRequest request = new MLPredictionTaskRequest(
                 llmSpec.getModelId(),
@@ -1655,6 +1683,29 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } catch (Exception e) {
             listener.onFailure(e);
         }
+    }
+
+    void generateLLMSummary(
+        List<ModelTensors> stepsSummary,
+        LLMSpec llmSpec,
+        String tenantId,
+        String question,
+        Map<String, String> parameter,
+        ActionListener<String> listener,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
+    ) {
+        generateLLMSummary(
+            stepsSummary,
+            llmSpec,
+            tenantId,
+            question,
+            parameter,
+            listener,
+            tokenTracker,
+            functionCalling,
+            AgentTokenBudget.unlimited()
+        );
     }
 
     public String extractSummaryFromResponse(MLTaskResponse response, Map<String, String> params) {
