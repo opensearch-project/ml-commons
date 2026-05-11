@@ -28,14 +28,7 @@ public class MLMcpConnectorListToolsResponseTest {
 
     private static final String TOOL_NAME = "tool1";
     private static final String TOOL_DESCRIPTION = "description";
-    private static final String TOOL_TYPE = "MCP";
-    private static final McpToolInfo tool = McpToolInfo
-        .builder()
-        .name(TOOL_NAME)
-        .type(TOOL_TYPE)
-        .description(TOOL_DESCRIPTION)
-        .arguments(Collections.emptyMap())
-        .build();
+    private static final McpToolInfo tool = McpToolInfo.builder().name(TOOL_NAME).description(TOOL_DESCRIPTION).inputSchema(null).build();
 
     @Test
     public void testBuilder() {
@@ -43,7 +36,6 @@ public class MLMcpConnectorListToolsResponseTest {
         assertEquals(1, response.getTools().size());
         assertEquals(TOOL_NAME, response.getTools().get(0).getName());
         assertEquals(TOOL_DESCRIPTION, response.getTools().get(0).getDescription());
-        assertEquals(TOOL_TYPE, response.getTools().get(0).getType());
     }
 
     @Test
@@ -80,7 +72,6 @@ public class MLMcpConnectorListToolsResponseTest {
         assertTrue(json.trim().startsWith("{"));
         assertTrue(json.contains("\"" + MLAgent.TOOLS_FIELD + "\":"));
         assertTrue(json.contains("\"name\":\"tool1\""));
-        assertTrue(json.contains("\"type\":\"MCP\""));
     }
 
     @Test

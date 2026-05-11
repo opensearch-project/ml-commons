@@ -6,6 +6,8 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -22,14 +24,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.requests.list.MLMcpConnectorListToolsRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpConnectorListToolsResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.McpToolInfo;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -51,6 +56,8 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
     @Mock
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
+    @Mock
     private Task task;
 
     /** Test-only subclass that overrides fetch to avoid static mocking. */
@@ -64,9 +71,10 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
             Client client,
             SdkClient sdkClient,
             EncryptorImpl encryptor,
-            MLFeatureEnabledSetting mlFeatureEnabledSetting
+            MLFeatureEnabledSetting mlFeatureEnabledSetting,
+            ConnectorAccessControlHelper connectorAccessControlHelper
         ) {
-            super(transportService, actionFilters, client, sdkClient, encryptor, mlFeatureEnabledSetting);
+            super(transportService, actionFilters, client, sdkClient, encryptor, mlFeatureEnabledSetting, connectorAccessControlHelper);
         }
 
         void setToolSpecsToReturn(List<MLToolSpec> toolSpecsToReturn) {
@@ -101,13 +109,22 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Boolean> accessListener = invocation.getArgument(5);
+            accessListener.onResponse(true);
+            return null;
+        })
+            .when(connectorAccessControlHelper)
+            .validateConnectorAccess(eq(sdkClient), eq(client), any(), any(), eq(mlFeatureEnabledSetting), any());
         transportAction = new TestableTransportMcpConnectorListToolsAction(
             transportService,
             actionFilters,
             client,
             sdkClient,
             encryptor,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            connectorAccessControlHelper
         );
     }
 
@@ -120,7 +137,8 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
             client,
             sdkClient,
             encryptor,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            connectorAccessControlHelper
         );
         action.setToolSpecsToReturn(List.of(MLToolSpec.builder().type("test_tool").name("TestTool").description("Desc").build()));
 
@@ -139,8 +157,10 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
 
     @Test
     public void testDoExecute_Success() {
-        String inputSchema =
-            "{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\"},\"max_tokens\":{\"type\":\"integer\"}}}";
+        String inputSchema = "\"input_schema\":\"{\"type\":\"object\",\"properties\":{\"query\":"
+            + "{\"type\":\"string\",\"description\":\"The query to search for.\"},\"language\":{\"type\":\"string\""
+            + ",\"description\":\"The language for the SDK to search for.\",\"detail\":{\"type\":\"string\","
+            + "\"description\":\"The amount of detail to return.\"}},\"required\":[\"query\",\"language\"]";
         Map<String, String> attributes = Collections.singletonMap("input_schema", inputSchema);
         MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").description("Desc").attributes(attributes).build();
         transportAction.setToolSpecsToReturn(List.of(toolSpec));
@@ -157,11 +177,8 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         assertEquals(1, response.getTools().size());
         McpToolInfo info = response.getTools().get(0);
         assertEquals("TestTool", info.getName());
-        assertEquals("test_tool", info.getType());
         assertEquals("Desc", info.getDescription());
-        assertNotNull(info.getArguments());
-        assertTrue(info.getArguments().containsKey("prompt"));
-        assertTrue(info.getArguments().containsKey("max_tokens"));
+        assertEquals(inputSchema, info.getInputSchema());
     }
 
     @Test
@@ -228,7 +245,8 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
             client,
             sdkClient,
             encryptor,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            connectorAccessControlHelper
         );
         MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").tenantId(null).build();
         ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
@@ -239,9 +257,38 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
     }
 
     @Test
+    public void testDoExecute_ConnectorAccessDenied_Forbidden() {
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<Boolean> accessListener = invocation.getArgument(5);
+            accessListener.onResponse(false);
+            return null;
+        })
+            .when(connectorAccessControlHelper)
+            .validateConnectorAccess(eq(sdkClient), eq(client), any(), any(), eq(mlFeatureEnabledSetting), any());
+
+        transportAction.setToolSpecsToReturn(List.of(MLToolSpec.builder().type("test_tool").name("TestTool").description("Desc").build()));
+
+        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
+        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        verifyNoMoreInteractions(listener);
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) captor.getValue()).status());
+        assertEquals("You don't have permission to access this connector", captor.getValue().getMessage());
+    }
+
+    @Test
     public void testDoExecute_WithMultiTenancyEnabled_ValidTenantId_Success() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        String inputSchema = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"}}}";
+        String inputSchema = "\"input_schema\":\"{\"type\":\"object\",\"properties\":{\"query\":"
+                + "{\"type\":\"string\",\"description\":\"The query to search for.\"},\"language\":{\"type\":\"string\""
+                + ",\"description\":\"The language for the SDK to search for.\",\"detail\":{\"type\":\"string\","
+                + "\"description\":\"The amount of detail to return.\"}},\"required\":[\"query\",\"language\"]";
         Map<String, String> attributes = Collections.singletonMap("input_schema", inputSchema);
         MLToolSpec toolSpec = MLToolSpec
             .builder()
@@ -267,16 +314,13 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         assertEquals(1, response.getTools().size());
         McpToolInfo info = response.getTools().get(0);
         assertEquals("McpTool", info.getName());
-        assertEquals("mcp_tool", info.getType());
         assertEquals("MCP tool for tenant", info.getDescription());
-        assertNotNull(info.getArguments());
-        assertTrue(info.getArguments().containsKey("query"));
-        assertTrue(info.getArguments().containsKey("limit"));
+        assertEquals(inputSchema, info.getInputSchema());
         assertEquals("tenant-abc", request.getTenantId());
     }
 
     @Test
-    public void testDoExecute_InputSchemaAttributesNull_ReturnsEmptyArguments() {
+    public void testDoExecute_InputSchemaAttributesNull_ReturnsNullInputSchema() {
         MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("ToolNullAttrs").description("Desc").attributes(null).build();
         transportAction.setToolSpecsToReturn(List.of(toolSpec));
 
@@ -288,12 +332,11 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
         verify(listener).onResponse(captor.capture());
         McpToolInfo info = captor.getValue().getTools().get(0);
-        assertNotNull(info.getArguments());
-        assertTrue(info.getArguments().isEmpty());
+        assertEquals(info.getInputSchema(), "");
     }
 
     @Test
-    public void testDoExecute_InputSchemaMissingOrInvalid_ReturnsEmptyArguments() {
+    public void testDoExecute_InputSchemaMissingOrPassthroughStrings() {
         MLToolSpec missingSchema = MLToolSpec
             .builder()
             .type("test_tool")
@@ -327,13 +370,13 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         verify(listener).onResponse(captor.capture());
         List<McpToolInfo> tools = captor.getValue().getTools();
         assertEquals(3, tools.size());
-        assertTrue(tools.get(0).getArguments().isEmpty());
-        assertTrue(tools.get(1).getArguments().isEmpty());
-        assertTrue(tools.get(2).getArguments().isEmpty());
+        assertNull(tools.get(0).getInputSchema());
+        assertEquals("{not-valid-json", tools.get(1).getInputSchema());
+        assertEquals("null", tools.get(2).getInputSchema());
     }
 
     @Test
-    public void testDoExecute_InputSchemaPropertiesNotMap_ReturnsEmptyArguments() {
+    public void testDoExecute_InputSchemaPropertiesNotMap_PassthroughRawJson() {
         String inputSchema = "{\"type\":\"object\",\"properties\":\"not-a-map\"}";
         MLToolSpec toolSpec = MLToolSpec
             .builder()
@@ -352,32 +395,6 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
         verify(listener).onResponse(captor.capture());
         McpToolInfo info = captor.getValue().getTools().get(0);
-        assertTrue(info.getArguments().isEmpty());
-    }
-
-    @Test
-    public void testDoExecute_InputSchemaPropertyTypeFallbackToObject() {
-        String inputSchema = "{\"type\":\"object\",\"properties\":{\"raw\":\"string\",\"config\":{},\"name\":{\"type\":null}}}";
-        MLToolSpec toolSpec = MLToolSpec
-            .builder()
-            .type("test_tool")
-            .name("ToolTypeFallback")
-            .description("Desc")
-            .attributes(Collections.singletonMap("input_schema", inputSchema))
-            .build();
-        transportAction.setToolSpecsToReturn(List.of(toolSpec));
-
-        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
-        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
-
-        transportAction.doExecute(task, request, listener);
-
-        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
-        verify(listener).onResponse(captor.capture());
-        Map<String, String> arguments = captor.getValue().getTools().get(0).getArguments();
-        assertEquals(3, arguments.size());
-        assertEquals("object", arguments.get("raw"));
-        assertEquals("object", arguments.get("config"));
-        assertEquals("object", arguments.get("name"));
+        assertEquals(inputSchema, info.getInputSchema());
     }
 }
