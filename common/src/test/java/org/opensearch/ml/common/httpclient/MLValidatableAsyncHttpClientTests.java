@@ -305,4 +305,15 @@ public class MLValidatableAsyncHttpClientTests {
 
         client.validate("http://api.openai.com", HTTP, "api.openai.com", 443, PRIVATE_IP_DISABLED);
     }
+
+    @Test
+    public void test_nullPatterns_noException() throws Exception {
+        MLValidatableAsyncHttpClient client = new MLValidatableAsyncHttpClient(
+            mock(SdkAsyncHttpClient.class),
+            PRIVATE_IP_ENABLED,
+            null,
+            null
+        );
+        client.validate("http://10.0.0.1", HTTP, "10.0.0.1", 80, PRIVATE_IP_ENABLED);
+    }
 }

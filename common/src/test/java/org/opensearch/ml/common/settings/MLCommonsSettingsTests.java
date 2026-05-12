@@ -282,4 +282,20 @@ public class MLCommonsSettingsTests {
             .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), validRegex).build());
         assertEquals(validRegex, result);
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testValidateRegexSafety_multiplePatterns_oneInvalid() {
+        List<String> mixedRegex = List.of("^https://valid\\.com$", "(a+)+b", "^https://another\\.com$");
+        MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), mixedRegex).build());
+    }
+
+    @Test
+    public void testValidateRegexSafety_multipleValidPatterns() {
+        List<String> validRegex = List
+            .of("^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$", "^https://.*\\.amazonaws\\.com/.*$");
+        List<String> result = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), validRegex).build());
+        assertEquals(validRegex, result);
+    }
 }

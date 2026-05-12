@@ -35,6 +35,8 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRU
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_RESTRICTED_IP_PATTERNS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
@@ -53,6 +55,7 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.copyFile;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -1304,6 +1307,22 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelCacheHelper).addModelInferenceDuration(modelIdCaptor.capture(), durationCaptor.capture());
         assert modelIdCaptor.getValue().equals(modelId);
         assert durationCaptor.getValue() > 0;
+    }
+
+    @Test
+    public void testSetUpParameterMap_includesSecurityPatterns() throws Exception {
+        String modelId = "test-model-id";
+        String tenantId = "test-tenant";
+
+        Method method = MLModelManager.class.getDeclaredMethod("setUpParameterMap", String.class, String.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = (Map<String, Object>) method.invoke(modelManager, modelId, tenantId);
+
+        assertNotNull(params);
+        assertTrue(params.containsKey(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS));
+        assertTrue(params.containsKey(CONNECTOR_RESTRICTED_IP_PATTERNS));
     }
 
     private void setupForModelMeta() {
