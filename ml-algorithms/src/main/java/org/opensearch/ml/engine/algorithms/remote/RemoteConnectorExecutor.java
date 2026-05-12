@@ -203,6 +203,8 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
 
     default void setMlGuard(MLGuard mlGuard) {}
 
+    default void setTrustedConnectorEndpointsRegex(List<String> trustedConnectorEndpointsRegex) {}
+
     default void preparePayloadAndInvoke(
         String action,
         MLInput mlInput,

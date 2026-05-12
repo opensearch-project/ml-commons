@@ -86,6 +86,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     @Setter
     @Getter
+    private volatile List<String> trustedConnectorEndpointsRegex;
+
+    @Setter
+    @Getter
     private StreamTransportService streamTransportService;
 
     public HttpJsonConnectorExecutor(Connector connector) {
@@ -109,6 +113,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
+            // Re-validate the resolved URL against the trusted-connector-endpoints
+            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+
             SdkHttpFullRequest request;
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
@@ -170,6 +177,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
     ) {
         try {
+            // Re-validate the resolved URL against the trusted-connector-endpoints allowlist
+            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+
             String llmInterface = parameters.get(LLM_INTERFACE);
             llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
             llmInterface = StringEscapeUtils.unescapeJava(llmInterface);

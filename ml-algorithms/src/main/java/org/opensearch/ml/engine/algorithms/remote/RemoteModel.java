@@ -55,6 +55,7 @@ public class RemoteModel implements Predictable {
     public static final String CONNECTOR_PRIVATE_IP_ENABLED = "connectorPrivateIpEnabled";
     public static final String CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS = "connectorTrustedPrivateEndpoints";
     public static final String CONNECTOR_RESTRICTED_IP_PATTERNS = "connectorRestrictedIpPatterns";
+    public static final String TRUSTED_CONNECTOR_ENDPOINTS_REGEX = "trustedConnectorEndpointsRegex";
     public static final String SDK_CLIENT = "sdk_client";
     public static final String SETTINGS = "settings";
 
@@ -161,6 +162,7 @@ public class RemoteModel implements Predictable {
                     .setConnectorRestrictedIpPatterns(
                         (List) params.getOrDefault(CONNECTOR_RESTRICTED_IP_PATTERNS, Collections.emptyList())
                     );
+                this.connectorExecutor.setTrustedConnectorEndpointsRegex((List<String>) params.get(TRUSTED_CONNECTOR_ENDPOINTS_REGEX));
                 listener.onResponse(this);
             }, e -> {
                 log.error("Failed to init remote model.", e);

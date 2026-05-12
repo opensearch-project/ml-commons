@@ -44,6 +44,7 @@ import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITE
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.USER_RATE_LIMITER_MAP;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -1574,6 +1575,7 @@ public class MLModelManager {
         params.put(CONNECTOR_PRIVATE_IP_ENABLED, mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
         params.put(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS, connectorTrustedPrivateEndpoints);
         params.put(CONNECTOR_RESTRICTED_IP_PATTERNS, connectorRestrictedIpPatterns);
+        params.put(TRUSTED_CONNECTOR_ENDPOINTS_REGEX, mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
         params.put(SDK_CLIENT, sdkClient);
         params.put(SETTINGS, settings);
         return Collections.unmodifiableMap(params);
