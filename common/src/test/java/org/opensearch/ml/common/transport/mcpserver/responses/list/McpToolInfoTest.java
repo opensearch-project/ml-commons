@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.mcpserver.responses.list;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -67,12 +68,13 @@ public class McpToolInfoTest {
     }
 
     @Test
-    public void testToXContent_NullDescription() throws IOException {
+    public void testToXContent_Null_Description_AndInputSchema() throws IOException {
         McpToolInfo info = McpToolInfo.builder().name(TOOL_NAME).description(null).inputSchema(null).build();
         XContentBuilder builder = XContentType.JSON.contentBuilder();
         info.toXContent(builder, EMPTY_PARAMS);
         String json = builder.toString();
         assertTrue(json.contains("\"name\":\"my_tool\""));
+        assertFalse(json.contains(CommonValue.TOOL_INPUT_SCHEMA_FIELD));
         assertNotNull(json);
     }
 }

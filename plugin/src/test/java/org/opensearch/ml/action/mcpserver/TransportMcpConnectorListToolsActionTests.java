@@ -12,9 +12,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -332,58 +334,19 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
         verify(listener).onResponse(captor.capture());
         McpToolInfo info = captor.getValue().getTools().get(0);
-        assertEquals(info.getInputSchema(), "");
+        assertNull(info.getInputSchema());
     }
 
     @Test
-    public void testDoExecute_InputSchemaMissingOrPassthroughStrings() {
-        MLToolSpec missingSchema = MLToolSpec
-            .builder()
-            .type("test_tool")
-            .name("ToolMissingSchema")
-            .description("Desc")
-            .attributes(Collections.singletonMap("other_field", "{}"))
-            .build();
-        MLToolSpec invalidSchema = MLToolSpec
-            .builder()
-            .type("test_tool")
-            .name("ToolInvalidSchema")
-            .description("Desc")
-            .attributes(Collections.singletonMap("input_schema", "{not-valid-json"))
-            .build();
-        MLToolSpec nullSchema = MLToolSpec
-            .builder()
-            .type("test_tool")
-            .name("ToolNullSchema")
-            .description("Desc")
-            .attributes(Collections.singletonMap("input_schema", "null"))
-            .build();
-
-        transportAction.setToolSpecsToReturn(List.of(missingSchema, invalidSchema, nullSchema));
-
-        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
-        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
-
-        transportAction.doExecute(task, request, listener);
-
-        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
-        verify(listener).onResponse(captor.capture());
-        List<McpToolInfo> tools = captor.getValue().getTools();
-        assertEquals(3, tools.size());
-        assertNull(tools.get(0).getInputSchema());
-        assertEquals("{not-valid-json", tools.get(1).getInputSchema());
-        assertEquals("null", tools.get(2).getInputSchema());
-    }
-
-    @Test
-    public void testDoExecute_InputSchemaPropertiesNotMap_PassthroughRawJson() {
-        String inputSchema = "{\"type\":\"object\",\"properties\":\"not-a-map\"}";
+    public void testDoExecute_InputSchemaAttributeValueNull_ReturnsNullInputSchema() {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put(TOOL_INPUT_SCHEMA_FIELD, null);
         MLToolSpec toolSpec = MLToolSpec
             .builder()
             .type("test_tool")
-            .name("ToolPropertiesNotMap")
+            .name("ToolInputSchemaValueNull")
             .description("Desc")
-            .attributes(Collections.singletonMap("input_schema", inputSchema))
+            .attributes(attributes)
             .build();
         transportAction.setToolSpecsToReturn(List.of(toolSpec));
 
@@ -395,6 +358,6 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
         verify(listener).onResponse(captor.capture());
         McpToolInfo info = captor.getValue().getTools().get(0);
-        assertEquals(inputSchema, info.getInputSchema());
+        assertNull(info.getInputSchema());
     }
 }

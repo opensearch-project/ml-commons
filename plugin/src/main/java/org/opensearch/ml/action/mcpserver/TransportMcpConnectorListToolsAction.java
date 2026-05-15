@@ -120,7 +120,7 @@ public class TransportMcpConnectorListToolsAction extends HandledTransportAction
         String name = getToolName(spec);
         String description = spec.getDescription();
         Map<String, String> attributes = spec.getAttributes();
-        String inputSchema = attributes == null ? "" : attributes.get(TOOL_INPUT_SCHEMA_FIELD);
+        String inputSchema = attributes == null ? null : attributes.get(TOOL_INPUT_SCHEMA_FIELD);
         return McpToolInfo.builder().name(name).description(description).inputSchema(inputSchema).build();
     }
 }
