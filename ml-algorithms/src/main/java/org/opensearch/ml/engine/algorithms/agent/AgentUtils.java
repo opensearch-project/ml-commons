@@ -817,7 +817,6 @@ public class AgentUtils {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
             List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
             Map<String, String> toolDescriptionOverrides = toStringMap(mcpConnectorConfig.get(TOOL_DESCRIPTIONS_FIELD));
-
             try {
                 getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
                     try {
@@ -825,6 +824,7 @@ public class AgentUtils {
                         if (toolFilters == null || toolFilters.isEmpty()) {
                             filteredTools = mcpToolspecs
                                     .stream()
+                                    .filter(Objects::nonNull)
                                     .map(toolSpec -> applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides))
                                     .collect(Collectors.toList());
                         } else {
@@ -840,7 +840,7 @@ public class AgentUtils {
                                 }
                             }
                         }
-                        warnUnusedToolDescriptionOverrides(connectorId, toolDescriptionOverrides, mcpToolspecs, filteredTools);
+                        warnUnusedToolDescriptionOverrides(connectorId, toolDescriptionOverrides, filteredTools);
                         finalToolSpecs.addAll(filteredTools);
                     } catch (Throwable t) {
                         log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);

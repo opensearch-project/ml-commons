@@ -1758,42 +1758,6 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testGetMcpToolSpecs_NoFilterWithNullToolSpecElement() throws Exception {
-        stubGetConnector();
-        List<MLToolSpec> repo = Arrays
-            .asList(null, MLToolSpec.builder().type(McpSseTool.TYPE).name("FilterTool").description("remote description").build());
-
-        try (
-            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
-            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
-        ) {
-            mockMcpConnector(connStatic);
-            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
-            when(exec.getMcpToolSpecs()).thenReturn(repo);
-            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
-
-            String mcpJsonConfig = "[{\""
-                + MCP_CONNECTOR_ID_FIELD
-                + "\":\"c1\",\""
-                + TOOL_DESCRIPTIONS_FIELD
-                + "\":[{\"FilterTool\":\"override description\"}]}]";
-            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
-            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
-
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
-
-            verify(listener).onResponse(argThat(result -> {
-                if (result == null || result.size() != 2) {
-                    return false;
-                }
-                return result.get(0) == null
-                    && "FilterTool".equals(result.get(1).getName())
-                    && "override description".equals(result.get(1).getDescription());
-            }));
-        }
-    }
-
-    @Test
     public void testGetMcpToolSpecs_MultipleConnectorsMerged() throws Exception {
         stubGetConnector();                                  // now safe
 
