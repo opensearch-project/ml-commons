@@ -2188,7 +2188,14 @@ public class AgentUtilsTest extends MLStaticMockBase {
                 .type(McpStreamableHttpTool.TYPE)
                 .name("get_simple_price")
                 .description("remote desc")
-                .attributes(Map.of("input_schema", "{}"))
+                .attributes(
+                    Map
+                        .of(
+                            "input_schema",
+                            "\"{\"type\":\"object\",\"properties\":{\"query\":"
+                                + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}"
+                        )
+                )
                 .runtimeResources(Map.of("MCP_SYNC_CLIENT", "from_remote"))
                 .build();
             McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
@@ -2223,7 +2230,10 @@ public class AgentUtilsTest extends MLStaticMockBase {
             MLToolSpec mergedMcp = response.get().get(0);
             assertEquals("get_simple_price", mergedMcp.getName());
             assertEquals("remote desc", mergedMcp.getDescription());
-            assertEquals("{}", mergedMcp.getAttributes().get("input_schema"));
+            assertEquals(
+                "\"{\"type\":\"object\",\"properties\":{\"query\":" + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}",
+                mergedMcp.getAttributes().get("input_schema")
+            );
             assertEquals("from_remote", mergedMcp.getRuntimeResources().get("MCP_SYNC_CLIENT"));
             assertEquals("from_agent", mergedMcp.getRuntimeResources().get("custom_runtime"));
             assertEquals("summarizer", response.get().get(1).getName());
@@ -2279,6 +2289,65 @@ public class AgentUtilsTest extends MLStaticMockBase {
             assertEquals("configured desc", mergedMcp.getDescription());
             assertEquals("configured", mergedMcp.getAttributes().get("configured_attr"));
             assertNull(mergedMcp.getRuntimeResources());
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_EmptyConfiguredAttributesUsesRemote() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .description("remote")
+                .attributes(
+                    Map
+                        .of(
+                            "input_schema",
+                            "\"{\"type\":\"object\",\"properties\":{\"query\":"
+                                + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}"
+                        )
+                )
+                .runtimeResources(null)
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .description("configured")
+                .attributes(Collections.emptyMap())
+                .runtimeResources(null)
+                .build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertEquals(1, response.get().size());
+            MLToolSpec merged = response.get().get(0);
+            assertEquals("configured", merged.getDescription());
+            assertEquals(
+                "\"{\"type\":\"object\",\"properties\":{\"query\":" + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}",
+                merged.getAttributes().get("input_schema")
+            );
         }
     }
 

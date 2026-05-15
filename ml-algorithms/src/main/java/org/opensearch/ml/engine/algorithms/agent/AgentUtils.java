@@ -807,6 +807,8 @@ public class AgentUtils {
             return;
         }
         getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpToolSpecs -> {
+            // If several connectors expose a tool with the same name, it picks the first one from the
+            // configured mcp connectors.
             Map<String, MLToolSpec> mcpToolSpecMap = mcpToolSpecs
                 .stream()
                 .filter(spec -> spec.getName() != null)
@@ -827,6 +829,9 @@ public class AgentUtils {
                             );
                         return;
                     }
+                    // Produce the executable MCP tool spec by layering agent configuration on top of the connector-
+                    // fetched definition: runtime resources are merged, while description and attributes use the agent
+                    // values when set non-empty and otherwise fall back to what the MCP server returned.
                     Map<String, Object> mergedRuntimeResources = new HashMap<>();
                     if (mcpSpec.getRuntimeResources() != null) {
                         mergedRuntimeResources.putAll(mcpSpec.getRuntimeResources());
@@ -841,7 +846,11 @@ public class AgentUtils {
                                 ? mcpSpec.getDescription()
                                 : configuredSpec.getDescription()
                         )
-                        .attributes(configuredSpec.getAttributes() == null ? mcpSpec.getAttributes() : configuredSpec.getAttributes())
+                        .attributes(
+                            configuredSpec.getAttributes() != null && !configuredSpec.getAttributes().isEmpty()
+                                ? configuredSpec.getAttributes()
+                                : mcpSpec.getAttributes()
+                        )
                         .runtimeResources(mergedRuntimeResources.isEmpty() ? null : mergedRuntimeResources)
                         .build();
                     resolvedSpecs.add(resolved);
