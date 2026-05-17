@@ -15,8 +15,10 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
@@ -88,6 +90,11 @@ public class MemoryProcessingServiceTests {
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
         testContent = createTestContent("Hello");
         when(memoryConfig.getParameters()).thenReturn(new HashMap<>());
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> l = invocation.getArgument(1);
+            l.onResponse(Map.of());
+            return null;
+        }).when(memoryContainerHelper).getStructuredOutputParameters(any(), any());
         // Mock the getLlmResultPath to return the default path
         when(memoryContainerHelper.getLlmResultPath(any(), any())).thenReturn("$.content[0].text");
     }
@@ -1103,6 +1110,167 @@ public class MemoryProcessingServiceTests {
         // Verify role clarity
         assertTrue("Should not be a chat assistant", prompt.contains("not a chat assistant"));
         assertTrue("Should only output JSON facts", prompt.contains("only job is to output JSON facts"));
+    }
+
+    @Test
+    public void testExtractFacts_StructuredOutputConnector_PassesSchemaParameter() {
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> l = invocation.getArgument(1);
+            l.onResponse(Map.of("_response_format_json", FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON));
+            return null;
+        }).when(memoryContainerHelper).getStructuredOutputParameters(eq("llm-model-123"), any());
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("I prefer dark mode")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+            Map<String, String> parameters = dataset.getParameters();
+
+            assertTrue(
+                "_response_format_json should be present for structured output connector",
+                parameters.containsKey("_response_format_json")
+            );
+            assertFalse(
+                "JSON enforcement message must NOT be in user_prompt when using structured output",
+                parameters.get("user_prompt").contains("Respond NOW with ONE LINE of valid JSON ONLY")
+            );
+
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            List<ModelTensor> tensors = new ArrayList<>();
+            Map<String, Object> contents = new HashMap<>();
+            contents.put("content", List.of(Map.of("text", "{\"facts\":[\"User prefers dark mode\"]}")));
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
+            mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+            actionListener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build()).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFacts_PromptFallbackConnector_AppendsEnforcementMessage() {
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> l = invocation.getArgument(1);
+            l.onResponse(Map.of());
+            return null;
+        }).when(memoryContainerHelper).getStructuredOutputParameters(eq("llm-model-123"), any());
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("I prefer dark mode")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+            Map<String, String> parameters = dataset.getParameters();
+
+            assertFalse(
+                "_response_format_json must NOT be present for prompt-based connector",
+                parameters.containsKey("_response_format_json")
+            );
+            assertTrue(
+                "JSON enforcement message MUST be in user_prompt for prompt-based connector",
+                parameters.get("user_prompt").contains("Respond NOW with ONE LINE of valid JSON ONLY")
+            );
+
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            List<ModelTensor> tensors = new ArrayList<>();
+            Map<String, Object> contents = new HashMap<>();
+            contents.put("content", List.of(Map.of("text", "{\"facts\":[\"User prefers dark mode\"]}")));
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
+            mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+            actionListener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build()).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFacts_StructuredOutputParseFails_CallsOnFailure() {
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> l = invocation.getArgument(1);
+            l.onResponse(Map.of("_response_format_json", FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON));
+            return null;
+        }).when(memoryContainerHelper).getStructuredOutputParameters(eq("llm-model-123"), any());
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("I prefer dark mode")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            List<ModelTensor> tensors = new ArrayList<>();
+            Map<String, Object> contents = new HashMap<>();
+            contents.put("content", List.of(Map.of("text", "not valid json at all")));
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
+            mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+            actionListener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build()).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
+
+        verify(client, times(1)).execute(any(), any(), any());
+        verify(factsListener).onFailure(any(OpenSearchStatusException.class));
+    }
+
+    @Test
+    public void testExtractFacts_StructuredOutputLookupFails_FallsBackToPromptEnforcement() {
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> l = invocation.getArgument(1);
+            l.onFailure(new RuntimeException("model lookup failed"));
+            return null;
+        }).when(memoryContainerHelper).getStructuredOutputParameters(eq("llm-model-123"), any());
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("I prefer dark mode")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+            Map<String, String> parameters = dataset.getParameters();
+
+            assertFalse("_response_format_json must NOT be present on fallback path", parameters.containsKey("_response_format_json"));
+            assertTrue(
+                "JSON enforcement message MUST be in user_prompt on fallback path",
+                parameters.get("user_prompt").contains("Respond NOW with ONE LINE of valid JSON ONLY")
+            );
+
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            List<ModelTensor> tensors = new ArrayList<>();
+            Map<String, Object> contents = new HashMap<>();
+            contents.put("content", List.of(Map.of("text", "{\"facts\":[\"User prefers dark mode\"]}")));
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
+            mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+            actionListener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build()).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
     }
 
     @Test

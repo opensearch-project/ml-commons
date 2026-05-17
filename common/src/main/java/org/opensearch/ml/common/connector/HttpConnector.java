@@ -40,6 +40,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -366,9 +367,59 @@ public class HttpConnector extends AbstractConnector {
                     payload = jsonObject.toString();
                 }
             }
+            if (parameters != null && isJson(payload)) {
+                payload = injectStructuredOutputParams(parameters, payload);
+            }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+    }
+
+    // Convention: parameters named _<fieldname>_additions_json are merged into an existing top-level
+    // JSON object; parameters named _<fieldname>_json are injected as a new top-level JSON object.
+    // Both conventions require the value to be a valid JSON object string.
+    private String injectStructuredOutputParams(Map<String, String> parameters, String payload) {
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith("_") && key.endsWith("_additions_json")) {
+                String fieldName = key.substring(1, key.length() - "_additions_json".length());
+                payload = mergeIntoJsonObject(payload, fieldName, entry.getValue());
+            } else if (key.startsWith("_") && key.endsWith("_json")) {
+                String fieldName = key.substring(1, key.length() - "_json".length());
+                payload = injectTopLevelJsonField(payload, fieldName, entry.getValue());
+            }
+        }
+        return payload;
+    }
+
+    private String injectTopLevelJsonField(String payload, String fieldName, String valueStr) {
+        if (valueStr == null || !isJson(valueStr)) {
+            return payload;
+        }
+        JsonElement valueElement = JsonParser.parseString(valueStr);
+        if (!valueElement.isJsonObject()) {
+            return payload;
+        }
+        JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
+        jsonObject.add(fieldName, valueElement.getAsJsonObject());
+        return jsonObject.toString();
+    }
+
+    private String mergeIntoJsonObject(String payload, String fieldName, String additionsStr) {
+        if (additionsStr == null || !isJson(additionsStr)) {
+            return payload;
+        }
+        JsonElement additionsElement = JsonParser.parseString(additionsStr);
+        if (!additionsElement.isJsonObject()) {
+            return payload;
+        }
+        JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
+        JsonObject target = jsonObject.has(fieldName) && jsonObject.get(fieldName).isJsonObject()
+            ? jsonObject.getAsJsonObject(fieldName)
+            : new JsonObject();
+        additionsElement.getAsJsonObject().entrySet().forEach(e -> target.add(e.getKey(), e.getValue()));
+        jsonObject.add(fieldName, target);
+        return jsonObject.toString();
     }
 
     private boolean neededStreamParameterInPayload(Map<String, String> parameters) {

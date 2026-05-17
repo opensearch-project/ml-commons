@@ -36,6 +36,9 @@ import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -639,6 +642,161 @@ public class HttpConnectorTest {
         Assert.assertTrue(foundByName.isPresent());
         Assert.assertEquals(customActionName, foundByName.get().getName());
         Assert.assertEquals("https://test2.com", foundByName.get().getUrl());
+    }
+
+    @Test
+    public void createPayload_WithResponseFormatJson_MergesIntoPayload() {
+        String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello");
+        parameters
+            .put(
+                "_response_format_json",
+                "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"result\","
+                    + "\"schema\":{\"type\":\"object\",\"properties\":{\"facts\":{\"type\":\"array\","
+                    + "\"items\":{\"type\":\"string\"}}},\"required\":[\"facts\"]}}}"
+            );
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("response_format should be present", json.has("response_format"));
+        Assert.assertEquals("json_schema", json.getAsJsonObject("response_format").get("type").getAsString());
+        Assert.assertEquals("Hello", json.getAsJsonArray("messages").get(0).getAsJsonObject().get("content").getAsString());
+    }
+
+    @Test
+    public void createPayload_WithoutResponseFormatJson_NoResponseFormatField() {
+        String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertFalse("response_format should NOT be present when parameter is absent", json.has("response_format"));
+    }
+
+    @Test
+    public void createPayload_ResponseFormatJson_IsJsonObjectNotString() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "{\"type\":\"json_object\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("response_format must be a JSON object, not a string", json.get("response_format").isJsonObject());
+        Assert.assertEquals("json_object", json.getAsJsonObject("response_format").get("type").getAsString());
+    }
+
+    @Test
+    public void createPayload_ResponseFormatJson_InvalidJson_IgnoresParameter() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "not-valid-json");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertFalse("response_format must be absent when _response_format_json is not valid JSON", json.has("response_format"));
+    }
+
+    @Test
+    public void createPayload_ResponseFormatJson_JsonArray_IgnoresParameter() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "[\"not\", \"an\", \"object\"]");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert
+            .assertFalse(
+                "response_format must be absent when _response_format_json is a JSON array, not an object",
+                json.has("response_format")
+            );
+    }
+
+    @Test
+    public void createPayload_WithOutputConfigJson_InjectsTopLevelField() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_output_config_json", "{\"format\":{\"type\":\"json_schema\"}}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("output_config should be present", json.has("output_config"));
+        Assert.assertTrue("output_config must be a JSON object", json.get("output_config").isJsonObject());
+    }
+
+    @Test
+    public void createPayload_WithOutputConfigJsonCamelCase_InjectsTopLevelField() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_outputConfig_json", "{\"textFormat\":{\"type\":\"json_schema\"}}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("outputConfig should be present", json.has("outputConfig"));
+        Assert.assertTrue("outputConfig must be a JSON object", json.get("outputConfig").isJsonObject());
+    }
+
+    @Test
+    public void createPayload_WithGenerationConfigAdditionsJson_MergesIntoExistingField() {
+        String requestBody = "{\"generationConfig\":{\"maxOutputTokens\":1024},\"contents\":[{\"role\":\"user\","
+            + "\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters
+            .put(
+                "_generationConfig_additions_json",
+                "{\"responseMimeType\":\"application/json\",\"responseSchema\":{\"type\":\"OBJECT\"}}"
+            );
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("generationConfig should be present", json.has("generationConfig"));
+        JsonObject genConfig = json.getAsJsonObject("generationConfig");
+        Assert.assertEquals("maxOutputTokens must be preserved", 1024, genConfig.get("maxOutputTokens").getAsInt());
+        Assert.assertEquals("responseMimeType must be merged in", "application/json", genConfig.get("responseMimeType").getAsString());
+        Assert.assertTrue("responseSchema must be merged in", genConfig.has("responseSchema"));
+    }
+
+    @Test
+    public void createPayload_WithGenerationConfigAdditionsJson_CreatesFieldIfAbsent() {
+        String requestBody = "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_generationConfig_additions_json", "{\"responseMimeType\":\"application/json\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("generationConfig should be created when absent", json.has("generationConfig"));
+        Assert
+            .assertEquals(
+                "responseMimeType should be set",
+                "application/json",
+                json.getAsJsonObject("generationConfig").get("responseMimeType").getAsString()
+            );
     }
 
     @Test

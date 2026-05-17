@@ -42,6 +42,7 @@ POST /_plugins/_ml/connectors/_create
       "action_type": "predict",
       "method": "POST",
       "url": "https://${parameters.endpoint}/openai/deployments/${parameters.deploy-name}/chat/completions?api-version=${parameters.api-version}",
+      "supports_structured_output": true,
       "headers": {
         "api-key": "${credential.openAI_key}"
       },

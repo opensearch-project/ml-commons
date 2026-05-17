@@ -5,12 +5,18 @@
 
 package org.opensearch.ml.helper;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 
 import java.io.IOException;
@@ -24,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.Answers;
+import org.mockito.ArgumentCaptor;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.bulk.BulkRequest;
@@ -57,6 +64,9 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
@@ -84,6 +94,7 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
     private org.opensearch.remote.metadata.client.SdkClient sdkClient;
     private ThreadPool threadPool;
     private ThreadContext threadContext;
+    private org.opensearch.ml.model.MLModelManager modelManager;
     private MemoryContainerHelper helper;
 
     @Before
@@ -94,8 +105,9 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(Settings.builder().build());
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        modelManager = mock(org.opensearch.ml.model.MLModelManager.class);
 
-        helper = new MemoryContainerHelper(client, sdkClient, NamedXContentRegistry.EMPTY);
+        helper = new MemoryContainerHelper(client, sdkClient, NamedXContentRegistry.EMPTY, modelManager);
     }
 
     public void testGetMemoryContainerSuccess() throws Exception {
@@ -706,6 +718,352 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
             .owner(owner)
             .configuration(configuration)
             .backendRoles(Arrays.asList("roleA", "roleB"));
+    }
+
+    // ---- getStructuredOutputParameters / schemaForUrl tests ----
+
+    private ConnectorAction mockPredictAction(boolean supportsStructuredOutput, String url) {
+        ConnectorAction action = mock(ConnectorAction.class);
+        when(action.getActionType()).thenReturn(ConnectorAction.ActionType.PREDICT);
+        when(action.isSupportsStructuredOutput()).thenReturn(supportsStructuredOutput);
+        when(action.getUrl()).thenReturn(url);
+        return action;
+    }
+
+    private void stubModelWithEmbeddedConnector(MLModel model) {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> l = invocation.getArgument(1);
+            l.onResponse(model);
+            return null;
+        }).when(modelManager).getModel(any(), any());
+    }
+
+    public void testGetStructuredOutputParameters_OpenAI_ReturnsCorrectSchema() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction openAiAction = mockPredictAction(true, "https://api.openai.com/v1/chat/completions");
+        when(connector.getActions()).thenReturn(Arrays.asList(openAiAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_AzureOpenAI_ReturnsOpenAISchema() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction azureAction = mockPredictAction(
+            true,
+            "https://my-resource.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2024-02-01"
+        );
+        when(connector.getActions()).thenReturn(Arrays.asList(azureAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_BedrockConverse_ReturnsEmptyMap() {
+        // Bedrock Converse structured output requires toolConfig+toolChoice, which changes the
+        // response shape; auto-detection is intentionally disabled so we fall back to prompt enforcement.
+        Connector connector = mock(Connector.class);
+        ConnectorAction bedrockAction = mockPredictAction(
+            true,
+            "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-sonnet/converse"
+        );
+        when(connector.getActions()).thenReturn(Arrays.asList(bedrockAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_Anthropic_ReturnsEmptyMap() {
+        // Anthropic direct API requires an anthropic-beta header that cannot be injected via
+        // parameters; auto-detection is intentionally disabled so we fall back to prompt enforcement.
+        Connector connector = mock(Connector.class);
+        ConnectorAction anthropicAction = mockPredictAction(true, "https://api.anthropic.com/v1/messages");
+        when(connector.getActions()).thenReturn(Arrays.asList(anthropicAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_Gemini_ReturnsGeminiSchema() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction geminiAction = mockPredictAction(
+            true,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        );
+        when(connector.getActions()).thenReturn(Arrays.asList(geminiAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON, captor.getValue().get("_generationConfig_additions_json"));
+    }
+
+    public void testGetStructuredOutputParameters_CohereV2_ReturnsCohereSchema() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction cohereAction = mockPredictAction(true, "https://api.cohere.com/v2/chat");
+        when(connector.getActions()).thenReturn(Arrays.asList(cohereAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_CohereV1_ReturnsEmptyMap() {
+        // Cohere v1 endpoint does not support json_schema — falls back to prompt enforcement.
+        Connector connector = mock(Connector.class);
+        ConnectorAction cohereV1Action = mockPredictAction(true, "https://api.cohere.ai/v1/chat");
+        when(connector.getActions()).thenReturn(Arrays.asList(cohereV1Action));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_Ollama_ReturnsOpenAISchema() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction ollamaAction = mockPredictAction(true, "http://localhost:11434/v1/chat/completions");
+        when(connector.getActions()).thenReturn(Arrays.asList(ollamaAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_FlagFalse_ReturnsEmptyMap() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction disabledAction = mockPredictAction(false, "https://api.openai.com/v1/chat/completions");
+        when(connector.getActions()).thenReturn(Arrays.asList(disabledAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_DeepSeek_ReturnsOpenAISchema() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction deepSeekAction = mockPredictAction(true, "https://api.deepseek.com/v1/chat/completions");
+        when(connector.getActions()).thenReturn(Arrays.asList(deepSeekAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_TemplateUrl_ReturnsOpenAISchema() {
+        // Verifies that a connector URL with an unresolved ${parameters.endpoint} placeholder
+        // still matches via the literal /v1/chat/completions path segment.
+        Connector connector = mock(Connector.class);
+        ConnectorAction templateAction = mockPredictAction(true, "https://${parameters.endpoint}/v1/chat/completions");
+        when(connector.getActions()).thenReturn(Arrays.asList(templateAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_UnknownUrl_ReturnsEmptyMap() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction unknownAction = mockPredictAction(true, "https://custom.internal.llm/api/chat");
+        when(connector.getActions()).thenReturn(Arrays.asList(unknownAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_ConnectorIdPath_ReturnsSchema() {
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(null);
+        when(model.getConnectorId()).thenReturn("connector-123");
+        stubModelWithEmbeddedConnector(model);
+
+        Connector connector = mock(Connector.class);
+        ConnectorAction connectorIdAction = mockPredictAction(true, "https://api.openai.com/v1/chat/completions");
+        when(connector.getActions()).thenReturn(Arrays.asList(connectorIdAction));
+        doAnswer(invocation -> {
+            ActionListener<Connector> l = invocation.getArgument(2);
+            l.onResponse(connector);
+            return null;
+        }).when(modelManager).getConnector(eq("connector-123"), any(), any());
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_ConnectorLookupFails_ReturnsEmptyMap() {
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(null);
+        when(model.getConnectorId()).thenReturn("connector-123");
+        stubModelWithEmbeddedConnector(model);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> l = invocation.getArgument(2);
+            l.onFailure(new RuntimeException("connector not found"));
+            return null;
+        }).when(modelManager).getConnector(eq("connector-123"), any(), any());
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_ModelLookupFails_ReturnsEmptyMap() {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> l = invocation.getArgument(1);
+            l.onFailure(new RuntimeException("model not found"));
+            return null;
+        }).when(modelManager).getModel(any(), any());
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_NoConnectorOrConnectorId_ReturnsEmptyMap() {
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(null);
+        when(model.getConnectorId()).thenReturn(null);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_NullUrl_ReturnsEmptyMap() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction nullUrlAction = mockPredictAction(true, null);
+        when(connector.getActions()).thenReturn(Arrays.asList(nullUrlAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_NullActions_ReturnsEmptyMap() {
+        Connector connector = mock(Connector.class);
+        when(connector.getActions()).thenReturn(null);
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_NoMatchingPredictAction_ReturnsEmptyMap() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction executeAction = mock(ConnectorAction.class);
+        when(executeAction.getActionType()).thenReturn(ConnectorAction.ActionType.EXECUTE);
+        when(connector.getActions()).thenReturn(Arrays.asList(executeAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
     }
 
     private String containerToJson(MLMemoryContainer container) throws IOException {

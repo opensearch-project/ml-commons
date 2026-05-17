@@ -10,6 +10,9 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
@@ -17,6 +20,8 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
@@ -53,10 +58,13 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -79,12 +87,14 @@ public class MemoryContainerHelper {
     Client client;
     SdkClient sdkClient;
     NamedXContentRegistry xContentRegistry;
+    MLModelManager modelManager;
 
     @Inject
-    public MemoryContainerHelper(Client client, SdkClient sdkClient, NamedXContentRegistry xContentRegistry) {
+    public MemoryContainerHelper(Client client, SdkClient sdkClient, NamedXContentRegistry xContentRegistry, MLModelManager modelManager) {
         this.client = client;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
+        this.modelManager = modelManager;
     }
 
     /**
@@ -495,6 +505,74 @@ public class MemoryContainerHelper {
             log.error("Failed to search for containers with prefix: " + indexPrefix, e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Resolves the structured output injection parameters for the given model asynchronously.
+     * Looks up the model's connector, checks its PREDICT action's {@code supports_structured_output}
+     * flag, then derives the provider from the connector URL to select the correct injection
+     * parameter and schema constant. Returns an empty map if the connector does not support native
+     * structured output or if the lookup fails; callers should fall back to prompt enforcement.
+     */
+    public void getStructuredOutputParameters(String modelId, ActionListener<Map<String, String>> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            modelManager.getModel(modelId, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
+                Connector connector = mlModel.getConnector();
+                if (connector != null) {
+                    listener.onResponse(schemaForConnector(connector));
+                } else if (mlModel.getConnectorId() != null) {
+                    modelManager
+                        .getConnector(
+                            mlModel.getConnectorId(),
+                            null,
+                            ActionListener.wrap(c -> listener.onResponse(schemaForConnector(c)), e -> {
+                                log.warn("Failed to fetch connector {} for structured output detection", mlModel.getConnectorId(), e);
+                                listener.onResponse(Map.of());
+                            })
+                        );
+                } else {
+                    listener.onResponse(Map.of());
+                }
+            }, e -> {
+                log.warn("Failed to fetch model {} for structured output detection, falling back to prompt enforcement", modelId, e);
+                listener.onResponse(Map.of());
+            }), context::restore));
+        }
+    }
+
+    private Map<String, String> schemaForConnector(Connector connector) {
+        if (connector.getActions() == null) {
+            return Map.of();
+        }
+        return connector
+            .getActions()
+            .stream()
+            .filter(a -> ConnectorAction.ActionType.PREDICT.equals(a.getActionType()) && a.isSupportsStructuredOutput())
+            .findFirst()
+            .map(a -> schemaForUrl(a.getUrl()))
+            .orElse(Map.of());
+    }
+
+    private Map<String, String> schemaForUrl(String url) {
+        if (url == null) {
+            return Map.of();
+        }
+        String lower = url.toLowerCase(Locale.ROOT);
+        // Anthropic direct API: requires the `anthropic-beta` header, which cannot be injected
+        // via parameters — skipped until header injection is supported at this layer.
+        // Bedrock Converse: requires toolConfig+toolChoice and additional response parsing — not yet implemented.
+        if (lower.contains("googleapis.com")) {
+            return Map.of("_generationConfig_additions_json", FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON);
+        }
+        // Cohere structured output (json_schema type) requires the v2 Chat API (/v2/chat).
+        // The legacy /v1/chat endpoint only supports json_object and ignores json_schema.
+        if (lower.contains("cohere.") && lower.contains("/v2/")) {
+            return Map.of("_response_format_json", FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON);
+        }
+        if (lower.contains("openai") || lower.contains("deepseek") || lower.contains("/v1/chat/completions")) {
+            return Map.of("_response_format_json", FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON);
+        }
+        return Map.of();
     }
 
     /**

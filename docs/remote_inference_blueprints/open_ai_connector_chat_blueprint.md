@@ -20,6 +20,7 @@ POST /_plugins/_ml/connectors/_create
       "action_type": "predict",
       "method": "POST",
       "url": "https://${parameters.endpoint}/v1/chat/completions",
+      "supports_structured_output": true,
       "headers": {
         "Authorization": "Bearer ${credential.openAI_key}"
       },
