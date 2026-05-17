@@ -251,7 +251,7 @@ public class MemoryContainerConstants {
     // Auto-detection via schemaForUrl is not enabled because that header cannot be injected
     // via parameters. Admins can wire this up manually by setting _output_json in the connector.
     // TODO: Enable auto-detection once MemoryContainerHelper can inject connector-level headers.
-    //       Track in: https://github.com/opensearch-project/ml-commons/issues (open follow-up issue)
+    // Track in: https://github.com/opensearch-project/ml-commons/issues (open follow-up issue)
     public static final String FACTS_EXTRACTION_ANTHROPIC_OUTPUT_JSON = """
         {
             "type": "json_schema",
@@ -273,7 +273,7 @@ public class MemoryContainerConstants {
     // response shape from a text field to a tool-use block and requires additional post-processing.
     // Not yet auto-detected by schemaForUrl.
     // TODO: Enable once MemoryProcessingService can parse Bedrock Converse tool-use responses.
-    //       Track in: https://github.com/opensearch-project/ml-commons/issues (open follow-up issue)
+    // Track in: https://github.com/opensearch-project/ml-commons/issues (open follow-up issue)
     public static final String FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON = """
         {
             "tools": [
