@@ -558,9 +558,7 @@ public class MemoryContainerHelper {
             return Map.of();
         }
         String lower = url.toLowerCase(Locale.ROOT);
-        // Anthropic direct API: requires the `anthropic-beta` header, which cannot be injected
-        // via parameters — skipped until header injection is supported at this layer.
-        // Bedrock Converse: requires toolConfig+toolChoice and additional response parsing — not yet implemented.
+        // Anthropic direct API and Bedrock Converse are not yet supported — see follow-up issues.
         if (lower.contains("googleapis.com")) {
             return Map.of("_generationConfig_additions_json", FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON);
         }

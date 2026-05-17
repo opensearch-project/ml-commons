@@ -245,60 +245,6 @@ public class MemoryContainerConstants {
             }
         }""";
 
-    // Anthropic Messages API (direct) — value for _output_json.
-    // IMPORTANT: Using this requires the connector's headers to include the appropriate
-    // anthropic-beta header (e.g. "anthropic-beta": "output-128k-2025-02-19").
-    // Auto-detection via schemaForUrl is not enabled because that header cannot be injected
-    // via parameters. Admins can wire this up manually by setting _output_json in the connector.
-    // TODO: Enable auto-detection once MemoryContainerHelper can inject connector-level headers.
-    // Track in: https://github.com/opensearch-project/ml-commons/issues (open follow-up issue)
-    public static final String FACTS_EXTRACTION_ANTHROPIC_OUTPUT_JSON = """
-        {
-            "type": "json_schema",
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "facts": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    }
-                },
-                "required": ["facts"],
-                "additionalProperties": false
-            }
-        }""";
-
-    // AWS Bedrock Converse API — reserved for future structured output support.
-    // Bedrock Converse structured output requires toolConfig+toolChoice, which changes the
-    // response shape from a text field to a tool-use block and requires additional post-processing.
-    // Not yet auto-detected by schemaForUrl.
-    // TODO: Enable once MemoryProcessingService can parse Bedrock Converse tool-use responses.
-    // Track in: https://github.com/opensearch-project/ml-commons/issues (open follow-up issue)
-    public static final String FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON = """
-        {
-            "tools": [
-                {
-                    "toolSpec": {
-                        "name": "facts_extraction",
-                        "description": "Extract user preference facts",
-                        "inputSchema": {
-                            "json": {
-                                "type": "object",
-                                "properties": {
-                                    "facts": {
-                                        "type": "array",
-                                        "items": {"type": "string"}
-                                    }
-                                },
-                                "required": ["facts"]
-                            }
-                        }
-                    }
-                }
-            ],
-            "toolChoice": {"tool": {"name": "facts_extraction"}}
-        }""";
-
     // Google Gemini / Vertex AI — value for _generationConfig_additions_json.
     // These keys are merged into the existing generationConfig object in the request payload.
     public static final String FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON = """
