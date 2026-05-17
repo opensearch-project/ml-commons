@@ -727,33 +727,34 @@ public class HttpConnectorTest {
     }
 
     @Test
-    public void createPayload_WithOutputConfigJson_InjectsTopLevelField() {
-        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+    public void createPayload_WithDisallowedField_IsNotInjected() {
+        String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
-        parameters.put("_output_config_json", "{\"format\":{\"type\":\"json_schema\"}}");
+        // "model" is not in STRUCTURED_OUTPUT_ALLOWED_FIELDS — must be silently ignored
+        parameters.put("_model_json", "{\"id\":\"attacker-model\"}");
 
         String payload = connector.createPayload(PREDICT.name(), parameters);
 
         JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
-        Assert.assertTrue("output_config should be present", json.has("output_config"));
-        Assert.assertTrue("output_config must be a JSON object", json.get("output_config").isJsonObject());
+        Assert.assertEquals("model field must not be overridden by disallowed injection", "gpt-4", json.get("model").getAsString());
     }
 
     @Test
-    public void createPayload_WithOutputConfigJsonCamelCase_InjectsTopLevelField() {
-        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+    public void createPayload_WithAllowedCamelCaseField_IsInjected() {
+        String requestBody = "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"${parameters.input}\"}]}]}";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
-        parameters.put("_outputConfig_json", "{\"textFormat\":{\"type\":\"json_schema\"}}");
+        // "generationConfig" is in STRUCTURED_OUTPUT_ALLOWED_FIELDS — camelCase field must be injected
+        parameters.put("_generationConfig_json", "{\"responseMimeType\":\"application/json\"}");
 
         String payload = connector.createPayload(PREDICT.name(), parameters);
 
         JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
-        Assert.assertTrue("outputConfig should be present", json.has("outputConfig"));
-        Assert.assertTrue("outputConfig must be a JSON object", json.get("outputConfig").isJsonObject());
+        Assert.assertTrue("generationConfig should be present", json.has("generationConfig"));
+        Assert.assertTrue("generationConfig must be a JSON object", json.get("generationConfig").isJsonObject());
     }
 
     @Test

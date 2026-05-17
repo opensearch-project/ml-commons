@@ -569,6 +569,11 @@ public class MemoryContainerHelper {
         if (lower.contains("cohere.") && lower.contains("/v2/")) {
             return Map.of("_response_format_json", FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON);
         }
+        // "/v1/chat/completions" is the de-facto path for OpenAI-compatible servers (Ollama, vLLM,
+        // LM Studio, etc.) that do not contain "openai" or "deepseek" in their URL. Matching on the
+        // path alone is intentional: supports_structured_output must be explicitly set to true on the
+        // connector action, which requires admin access, so an unintended match only results in an
+        // extra response_format field being sent — the upstream server will ignore or reject it safely.
         if (lower.contains("openai") || lower.contains("deepseek") || lower.contains("/v1/chat/completions")) {
             return Map.of("_response_format_json", FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON);
         }

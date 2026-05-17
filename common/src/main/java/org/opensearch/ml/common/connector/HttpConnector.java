@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,6 +62,17 @@ public class HttpConnector extends AbstractConnector {
     public static final String REGION_FIELD = "region";
     // TODO: move the AgentUtils class from algorithm module to common module
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
+
+    // Allowlist of top-level JSON fields that _<field>_json / _<field>_additions_json parameters may inject.
+    // Restricts injection to structured-output fields only; prevents callers from overriding
+    // provider control fields such as "model", "stream", or "max_tokens".
+    static final Set<String> STRUCTURED_OUTPUT_ALLOWED_FIELDS = Set
+        .of(
+            "response_format",  // OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere
+            "generationConfig", // Google Gemini
+            "tools",            // Bedrock Converse (future)
+            "tool_choice"       // Bedrock Converse (future)
+        );
 
     // TODO: add RequestConfig like request time out,
 
@@ -377,16 +389,21 @@ public class HttpConnector extends AbstractConnector {
 
     // Convention: parameters named _<fieldname>_additions_json are merged into an existing top-level
     // JSON object; parameters named _<fieldname>_json are injected as a new top-level JSON object.
-    // Both conventions require the value to be a valid JSON object string.
+    // Both conventions require the value to be a valid JSON object string and the target field name
+    // must be in STRUCTURED_OUTPUT_ALLOWED_FIELDS to prevent callers from overriding provider control fields.
     private String injectStructuredOutputParams(Map<String, String> parameters, String payload) {
         for (Map.Entry<String, String> entry : parameters.entrySet()) {
             String key = entry.getKey();
             if (key.startsWith("_") && key.endsWith("_additions_json")) {
                 String fieldName = key.substring(1, key.length() - "_additions_json".length());
-                payload = mergeIntoJsonObject(payload, fieldName, entry.getValue());
+                if (STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName)) {
+                    payload = mergeIntoJsonObject(payload, fieldName, entry.getValue());
+                }
             } else if (key.startsWith("_") && key.endsWith("_json")) {
                 String fieldName = key.substring(1, key.length() - "_json".length());
-                payload = injectTopLevelJsonField(payload, fieldName, entry.getValue());
+                if (STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName)) {
+                    payload = injectTopLevelJsonField(payload, fieldName, entry.getValue());
+                }
             }
         }
         return payload;
