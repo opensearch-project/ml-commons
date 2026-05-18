@@ -53,7 +53,6 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
 
     // Chat-specific constants
     private static final String STOP_REASON_MAX_ITERATIONS = "max_iterations";
-    private static final String STOP_REASON_MAX_TOKENS = "max_tokens";
     private static final String STOP_REASON_END_TURN = "end_turn";
 
     public MLChatAgentRunnerV2(
@@ -184,7 +183,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 .onResponse(
                     new AgentLogicResult(
                         createBudgetExhaustedMessage(tokenBudget.exhaustedMessage(consumedBeforeCall)),
-                        STOP_REASON_MAX_TOKENS,
+                        AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED,
                         accumulatedTokenUsage[0],
                         toolInteractionMessages
                     )
@@ -238,7 +237,6 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
 
                     // Extract assistant message from response using base class method
                     Message assistantMessage = extractAssistantMessage(output, modelProvider);
-                    messages.add(assistantMessage);
 
                     if (tokenBudget.isExhausted(accumulatedTokenUsage[0])) {
                         long consumed = AgentTokenBudget.consumedTokens(accumulatedTokenUsage[0]);
@@ -259,13 +257,15 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                             .onResponse(
                                 new AgentLogicResult(
                                     resultMessage,
-                                    STOP_REASON_MAX_TOKENS,
+                                    AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED,
                                     accumulatedTokenUsage[0],
                                     toolInteractionMessages
                                 )
                             );
                         return;
                     }
+
+                    messages.add(assistantMessage);
 
                     // Check if we should continue the loop
                     if (toolCalls == null || toolCalls.isEmpty()) {

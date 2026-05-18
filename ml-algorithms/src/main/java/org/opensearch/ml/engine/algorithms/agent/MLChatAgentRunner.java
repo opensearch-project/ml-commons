@@ -617,7 +617,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             modelProvider,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
                         );
                         cleanUpResource(tools);
                         return;
@@ -881,7 +882,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             modelProvider,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
                         );
                         cleanUpResource(tools);
                         return;
@@ -1122,15 +1124,45 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    /**
-     * Get agent-level token budget from parameters.
-     * Returns -1 if no budget is configured (unlimited).
-     *
-     * @param params Execution parameters (merged agent + runtime params)
-     * @return Maximum total tokens allowed for the agent execution, or -1 for unlimited
-     */
-    private long getMaxTokensBudget(Map<String, String> params) {
-        return AgentTokenBudget.fromExecutionParams(params).getMaxTokens();
+    private void sendFinalAnswer(
+        String sessionId,
+        ActionListener<Object> listener,
+        String question,
+        String parentInteractionId,
+        boolean verbose,
+        boolean traceDisabled,
+        List<ModelTensors> cotModelTensors,
+        Memory memory,
+        AtomicInteger traceNumber,
+        Map<String, Object> additionalInfo,
+        String finalAnswer,
+        boolean usesUnifiedInterface,
+        List<String> toolInteractions,
+        ModelProvider modelProvider,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage
+    ) {
+        sendFinalAnswer(
+            sessionId,
+            listener,
+            question,
+            parentInteractionId,
+            verbose,
+            traceDisabled,
+            cotModelTensors,
+            memory,
+            traceNumber,
+            additionalInfo,
+            finalAnswer,
+            usesUnifiedInterface,
+            toolInteractions,
+            modelProvider,
+            tokenTracker,
+            tenantId,
+            includeTokenUsage,
+            null
+        );
     }
 
     private void sendFinalAnswer(
@@ -1150,7 +1182,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ModelProvider modelProvider,
         AgentTokenTracker tokenTracker,
         String tenantId,
-        boolean includeTokenUsage
+        boolean includeTokenUsage,
+        String stopReason
     ) {
         // Token tracking: send streaming batch or add to response tensors
         if (streamingWrapper.isStreaming()) {
@@ -1181,7 +1214,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             copyOfFinalAnswer,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            stopReason
                         );
                     }, e -> {
                         log.error("Failed to save assistant response as structured message", e);
@@ -1214,7 +1248,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             copyOfFinalAnswer,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            stopReason
                         );
                     }, e -> {
                         log.error("Failed to save structured messages for AG-UI agent", e);
@@ -1237,7 +1272,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         copyOfFinalAnswer,
                                         tokenTracker,
                                         tenantId,
-                                        includeTokenUsage
+                                        includeTokenUsage,
+                                        stopReason
                                     );
                                 }, e -> { listener.onFailure(e); })
                             );
@@ -1266,7 +1302,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 finalAnswer,
                 tokenTracker,
                 tenantId,
-                includeTokenUsage
+                includeTokenUsage,
+                stopReason
             );
         }
     }
@@ -1433,6 +1470,34 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String tenantId,
         boolean includeTokenUsage
     ) {
+        returnFinalResponse(
+            sessionId,
+            listener,
+            parentInteractionId,
+            verbose,
+            cotModelTensors,
+            additionalInfo,
+            finalAnswer2,
+            tokenTracker,
+            tenantId,
+            includeTokenUsage,
+            null
+        );
+    }
+
+    public static void returnFinalResponse(
+        String sessionId,
+        ActionListener<Object> listener,
+        String parentInteractionId,
+        boolean verbose,
+        List<ModelTensors> cotModelTensors, // AtomicBoolean getFinalAnswer,
+        Map<String, Object> additionalInfo,
+        String finalAnswer2,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage,
+        String stopReason
+    ) {
         cotModelTensors
             .add(
                 ModelTensors.builder().mlModelTensors(List.of(ModelTensor.builder().name("response").result(finalAnswer2).build())).build()
@@ -1445,7 +1510,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     ModelTensor
                         .builder()
                         .name("response")
-                        .dataAsMap(Map.of("response", finalAnswer2, ADDITIONAL_INFO_FIELD, additionalInfo))
+                        .dataAsMap(responseDataMap(finalAnswer2, additionalInfo, stopReason))
                         .build()
                 )
         );
@@ -1456,6 +1521,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
             AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
+    }
+
+    private static Map<String, Object> responseDataMap(String finalAnswer, Map<String, Object> additionalInfo, String stopReason) {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("response", finalAnswer);
+        dataAsMap.put(ADDITIONAL_INFO_FIELD, additionalInfo);
+        if (stopReason != null) {
+            dataAsMap.put("stop_reason", stopReason);
+        }
+        return dataAsMap;
     }
 
     private void handleMaxIterationsReached(
@@ -1507,8 +1582,27 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }, listener::onFailure);
 
         if (tokenBudget.isExhausted(tokenTracker)) {
-            String fallbackResponse = buildMaxIterationsFallbackResponse(maxIterations, lastThought);
-            responseListener.onResponse(fallbackResponse);
+            sendFinalAnswer(
+                sessionId,
+                listener,
+                question,
+                parentInteractionId,
+                verbose,
+                traceDisabled,
+                traceTensors,
+                memory,
+                traceNumber,
+                additionalInfo,
+                tokenBudget.exhaustedMessage(tokenTracker),
+                usesUnifiedInterface,
+                toolInteractions,
+                modelProvider,
+                tokenTracker,
+                tenantId,
+                includeTokenUsage,
+                AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
+            );
+            cleanUpResource(tools);
             return;
         }
 

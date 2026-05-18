@@ -1560,6 +1560,8 @@ public class MLChatAgentRunnerTest {
         List<MLPredictionTaskRequest> requests = capturePredictionRequests();
         assertTrue(requests.size() > 0);
         assertEquals("100", getPredictionParams(requests.get(0)).get("max_tokens"));
+        assertEquals("100", getPredictionParams(requests.get(0)).get("maxTokens"));
+        assertEquals("100", getPredictionParams(requests.get(0)).get("maxOutputTokens"));
     }
 
     @Test
@@ -1592,7 +1594,11 @@ public class MLChatAgentRunnerTest {
 
         assertTrue(requestParams.size() >= 2);
         assertEquals("100", requestParams.get(0).get("max_tokens"));
+        assertEquals("100", requestParams.get(0).get("maxTokens"));
+        assertEquals("100", requestParams.get(0).get("maxOutputTokens"));
         assertEquals("70", requestParams.get(1).get("max_tokens"));
+        assertEquals("70", requestParams.get(1).get("maxTokens"));
+        assertEquals("70", requestParams.get(1).get("maxOutputTokens"));
     }
 
     @Test

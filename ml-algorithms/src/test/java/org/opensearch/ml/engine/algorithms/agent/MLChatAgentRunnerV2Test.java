@@ -274,20 +274,21 @@ public class MLChatAgentRunnerV2Test {
         // Act
         runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
 
-        // Assert: should stop with max_tokens stop reason
+        // Assert: should stop with budget_exhausted stop reason
         ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> resultCaptor = ArgumentCaptor
             .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
         verify(listener, timeout(5000)).onResponse(resultCaptor.capture());
 
         AbstractV2AgentRunner.AgentLogicResult result = resultCaptor.getValue();
         assertNotNull(result);
-        assertEquals("max_tokens", result.stopReason);
+        assertEquals("budget_exhausted", result.stopReason);
         assertNotNull(result.tokenUsage);
         assertEquals(Long.valueOf(150L), result.tokenUsage.getEffectiveTotalTokens());
         assertEquals(
             "Agent execution stopped: token budget exhausted (150/100 tokens used)",
             result.assistantMessage.getContent().getFirst().getText()
         );
+        assertTrue(result.toolInteractionMessages == null || result.toolInteractionMessages.isEmpty());
         verify(tool, never()).run(anyMap(), any());
     }
 
@@ -326,7 +327,11 @@ public class MLChatAgentRunnerV2Test {
 
         List<ActionRequest> requests = requestCaptor.getAllValues();
         assertEquals("100", getRequestParameters(requests.get(0)).get("max_tokens"));
+        assertEquals("100", getRequestParameters(requests.get(0)).get("maxTokens"));
+        assertEquals("100", getRequestParameters(requests.get(0)).get("maxOutputTokens"));
         assertEquals("70", getRequestParameters(requests.get(1)).get("max_tokens"));
+        assertEquals("70", getRequestParameters(requests.get(1)).get("maxTokens"));
+        assertEquals("70", getRequestParameters(requests.get(1)).get("maxOutputTokens"));
     }
 
     @Test
@@ -391,7 +396,7 @@ public class MLChatAgentRunnerV2Test {
     }
 
     @Test
-    public void testExecuteAgentLogic_InvalidMaxTokens_TreatedAsUnlimited() {
+    public void testExecuteAgentLogic_InvalidMaxTokens_Throws() {
         // Arrange: invalid max_tokens value
         Map<String, String> params = new HashMap<>();
         params.put("agent_id", "test-agent");
@@ -407,17 +412,10 @@ public class MLChatAgentRunnerV2Test {
 
         ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
 
-        // Act
-        runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener);
-
-        // Assert: should complete normally (invalid value treated as unlimited)
-        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> resultCaptor = ArgumentCaptor
-            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
-        verify(listener, timeout(5000)).onResponse(resultCaptor.capture());
-
-        AbstractV2AgentRunner.AgentLogicResult result = resultCaptor.getValue();
-        assertNotNull(result);
-        assertEquals("end_turn", result.stopReason);
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> runner.executeAgentLogic(mlAgent, params, conversationHistory, functionCalling, modelProvider, listener)
+        );
     }
 
     // ==================== Helper Methods ====================

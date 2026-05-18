@@ -501,17 +501,6 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         return getDefaultMaxIterations();
     }
 
-    /**
-     * Get agent-level token budget from parameters.
-     * Returns -1 if no budget is configured (unlimited).
-     *
-     * @param params Execution parameters (merged agent + runtime params)
-     * @return Maximum total tokens allowed for the agent execution, or -1 for unlimited
-     */
-    protected long getMaxTokensBudget(Map<String, String> params) {
-        return AgentTokenBudget.fromExecutionParams(params).getMaxTokens();
-    }
-
     protected FunctionCalling getFunctionCalling(MLAgent mlAgent, Map<String, String> params) {
         String llmInterface = params.get(MLChatAgentRunner.LLM_INTERFACE);
         if (llmInterface == null && mlAgent.getParameters() != null) {
