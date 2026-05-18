@@ -5,23 +5,22 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
-
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 import org.opensearch.ml.common.agent.TokenUsage;
 
-import lombok.extern.log4j.Log4j2;
-
-@Log4j2
+/**
+ * Enforces an agent-level token budget for direct agent LLM calls and PER sub-agent executions.
+ * Tool-internal LLM calls, such as calls made inside AgentTool or MLModelTool, are outside this budget.
+ */
 class AgentTokenBudget {
 
     static final String MAX_TOKENS_FIELD = "max_tokens";
     static final String BEDROCK_MAX_TOKENS_FIELD = "maxTokens";
     static final String GEMINI_MAX_OUTPUT_TOKENS_FIELD = "maxOutputTokens";
+    static final String STOP_REASON_BUDGET_EXHAUSTED = "budget_exhausted";
     static final long UNLIMITED = -1L;
 
     private static final List<String> OUTPUT_LIMIT_FIELDS = List
@@ -39,17 +38,20 @@ class AgentTokenBudget {
         }
 
         String maxTokensStr = params.get(MAX_TOKENS_FIELD);
-        if (maxTokensStr != null) {
-            try {
-                long value = Long.parseLong(maxTokensStr);
-                if (value > 0) {
-                    return new AgentTokenBudget(value);
-                }
-            } catch (NumberFormatException e) {
-                log.warn("Invalid max_tokens value: {}", maxTokensStr);
-            }
+        if (maxTokensStr == null) {
+            return unlimited();
         }
-        return unlimited();
+
+        long value;
+        try {
+            value = Long.parseLong(maxTokensStr);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("max_tokens must be a positive long value", e);
+        }
+        if (value <= 0) {
+            throw new IllegalArgumentException("max_tokens must be a positive long value");
+        }
+        return new AgentTokenBudget(value);
     }
 
     static AgentTokenBudget unlimited() {
@@ -107,7 +109,10 @@ class AgentTokenBudget {
             effectiveLimit = Math.min(existingLimit, remaining);
         }
 
-        targetParams.put(outputLimitField(targetParams), Long.toString(effectiveLimit));
+        String effectiveLimitString = Long.toString(effectiveLimit);
+        for (String field : OUTPUT_LIMIT_FIELDS) {
+            targetParams.put(field, effectiveLimitString);
+        }
     }
 
     void applyRemainingToParams(Map<String, String> targetParams, Map<String, String> llmSpecParams, TokenUsage tokenUsage) {
@@ -174,19 +179,4 @@ class AgentTokenBudget {
         }
     }
 
-    private static String outputLimitField(Map<String, String> params) {
-        String llmInterface = params == null ? null : params.get(MLChatAgentRunner.LLM_INTERFACE);
-        if (llmInterface == null) {
-            return MAX_TOKENS_FIELD;
-        }
-
-        String normalized = llmInterface.trim().toLowerCase(Locale.ROOT);
-        if (normalized.startsWith(LLM_INTERFACE_BEDROCK_CONVERSE) || (normalized.contains("bedrock") && normalized.contains("converse"))) {
-            return BEDROCK_MAX_TOKENS_FIELD;
-        }
-        if (normalized.startsWith(LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT) || normalized.contains("gemini")) {
-            return GEMINI_MAX_OUTPUT_TOKENS_FIELD;
-        }
-        return MAX_TOKENS_FIELD;
-    }
 }

@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.HashMap;
@@ -26,11 +27,22 @@ public class AgentTokenBudgetTest {
     }
 
     @Test
-    public void testFromExecutionParams_InvalidZeroNegativeOrMissingAreUnlimited() {
-        assertFalse(AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "invalid")).isLimited());
-        assertFalse(AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "0")).isLimited());
-        assertFalse(AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "-1")).isLimited());
+    public void testFromExecutionParams_MissingIsUnlimited() {
         assertFalse(AgentTokenBudget.fromExecutionParams(Map.of()).isLimited());
+    }
+
+    @Test
+    public void testFromExecutionParams_InvalidExplicitValuesThrow() {
+        assertThrows(IllegalArgumentException.class, () -> AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "invalid")));
+        assertThrows(IllegalArgumentException.class, () -> AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "0")));
+        assertThrows(IllegalArgumentException.class, () -> AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "-1")));
+        assertThrows(IllegalArgumentException.class, () -> AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", " 100 ")));
+        assertThrows(IllegalArgumentException.class, () -> AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "100.5")));
+        assertThrows(IllegalArgumentException.class, () -> AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "1e10")));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "9999999999999999999"))
+        );
     }
 
     @Test
@@ -47,7 +59,7 @@ public class AgentTokenBudgetTest {
     }
 
     @Test
-    public void testApplyRemainingToParams_UsesGenericMaxTokensForOpenAIAndFallback() {
+    public void testApplyRemainingToParams_WritesAllProviderLimitFields() {
         AgentTokenBudget budget = AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "100"));
         Map<String, String> params = new HashMap<>();
         params.put("_llm_interface", "openai/v1/chat/completions");
@@ -55,32 +67,12 @@ public class AgentTokenBudgetTest {
         budget.applyRemainingToParams(params, null, 25L);
 
         assertEquals("75", params.get("max_tokens"));
-    }
-
-    @Test
-    public void testApplyRemainingToParams_UsesBedrockMaxTokens() {
-        AgentTokenBudget budget = AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "100"));
-        Map<String, String> params = new HashMap<>();
-        params.put("_llm_interface", "bedrock/converse/claude");
-
-        budget.applyRemainingToParams(params, null, 25L);
-
         assertEquals("75", params.get("maxTokens"));
-    }
-
-    @Test
-    public void testApplyRemainingToParams_UsesGeminiMaxOutputTokens() {
-        AgentTokenBudget budget = AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "100"));
-        Map<String, String> params = new HashMap<>();
-        params.put("_llm_interface", "gemini/v1beta/generatecontent");
-
-        budget.applyRemainingToParams(params, null, 25L);
-
         assertEquals("75", params.get("maxOutputTokens"));
     }
 
     @Test
-    public void testApplyRemainingToParams_PreservesSmallerExistingLimit() {
+    public void testApplyRemainingToParams_ClampsToSmallerExistingLimit() {
         AgentTokenBudget budget = AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "100"));
         Map<String, String> params = new HashMap<>();
         params.put("_llm_interface", "openai/v1/chat/completions");
@@ -90,6 +82,8 @@ public class AgentTokenBudgetTest {
         budget.applyRemainingToParams(params, llmSpecParams, 10L);
 
         assertEquals("30", params.get("max_tokens"));
+        assertEquals("30", params.get("maxTokens"));
+        assertEquals("30", params.get("maxOutputTokens"));
     }
 
     @Test
@@ -102,5 +96,19 @@ public class AgentTokenBudgetTest {
         budget.applyRemainingToParams(params, null, 75L);
 
         assertEquals("25", params.get("max_tokens"));
+        assertEquals("25", params.get("maxTokens"));
+        assertEquals("25", params.get("maxOutputTokens"));
+    }
+
+    @Test
+    public void testApplyRemainingToParams_RemainingZeroDoesNotWriteUnconstrainedLimit() {
+        AgentTokenBudget budget = AgentTokenBudget.fromExecutionParams(Map.of("max_tokens", "100"));
+        Map<String, String> params = new HashMap<>();
+
+        budget.applyRemainingToParams(params, null, 100L);
+
+        assertFalse(params.containsKey("max_tokens"));
+        assertFalse(params.containsKey("maxTokens"));
+        assertFalse(params.containsKey("maxOutputTokens"));
     }
 }

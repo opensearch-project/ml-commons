@@ -647,6 +647,50 @@ public class AgentTokenTrackerTest {
     }
 
     @Test
+    public void testMergeSubAgentUsage_malformedEntriesAreIgnored() {
+        Map<String, Object> malformedSubModel = new HashMap<>();
+        malformedSubModel.put("model_id", 123);
+        malformedSubModel.put("model_url", 456);
+        malformedSubModel.put("model_name", 789);
+        malformedSubModel.put("call_count", "bad-count");
+
+        Map<String, Object> validSubModel = new HashMap<>();
+        validSubModel.put("model_id", "claude-3");
+        validSubModel.put("model_url", 456);
+        validSubModel.put("model_name", 789);
+        validSubModel.put("input_tokens", 100L);
+        validSubModel.put("call_count", "bad-count");
+
+        Map<String, Object> tokenUsageMap = new HashMap<>();
+        tokenUsageMap.put("per_turn_usage", List.of("bad-turn", Map.of("model_id", "claude-3", "total_tokens", 100L)));
+        tokenUsageMap.put("per_model_usage", List.of("bad-model", malformedSubModel, validSubModel));
+
+        tracker.mergeSubAgentUsage(tokenUsageMap);
+
+        Map<String, Object> output = tracker.toOutputMap();
+        List<Map<String, Object>> perTurn = (List<Map<String, Object>>) output.get("per_turn_usage");
+        assertEquals(1, perTurn.size());
+
+        List<Map<String, Object>> perModel = (List<Map<String, Object>>) output.get("per_model_usage");
+        assertEquals(1, perModel.size());
+        assertEquals("claude-3", perModel.get(0).get("model_id"));
+        assertEquals(1, perModel.get(0).get("call_count"));
+        assertEquals(100L, tracker.getCumulativeTotalTokens());
+    }
+
+    @Test
+    public void testRecordReservedTokens() {
+        tracker.recordReservedTokens("executor", 100L);
+
+        assertEquals(100L, tracker.getCumulativeTotalTokens());
+        Map<String, Object> output = tracker.toOutputMap();
+        List<Map<String, Object>> perModel = (List<Map<String, Object>>) output.get("per_model_usage");
+        assertEquals(1, perModel.size());
+        assertEquals("executor", perModel.get(0).get("model_id"));
+        assertEquals(100L, perModel.get(0).get("total_tokens"));
+    }
+
+    @Test
     public void testSetModelMetadata_nullUrlAndName() {
         tracker.setModelMetadata("model-1", null, null);
 
@@ -715,5 +759,23 @@ public class AgentTokenTrackerTest {
 
         // Should return 0 when effective total is null
         assertEquals(0, tracker.getCumulativeTotalTokens());
+    }
+
+    @Test
+    public void testGetCumulativeTotalTokens_partialInputOnly() {
+        TokenUsage usage = TokenUsage.builder().inputTokens(100L).build();
+
+        tracker.recordTurn("gpt-4", usage);
+
+        assertEquals(100L, tracker.getCumulativeTotalTokens());
+    }
+
+    @Test
+    public void testGetCumulativeTotalTokens_partialOutputOnly() {
+        TokenUsage usage = TokenUsage.builder().outputTokens(50L).build();
+
+        tracker.recordTurn("gpt-4", usage);
+
+        assertEquals(50L, tracker.getCumulativeTotalTokens());
     }
 }
