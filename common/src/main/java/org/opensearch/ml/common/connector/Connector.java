@@ -204,4 +204,8 @@ public interface Connector extends ToXContentObject, Writeable {
     Map<String, String> getDecryptedHeaders();
 
     Map<String, String> getDecryptedCredential();
+
+    default Map<String, String> getHeadersWithRuntimeParameters(Map<String, String> runtimeParameters) {
+        return getDecryptedHeaders();
+    }
 }

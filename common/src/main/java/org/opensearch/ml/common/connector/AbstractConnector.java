@@ -240,6 +240,11 @@ public abstract class AbstractConnector implements Connector {
         function.apply(orderedToDecrypt, tenantId, updateDecryptedCredentialsListener);
     }
 
+    @Override
+    public Map<String, String> getHeadersWithRuntimeParameters(Map<String, String> runtimeParameters) {
+        return substituteHeadersWithRuntimeParameters(getDecryptedHeaders(), runtimeParameters);
+    }
+
     protected abstract Map<String, String> getAllHeaders(String action);
 
 }

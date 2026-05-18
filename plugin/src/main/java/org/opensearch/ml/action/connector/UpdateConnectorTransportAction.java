@@ -127,7 +127,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             if (connector.getActions() != null) {
                                 for (ConnectorAction action : connector.getActions()) {
                                     Map<String, String> headers = action.getHeaders();
-                                    RestActionUtils.validateHeaderSecurity(headers);
+                                    RestActionUtils.validateConnectorHeaders(headers, connector.getProtocol());
                                 }
                             }
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {

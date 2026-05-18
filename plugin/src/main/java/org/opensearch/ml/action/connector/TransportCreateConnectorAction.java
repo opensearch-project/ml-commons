@@ -102,7 +102,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         if (mlCreateConnectorInput.getActions() != null) {
             for (ConnectorAction action : mlCreateConnectorInput.getActions()) {
                 Map<String, String> headers = action.getHeaders();
-                RestActionUtils.validateHeaderSecurity(headers);
+                RestActionUtils.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
             }
         }
         if (mlCreateConnectorInput.getProtocol() != null

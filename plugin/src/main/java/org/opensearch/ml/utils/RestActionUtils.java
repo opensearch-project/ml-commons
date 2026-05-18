@@ -62,6 +62,29 @@ import tools.jackson.databind.ObjectMapper;
 public class RestActionUtils {
 
     private static final Logger logger = LogManager.getLogger(RestActionUtils.class);
+    private static final Pattern PARAMETER_PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{parameters\\.[^}]+\\}");
+    private static final Set<String> BLOCKED_DYNAMIC_HEADERS = Set
+        .of(
+            // Authentication and authorization headers
+            "authorization",
+            "proxy-authorization",
+            "cookie",
+            "x-api-key",
+            "x-auth-token",
+            "x-auth-header",
+            // IP forwarding headers (prevent IP spoofing)
+            "x-forwarded-for",
+            "x-real-ip",
+            "x-client-ip",
+            "cf-connecting-ip",  // Cloudflare
+            "true-client-ip",    // Akamai, Cloudflare
+            "x-originating-ip",
+            // Host and routing headers (prevent SSRF)
+            "host",
+            "x-forwarded-host",
+            "x-forwarded-server",
+            "forwarded"
+        );
 
     public static final String SECURITY_AUTHCZ_ADMIN_DN = "plugins.security.authcz.admin_dn";
 
@@ -388,38 +411,48 @@ public class RestActionUtils {
     }
 
     /**
-     * Validates that authorization-related headers do not use ${parameters.*} placeholders.
-     * This prevents users from overriding authorization via runtime parameters.
+     * Validates connector headers for both security and protocol compatibility.
      *
      * @param headers Connector headers to validate
+     * @param connectorProtocol The connector protocol (e.g., "http", "mcp_sse", "mcp_streamable_http")
      * @throws IllegalArgumentException if validation fails
      */
-    public static void validateHeaderSecurity(Map<String, String> headers) {
+    public static void validateConnectorHeaders(Map<String, String> headers, String connectorProtocol) {
         if (headers == null || headers.isEmpty()) {
             return;
         }
 
-        // Headers that should NOT allow ${parameters.*} substitution
-        Set<String> blockedHeaders = Set
-            .of("authorization", "proxy-authorization", "cookie", "x-api-key", "x-auth-token", "x-auth-header", "host", "x-forwarded-host");
-
-        Pattern parameterPattern = Pattern.compile("\\$\\{parameters\\.[^}]+\\}");
+        boolean isMcpProtocol = connectorProtocol != null && connectorProtocol.toLowerCase(Locale.ROOT).startsWith("mcp");
 
         for (Map.Entry<String, String> entry : headers.entrySet()) {
-            String headerName = entry.getKey().toLowerCase(Locale.ROOT);
             String headerValue = entry.getValue();
+            if (headerValue == null) {
+                continue;
+            }
 
-            if (blockedHeaders.contains(headerName) && headerValue != null) {
-                Matcher matcher = parameterPattern.matcher(headerValue);
-                if (matcher.find()) {
-                    throw new IllegalArgumentException(
-                        String
-                            .format(
-                                "Header '%s' cannot use ${parameters.*} placeholders. Use ${credential.*} instead for sensitive values.",
-                                entry.getKey()
-                            )
-                    );
-                }
+            Matcher matcher = PARAMETER_PLACEHOLDER_PATTERN.matcher(headerValue);
+            if (!matcher.find()) {
+                continue; // No ${parameters.*} placeholder found
+            }
+
+            // MCP connectors cannot use any dynamic parameters in headers
+            if (isMcpProtocol) {
+                throw new IllegalArgumentException(
+                    String.format("Header '%s' cannot use ${parameters.*} placeholders in MCP connectors.", entry.getKey())
+                );
+            }
+
+            // Security validation: check if header is in blocked list
+            String headerName = entry.getKey().toLowerCase(Locale.ROOT);
+            if (BLOCKED_DYNAMIC_HEADERS.contains(headerName)) {
+                throw new IllegalArgumentException(
+                    String
+                        .format(
+                            "Header '%s' cannot use ${parameters.*} placeholders for security reasons. "
+                                + "Use ${credential.*} instead for sensitive values.",
+                            entry.getKey()
+                        )
+                );
             }
         }
     }

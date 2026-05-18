@@ -36,7 +36,6 @@ import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -378,11 +377,8 @@ public class ConnectorUtils {
             .method(method)
             .uri(uri)
             .contentStreamProvider(requestBody.contentStreamProvider());
-        Map<String, String> headers = connector.getDecryptedHeaders();
-        if (connector instanceof AbstractConnector) {
-            headers = ((AbstractConnector) connector).substituteHeadersWithRuntimeParameters(headers, parameters);
-            validateSubstitutedHeaders(headers);
-        }
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
                 builder.putHeader(key, headers.get(key));
@@ -419,11 +415,8 @@ public class ConnectorUtils {
             );
         }
         Request.Builder requestBuilder = new Request.Builder();
-        Map<String, String> headers = connector.getDecryptedHeaders();
-        if (connector instanceof AbstractConnector) {
-            headers = ((AbstractConnector) connector).substituteHeadersWithRuntimeParameters(headers, parameters);
-            validateSubstitutedHeaders(headers);
-        }
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
                 requestBuilder.addHeader(key, headers.get(key));
@@ -550,8 +543,11 @@ public class ConnectorUtils {
                 continue;
 
             // Check for header injection
-            if (value.contains("\r") || value.contains("\n")) {
-                throw new IllegalArgumentException("Header value contains invalid characters (CR/LF)");
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if (c < 0x20 && c != '\t') {
+                    throw new IllegalArgumentException("Header value contains invalid control character");
+                }
             }
 
             // Check per-header size

@@ -1373,7 +1373,7 @@ public class ConnectorUtilsTest {
     @Test
     public void testValidateSubstitutedHeaders_HeaderWithCRLF() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Header value contains invalid characters (CR/LF)");
+        exceptionRule.expectMessage("Header value contains invalid control character");
 
         Map<String, String> headers = new HashMap<>();
         headers.put("X-Request-ID", "value\r\nX-Injected: malicious");
@@ -1384,7 +1384,7 @@ public class ConnectorUtilsTest {
     @Test
     public void testValidateSubstitutedHeaders_HeaderWithCR() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Header value contains invalid characters (CR/LF)");
+        exceptionRule.expectMessage("Header value contains invalid control character");
 
         Map<String, String> headers = new HashMap<>();
         headers.put("X-Request-ID", "value\rmalicious");
@@ -1395,11 +1395,42 @@ public class ConnectorUtilsTest {
     @Test
     public void testValidateSubstitutedHeaders_HeaderWithLF() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Header value contains invalid characters (CR/LF)");
+        exceptionRule.expectMessage("Header value contains invalid control character");
 
         Map<String, String> headers = new HashMap<>();
         headers.put("X-Request-ID", "value\nmalicious");
 
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithNUL() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header value contains invalid control character");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\u0000malicious");
+
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithESC() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header value contains invalid control character");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\u001Bmalicious");
+
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithTab() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\twith\ttabs");
+
+        // Should not throw - tab is allowed
         ConnectorUtils.validateSubstitutedHeaders(headers);
     }
 

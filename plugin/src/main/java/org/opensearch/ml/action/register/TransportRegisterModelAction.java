@@ -389,7 +389,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
         for (ConnectorAction action : registerModelInput.getConnector().getActions()) {
             Map<String, String> headers = action.getHeaders();
-            RestActionUtils.validateHeaderSecurity(headers);
+            RestActionUtils.validateConnectorHeaders(headers, registerModelInput.getConnector().getProtocol());
         }
     }
 
