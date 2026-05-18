@@ -1056,14 +1056,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     ModelTensors
                         .builder()
                         .mlModelTensors(
-                            List
-                                .of(
-                                    ModelTensor
-                                        .builder()
-                                        .name(RESPONSE_FIELD)
-                                        .dataAsMap(responseDataMap(finalResult, stopReason))
-                                        .build()
-                                )
+                            List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(responseDataMap(finalResult, stopReason)).build())
                         )
                         .build()
                 );

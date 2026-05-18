@@ -1505,14 +1505,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         List<ModelTensors> finalModelTensors = createFinalAnswerTensors(
             createModelTensors(sessionId, parentInteractionId),
-            List
-                .of(
-                    ModelTensor
-                        .builder()
-                        .name("response")
-                        .dataAsMap(responseDataMap(finalAnswer2, additionalInfo, stopReason))
-                        .build()
-                )
+            List.of(ModelTensor.builder().name("response").dataAsMap(responseDataMap(finalAnswer2, additionalInfo, stopReason)).build())
         );
         if (verbose) {
             AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId, includeTokenUsage);
