@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
@@ -1420,6 +1421,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         ArgumentCaptor<MLPredictionTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
         verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), requestCaptor.capture(), any());
         assertEquals("100", getPredictionParams(requestCaptor.getValue()).get("max_tokens"));
+        assertEquals("100", getPredictionParams(requestCaptor.getValue()).get("maxTokens"));
+        assertEquals("100", getPredictionParams(requestCaptor.getValue()).get("maxOutputTokens"));
+        assertEquals("100", params.get("max_tokens"));
     }
 
     @Test
@@ -1449,6 +1453,32 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             AgentMLInput agentInput = (AgentMLInput) executeCaptor.getValue().getInput();
             RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
             assertEquals("70", dataSet.getParameters().get("max_tokens"));
+        }
+    }
+
+    @Test
+    public void testTokenBudgetDoesNotDispatchExecutorWhenPlannerExhaustsBudget() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        try (MockedStatic<FunctionCallingFactory> factoryMock = mockStatic(FunctionCallingFactory.class)) {
+            FunctionCalling mockFunctionCalling = mock(FunctionCalling.class);
+            when(mockFunctionCalling.extractTokenUsage(any())).thenReturn(TokenUsage.builder().totalTokens(100L).build());
+            factoryMock.when(() -> FunctionCallingFactory.create(anyString())).thenReturn(mockFunctionCalling);
+
+            mockPlannerStepResponse();
+            mockMemoryUpdates();
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test question");
+            params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent");
+            params.put("_llm_interface", "openai/v1/chat/completions");
+            params.put("max_tokens", "100");
+            params.put("max_steps", "5");
+
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+            verify(client, never()).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+            verify(agentActionListener).onResponse(any());
         }
     }
 

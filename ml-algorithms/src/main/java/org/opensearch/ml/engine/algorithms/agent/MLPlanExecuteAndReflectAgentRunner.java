@@ -501,12 +501,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 parentInteractionId,
                 allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
-                tokenBudget.exhaustedMessage(tokenTracker) + ". Completed steps: " + completedSteps,
+                tokenBudget.exhaustedMessage(tokenTracker) + ". Completed steps:\n" + formatCompletedSteps(completedSteps),
                 null,
                 finalListener,
                 tokenTracker,
                 allParams.get(TENANT_ID_FIELD),
-                includeTokenUsage
+                includeTokenUsage,
+                AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
             );
             return;
         }
@@ -544,13 +545,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         }
 
-        tokenBudget.applyRemainingToParams(allParams, llm.getParameters(), tokenTracker);
+        Map<String, String> requestParams = new HashMap<>(allParams);
+        tokenBudget.applyRemainingToParams(requestParams, llm.getParameters(), tokenTracker);
         request = new MLPredictionTaskRequest(
             llm.getModelId(),
             RemoteInferenceMLInput
                 .builder()
                 .algorithm(FunctionName.REMOTE)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(allParams).build())
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(requestParams).build())
                 .build(),
             null,
             allParams.get(TENANT_ID_FIELD)
@@ -593,12 +595,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     parentInteractionId,
                     allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                     allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
-                    tokenBudget.exhaustedMessage(consumed) + ". Completed steps: " + completedSteps,
+                    tokenBudget.exhaustedMessage(consumed) + ". Completed steps:\n" + formatCompletedSteps(completedSteps),
                     null,
                     finalListener,
                     tokenTracker,
                     allParams.get(TENANT_ID_FIELD),
-                    includeTokenUsage
+                    includeTokenUsage,
+                    AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
                 );
                 return;
             }
@@ -650,8 +653,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 }
                 // Mark sub-agent so its token tracker suppresses logging (parent logs merged totals)
                 reactParams.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "true");
+                long subAgentBudget = tokenBudget.remaining(tokenTracker);
                 if (tokenBudget.isLimited()) {
-                    reactParams.put(AgentTokenBudget.MAX_TOKENS_FIELD, Long.toString(tokenBudget.remaining(tokenTracker)));
+                    if (subAgentBudget <= 0) {
+                        boolean includeTokenUsage = Boolean.parseBoolean(allParams.getOrDefault(AgentUtils.INCLUDE_TOKEN_USAGE, "false"));
+                        saveAndReturnFinalResult(
+                            memory,
+                            parentInteractionId,
+                            allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
+                            allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
+                            tokenBudget.exhaustedMessage(tokenTracker) + ". Completed steps:\n" + formatCompletedSteps(completedSteps),
+                            null,
+                            finalListener,
+                            tokenTracker,
+                            allParams.get(TENANT_ID_FIELD),
+                            includeTokenUsage,
+                            AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
+                        );
+                        return;
+                    }
+                    reactParams.put(AgentTokenBudget.MAX_TOKENS_FIELD, Long.toString(subAgentBudget));
                 }
 
                 AgentMLInput agentInput = AgentMLInput
@@ -760,12 +781,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             parentInteractionId,
                             allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                             allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
-                            tokenBudget.exhaustedMessage(tokenTracker) + ". Completed steps: " + completedSteps,
+                            tokenBudget.exhaustedMessage(tokenTracker) + ". Completed steps:\n" + formatCompletedSteps(completedSteps),
                             null,
                             finalListener,
                             tokenTracker,
                             allParams.get(TENANT_ID_FIELD),
-                            includeTokenUsage
+                            includeTokenUsage,
+                            AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
                         );
                         return;
                     }
@@ -801,6 +823,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     String agentId = allParams.getOrDefault(AGENT_ID_LOG_FIELD, "unknown");
                     String tenantIdLog = allParams.get(TENANT_ID_FIELD);
                     log.error("Failed to execute ReAct agent. agentId={}, tenantId={}", agentId, tenantIdLog, e);
+                    if (tokenBudget.isLimited()) {
+                        tokenTracker.recordReservedTokens(reActAgentId, subAgentBudget);
+                    }
                     finalListener.onFailure(e);
                 }));
             }
@@ -937,6 +962,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         allParams.put(field, String.join(", ", steps));
     }
 
+    private static String formatCompletedSteps(List<String> completedSteps) {
+        return completedSteps == null || completedSteps.isEmpty() ? "" : String.join("\n", completedSteps);
+    }
+
     @VisibleForTesting
     void saveAndReturnFinalResult(
         Memory memory,
@@ -949,6 +978,34 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         AgentTokenTracker tokenTracker,
         String tenantId,
         boolean includeTokenUsage
+    ) {
+        saveAndReturnFinalResult(
+            memory,
+            parentInteractionId,
+            reactAgentMemoryId,
+            reactParentInteractionId,
+            finalResult,
+            input,
+            finalListener,
+            tokenTracker,
+            tenantId,
+            includeTokenUsage,
+            null
+        );
+    }
+
+    private void saveAndReturnFinalResult(
+        Memory memory,
+        String parentInteractionId,
+        String reactAgentMemoryId,
+        String reactParentInteractionId,
+        String finalResult,
+        String input,
+        ActionListener<Object> finalListener,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean includeTokenUsage,
+        String stopReason
     ) {
         if (memory != null) {
             Map<String, Object> updateContent = new HashMap<>();
@@ -970,7 +1027,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         ModelTensors
                             .builder()
                             .mlModelTensors(
-                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                                List
+                                    .of(
+                                        ModelTensor
+                                            .builder()
+                                            .name(RESPONSE_FIELD)
+                                            .dataAsMap(responseDataMap(finalResult, stopReason))
+                                            .build()
+                                    )
                             )
                             .build()
                     );
@@ -992,13 +1056,29 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     ModelTensors
                         .builder()
                         .mlModelTensors(
-                            List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                            List
+                                .of(
+                                    ModelTensor
+                                        .builder()
+                                        .name(RESPONSE_FIELD)
+                                        .dataAsMap(responseDataMap(finalResult, stopReason))
+                                        .build()
+                                )
                         )
                         .build()
                 );
             AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
             finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
+    }
+
+    private static Map<String, Object> responseDataMap(String finalResult, String stopReason) {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put(RESPONSE_FIELD, finalResult);
+        if (stopReason != null) {
+            dataAsMap.put("stop_reason", stopReason);
+        }
+        return dataAsMap;
     }
 
     @VisibleForTesting
@@ -1036,17 +1116,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         return taskUpdates;
     }
 
-    /**
-     * Get agent-level token budget from parameters.
-     * Returns -1 if no budget is configured (unlimited).
-     *
-     * @param params Execution parameters (merged agent + runtime params)
-     * @return Maximum total tokens allowed for the agent execution, or -1 for unlimited
-     */
-    private long getMaxTokensBudget(Map<String, String> params) {
-        return AgentTokenBudget.fromExecutionParams(params).getMaxTokens();
-    }
-
     private void handleMaxStepsReached(
         LLMSpec llm,
         Map<String, String> allParams,
@@ -1078,7 +1147,19 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }, finalListener::onFailure);
 
         if (tokenBudget.isExhausted(tokenTracker)) {
-            responseListener.onResponse(tokenBudget.exhaustedMessage(tokenTracker) + ". Completed steps: " + completedSteps);
+            saveAndReturnFinalResult(
+                memory,
+                parentInteractionId,
+                allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
+                allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
+                tokenBudget.exhaustedMessage(tokenTracker) + ". Completed steps:\n" + formatCompletedSteps(completedSteps),
+                null,
+                finalListener,
+                tokenTracker,
+                allParams.get(TENANT_ID_FIELD),
+                includeTokenUsage,
+                AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED
+            );
             return;
         }
 
