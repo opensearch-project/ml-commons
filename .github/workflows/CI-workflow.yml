@@ -104,6 +104,48 @@ jobs:
           if-no-files-found: error
 
 
+  IntegTest-Coverage-linux:
+    needs: [Get-CI-Image-Tag, spotless]
+    strategy:
+      matrix:
+        java: [21]
+
+    name: IntegTest Coverage on linux (single-node)
+    if: github.repository == 'opensearch-project/ml-commons'
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-version-linux }}
+      options: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-start-options }}
+
+    steps:
+      - name: Run start commands
+        run: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-start-command }}
+      - name: Setup Java ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+
+      - name: Checkout MLCommons
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Build and Run Single-Node IntegTest with Coverage
+        run: |
+          chown -R 1000:1000 `pwd`
+          su `id -un 1000` -c 'whoami && java -version &&
+                               ./gradlew build "-Pcrypto.standard=FIPS-140-3" -x spotlessJava &&
+                               ./gradlew :opensearch-ml-plugin:integTest "-Pcrypto.standard=FIPS-140-3" -x spotlessJava --continue || true &&
+                               ./gradlew :opensearch-ml-plugin:jacocoIntegTestReport "-Pcrypto.standard=FIPS-140-3" -x spotlessJava'
+
+      - name: Upload IntegTest Coverage Report
+        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457  # v3
+        with:
+          flags: ml-commons-integtest
+          files: plugin/build/reports/jacoco/integTest/jacocoIntegTestReport.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   Test-ml-linux-docker:
     needs: [Get-Require-Approval, Build-ml-linux, spotless]
     strategy:
