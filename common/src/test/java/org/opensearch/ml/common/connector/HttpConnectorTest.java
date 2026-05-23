@@ -783,8 +783,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_WithToolConfigJson_IsInjected() {
         // "toolConfig" is in STRUCTURED_OUTPUT_ALLOWED_FIELDS for Bedrock Converse structured output
-        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\","
-            + "\"text\":\"${parameters.input}\"}]}]}";
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\"," + "\"text\":\"${parameters.input}\"}]}]}";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");

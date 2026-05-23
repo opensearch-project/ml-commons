@@ -1002,10 +1002,7 @@ public class MemoryProcessingServiceTests {
 
             // Verify that the JSON enforcement message is included in the user_prompt
             assertNotNull("user_prompt should not be null", userPrompt);
-            assertTrue(
-                "JSON enforcement message should be included",
-                userPrompt.contains(JSON_ENFORCEMENT_SENTINEL)
-            );
+            assertTrue("JSON enforcement message should be included", userPrompt.contains(JSON_ENFORCEMENT_SENTINEL));
 
             // Mock successful response
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
@@ -1168,15 +1165,22 @@ public class MemoryProcessingServiceTests {
         // The result path override must be stripped from predict parameters and used for extraction.
         doAnswer(invocation -> {
             ActionListener<Map<String, String>> l = invocation.getArgument(1);
-            l.onResponse(new HashMap<>(Map.of(
-                "_toolConfig_json", FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON,
-                "_structured_output_result_path", BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH
-            )));
+            l
+                .onResponse(
+                    new HashMap<>(
+                        Map
+                            .of(
+                                "_toolConfig_json",
+                                FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON,
+                                "_structured_output_result_path",
+                                BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH
+                            )
+                    )
+                );
             return null;
         }).when(memoryContainerHelper).getStructuredOutputParameters(eq("llm-model-123"), any());
 
-        List<MessageInput> messages = Arrays
-            .asList(MessageInput.builder().content(createTestContent("I use Java")).role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("I use Java")).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -1185,10 +1189,11 @@ public class MemoryProcessingServiceTests {
             RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
             Map<String, String> parameters = dataset.getParameters();
 
-            assertTrue("_toolConfig_json must be present for Bedrock structured output",
-                parameters.containsKey("_toolConfig_json"));
-            assertFalse("_structured_output_result_path must be stripped before predict call",
-                parameters.containsKey("_structured_output_result_path"));
+            assertTrue("_toolConfig_json must be present for Bedrock structured output", parameters.containsKey("_toolConfig_json"));
+            assertFalse(
+                "_structured_output_result_path must be stripped before predict call",
+                parameters.containsKey("_structured_output_result_path")
+            );
 
             // Simulate Bedrock Converse tool-use response: toolUse.input is a pre-parsed Map
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
@@ -1206,12 +1211,15 @@ public class MemoryProcessingServiceTests {
             Map<String, Object> dataAsMap = new HashMap<>();
             dataAsMap.put("output", output);
             List<ModelTensors> mlModelOutputs = new ArrayList<>();
-            mlModelOutputs.add(ModelTensors.builder()
-                .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
-                .build());
-            actionListener.onResponse(
-                MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build()).build()
-            );
+            mlModelOutputs
+                .add(
+                    ModelTensors
+                        .builder()
+                        .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                        .build()
+                );
+            actionListener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build()).build());
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 

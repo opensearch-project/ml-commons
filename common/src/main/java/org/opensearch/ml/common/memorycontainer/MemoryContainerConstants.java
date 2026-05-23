@@ -296,8 +296,7 @@ public class MemoryContainerConstants {
 
     // JsonPath to the facts object in a Bedrock Converse tool-use response.
     // Used by MemoryProcessingService when structured output is active for Bedrock connectors.
-    public static final String BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH =
-        "$.output.message.content[0].toolUse.input";
+    public static final String BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH = "$.output.message.content[0].toolUse.input";
 
     public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
         """

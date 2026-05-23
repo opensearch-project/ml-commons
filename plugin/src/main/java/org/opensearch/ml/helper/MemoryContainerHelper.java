@@ -9,8 +9,8 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON;
@@ -599,12 +599,14 @@ public class MemoryContainerHelper {
         // content[0].toolUse.input rather than content[0].text, so a result path override is returned
         // alongside the schema. MemoryProcessingService strips the override key before the predict call.
         if (hostHasSegment(host, URL_TOKEN_AMAZONAWS) && pathHasSegment(path, URL_TOKEN_CONVERSE_SEGMENT)) {
-            return Map.of(
-                "_toolConfig_json", FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON,
-                "_structured_output_result_path", BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH
-            );
+            return Map
+                .of(
+                    "_toolConfig_json",
+                    FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON,
+                    "_structured_output_result_path",
+                    BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH
+                );
         }
-        // Anthropic direct API is not yet supported — see follow-up issues.
         if (hostHasSegment(host, URL_TOKEN_GOOGLEAPIS)) {
             return Map.of("_generationConfig_additions_json", FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON);
         }
@@ -623,7 +625,8 @@ public class MemoryContainerHelper {
         // (requires admin access), so an unintended match only results in an extra response_format
         // field being sent. Note: if the upstream provider rejects the extra field with a 4xx,
         // that surfaces as a failed predict call, not a silent fallback.
-        if (hostHasSegment(host, URL_TOKEN_OPENAI) || pathHasSegment(path, URL_TOKEN_OPENAI)
+        if (hostHasSegment(host, URL_TOKEN_OPENAI)
+            || pathHasSegment(path, URL_TOKEN_OPENAI)
             || hostHasSegment(host, URL_TOKEN_DEEPSEEK)
             || path.contains(URL_TOKEN_OPENAI_COMPAT_PATH)) {
             return Map.of("_response_format_json", FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON);
@@ -633,14 +636,16 @@ public class MemoryContainerHelper {
 
     private static boolean hostHasSegment(String host, String segment) {
         for (String label : host.split("\\.", -1)) {
-            if (label.equals(segment)) return true;
+            if (label.equals(segment))
+                return true;
         }
         return false;
     }
 
     private static boolean pathHasSegment(String path, String segment) {
         for (String seg : path.split("/", -1)) {
-            if (seg.equals(segment)) return true;
+            if (seg.equals(segment))
+                return true;
         }
         return false;
     }

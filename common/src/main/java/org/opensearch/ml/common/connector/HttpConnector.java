@@ -395,16 +395,19 @@ public class HttpConnector extends AbstractConnector {
     // Note: matched parameters are read but not removed from the map.
     private String injectStructuredOutputParams(Map<String, String> parameters, String payload) {
         JsonElement parsed = JsonParser.parseString(payload);
-        if (!parsed.isJsonObject()) return payload;
+        if (!parsed.isJsonObject())
+            return payload;
         JsonObject body = parsed.getAsJsonObject();
         boolean modified = false;
 
         // Pass 1: _<field>_json — inject or replace a top-level field
         for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            if (entry.getKey().endsWith("_additions_json")) continue;
+            if (entry.getKey().endsWith("_additions_json"))
+                continue;
             String fieldName = allowedFieldName(entry.getKey(), "_json");
             JsonObject value = asJsonObject(entry.getValue());
-            if (fieldName == null || value == null) continue;
+            if (fieldName == null || value == null)
+                continue;
             body.add(fieldName, value);
             modified = true;
         }
@@ -413,7 +416,8 @@ public class HttpConnector extends AbstractConnector {
         for (Map.Entry<String, String> entry : parameters.entrySet()) {
             String fieldName = allowedFieldName(entry.getKey(), "_additions_json");
             JsonObject additions = asJsonObject(entry.getValue());
-            if (fieldName == null || additions == null) continue;
+            if (fieldName == null || additions == null)
+                continue;
             JsonObject target = body.has(fieldName) && body.get(fieldName).isJsonObject()
                 ? body.getAsJsonObject(fieldName)
                 : new JsonObject();
@@ -427,16 +431,19 @@ public class HttpConnector extends AbstractConnector {
 
     /** Returns the allowlisted field name encoded in a _&lt;field&gt;_&lt;suffix&gt; key, or null if invalid. */
     private static String allowedFieldName(String key, String suffix) {
-        if (!key.startsWith("_") || !key.endsWith(suffix)) return null;
+        if (!key.startsWith("_") || !key.endsWith(suffix))
+            return null;
         int end = key.length() - suffix.length();
-        if (end <= 1) return null;
+        if (end <= 1)
+            return null;
         String fieldName = key.substring(1, end);
         return STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName) ? fieldName : null;
     }
 
     /** Parses a JSON string as an object, returning null if absent, invalid, or not an object. */
     private static JsonObject asJsonObject(String json) {
-        if (json == null || !isJson(json)) return null;
+        if (json == null || !isJson(json))
+            return null;
         JsonElement el = JsonParser.parseString(json);
         return el.isJsonObject() ? el.getAsJsonObject() : null;
     }

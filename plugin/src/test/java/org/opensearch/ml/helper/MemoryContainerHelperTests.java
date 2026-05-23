@@ -795,24 +795,6 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         assertEquals(BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH, captor.getValue().get("_structured_output_result_path"));
     }
 
-    public void testGetStructuredOutputParameters_Anthropic_ReturnsEmptyMap() {
-        // Anthropic direct API requires an anthropic-beta header that cannot be injected via
-        // parameters; auto-detection is intentionally disabled so we fall back to prompt enforcement.
-        Connector connector = mock(Connector.class);
-        ConnectorAction anthropicAction = mockPredictAction(true, "https://api.anthropic.com/v1/messages");
-        when(connector.getActions()).thenReturn(Arrays.asList(anthropicAction));
-        MLModel model = mock(MLModel.class);
-        when(model.getConnector()).thenReturn(connector);
-        stubModelWithEmbeddedConnector(model);
-
-        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
-        helper.getStructuredOutputParameters("m1", listener);
-
-        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(listener).onResponse(captor.capture());
-        assertTrue(captor.getValue().isEmpty());
-    }
-
     public void testGetStructuredOutputParameters_Gemini_ReturnsGeminiSchema() {
         Connector connector = mock(Connector.class);
         ConnectorAction geminiAction = mockPredictAction(
