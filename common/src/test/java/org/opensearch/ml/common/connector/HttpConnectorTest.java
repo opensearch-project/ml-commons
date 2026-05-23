@@ -381,26 +381,34 @@ public class HttpConnectorTest {
     }
 
     public static HttpConnector createHttpConnectorWithRequestBody(String requestBody) {
-        ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
-        String name = null;
-        String method = "POST";
-        String url = "https://test.com";
-        Map<String, String> headers = new HashMap<>();
-        headers.put("api_key", "${credential.key}");
-        String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
-        String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
-
         ConnectorAction action = new ConnectorAction(
-            actionType,
-            name,
-            method,
-            url,
-            headers,
+            ConnectorAction.ActionType.PREDICT,
+            null,
+            "POST",
+            "https://test.com",
+            Map.of("api_key", "${credential.key}"),
             requestBody,
-            preProcessFunction,
-            postProcessFunction
+            MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
+            MLPostProcessFunction.OPENAI_EMBEDDING
         );
+        return buildConnector(action);
+    }
 
+    /** Creates a connector whose PREDICT action has {@code supports_structured_output: true}. */
+    public static HttpConnector createHttpConnectorWithStructuredOutputEnabled(String requestBody) {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://test.com")
+            .headers(Map.of("api_key", "${credential.key}"))
+            .requestBody(requestBody)
+            .supportsStructuredOutput(true)
+            .build();
+        return buildConnector(action);
+    }
+
+    private static HttpConnector buildConnector(ConnectorAction action) {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
 
@@ -409,7 +417,7 @@ public class HttpConnectorTest {
 
         ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30, 30, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
 
-        HttpConnector connector = HttpConnector
+        return HttpConnector
             .builder()
             .name("test_connector_name")
             .description("this is a test connector")
@@ -422,7 +430,6 @@ public class HttpConnectorTest {
             .accessMode(AccessMode.PUBLIC)
             .connectorClientConfig(httpClientConfig)
             .build();
-        return connector;
     }
 
     @Test
@@ -647,7 +654,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_WithResponseFormatJson_MergesIntoPayload() {
         String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "Hello");
         parameters
@@ -669,7 +676,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_WithoutResponseFormatJson_NoResponseFormatField() {
         String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "Hello");
 
@@ -682,7 +689,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_ResponseFormatJson_IsJsonObjectNotString() {
         String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters.put("_response_format_json", "{\"type\":\"json_object\"}");
@@ -697,7 +704,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_ResponseFormatJson_InvalidJson_IgnoresParameter() {
         String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters.put("_response_format_json", "not-valid-json");
@@ -711,7 +718,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_ResponseFormatJson_JsonArray_IgnoresParameter() {
         String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters.put("_response_format_json", "[\"not\", \"an\", \"object\"]");
@@ -729,7 +736,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_WithDisallowedField_IsNotInjected() {
         String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         // "model" is not in STRUCTURED_OUTPUT_ALLOWED_FIELDS — must be silently ignored
@@ -744,7 +751,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_WithAllowedCamelCaseField_IsInjected() {
         String requestBody = "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"${parameters.input}\"}]}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         // "generationConfig" is in STRUCTURED_OUTPUT_ALLOWED_FIELDS — camelCase field must be injected
@@ -761,7 +768,7 @@ public class HttpConnectorTest {
     public void createPayload_WithGenerationConfigAdditionsJson_MergesIntoExistingField() {
         String requestBody = "{\"generationConfig\":{\"maxOutputTokens\":1024},\"contents\":[{\"role\":\"user\","
             + "\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters
@@ -784,7 +791,7 @@ public class HttpConnectorTest {
     public void createPayload_WithToolConfigJson_IsInjected() {
         // "toolConfig" is in STRUCTURED_OUTPUT_ALLOWED_FIELDS for Bedrock Converse structured output
         String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\"," + "\"text\":\"${parameters.input}\"}]}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters.put("_toolConfig_json", "{\"toolChoice\":{\"tool\":{\"name\":\"extract_facts\"}}}");
@@ -799,7 +806,7 @@ public class HttpConnectorTest {
     @Test
     public void createPayload_WithGenerationConfigAdditionsJson_CreatesFieldIfAbsent() {
         String requestBody = "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters.put("_generationConfig_additions_json", "{\"responseMimeType\":\"application/json\"}");
@@ -821,7 +828,7 @@ public class HttpConnectorTest {
         // Payload is a JSON array, not an object — structured output injection must be skipped
         // without throwing IllegalStateException from getAsJsonObject().
         String requestBody = "[{\"role\":\"user\",\"content\":\"hello\"}]";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("_response_format_json", "{\"type\":\"json_object\"}");
 
@@ -836,7 +843,7 @@ public class HttpConnectorTest {
         // Keys exactly "_additions_json" or "_json" produce an empty field name after slicing —
         // must be silently ignored, not throw StringIndexOutOfBoundsException.
         String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":\"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters.put("_additions_json", "{\"type\":\"json_object\"}");
@@ -853,7 +860,7 @@ public class HttpConnectorTest {
         // When _response_format_json (replace) and _response_format_additions_json (merge) are both
         // present, the replace pass runs first; the merge then merges into the replaced value.
         String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":\"${parameters.input}\"}]}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
         parameters.put("_response_format_json", "{\"type\":\"json_schema\"}");

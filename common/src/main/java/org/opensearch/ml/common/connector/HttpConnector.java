@@ -378,7 +378,7 @@ public class HttpConnector extends AbstractConnector {
                     payload = jsonObject.toString();
                 }
             }
-            if (parameters != null && isJson(payload)) {
+            if (parameters != null && isJson(payload) && connectorAction.get().isSupportsStructuredOutput()) {
                 payload = injectStructuredOutputParams(parameters, payload);
             }
             return (T) payload;
