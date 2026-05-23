@@ -930,6 +930,62 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
     }
 
+    public void testGetStructuredOutputParameters_AzureTemplateUrl_ReturnsOpenAISchema() {
+        // Azure connector URLs use ${parameters.endpoint} as the host, so "openai" only appears
+        // in the path (/openai/deployments/...) — verified via path segment matching.
+        Connector connector = mock(Connector.class);
+        ConnectorAction azureTemplateAction = mockPredictAction(
+            true,
+            "https://${parameters.endpoint}/openai/deployments/${parameters.deploy-name}/chat/completions"
+        );
+        when(connector.getActions()).thenReturn(Arrays.asList(azureTemplateAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
+    }
+
+    public void testGetStructuredOutputParameters_SubstringInHostLabel_ReturnsEmptyMap() {
+        // "my-openai-proxy" is a single host label — it does not equal the "openai" token,
+        // so token-based matching must not mis-route it.
+        Connector connector = mock(Connector.class);
+        ConnectorAction proxyAction = mockPredictAction(true, "https://my-openai-proxy.internal/api/chat");
+        when(connector.getActions()).thenReturn(Arrays.asList(proxyAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_OpenAIInQueryParam_ReturnsEmptyMap() {
+        // "openai" appearing only in the query string must not trigger a match.
+        Connector connector = mock(Connector.class);
+        ConnectorAction queryAction = mockPredictAction(true, "https://custom.proxy.internal/api/chat?source=openai");
+        when(connector.getActions()).thenReturn(Arrays.asList(queryAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
     public void testGetStructuredOutputParameters_UnknownUrl_ReturnsEmptyMap() {
         Connector connector = mock(Connector.class);
         ConnectorAction unknownAction = mockPredictAction(true, "https://custom.internal.llm/api/chat");

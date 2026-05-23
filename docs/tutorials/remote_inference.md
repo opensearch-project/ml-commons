@@ -74,7 +74,7 @@ A connector consists of 7 parts
     * `request_body`: string, http request body template, User can use `${parameters.<key>}` to use variables defined in `parameters`.
     * `pre_process_function`: string: painless script, pre-process the input data. We have built-in pre-process functions for cohere and openAI embedding models connector.pre_process.cohere.embedding and connector.pre_process.openai.embedding. You can also writer your own functions.
     * `post_process_function`: string: painless script, post-process the model output data. We have built-in post-process functions for cohere and openAI embedding models connector.post_process.cohere.embedding and connector.post_process.openai.embedding. You can also writer your own functions.
-    * `supports_structured_output`: boolean (default `false`). When `true`, agentic memory will inject provider-specific JSON schema parameters into fact-extraction requests so the provider enforces output structure at the token level. Supported for OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere v2, and Google Gemini/Vertex AI connectors.
+    * `supports_structured_output`: boolean (default `false`). When `true`, agentic memory will inject provider-specific JSON schema parameters into fact-extraction requests so the provider enforces output structure at the token level. Supported for OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere v2, and Google Gemini/Vertex AI connectors. For unsupported providers the flag is ignored and no schema parameters are injected; fact extraction falls back to being enforced at the prompting level.
 
 ## connector settings
 ### connector access control

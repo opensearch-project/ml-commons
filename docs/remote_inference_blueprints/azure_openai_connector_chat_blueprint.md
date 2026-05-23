@@ -17,6 +17,8 @@ PUT /_cluster/settings
 
 Refer to [Azure OpenAI Service REST API reference - Chat Completion](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions).
 
+> **Note:** `supports_structured_output: true` enables JSON schema enforcement for agentic memory fact extraction. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
+
 If you are using self-managed Opensearch, you should supply OpenAI API key:
 
 

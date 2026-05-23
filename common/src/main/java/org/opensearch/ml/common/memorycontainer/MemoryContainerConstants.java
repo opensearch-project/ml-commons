@@ -258,7 +258,8 @@ public class MemoryContainerConstants {
                         "items": {"type": "string"}
                     }
                 },
-                "required": ["facts"]
+                "required": ["facts"],
+                "additionalProperties": false
             }
         }""";
 
