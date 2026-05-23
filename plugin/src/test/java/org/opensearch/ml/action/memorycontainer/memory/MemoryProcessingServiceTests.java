@@ -94,8 +94,8 @@ public class MemoryProcessingServiceTests {
         testContent = createTestContent("Hello");
         when(memoryConfig.getParameters()).thenReturn(new HashMap<>());
         doAnswer(invocation -> {
-            ActionListener<Map<String, String>> l = invocation.getArgument(1);
-            l.onResponse(Map.of());
+            ActionListener<Map<String, String>> listener = invocation.getArgument(1);
+            listener.onResponse(Map.of());
             return null;
         }).when(memoryContainerHelper).getStructuredOutputParameters(any(), any());
         // Mock the getLlmResultPath to return the default path
