@@ -1,5 +1,7 @@
 # Bedrock connector blueprint example for Converse
 
+> **Note:** `supports_structured_output: true` enables JSON schema enforcement for agentic memory fact extraction. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
+
 ## 1. Add connector endpoint to trusted URLs:
 
 Note: no need to do this after 2.11.0
@@ -41,6 +43,7 @@ POST /_plugins/_ml/connectors/_create
         {
             "action_type": "predict",
             "method": "POST",
+            "supports_structured_output": true,
             "headers": {
                 "content-type": "application/json"
             },
@@ -74,6 +77,7 @@ POST /_plugins/_ml/connectors/_create
         {
             "action_type": "predict",
             "method": "POST",
+            "supports_structured_output": true,
             "headers": {
                 "content-type": "application/json"
             },

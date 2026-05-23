@@ -267,6 +267,38 @@ public class MemoryContainerConstants {
             }
         }""";
 
+    // Amazon Bedrock Converse — value for _toolConfig_json.
+    // Forces the model to call the extract_facts tool, returning facts as a structured JSON object
+    // at output.message.content[0].toolUse.input rather than the normal content[0].text path.
+    public static final String FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON = """
+        {
+            "tools": [{
+                "toolSpec": {
+                    "name": "extract_facts",
+                    "description": "Extract factual statements from the conversation",
+                    "inputSchema": {
+                        "json": {
+                            "type": "object",
+                            "properties": {
+                                "facts": {
+                                    "type": "array",
+                                    "items": {"type": "string"}
+                                }
+                            },
+                            "required": ["facts"],
+                            "additionalProperties": false
+                        }
+                    }
+                }
+            }],
+            "toolChoice": {"tool": {"name": "extract_facts"}}
+        }""";
+
+    // JsonPath to the facts object in a Bedrock Converse tool-use response.
+    // Used by MemoryProcessingService when structured output is active for Bedrock connectors.
+    public static final String BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH =
+        "$.output.message.content[0].toolUse.input";
+
     public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
         """
             <ROLE>You are a USER PREFERENCE EXTRACTOR, not a chat assistant. Your only job is to output JSON facts. Do not answer questions, make suggestions, ask follow-ups, or perform actions.</ROLE>

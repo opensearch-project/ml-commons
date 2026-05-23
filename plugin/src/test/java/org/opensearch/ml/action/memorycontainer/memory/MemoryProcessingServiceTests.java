@@ -18,6 +18,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_SENTINEL;
@@ -1158,6 +1160,67 @@ public class MemoryProcessingServiceTests {
         memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFacts_BedrockConverseStructuredOutput_UsesToolUseResultPath() {
+        // Bedrock Converse tool-use response arrives at toolUse.input (a Map), not content[0].text.
+        // The result path override must be stripped from predict parameters and used for extraction.
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> l = invocation.getArgument(1);
+            l.onResponse(new HashMap<>(Map.of(
+                "_toolConfig_json", FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON,
+                "_structured_output_result_path", BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH
+            )));
+            return null;
+        }).when(memoryContainerHelper).getStructuredOutputParameters(eq("llm-model-123"), any());
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("I use Java")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+            Map<String, String> parameters = dataset.getParameters();
+
+            assertTrue("_toolConfig_json must be present for Bedrock structured output",
+                parameters.containsKey("_toolConfig_json"));
+            assertFalse("_structured_output_result_path must be stripped before predict call",
+                parameters.containsKey("_structured_output_result_path"));
+
+            // Simulate Bedrock Converse tool-use response: toolUse.input is a pre-parsed Map
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            Map<String, Object> toolUseInput = new HashMap<>();
+            toolUseInput.put("facts", List.of("User programs in Java"));
+            Map<String, Object> toolUse = new HashMap<>();
+            toolUse.put("name", "extract_facts");
+            toolUse.put("input", toolUseInput);
+            Map<String, Object> content = new HashMap<>();
+            content.put("toolUse", toolUse);
+            Map<String, Object> message = new HashMap<>();
+            message.put("content", List.of(content));
+            Map<String, Object> output = new HashMap<>();
+            output.put("message", message);
+            Map<String, Object> dataAsMap = new HashMap<>();
+            dataAsMap.put("output", output);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            mlModelOutputs.add(ModelTensors.builder()
+                .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                .build());
+            actionListener.onResponse(
+                MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build()).build()
+            );
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
+
+        ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
+        verify(factsListener).onResponse(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("User programs in Java", captor.getValue().get(0));
     }
 
     @Test

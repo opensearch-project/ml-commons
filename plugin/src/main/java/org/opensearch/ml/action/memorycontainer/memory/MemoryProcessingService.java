@@ -127,7 +127,11 @@ public class MemoryProcessingService {
         Map<String, String> stringParameters = new HashMap<>();
         stringParameters.put("system_prompt", systemPrompt);
 
-        memoryContainerHelper.getStructuredOutputParameters(llmModelId, ActionListener.wrap(structuredOutputParams -> {
+        memoryContainerHelper.getStructuredOutputParameters(llmModelId, ActionListener.wrap(rawStructuredOutputParams -> {
+            // Copy to a mutable map so we can extract the result path override before merging.
+            Map<String, String> structuredOutputParams = new HashMap<>(rawStructuredOutputParams);
+            // Extract the result path override before merging so it is never sent to the model.
+            String structuredOutputResultPath = structuredOutputParams.remove("_structured_output_result_path");
             try {
                 if (!structuredOutputParams.isEmpty()) {
                     stringParameters.putAll(structuredOutputParams);
@@ -140,7 +144,7 @@ public class MemoryProcessingService {
                 listener.onResponse(new ArrayList<>());
                 return;
             }
-            sendFactExtractionRequest(tenantId, llmModelId, stringParameters, strategy, memoryConfig, listener);
+            sendFactExtractionRequest(tenantId, llmModelId, stringParameters, structuredOutputResultPath, strategy, memoryConfig, listener);
         }, e -> {
             log.warn("Unexpected error fetching structured output parameters, falling back to prompt enforcement", e);
             try {
@@ -150,7 +154,7 @@ public class MemoryProcessingService {
                 listener.onResponse(new ArrayList<>());
                 return;
             }
-            sendFactExtractionRequest(tenantId, llmModelId, stringParameters, strategy, memoryConfig, listener);
+            sendFactExtractionRequest(tenantId, llmModelId, stringParameters, null, strategy, memoryConfig, listener);
         }));
     }
 
@@ -158,6 +162,7 @@ public class MemoryProcessingService {
         String tenantId,
         String llmModelId,
         Map<String, String> stringParameters,
+        String structuredOutputResultPath,
         MemoryStrategy strategy,
         MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
@@ -178,7 +183,7 @@ public class MemoryProcessingService {
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
             try {
                 log.debug("Received LLM response, parsing facts...");
-                List<String> facts = parseFactsFromLLMResponse(strategy, memoryConfig, response.getOutput());
+                List<String> facts = parseFactsFromLLMResponse(structuredOutputResultPath, strategy, memoryConfig, response.getOutput());
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
@@ -340,7 +345,12 @@ public class MemoryProcessingService {
         }
     }
 
-    private List<String> parseFactsFromLLMResponse(MemoryStrategy strategy, MemoryConfiguration memoryConfig, MLOutput mlOutput) {
+    private List<String> parseFactsFromLLMResponse(
+        String structuredOutputResultPath,
+        MemoryStrategy strategy,
+        MemoryConfiguration memoryConfig,
+        MLOutput mlOutput
+    ) {
         List<String> facts = new ArrayList<>();
 
         if (!(mlOutput instanceof ModelTensorOutput)) {
@@ -362,7 +372,11 @@ public class MemoryProcessingService {
 
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
-            String llmResultPath = memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
+            // Use the structured output result path override when present (e.g. Bedrock Converse
+            // tool-use responses arrive at toolUse.input rather than content[0].text).
+            String llmResultPath = structuredOutputResultPath != null
+                ? structuredOutputResultPath
+                : memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
             try {
                 Object filterdResult = JsonPath.read(dataMap, llmResultPath);
                 String llmResult = null;

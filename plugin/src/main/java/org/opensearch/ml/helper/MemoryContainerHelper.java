@@ -10,6 +10,8 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
@@ -97,6 +99,8 @@ public class MemoryContainerHelper {
     private static final String URL_TOKEN_DEEPSEEK = "deepseek";
     // Multi-segment path — used with path.contains() on a query-stripped path, which is safe.
     private static final String URL_TOKEN_OPENAI_COMPAT_PATH = "/v1/chat/completions";
+    private static final String URL_TOKEN_AMAZONAWS = "amazonaws";
+    private static final String URL_TOKEN_CONVERSE_SEGMENT = "converse";
 
     // Captures (1) host and (2) path from a URL, stopping before '?' or '#'.
     // Handles connector template URLs such as https://${parameters.endpoint}/openai/...
@@ -591,7 +595,16 @@ public class MemoryContainerHelper {
         String host = m.group(1).toLowerCase(Locale.ROOT);
         String path = m.group(2).toLowerCase(Locale.ROOT);
 
-        // Anthropic direct API and Bedrock Converse are not yet supported — see follow-up issues.
+        // Bedrock Converse: toolConfig forces the model into tool-use mode; the response arrives at
+        // content[0].toolUse.input rather than content[0].text, so a result path override is returned
+        // alongside the schema. MemoryProcessingService strips the override key before the predict call.
+        if (hostHasSegment(host, URL_TOKEN_AMAZONAWS) && pathHasSegment(path, URL_TOKEN_CONVERSE_SEGMENT)) {
+            return Map.of(
+                "_toolConfig_json", FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON,
+                "_structured_output_result_path", BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH
+            );
+        }
+        // Anthropic direct API is not yet supported — see follow-up issues.
         if (hostHasSegment(host, URL_TOKEN_GOOGLEAPIS)) {
             return Map.of("_generationConfig_additions_json", FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON);
         }

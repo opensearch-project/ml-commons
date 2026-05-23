@@ -781,6 +781,23 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_WithToolConfigJson_IsInjected() {
+        // "toolConfig" is in STRUCTURED_OUTPUT_ALLOWED_FIELDS for Bedrock Converse structured output
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\","
+            + "\"text\":\"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_toolConfig_json", "{\"toolChoice\":{\"tool\":{\"name\":\"extract_facts\"}}}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("toolConfig must be injected for Bedrock Converse", json.has("toolConfig"));
+        Assert.assertTrue("toolConfig must be a JSON object", json.get("toolConfig").isJsonObject());
+    }
+
+    @Test
     public void createPayload_WithGenerationConfigAdditionsJson_CreatesFieldIfAbsent() {
         String requestBody = "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);

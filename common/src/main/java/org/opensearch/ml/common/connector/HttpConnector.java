@@ -69,7 +69,8 @@ public class HttpConnector extends AbstractConnector {
     static final Set<String> STRUCTURED_OUTPUT_ALLOWED_FIELDS = Set
         .of(
             "response_format",  // OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere
-            "generationConfig"  // Google Gemini
+            "generationConfig", // Google Gemini
+            "toolConfig"        // Amazon Bedrock Converse
         );
 
     // TODO: add RequestConfig like request time out,

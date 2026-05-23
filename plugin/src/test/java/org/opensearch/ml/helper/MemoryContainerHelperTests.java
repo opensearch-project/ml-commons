@@ -13,7 +13,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
@@ -773,9 +775,7 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
     }
 
-    public void testGetStructuredOutputParameters_BedrockConverse_ReturnsEmptyMap() {
-        // Bedrock Converse structured output requires toolConfig+toolChoice, which changes the
-        // response shape; auto-detection is intentionally disabled so we fall back to prompt enforcement.
+    public void testGetStructuredOutputParameters_BedrockConverse_ReturnsToolConfigAndResultPath() {
         Connector connector = mock(Connector.class);
         ConnectorAction bedrockAction = mockPredictAction(
             true,
@@ -791,7 +791,8 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         verify(listener).onResponse(captor.capture());
-        assertTrue(captor.getValue().isEmpty());
+        assertEquals(FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON, captor.getValue().get("_toolConfig_json"));
+        assertEquals(BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH, captor.getValue().get("_structured_output_result_path"));
     }
 
     public void testGetStructuredOutputParameters_Anthropic_ReturnsEmptyMap() {
