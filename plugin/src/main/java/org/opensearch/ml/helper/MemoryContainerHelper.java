@@ -595,9 +595,8 @@ public class MemoryContainerHelper {
         String host = m.group(1).toLowerCase(Locale.ROOT);
         String path = m.group(2).toLowerCase(Locale.ROOT);
 
-        // Bedrock Converse: toolConfig forces the model into tool-use mode; the response arrives at
-        // content[0].toolUse.input rather than content[0].text, so a result path override is returned
-        // alongside the schema. MemoryProcessingService strips the override key before the predict call.
+        // Bedrock Converse: tool use forces constrained decoding via extract_facts.
+        // The tool response arrives at content[0].toolUse.input, so a result path override is included.
         if (hostHasSegment(host, URL_TOKEN_AMAZONAWS) && pathHasSegment(path, URL_TOKEN_CONVERSE_SEGMENT)) {
             return Map
                 .of(

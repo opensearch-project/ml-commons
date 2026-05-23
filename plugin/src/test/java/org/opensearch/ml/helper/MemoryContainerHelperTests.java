@@ -31,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.OpenSearchStatusException;
@@ -775,6 +776,7 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
     }
 
+    @Test
     public void testGetStructuredOutputParameters_BedrockConverse_ReturnsToolConfigAndResultPath() {
         Connector connector = mock(Connector.class);
         ConnectorAction bedrockAction = mockPredictAction(

@@ -127,14 +127,13 @@ public class MemoryProcessingService {
         Map<String, String> stringParameters = new HashMap<>();
         stringParameters.put("system_prompt", systemPrompt);
 
-        memoryContainerHelper.getStructuredOutputParameters(llmModelId, ActionListener.wrap(rawStructuredOutputParams -> {
-            // Copy to a mutable map so we can extract the result path override before merging.
-            Map<String, String> structuredOutputParams = new HashMap<>(rawStructuredOutputParams);
-            // Extract the result path override before merging so it is never sent to the model.
-            String structuredOutputResultPath = structuredOutputParams.remove("_structured_output_result_path");
+        memoryContainerHelper.getStructuredOutputParameters(llmModelId, ActionListener.wrap(structuredOutputParams -> {
+            String structuredOutputResultPath = null;
             try {
                 if (!structuredOutputParams.isEmpty()) {
-                    stringParameters.putAll(structuredOutputParams);
+                    Map<String, String> params = new HashMap<>(structuredOutputParams);
+                    structuredOutputResultPath = params.remove("_structured_output_result_path");
+                    stringParameters.putAll(params);
                     stringParameters.put("user_prompt", buildUserPrompt(serializeMessagesToJson(messages)));
                 } else {
                     stringParameters.put("user_prompt", buildUserPromptWithEnforcement(messages, strategy.getType()));
@@ -183,7 +182,7 @@ public class MemoryProcessingService {
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
             try {
                 log.debug("Received LLM response, parsing facts...");
-                List<String> facts = parseFactsFromLLMResponse(structuredOutputResultPath, strategy, memoryConfig, response.getOutput());
+                List<String> facts = parseFactsFromLLMResponse(strategy, memoryConfig, structuredOutputResultPath, response.getOutput());
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
@@ -346,9 +345,9 @@ public class MemoryProcessingService {
     }
 
     private List<String> parseFactsFromLLMResponse(
-        String structuredOutputResultPath,
         MemoryStrategy strategy,
         MemoryConfiguration memoryConfig,
+        String structuredOutputResultPath,
         MLOutput mlOutput
     ) {
         List<String> facts = new ArrayList<>();
@@ -372,8 +371,6 @@ public class MemoryProcessingService {
 
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
-            // Use the structured output result path override when present (e.g. Bedrock Converse
-            // tool-use responses arrive at toolUse.input rather than content[0].text).
             String llmResultPath = structuredOutputResultPath != null
                 ? structuredOutputResultPath
                 : memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);

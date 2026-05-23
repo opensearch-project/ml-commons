@@ -1161,11 +1161,11 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFacts_BedrockConverseStructuredOutput_UsesToolUseResultPath() {
-        // Bedrock Converse tool-use response arrives at toolUse.input (a Map), not content[0].text.
-        // The result path override must be stripped from predict parameters and used for extraction.
+        // Bedrock Converse tool use: _toolConfig_json is sent to the model, _structured_output_result_path
+        // is stripped from the predict params and used to extract facts from the tool-use response shape.
         doAnswer(invocation -> {
-            ActionListener<Map<String, String>> l = invocation.getArgument(1);
-            l
+            ActionListener<Map<String, String>> listener = invocation.getArgument(1);
+            listener
                 .onResponse(
                     new HashMap<>(
                         Map
@@ -1189,23 +1189,25 @@ public class MemoryProcessingServiceTests {
             RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
             Map<String, String> parameters = dataset.getParameters();
 
-            assertTrue("_toolConfig_json must be present for Bedrock structured output", parameters.containsKey("_toolConfig_json"));
+            assertTrue(
+                "_toolConfig_json must be present for Bedrock tool-use structured output",
+                parameters.containsKey("_toolConfig_json")
+            );
             assertFalse(
-                "_structured_output_result_path must be stripped before predict call",
+                "_structured_output_result_path must be stripped before predict",
                 parameters.containsKey("_structured_output_result_path")
             );
 
-            // Simulate Bedrock Converse tool-use response: toolUse.input is a pre-parsed Map
+            // Response shaped to match BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH = $.output.message.content[0].toolUse.input
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
             Map<String, Object> toolUseInput = new HashMap<>();
             toolUseInput.put("facts", List.of("User programs in Java"));
             Map<String, Object> toolUse = new HashMap<>();
-            toolUse.put("name", "extract_facts");
             toolUse.put("input", toolUseInput);
-            Map<String, Object> content = new HashMap<>();
-            content.put("toolUse", toolUse);
+            Map<String, Object> contentItem = new HashMap<>();
+            contentItem.put("toolUse", toolUse);
             Map<String, Object> message = new HashMap<>();
-            message.put("content", List.of(content));
+            message.put("content", List.of(contentItem));
             Map<String, Object> output = new HashMap<>();
             output.put("message", message);
             Map<String, Object> dataAsMap = new HashMap<>();
