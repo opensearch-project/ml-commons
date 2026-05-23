@@ -801,6 +801,58 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_ArrayPayload_StructuredOutputNotInjected() {
+        // Payload is a JSON array, not an object — structured output injection must be skipped
+        // without throwing IllegalStateException from getAsJsonObject().
+        String requestBody = "[{\"role\":\"user\",\"content\":\"hello\"}]";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("_response_format_json", "{\"type\":\"json_object\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        Assert.assertTrue("Payload must remain a JSON array", payload.startsWith("["));
+        Assert.assertFalse("response_format must not be injected into an array payload", payload.contains("response_format"));
+    }
+
+    @Test
+    public void createPayload_EmptyFieldNameKey_DoesNotThrow() {
+        // Keys exactly "_additions_json" or "_json" produce an empty field name after slicing —
+        // must be silently ignored, not throw StringIndexOutOfBoundsException.
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":\"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_additions_json", "{\"type\":\"json_object\"}");
+        parameters.put("_json", "{\"type\":\"json_object\"}");
+
+        // Must not throw; payload must be returned unchanged since field names are empty
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertFalse("Empty-field-name keys must be ignored", json.has(""));
+    }
+
+    @Test
+    public void createPayload_BothReplaceAndMergeForSameField_ReplaceTakesPrecedence() {
+        // When _response_format_json (replace) and _response_format_additions_json (merge) are both
+        // present, the replace pass runs first; the merge then merges into the replaced value.
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":\"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "{\"type\":\"json_schema\"}");
+        parameters.put("_response_format_additions_json", "{\"extra\":\"field\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        JsonObject rf = json.getAsJsonObject("response_format");
+        Assert.assertNotNull("response_format must be present", rf);
+        Assert.assertEquals("type from replace pass must be preserved", "json_schema", rf.get("type").getAsString());
+        Assert.assertEquals("extra field from merge pass must be added", "field", rf.get("extra").getAsString());
+    }
+
+    @Test
     public void testFindAction_MultipleActionsWithSameType() {
         ConnectorAction action1 = new ConnectorAction(
             PREDICT,

@@ -385,56 +385,59 @@ public class HttpConnector extends AbstractConnector {
         return (T) parameters.get("http_body");
     }
 
-    // Convention: parameters named _<fieldname>_additions_json are merged into an existing top-level
-    // JSON object; parameters named _<fieldname>_json are injected as a new top-level JSON object.
-    // Both conventions require the value to be a valid JSON object string and the target field name
-    // must be in STRUCTURED_OUTPUT_ALLOWED_FIELDS to prevent callers from overriding provider control fields.
+    // Convention: parameters named _<fieldname>_json inject/replace a top-level JSON object field;
+    // parameters named _<fieldname>_additions_json merge into an existing top-level JSON object field.
+    // Both conventions require: (a) the payload is a JSON object (array payloads are left untouched),
+    // (b) a non-empty, allowlisted field name, and (c) a valid JSON object value string.
+    // Replacements (_X_json) are applied before merges (_X_additions_json) so behaviour is
+    // deterministic when both are present for the same field.
+    // Note: matched parameters are read but not removed from the map.
     private String injectStructuredOutputParams(Map<String, String> parameters, String payload) {
+        JsonElement parsed = JsonParser.parseString(payload);
+        if (!parsed.isJsonObject()) return payload;
+        JsonObject body = parsed.getAsJsonObject();
+        boolean modified = false;
+
+        // Pass 1: _<field>_json — inject or replace a top-level field
         for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            String key = entry.getKey();
-            if (key.startsWith("_") && key.endsWith("_additions_json")) {
-                String fieldName = key.substring(1, key.length() - "_additions_json".length());
-                if (STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName)) {
-                    payload = mergeIntoJsonObject(payload, fieldName, entry.getValue());
-                }
-            } else if (key.startsWith("_") && key.endsWith("_json")) {
-                String fieldName = key.substring(1, key.length() - "_json".length());
-                if (STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName)) {
-                    payload = injectTopLevelJsonField(payload, fieldName, entry.getValue());
-                }
-            }
+            if (entry.getKey().endsWith("_additions_json")) continue;
+            String fieldName = allowedFieldName(entry.getKey(), "_json");
+            JsonObject value = asJsonObject(entry.getValue());
+            if (fieldName == null || value == null) continue;
+            body.add(fieldName, value);
+            modified = true;
         }
-        return payload;
+
+        // Pass 2: _<field>_additions_json — merge into an existing top-level object
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            String fieldName = allowedFieldName(entry.getKey(), "_additions_json");
+            JsonObject additions = asJsonObject(entry.getValue());
+            if (fieldName == null || additions == null) continue;
+            JsonObject target = body.has(fieldName) && body.get(fieldName).isJsonObject()
+                ? body.getAsJsonObject(fieldName)
+                : new JsonObject();
+            additions.entrySet().forEach(e -> target.add(e.getKey(), e.getValue()));
+            body.add(fieldName, target);
+            modified = true;
+        }
+
+        return modified ? body.toString() : payload;
     }
 
-    private String injectTopLevelJsonField(String payload, String fieldName, String valueStr) {
-        if (valueStr == null || !isJson(valueStr)) {
-            return payload;
-        }
-        JsonElement valueElement = JsonParser.parseString(valueStr);
-        if (!valueElement.isJsonObject()) {
-            return payload;
-        }
-        JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
-        jsonObject.add(fieldName, valueElement.getAsJsonObject());
-        return jsonObject.toString();
+    /** Returns the allowlisted field name encoded in a _&lt;field&gt;_&lt;suffix&gt; key, or null if invalid. */
+    private static String allowedFieldName(String key, String suffix) {
+        if (!key.startsWith("_") || !key.endsWith(suffix)) return null;
+        int end = key.length() - suffix.length();
+        if (end <= 1) return null;
+        String fieldName = key.substring(1, end);
+        return STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName) ? fieldName : null;
     }
 
-    private String mergeIntoJsonObject(String payload, String fieldName, String additionsStr) {
-        if (additionsStr == null || !isJson(additionsStr)) {
-            return payload;
-        }
-        JsonElement additionsElement = JsonParser.parseString(additionsStr);
-        if (!additionsElement.isJsonObject()) {
-            return payload;
-        }
-        JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
-        JsonObject target = jsonObject.has(fieldName) && jsonObject.get(fieldName).isJsonObject()
-            ? jsonObject.getAsJsonObject(fieldName)
-            : new JsonObject();
-        additionsElement.getAsJsonObject().entrySet().forEach(e -> target.add(e.getKey(), e.getValue()));
-        jsonObject.add(fieldName, target);
-        return jsonObject.toString();
+    /** Parses a JSON string as an object, returning null if absent, invalid, or not an object. */
+    private static JsonObject asJsonObject(String json) {
+        if (json == null || !isJson(json)) return null;
+        JsonElement el = JsonParser.parseString(json);
+        return el.isJsonObject() ? el.getAsJsonObject() : null;
     }
 
     private boolean neededStreamParameterInPayload(Map<String, String> parameters) {

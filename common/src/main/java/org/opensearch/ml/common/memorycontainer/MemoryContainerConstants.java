@@ -196,6 +196,10 @@ public class MemoryContainerConstants {
         """
             Respond NOW with ONE LINE of valid JSON ONLY exactly as {"facts":["fact1","fact2",...]}. No extra text, no code fences, no newlines or tabs, no spaces after commas or colons.""";
 
+    // Stable prefix of JSON_ENFORCEMENT_MESSAGE with no JSON-special characters.
+    // Use this in assertions instead of parsing the full message out of a serialized JSON string.
+    public static final String JSON_ENFORCEMENT_SENTINEL = "Respond NOW with ONE LINE of valid JSON ONLY";
+
     // JSON enforcement message for user preference extraction
     public static final String USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE = """
         Return ONLY ONE LINE of valid JSON exactly as {"facts":["<fact sentence>"]}. Begin with { and end with }. No extra text.""";

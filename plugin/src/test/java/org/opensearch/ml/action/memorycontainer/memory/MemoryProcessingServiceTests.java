@@ -20,6 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_MESSAGE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_SENTINEL;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE;
@@ -999,7 +1000,10 @@ public class MemoryProcessingServiceTests {
 
             // Verify that the JSON enforcement message is included in the user_prompt
             assertNotNull("user_prompt should not be null", userPrompt);
-            assertTrue("JSON enforcement message should be included", userPrompt.contains("Respond NOW with ONE LINE of valid JSON ONLY"));
+            assertTrue(
+                "JSON enforcement message should be included",
+                userPrompt.contains(JSON_ENFORCEMENT_SENTINEL)
+            );
 
             // Mock successful response
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
@@ -1136,7 +1140,7 @@ public class MemoryProcessingServiceTests {
             );
             assertFalse(
                 "JSON enforcement message must NOT be in user_prompt when using structured output",
-                parameters.get("user_prompt").contains("Respond NOW with ONE LINE of valid JSON ONLY")
+                parameters.get("user_prompt").contains(JSON_ENFORCEMENT_SENTINEL)
             );
 
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
@@ -1180,7 +1184,7 @@ public class MemoryProcessingServiceTests {
             );
             assertTrue(
                 "JSON enforcement message MUST be in user_prompt for prompt-based connector",
-                parameters.get("user_prompt").contains("Respond NOW with ONE LINE of valid JSON ONLY")
+                parameters.get("user_prompt").contains(JSON_ENFORCEMENT_SENTINEL)
             );
 
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
@@ -1253,7 +1257,7 @@ public class MemoryProcessingServiceTests {
             assertFalse("_response_format_json must NOT be present on fallback path", parameters.containsKey("_response_format_json"));
             assertTrue(
                 "JSON enforcement message MUST be in user_prompt on fallback path",
-                parameters.get("user_prompt").contains("Respond NOW with ONE LINE of valid JSON ONLY")
+                parameters.get("user_prompt").contains(JSON_ENFORCEMENT_SENTINEL)
             );
 
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
