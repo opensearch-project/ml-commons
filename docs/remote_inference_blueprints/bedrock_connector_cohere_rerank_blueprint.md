@@ -41,8 +41,7 @@ POST /_plugins/_ml/connectors/_create
         "service_name": "bedrock",
         "endpoint": "bedrock-runtime",
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
-        "model_name": "cohere.rerank-v3-5:0",
-        "api_version": 2
+        "model_name": "cohere.rerank-v3-5:0"
     },
     "actions": [
         {
@@ -53,13 +52,15 @@ POST /_plugins/_ml/connectors/_create
                 "content-type": "application/json"
             },
             "url": "https://${parameters.endpoint}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
-            "request_body": "{ \"documents\": ${parameters.documents}, \"query\": \"${parameters.query}\", \"api_version\": ${parameters.api_version} }",
+            "request_body": "{ \"documents\": ${parameters.documents}, \"query\": \"${parameters.query}\", \"api_version\": 2 }",
             "pre_process_function": "connector.pre_process.cohere.rerank",
             "post_process_function": "connector.post_process.cohere.rerank"
         }
     ]
 }
 ```
+
+> **Security note:** Do not commit real AWS credentials to version control. For production deployments, consider using IAM roles (section 2.2) or [AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html) to manage credentials securely.
 
 ### 2.2 AWS OpenSearch Service with IAM role
 
@@ -80,8 +81,7 @@ POST /_plugins/_ml/connectors/_create
         "service_name": "bedrock",
         "endpoint": "bedrock-runtime",
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
-        "model_name": "cohere.rerank-v3-5:0",
-        "api_version": 2
+        "model_name": "cohere.rerank-v3-5:0"
     },
     "actions": [
         {
@@ -92,7 +92,7 @@ POST /_plugins/_ml/connectors/_create
                 "content-type": "application/json"
             },
             "url": "https://${parameters.endpoint}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
-            "request_body": "{ \"documents\": ${parameters.documents}, \"query\": \"${parameters.query}\", \"api_version\": ${parameters.api_version} }",
+            "request_body": "{ \"documents\": ${parameters.documents}, \"query\": \"${parameters.query}\", \"api_version\": 2 }",
             "pre_process_function": "connector.pre_process.cohere.rerank",
             "post_process_function": "connector.post_process.cohere.rerank"
         }
@@ -127,8 +127,7 @@ POST /_plugins/_ml/connectors/_create
         "service_name": "bedrock",
         "endpoint": "bedrock-runtime",
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
-        "model_name": "cohere.rerank-v3-5:0",
-        "api_version": 2
+        "model_name": "cohere.rerank-v3-5:0"
     },
     "actions": [
         {
@@ -139,8 +138,8 @@ POST /_plugins/_ml/connectors/_create
                 "content-type": "application/json"
             },
             "url": "https://${parameters.endpoint}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
-            "request_body": "{ \"documents\": ${parameters.documents}, \"query\": \"${parameters.query}\", \"api_version\": ${parameters.api_version} }",
-            "pre_process_function": "\n    def query_text = params.query_text;\n    def text_docs = params.text_docs;\n    def textDocsBuilder = new StringBuilder('[');\n    for (int i=0; i<text_docs.length; i++) {\n      textDocsBuilder.append('\"');\n      textDocsBuilder.append(text_docs[i]);\n      textDocsBuilder.append('\"');\n      if (i<text_docs.length - 1) {\n        textDocsBuilder.append(',');\n      }\n    }\n    textDocsBuilder.append(']');\n    def parameters = '{ \"query\": \"' + query_text + '\",  \"documents\": ' + textDocsBuilder.toString() + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n  ",
+            "request_body": "{ \"documents\": ${parameters.documents}, \"query\": \"${parameters.query}\", \"api_version\": 2 }",
+            "pre_process_function": "\n    def query_text = params.query_text;\n    def text_docs = params.text_docs;\n    def textDocsBuilder = new StringBuilder('[');\n    for (int i=0; i<text_docs.length; i++) {\n      textDocsBuilder.append('\"');\n      textDocsBuilder.append(text_docs[i].replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"'));\n      textDocsBuilder.append('\"');\n      if (i<text_docs.length - 1) {\n        textDocsBuilder.append(',');\n      }\n    }\n    textDocsBuilder.append(']');\n    def escapedQuery = query_text.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"');\n    def parameters = '{ \"query\": \"' + escapedQuery + '\",  \"documents\": ' + textDocsBuilder.toString() + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n  ",
             "post_process_function": "\n    if (params.results == null || params.results.length == 0) {\n      throw new IllegalArgumentException(\"Post process function input is empty.\");\n    }\n    def outputs = params.results;\n    def relevance_scores = new Double[outputs.length];\n    for (int i=0; i<outputs.length; i++) {\n      def index = new BigDecimal(outputs[i].index.toString()).intValue();\n      relevance_scores[index] = outputs[i].relevance_score;\n    }\n    def resultBuilder = new StringBuilder('[');\n    for (int i=0; i<relevance_scores.length; i++) {\n      resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');\n      resultBuilder.append('\"data\": [');\n      resultBuilder.append(relevance_scores[i]);\n      resultBuilder.append(']}');\n      if (i<outputs.length - 1) {\n        resultBuilder.append(',');\n      }\n    }\n    resultBuilder.append(']');\n    return resultBuilder.toString();\n  "
         }
     ]
