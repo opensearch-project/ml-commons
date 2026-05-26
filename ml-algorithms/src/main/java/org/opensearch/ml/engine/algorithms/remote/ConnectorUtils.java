@@ -53,6 +53,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -376,7 +377,8 @@ public class ConnectorUtils {
             .method(method)
             .uri(uri)
             .contentStreamProvider(requestBody.contentStreamProvider());
-        Map<String, String> headers = connector.getDecryptedHeaders();
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
                 builder.putHeader(key, headers.get(key));
@@ -413,7 +415,8 @@ public class ConnectorUtils {
             );
         }
         Request.Builder requestBuilder = new Request.Builder();
-        Map<String, String> headers = connector.getDecryptedHeaders();
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
                 requestBuilder.addHeader(key, headers.get(key));
@@ -525,6 +528,40 @@ public class ConnectorUtils {
 
         if (element != null && element.isJsonNull()) {
             parent.remove(fieldName);
+        }
+    }
+
+    @VisibleForTesting
+    static void validateSubstitutedHeaders(Map<String, String> headers) {
+        if (headers == null)
+            return;
+
+        int totalSize = 0;
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String value = entry.getValue();
+            if (value == null)
+                continue;
+
+            // Check for header injection
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if ((c < 0x20 && c != '\t') || c == 0x7F) {
+                    throw new IllegalArgumentException("Header value contains invalid control character");
+                }
+            }
+
+            // Check per-header size (key + value)
+            int headerSize = entry.getKey().length() + value.length();
+            if (headerSize > 8192) {
+                throw new IllegalArgumentException("Header size (key + value) exceeds 8KB limit");
+            }
+
+            totalSize += headerSize;
+        }
+
+        // Check total size
+        if (totalSize > 65536) {
+            throw new IllegalArgumentException("Total headers size (key + value) exceeds 64KB limit");
         }
     }
 }

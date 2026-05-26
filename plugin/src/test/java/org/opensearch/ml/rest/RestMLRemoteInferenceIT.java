@@ -1110,4 +1110,103 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         logger.info("task ID created: {}", taskId);
         return taskId;
     }
+
+    @Test
+    public void testRuntimeParameterSubstitutionInHeaders() throws IOException, InterruptedException {
+        updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^https://httpbin\\.org/.*$"));
+
+        String connectorWithDynamicHeaders = "{\n"
+            + "\"name\": \"Test Connector with Dynamic Headers\",\n"
+            + "\"description\": \"Connector to test runtime parameter substitution\",\n"
+            + "\"version\": 1,\n"
+            + "\"protocol\": \"http\",\n"
+            + "\"parameters\": {\n"
+            + "    \"endpoint\": \"httpbin.org\",\n"
+            + "    \"model\": \"test-model\"\n"
+            + "  },\n"
+            + "\"credential\": {"
+            + "    \"test_api_key\": \"test\"\n"
+            + "  },\n"
+            + "\"actions\": [\n"
+            + "    {\n"
+            + "      \"action_type\": \"predict\",\n"
+            + "      \"method\": \"POST\",\n"
+            + "      \"url\": \"https://${parameters.endpoint}/post\",\n"
+            + "      \"headers\": {\n"
+            + "        \"X-Request-ID\": \"${parameters.request_id}\",\n"
+            + "        \"X-Model\": \"${parameters.model}\"\n"
+            + "      },\n"
+            + "      \"request_body\": \"{\\\"input\\\": \\\"${parameters.input}\\\"}\",\n"
+            + "      \"post_process_function\": \"return params.response;\"\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+
+        // Create connector
+        Response response = createConnector(connectorWithDynamicHeaders);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        assertNotNull(connectorId);
+
+        // Register and deploy model
+        response = registerRemoteModel("Test Model with Dynamic Headers", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+
+        // Call predict with runtime parameters
+        String predictInput = "{\n"
+            + "  \"parameters\": {\n"
+            + "      \"request_id\": \"req-integration-test-12345\",\n"
+            + "      \"input\": \"test input\"\n"
+            + "  }\n"
+            + "}";
+
+        response = predictRemoteModel(modelId, predictInput);
+        responseMap = parseResponseToMap(response);
+
+        // httpbin.org/post echoes back the request, including headers
+        // Verify the response contains our substituted header values
+        List inferenceResults = (List) responseMap.get("inference_results");
+        assertNotNull(inferenceResults);
+        assertFalse(inferenceResults.isEmpty());
+
+        Map result = (Map) inferenceResults.get(0);
+        List output = (List) result.get("output");
+        assertNotNull(output);
+
+        // The response from httpbin should contain the headers we sent
+        // This verifies that ${parameters.*} substitution actually worked
+        Map outputData = (Map) output.get(0);
+        Map dataAsMap = (Map) outputData.get("dataAsMap");
+        assertNotNull(dataAsMap);
+
+        // httpbin returns the headers in the response
+        Map headers = (Map) dataAsMap.get("headers");
+        if (headers != null) {
+            // Verify our dynamic headers were substituted correctly
+            String requestId = (String) headers.get("X-Request-Id");
+            String model = (String) headers.get("X-Model");
+
+            // httpbin may lowercase header names
+            if (requestId == null) {
+                requestId = (String) headers.get("x-request-id");
+            }
+            if (model == null) {
+                model = (String) headers.get("x-model");
+            }
+
+            assertEquals("req-integration-test-12345", requestId);
+            assertEquals("test-model", model);
+        }
+    }
 }

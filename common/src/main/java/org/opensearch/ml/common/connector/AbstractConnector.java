@@ -13,8 +13,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.TriConsumer;
@@ -34,6 +38,28 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @Getter
 public abstract class AbstractConnector implements Connector {
+    private static final Pattern PARAMETER_PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{parameters\\.[^}]+\\}");
+    private static final Set<String> MCP_PROTOCOLS = Set.of(ConnectorProtocols.MCP_SSE, ConnectorProtocols.MCP_STREAMABLE_HTTP);
+    private static final Set<String> BLOCKED_DYNAMIC_HEADERS = Set
+        .of(
+            "authorization",
+            "proxy-authorization",
+            "cookie",
+            "x-api-key",
+            "x-auth-token",
+            "x-auth-header",
+            "x-forwarded-for",
+            "x-real-ip",
+            "x-client-ip",
+            "cf-connecting-ip",
+            "true-client-ip",
+            "x-originating-ip",
+            "host",
+            "x-forwarded-host",
+            "x-forwarded-server",
+            "forwarded"
+        );
+
     public static final String ACCESS_KEY_FIELD = "access_key";
     public static final String SECRET_KEY_FIELD = "secret_key";
     public static final String SESSION_TOKEN_FIELD = "session_token";
@@ -88,13 +114,33 @@ public abstract class AbstractConnector implements Connector {
         for (String key : headers.keySet()) {
             decryptedHeaders.put(key, substitutor.replace(headers.get(key)));
         }
-        if (parameters != null && !parameters.isEmpty()) {
-            substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            for (String key : decryptedHeaders.keySet()) {
-                decryptedHeaders.put(key, substitutor.replace(decryptedHeaders.get(key)));
+        return decryptedHeaders;
+    }
+
+    public Map<String, String> substituteHeadersWithRuntimeParameters(Map<String, String> headers, Map<String, String> runtimeParameters) {
+        if (headers == null || headers.isEmpty()) {
+            return headers;
+        }
+
+        Map<String, String> substitutedHeaders = new HashMap<>();
+        StringSubstitutor substitutor = new StringSubstitutor(runtimeParameters, "${parameters.", "}");
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String value = entry.getValue();
+            if (value != null && value.contains("${parameters.")) {
+                String substituted = substitutor.replace(value);
+                if (substituted.contains("${parameters.")) {
+                    throw new IllegalArgumentException(
+                        String.format("Header '%s' contains unresolved placeholder. Required parameter is missing.", entry.getKey())
+                    );
+                }
+                substitutedHeaders.put(entry.getKey(), substituted);
+            } else {
+                substitutedHeaders.put(entry.getKey(), value);
             }
         }
-        return decryptedHeaders;
+
+        return substitutedHeaders;
     }
 
     @SuppressWarnings("unchecked")
@@ -224,6 +270,57 @@ public abstract class AbstractConnector implements Connector {
             listener.onFailure(e);
         });
         function.apply(orderedToDecrypt, tenantId, updateDecryptedCredentialsListener);
+    }
+
+    @Override
+    public Map<String, String> getHeadersWithRuntimeParameters(Map<String, String> runtimeParameters) {
+        Map<String, String> headers = getDecryptedHeaders();
+        validateConnectorHeaders(headers, protocol);
+        return substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+    }
+
+    /**
+     * Validates connector headers for both security and protocol compatibility.
+     * 
+     * @param headers Connector headers to validate
+     * @param connectorProtocol The connector protocol
+     * @throws IllegalArgumentException if validation fails
+     */
+    public static void validateConnectorHeaders(Map<String, String> headers, String connectorProtocol) {
+        if (headers == null || headers.isEmpty()) {
+            return;
+        }
+
+        boolean isMcpProtocol = connectorProtocol != null && MCP_PROTOCOLS.contains(connectorProtocol.toLowerCase(Locale.ROOT));
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String headerValue = entry.getValue();
+            if (headerValue == null) {
+                continue;
+            }
+
+            Matcher matcher = PARAMETER_PLACEHOLDER_PATTERN.matcher(headerValue);
+            if (!matcher.find()) {
+                continue;
+            }
+
+            if (isMcpProtocol) {
+                throw new IllegalArgumentException(
+                    String.format("Header '%s' cannot use ${parameters.*} placeholders in MCP connectors.", entry.getKey())
+                );
+            }
+
+            String headerName = entry.getKey().toLowerCase(Locale.ROOT);
+            if (BLOCKED_DYNAMIC_HEADERS.contains(headerName)) {
+                throw new IllegalArgumentException(
+                    String
+                        .format(
+                            "Header '%s' cannot use ${parameters.*} placeholders for security reasons. Use ${credential.*} instead.",
+                            entry.getKey()
+                        )
+                );
+            }
+        }
     }
 
     protected abstract Map<String, String> getAllHeaders(String action);
