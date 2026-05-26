@@ -1437,7 +1437,7 @@ public class ConnectorUtilsTest {
     @Test
     public void testValidateSubstitutedHeaders_HeaderExceeds8KB() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Header value exceeds 8KB limit");
+        exceptionRule.expectMessage("Header size (key + value) exceeds 8KB limit");
 
         Map<String, String> headers = new HashMap<>();
         // Create a string with 8193 characters (exceeds 8KB limit)
@@ -1452,16 +1452,16 @@ public class ConnectorUtilsTest {
     @Test
     public void testValidateSubstitutedHeaders_TotalSizeExceeds64KB() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Total headers size exceeds 64KB limit");
+        exceptionRule.expectMessage("Total headers size (key + value) exceeds 64KB limit");
 
         Map<String, String> headers = new HashMap<>();
-        // Create 9 headers with 8KB each (72KB total, exceeds 64KB limit)
         for (int i = 0; i < 9; i++) {
+            String key = "X-Header-" + i;
             StringBuilder value = new StringBuilder();
-            for (int j = 0; j < 8192; j++) {
+            for (int j = 0; j < 8192 - key.length(); j++) {
                 value.append("a");
             }
-            headers.put("X-Header-" + i, value.toString());
+            headers.put(key, value.toString());
         }
         ConnectorUtils.validateSubstitutedHeaders(headers);
     }
@@ -1469,12 +1469,13 @@ public class ConnectorUtilsTest {
     @Test
     public void testValidateSubstitutedHeaders_ExactlyAt8KB() {
         Map<String, String> headers = new HashMap<>();
-        // Create a string with exactly 8192 characters (at limit, should pass)
+        // Create a header with key + value exactly 8192 bytes
+        String key = "X-Large-Header";
         StringBuilder value = new StringBuilder();
-        for (int i = 0; i < 8192; i++) {
+        for (int i = 0; i < 8192 - key.length(); i++) {
             value.append("a");
         }
-        headers.put("X-Large-Header", value.toString());
+        headers.put(key, value.toString());
 
         // Should not throw exception
         ConnectorUtils.validateSubstitutedHeaders(headers);

@@ -30,6 +30,7 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -102,7 +103,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         if (mlCreateConnectorInput.getActions() != null) {
             for (ConnectorAction action : mlCreateConnectorInput.getActions()) {
                 Map<String, String> headers = action.getHeaders();
-                RestActionUtils.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
+                AbstractConnector.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
             }
         }
         if (mlCreateConnectorInput.getProtocol() != null

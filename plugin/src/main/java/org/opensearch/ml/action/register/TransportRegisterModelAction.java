@@ -42,6 +42,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -389,7 +390,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
         for (ConnectorAction action : registerModelInput.getConnector().getActions()) {
             Map<String, String> headers = action.getHeaders();
-            RestActionUtils.validateConnectorHeaders(headers, registerModelInput.getConnector().getProtocol());
+            AbstractConnector.validateConnectorHeaders(headers, registerModelInput.getConnector().getProtocol());
         }
     }
 

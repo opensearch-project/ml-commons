@@ -545,22 +545,23 @@ public class ConnectorUtils {
             // Check for header injection
             for (int i = 0; i < value.length(); i++) {
                 char c = value.charAt(i);
-                if (c < 0x20 && c != '\t') {
+                if ((c < 0x20 && c != '\t') || c == 0x7F) {
                     throw new IllegalArgumentException("Header value contains invalid control character");
                 }
             }
 
-            // Check per-header size
-            if (value.length() > 8192) {
-                throw new IllegalArgumentException("Header value exceeds 8KB limit");
+            // Check per-header size (key + value)
+            int headerSize = entry.getKey().length() + value.length();
+            if (headerSize > 8192) {
+                throw new IllegalArgumentException("Header size (key + value) exceeds 8KB limit");
             }
 
-            totalSize += entry.getKey().length() + value.length();
+            totalSize += headerSize;
         }
 
         // Check total size
         if (totalSize > 65536) {
-            throw new IllegalArgumentException("Total headers size exceeds 64KB limit");
+            throw new IllegalArgumentException("Total headers size (key + value) exceeds 64KB limit");
         }
     }
 }

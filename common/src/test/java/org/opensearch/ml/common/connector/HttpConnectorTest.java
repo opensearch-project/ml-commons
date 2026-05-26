@@ -772,21 +772,6 @@ public class HttpConnectorTest {
     }
 
     @Test
-    public void testSubstituteHeadersWithRuntimeParameters_WithDefaultValue() {
-        HttpConnector connector = createHttpConnector();
-
-        Map<String, String> headers = new HashMap<>();
-        headers.put("X-Request-ID", "${parameters.request_id}");
-
-        Map<String, String> runtimeParameters = new HashMap<>();
-        runtimeParameters.put("request_id", "default-value");
-
-        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
-
-        Assert.assertEquals("default-value", result.get("X-Request-ID"));
-    }
-
-    @Test
     public void testSubstituteHeadersWithRuntimeParameters_NoPlaceholder() {
         HttpConnector connector = createHttpConnector();
 
@@ -852,10 +837,14 @@ public class HttpConnectorTest {
         Map<String, String> runtimeParameters = new HashMap<>();
         // No request_id provided
 
-        Map<String, String> result = connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters);
+        IllegalArgumentException exception = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> connector.substituteHeadersWithRuntimeParameters(headers, runtimeParameters)
+            );
 
-        // Placeholder remains unresolved
-        Assert.assertEquals("${parameters.request_id}", result.get("X-Request-ID"));
+        Assert.assertTrue(exception.getMessage().contains("X-Request-ID"));
+        Assert.assertTrue(exception.getMessage().contains("unresolved placeholder"));
     }
 
     @Test
@@ -875,5 +864,100 @@ public class HttpConnectorTest {
         Assert.assertEquals("Bearer ${credential.token}", result.get("Authorization"));
         Assert.assertEquals("req-999", result.get("X-Request-ID"));
         Assert.assertEquals("application/json", result.get("Content-Type"));
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_ValidHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("X-Request-ID", "${parameters.request_id}");
+
+        AbstractConnector.validateConnectorHeaders(headers, "http");
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_NullHeaders() {
+        AbstractConnector.validateConnectorHeaders(null, "http");
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_EmptyHeaders() {
+        AbstractConnector.validateConnectorHeaders(new HashMap<>(), "http");
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_AuthorizationWithParameters() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer ${parameters.token}");
+
+        IllegalArgumentException exception = Assert
+            .assertThrows(IllegalArgumentException.class, () -> AbstractConnector.validateConnectorHeaders(headers, "http"));
+        Assert.assertTrue(exception.getMessage().contains("Authorization"));
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_AuthorizationWithCredential() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer ${credential.secretArn.token}");
+
+        AbstractConnector.validateConnectorHeaders(headers, "http");
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_CookieWithParameters() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cookie", "session=${parameters.session_id}");
+
+        IllegalArgumentException exception = Assert
+            .assertThrows(IllegalArgumentException.class, () -> AbstractConnector.validateConnectorHeaders(headers, "http"));
+        Assert.assertTrue(exception.getMessage().contains("Cookie"));
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_HostWithParameters() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Host", "${parameters.host}");
+
+        IllegalArgumentException exception = Assert
+            .assertThrows(IllegalArgumentException.class, () -> AbstractConnector.validateConnectorHeaders(headers, "http"));
+        Assert.assertTrue(exception.getMessage().contains("Host"));
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_CaseInsensitive() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("authorization", "Bearer ${parameters.token}");
+
+        IllegalArgumentException exception = Assert
+            .assertThrows(IllegalArgumentException.class, () -> AbstractConnector.validateConnectorHeaders(headers, "http"));
+        Assert.assertTrue(exception.getMessage().contains("cannot use ${parameters.*} placeholders"));
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_CustomTracingHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-Id", "${parameters.request_id}");
+        headers.put("intuit_tid", "${parameters.intuit_tid}");
+
+        AbstractConnector.validateConnectorHeaders(headers, "http");
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_McpSseWithParameters() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Trace-Id", "${parameters.trace_id}");
+
+        IllegalArgumentException exception = Assert
+            .assertThrows(IllegalArgumentException.class, () -> AbstractConnector.validateConnectorHeaders(headers, "mcp_sse"));
+        Assert.assertTrue(exception.getMessage().contains("MCP connectors"));
+    }
+
+    @Test
+    public void testValidateConnectorHeaders_McpWithStaticHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Trace-Id", "static-trace-id");
+        headers.put("Authorization", "Bearer ${credential.secretArn.token}");
+
+        AbstractConnector.validateConnectorHeaders(headers, "mcp_sse");
     }
 }
