@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_NAME_UNIQUENESS_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
@@ -111,7 +112,8 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED, ML_COMMONS_AGENT_NAME_UNIQUENESS_ENABLED)));
         transportRegisterAgentAction = new TransportRegisterAgentAction(
             transportService,
             actionFilters,
@@ -608,5 +610,305 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Model registration failed", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_uniquenessEnforced_duplicateNameRejected() {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("duplicate-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // Simulate a search hit (name already exists)
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.search.SearchResponse> al = invocation.getArgument(1);
+            org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+                1L,
+                org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+            );
+            org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+                new org.opensearch.search.SearchHit[0],
+                totalHits,
+                Float.NaN
+            );
+            org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+                hits,
+                org.opensearch.search.aggregations.InternalAggregations.EMPTY,
+                null,
+                null,
+                false,
+                null,
+                0
+            );
+            org.opensearch.action.search.SearchResponse searchResponse = new org.opensearch.action.search.SearchResponse(
+                internal,
+                null,
+                1,
+                1,
+                0,
+                1,
+                org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+                org.opensearch.action.search.SearchResponse.Clusters.EMPTY
+            );
+            al.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("already exists"));
+        // Index creation must NOT have been attempted when a duplicate is found
+        verify(mlIndicesHandler, times(0)).initMLAgentIndex(any());
+    }
+
+    @Test
+    public void test_execute_registerAgent_uniquenessEnforced_uniqueNameAllowed() {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("unique-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // Simulate a search returning zero hits (name is unique)
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.search.SearchResponse> al = invocation.getArgument(1);
+            org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+                0L,
+                org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+            );
+            org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+                new org.opensearch.search.SearchHit[0],
+                totalHits,
+                Float.NaN
+            );
+            org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+                hits,
+                org.opensearch.search.aggregations.InternalAggregations.EMPTY,
+                null,
+                null,
+                false,
+                null,
+                0
+            );
+            org.opensearch.action.search.SearchResponse searchResponse = new org.opensearch.action.search.SearchResponse(
+                internal,
+                null,
+                1,
+                1,
+                0,
+                1,
+                org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+                org.opensearch.action.search.SearchResponse.Clusters.EMPTY
+            );
+            al.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+    }
+
+    @Test
+    public void test_execute_registerAgent_uniquenessEnforced_indexNotFound_allowsRegistration() {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("first-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // Simulate IndexNotFoundException from search - happens before any agent has ever been registered.
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.search.SearchResponse> al = invocation.getArgument(1);
+            al.onFailure(new org.opensearch.index.IndexNotFoundException(ML_AGENT_INDEX));
+            return null;
+        }).when(client).search(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+    }
+
+    @Test
+    public void test_execute_registerAgent_uniquenessDisabled_skipsSearch() {
+        // Default: uniqueness disabled - no search should occur
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(false);
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("any-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        verify(client, times(0)).search(any(), any());
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    /**
+     * Builds a real SearchResponse with the given total-hit count so we can drive the
+     * ActionListener callback path through mock client.search(...).
+     */
+    private org.opensearch.action.search.SearchResponse buildSearchResponseWithHits(long hitCount) {
+        org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+            hitCount,
+            org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+        );
+        org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+            new org.opensearch.search.SearchHit[0],
+            totalHits,
+            Float.NaN
+        );
+        org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+            hits,
+            org.opensearch.search.aggregations.InternalAggregations.EMPTY,
+            null,
+            null,
+            false,
+            null,
+            0
+        );
+        return new org.opensearch.action.search.SearchResponse(
+            internal,
+            null,
+            1,
+            1,
+            0,
+            1,
+            org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+            org.opensearch.action.search.SearchResponse.Clusters.EMPTY
+        );
+    }
+
+    @Test
+    public void test_execute_registerAgent_uniquenessEnforced_planExecuteAndReflect_executorNameCollision_rejected() {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("tools", "[]");
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("per_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Plan-execute-and-reflect agent")
+            .parameters(parameters)
+            .llm(new LLMSpec("test-model-id", new HashMap<>()))
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // First search: submitted name is available (0 hits). Second search: derived executor
+        // name "per_agent (ReAct)" already exists (1 hit) -> request must fail before any index write.
+        doAnswer(new org.mockito.stubbing.Answer<Void>() {
+            private int callCount = 0;
+
+            @Override
+            public Void answer(org.mockito.invocation.InvocationOnMock invocation) {
+                ActionListener<org.opensearch.action.search.SearchResponse> al = invocation.getArgument(1);
+                long hits = (callCount++ == 0) ? 0L : 1L;
+                al.onResponse(buildSearchResponseWithHits(hits));
+                return null;
+            }
+        }).when(client).search(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("(ReAct)"));
+        assertTrue(argumentCaptor.getValue().getMessage().contains("already exists"));
+        // Neither the submitted agent nor its executor should have been indexed
+        verify(mlIndicesHandler, times(0)).initMLAgentIndex(any());
+    }
+
+    @Test
+    public void test_execute_registerAgent_multiTenancy_missingTenantId_failsBeforeSearch() {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        // No tenantId on the agent
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("some-agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        // Tenant validation must fail fast, before any metadata search is issued
+        verify(client, times(0)).search(any(), any());
+        verify(actionListener).onFailure(any(Exception.class));
     }
 }

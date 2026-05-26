@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.time.Instant;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
@@ -32,6 +33,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateAction;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateInput;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
+import org.opensearch.ml.helper.NameUniquenessHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -127,7 +129,15 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                                         )
                                     );
                             } else {
-                                updateAgent(agentId, mlAgentUpdateInput, retrievedAgent, wrappedListener);
+                                validateAgentNameUniquenessForUpdate(
+                                    mlAgentUpdateInput,
+                                    retrievedAgent,
+                                    ActionListener
+                                        .wrap(
+                                            unused -> updateAgent(agentId, mlAgentUpdateInput, retrievedAgent, wrappedListener),
+                                            wrappedListener::onFailure
+                                        )
+                                );
                             }
                         } else {
                             log.error("Failed to validate tenant for Agent ID {}", agentId);
@@ -178,6 +188,54 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                 }
             }
         });
+    }
+
+    /**
+     * When {@code plugins.ml_commons.agent_name_uniqueness_enabled} is enabled and the update
+     * would rename the agent to a new value, reject the update if another agent in the same
+     * tenant already has that name. Skipped if the setting is off, if the update omits a new
+     * name (or provides a blank one), or if the new name equals the existing name (so a PUT
+     * that doesn't actually rename does not 409 against itself). Mirrors the gate shape used
+     * by {@code TransportUpdateModelGroupAction#updateModelGroup}.
+     *
+     * <p>Same best-effort semantics as the register path: two concurrent updates racing on the
+     * same name can both see zero hits and both succeed.
+     */
+    private void validateAgentNameUniquenessForUpdate(
+        MLAgentUpdateInput updateInput,
+        MLAgent originalAgent,
+        ActionListener<Void> listener
+    ) {
+        if (!mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()) {
+            listener.onResponse(null);
+            return;
+        }
+        String newName = updateInput.getName();
+        if (StringUtils.isBlank(newName) || newName.equals(originalAgent.getName())) {
+            // No rename (name omitted/blank), or a no-op rename to the current name.
+            listener.onResponse(null);
+            return;
+        }
+
+        NameUniquenessHelper
+            .searchByExactName(client, sdkClient, ML_AGENT_INDEX, newName, originalAgent.getTenantId(), ActionListener.wrap(response -> {
+                if (response == null) {
+                    listener.onResponse(null);
+                    return;
+                }
+                long totalHits = response.getHits().getTotalHits() == null ? 0 : response.getHits().getTotalHits().value();
+                if (totalHits > 0) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "An agent with name [" + newName + "] already exists. Agent names must be unique.",
+                                RestStatus.CONFLICT
+                            )
+                        );
+                } else {
+                    listener.onResponse(null);
+                }
+            }, listener::onFailure));
     }
 
     @VisibleForTesting

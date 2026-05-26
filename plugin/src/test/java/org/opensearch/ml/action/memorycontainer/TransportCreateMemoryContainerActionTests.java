@@ -75,6 +75,8 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -1955,5 +1957,93 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(embeddingModel);
             return null;
         }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+    }
+
+    private SearchDataObjectResponse searchDataObjectResponseWithHits(long hitCount) {
+        org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+            hitCount,
+            org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+        );
+        org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+            new org.opensearch.search.SearchHit[0],
+            totalHits,
+            Float.NaN
+        );
+        org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+            hits,
+            org.opensearch.search.aggregations.InternalAggregations.EMPTY,
+            null,
+            null,
+            false,
+            null,
+            0
+        );
+        org.opensearch.action.search.SearchResponse searchResponse = new org.opensearch.action.search.SearchResponse(
+            internal,
+            null,
+            1,
+            1,
+            0,
+            1,
+            org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+            org.opensearch.action.search.SearchResponse.Clusters.EMPTY
+        );
+        SearchDataObjectResponse sdkResp = mock(SearchDataObjectResponse.class);
+        when(sdkResp.searchResponse()).thenReturn(searchResponse);
+        return sdkResp;
+    }
+
+    public void testDoExecute_UniquenessEnforced_DuplicateNameRejected() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(true);
+
+        // Simulate search returning 1 hit (name already exists)
+        CompletableFuture<SearchDataObjectResponse> future = CompletableFuture.completedFuture(searchDataObjectResponseWithHits(1L));
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertNotNull(exception);
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("already exists"));
+        // putDataObjectAsync must NOT be called when duplicate is detected
+        verify(sdkClient, org.mockito.Mockito.never()).putDataObjectAsync(any(PutDataObjectRequest.class));
+    }
+
+    public void testDoExecute_UniquenessEnforced_UniqueNameAllowed() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(true);
+
+        // Simulate search returning 0 hits (name is unique)
+        CompletableFuture<SearchDataObjectResponse> searchFuture = CompletableFuture.completedFuture(searchDataObjectResponseWithHits(0L));
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(searchFuture);
+
+        mockSuccessfulCreatePipeline();
+        mockAndRunExecuteMethod(request);
+
+        verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
+    }
+
+    public void testDoExecute_UniquenessEnforced_IndexNotFound_AllowsCreation() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(true);
+
+        // Simulate IndexNotFoundException - first time a memory container is ever created
+        CompletableFuture<SearchDataObjectResponse> searchFuture = new CompletableFuture<>();
+        searchFuture.completeExceptionally(new IndexNotFoundException(ML_MEMORY_CONTAINER_INDEX));
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(searchFuture);
+
+        mockSuccessfulCreatePipeline();
+        mockAndRunExecuteMethod(request);
+    }
+
+    public void testDoExecute_UniquenessDisabled_SkipsSearch() throws InterruptedException {
+        // Default: uniqueness disabled
+        when(mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()).thenReturn(false);
+
+        mockSuccessfulCreatePipeline();
+        mockAndRunExecuteMethod(request);
+
+        verify(sdkClient, org.mockito.Mockito.never()).searchDataObjectAsync(any(SearchDataObjectRequest.class));
     }
 }

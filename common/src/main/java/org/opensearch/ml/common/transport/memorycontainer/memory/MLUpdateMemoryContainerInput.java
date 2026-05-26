@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -39,6 +40,10 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
 
     @Builder
     public MLUpdateMemoryContainerInput(String name, String description, List<String> backendRoles, MemoryConfiguration configuration) {
+        // Null = "no rename" (name is optional on update), but a non-null blank string is always wrong.
+        if (name != null && StringUtils.isBlank(name)) {
+            throw new IllegalArgumentException("name cannot be blank");
+        }
         this.name = name;
         this.description = description;
         validateBackendRoles(backendRoles);

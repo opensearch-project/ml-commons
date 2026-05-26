@@ -45,6 +45,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.helper.NameUniquenessHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -99,13 +100,78 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
-        // Check if this agent needs model creation
-        if (mlAgent.usesUnifiedInterface()) {
-            createModelAndRegisterAgent(mlAgent, listener);
+        // Validate tenant id before any metadata search so a missing tenant fails fast in
+        // multi-tenant mode, rather than leaking existence via a 409 from a cross-tenant search.
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlAgent.getTenantId(), listener)) {
             return;
         }
 
-        registerAgent(mlAgent, listener);
+        validateAgentNameUniqueness(mlAgent, ActionListener.wrap(unused -> {
+            // Check if this agent needs model creation
+            if (mlAgent.usesUnifiedInterface()) {
+                createModelAndRegisterAgent(mlAgent, listener);
+                return;
+            }
+            registerAgent(mlAgent, listener);
+        }, listener::onFailure));
+    }
+
+    /**
+     * When {@code plugins.ml_commons.agent_name_uniqueness_enabled} is enabled, reject the
+     * registration if an agent with the same name already exists in the same tenant. When the
+     * setting is disabled (default), this is a no-op so existing clusters remain backward compatible.
+     *
+     * <p>For PLAN_EXECUTE_AND_REFLECT agents without a pre-existing executor-agent-id, an internal
+     * "{@code <name> (ReAct)}" executor agent is auto-created; this method also checks that
+     * derived name so the auto-created agent cannot collide with an existing one.
+     *
+     * <p>Note: this is a best-effort check, not a transactional guard. Two concurrent register
+     * requests with the same name can both pass this check before either write is visible.
+     * See the PR description for a follow-up plan if stricter semantics are required.
+     */
+    private void validateAgentNameUniqueness(MLAgent mlAgent, ActionListener<Void> listener) {
+        if (!mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()) {
+            listener.onResponse(null);
+            return;
+        }
+
+        // MLAgent.validate() already rejects null/blank/over-length names upstream, so we rely on
+        // that invariant here and don't re-check.
+        String name = mlAgent.getName();
+        String tenantId = mlAgent.getTenantId();
+        checkAgentNameAvailable(name, tenantId, ActionListener.wrap(unused -> {
+            // If this is a PLAN_EXECUTE_AND_REFLECT registration that will auto-create an
+            // executor agent named "<name> (ReAct)", validate that derived name too.
+            if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
+                && mlAgent.getParameters() != null
+                && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD)) {
+                checkAgentNameAvailable(name + " (ReAct)", tenantId, listener);
+            } else {
+                listener.onResponse(null);
+            }
+        }, listener::onFailure));
+    }
+
+    private void checkAgentNameAvailable(String name, String tenantId, ActionListener<Void> listener) {
+        NameUniquenessHelper.searchByExactName(client, sdkClient, ML_AGENT_INDEX, name, tenantId, ActionListener.wrap(response -> {
+            if (response == null) {
+                // Index not yet created - no duplicate possible.
+                listener.onResponse(null);
+                return;
+            }
+            long totalHits = response.getHits().getTotalHits() == null ? 0 : response.getHits().getTotalHits().value();
+            if (totalHits > 0) {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "An agent with name [" + name + "] already exists. Agent names must be unique.",
+                            RestStatus.CONFLICT
+                        )
+                    );
+            } else {
+                listener.onResponse(null);
+            }
+        }, listener::onFailure));
     }
 
     private void createModelAndRegisterAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
@@ -185,9 +251,6 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
         MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
         String tenantId = agent.getTenantId();
-        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
-            return;
-        }
 
         // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have an executor agent id, create an executor (reAct) agent
         if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT

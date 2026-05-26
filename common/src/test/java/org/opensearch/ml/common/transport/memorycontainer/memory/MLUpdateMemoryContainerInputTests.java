@@ -33,6 +33,23 @@ import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 public class MLUpdateMemoryContainerInputTests {
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testConstructorRejectsBlankName() {
+        MLUpdateMemoryContainerInput.builder().name("   ").build();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testConstructorRejectsEmptyName() {
+        MLUpdateMemoryContainerInput.builder().name("").build();
+    }
+
+    @Test
+    public void testConstructorAllowsNullName() {
+        // Null name on update means "no rename" - must be allowed.
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name(null).description("desc").build();
+        assertNull(input.getName());
+    }
+
     @Test
     public void testConstructor() {
         List<String> backendRoles = Arrays.asList("role1", "role2");

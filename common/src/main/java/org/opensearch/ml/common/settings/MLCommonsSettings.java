@@ -539,4 +539,24 @@ public final class MLCommonsSettings {
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
+
+    // When enabled, registering an Agent with a name that already exists (per tenant) is rejected.
+    // Defaults to false for backward compatibility.
+    public static final Setting<Boolean> ML_COMMONS_AGENT_NAME_UNIQUENESS_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "agent_name_uniqueness_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // When enabled, creating an Agentic Memory Container with a name that already exists (per
+    // tenant) is rejected. Defaults to false for backward compatibility.
+    public static final Setting<Boolean> ML_COMMONS_AGENTIC_MEMORY_NAME_UNIQUENESS_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "agentic_memory_name_uniqueness_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 }

@@ -6,6 +6,8 @@
 package org.opensearch.ml.action.agents;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
@@ -288,6 +290,228 @@ public class UpdateAgentTransportActionTests {
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(RestStatus.FORBIDDEN, argumentCaptor.getValue().status());
+    }
+
+    @Test
+    public void testDoExecute_uniquenessEnforced_renameToExistingName_rejected() throws IOException {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        String agentId = "test_agent_id";
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
+            .builder()
+            .agentId(agentId)
+            .name("other_agent")
+            .description("desc")
+            .build();
+
+        GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
+
+        MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
+        doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.search.SearchResponse> al = invocation.getArgument(1);
+            al.onResponse(buildSearchResponseWithConflictingHit("conflicting_agent_id"));
+            return null;
+        }).when(client).search(any(), any());
+
+        updateAgentTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) captor.getValue()).status());
+        assertTrue(captor.getValue().getMessage().contains("already exists"));
+        assertTrue(captor.getValue().getMessage().contains("other_agent"));
+        assertFalse(captor.getValue().getMessage().contains("conflicting_agent_id"));
+        // The put must not have been issued
+        verify(client, times(0)).update(any(), any());
+    }
+
+    @Test
+    public void testDoExecute_uniquenessEnforced_renameToUnusedName_allowed() throws IOException {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        String agentId = "test_agent_id";
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
+            .builder()
+            .agentId(agentId)
+            .name("brand_new_name")
+            .description("desc")
+            .build();
+
+        GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
+
+        MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
+        doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.search.SearchResponse> al = invocation.getArgument(1);
+            al.onResponse(buildSearchResponseWithHits(0L));
+            return null;
+        }).when(client).search(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        updateAgentTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<UpdateResponse> captor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(DocWriteResponse.Result.UPDATED, captor.getValue().getResult());
+    }
+
+    @Test
+    public void testDoExecute_uniquenessEnforced_sameNameNoOp_skipsSearch() throws IOException {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(true);
+
+        String agentId = "test_agent_id";
+        // prepareMLAgentGetResponse stores name="test"; PUT with the same name must be a no-op.
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
+            .builder()
+            .agentId(agentId)
+            .name("test")
+            .description("desc")
+            .build();
+
+        GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
+
+        MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
+        doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        updateAgentTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(client, times(0)).search(any(), any());
+        verify(actionListener).onResponse(any());
+    }
+
+    @Test
+    public void testDoExecute_uniquenessDisabled_renameSkipsSearch() throws IOException {
+        when(mlFeatureEnabledSetting.isAgentNameUniquenessEnabled()).thenReturn(false);
+
+        String agentId = "test_agent_id";
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
+            .builder()
+            .agentId(agentId)
+            .name("renamed_but_flag_off")
+            .description("desc")
+            .build();
+
+        GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
+
+        MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
+        doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        updateAgentTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(client, times(0)).search(any(), any());
+        verify(actionListener).onResponse(any());
+    }
+
+    private org.opensearch.action.search.SearchResponse buildSearchResponseWithHits(long hitCount) {
+        org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+            hitCount,
+            org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+        );
+        org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+            new org.opensearch.search.SearchHit[0],
+            totalHits,
+            Float.NaN
+        );
+        org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+            hits,
+            org.opensearch.search.aggregations.InternalAggregations.EMPTY,
+            null,
+            null,
+            false,
+            null,
+            0
+        );
+        return new org.opensearch.action.search.SearchResponse(
+            internal,
+            null,
+            1,
+            1,
+            0,
+            1,
+            org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+            org.opensearch.action.search.SearchResponse.Clusters.EMPTY
+        );
+    }
+
+    private org.opensearch.action.search.SearchResponse buildSearchResponseWithConflictingHit(String conflictingId) {
+        org.apache.lucene.search.TotalHits totalHits = new org.apache.lucene.search.TotalHits(
+            1L,
+            org.apache.lucene.search.TotalHits.Relation.EQUAL_TO
+        );
+        org.opensearch.search.SearchHit hit = new org.opensearch.search.SearchHit(0, conflictingId, null, null);
+        org.opensearch.search.SearchHits hits = new org.opensearch.search.SearchHits(
+            new org.opensearch.search.SearchHit[] { hit },
+            totalHits,
+            Float.NaN
+        );
+        org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+            hits,
+            org.opensearch.search.aggregations.InternalAggregations.EMPTY,
+            null,
+            null,
+            false,
+            null,
+            0
+        );
+        return new org.opensearch.action.search.SearchResponse(
+            internal,
+            null,
+            1,
+            1,
+            0,
+            1,
+            org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+            org.opensearch.action.search.SearchResponse.Clusters.EMPTY
+        );
     }
 
     private GetResponse prepareMLAgentGetResponse(String agentId, boolean isHidden, String tenantId) throws IOException {

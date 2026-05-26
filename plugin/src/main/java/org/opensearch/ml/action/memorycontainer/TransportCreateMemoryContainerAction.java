@@ -34,6 +34,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerModelValidator;
 import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
 import org.opensearch.ml.helper.MemoryContainerSharedIndexValidator;
+import org.opensearch.ml.helper.NameUniquenessHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -98,7 +99,18 @@ public class TransportCreateMemoryContainerAction extends
         User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
 
-        // Validate configuration before creating memory container
+        validateMemoryContainerNameUniqueness(input.getName(), tenantId, ActionListener.wrap(unused -> {
+            // Validate configuration before creating memory container
+            validateConfigurationAndCreate(input, user, tenantId, listener);
+        }, listener::onFailure));
+    }
+
+    private void validateConfigurationAndCreate(
+        MLCreateMemoryContainerInput input,
+        User user,
+        String tenantId,
+        ActionListener<MLCreateMemoryContainerResponse> listener
+    ) {
         validateConfiguration(input.getConfiguration(), ActionListener.wrap(isValid -> {
             // Check if memory container index exists, create if not
             ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
@@ -286,6 +298,41 @@ public class TransportCreateMemoryContainerAction extends
             log.error("Failed to save memory container", e);
             listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
+    }
+
+    /**
+     * When {@code plugins.ml_commons.agentic_memory_name_uniqueness_enabled} is enabled, reject
+     * creation if a memory container with the same name already exists in the same tenant. When the
+     * setting is disabled (default), this is a no-op so existing clusters remain backward compatible.
+     */
+    private void validateMemoryContainerNameUniqueness(String name, String tenantId, ActionListener<Void> listener) {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryNameUniquenessEnabled()) {
+            listener.onResponse(null);
+            return;
+        }
+
+        // MLCreateMemoryContainerInput rejects null names upstream, so we rely on that invariant
+        // here and don't re-check.
+        NameUniquenessHelper
+            .searchByExactName(client, sdkClient, ML_MEMORY_CONTAINER_INDEX, name, tenantId, ActionListener.wrap(response -> {
+                if (response == null) {
+                    // Index not yet created - no duplicate possible.
+                    listener.onResponse(null);
+                    return;
+                }
+                long totalHits = response.getHits().getTotalHits() == null ? 0 : response.getHits().getTotalHits().value();
+                if (totalHits > 0) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "A memory container with name [" + name + "] already exists. Memory container names must be unique.",
+                                RestStatus.CONFLICT
+                            )
+                        );
+                } else {
+                    listener.onResponse(null);
+                }
+            }, listener::onFailure));
     }
 
     private void validateConfiguration(MemoryConfiguration config, ActionListener<Boolean> listener) {
