@@ -55,6 +55,7 @@ public class MLRegisterModelRequest extends ActionRequest {
         Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
         fieldsToValidate.put("Model name", new FieldDescriptor(registerModelInput.getModelName(), true));
         fieldsToValidate.put("Model description", new FieldDescriptor(registerModelInput.getDescription(), false));
+        fieldsToValidate.put("Model provisioned_by field", new FieldDescriptor(registerModelInput.getProvisionedBy(), false));
 
         return validateFields(fieldsToValidate);
     }

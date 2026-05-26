@@ -48,6 +48,10 @@ public interface Connector extends ToXContentObject, Writeable {
 
     void setTenantId(String tenantId);
 
+    String getProvisionedBy();
+
+    void setProvisionedBy(String provisionedBy);
+
     String getProtocol();
 
     void setCreatedTime(Instant createdTime);
