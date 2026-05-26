@@ -80,7 +80,9 @@ public class BedrockConverseModelProviderTest {
         String requestBody = awsConnector.getActions().get(0).getRequestBody();
         assertTrue(requestBody.contains("inferenceConfig"));
         assertTrue(requestBody.contains("${parameters.max_tokens:-4096}"));
-        assertTrue(requestBody.contains("${parameters.temperature:-1.0}"));
+        assertTrue(requestBody.contains("${parameters.temperature_field:-}"));
+        // Verify temperature_field is set as a connector parameter (default when no top_p)
+        assertEquals(", \"temperature\": 1.0", awsConnector.getParameters().get("temperature_field"));
     }
 
     @Test
@@ -110,6 +112,10 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(topPField);
         assertTrue(topPField.contains("topP"));
         assertTrue(topPField.contains("0.9"));
+        // temperature_field should also be set since both were explicitly provided
+        String tempField = awsConnector.getParameters().get("temperature_field");
+        assertNotNull(tempField);
+        assertTrue(tempField.contains("0.5"));
     }
 
     @Test
