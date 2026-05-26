@@ -27,11 +27,13 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
@@ -919,6 +921,75 @@ public class HttpConnectorTest {
         Assert.assertTrue(foundByName.isPresent());
         Assert.assertEquals("predict_action_2", foundByName.get().getName());
         Assert.assertEquals("https://test2.com", foundByName.get().getUrl());
+    }
+
+    // ---- provisioned_by tests ----
+
+    @Test
+    public void builder_WithProvisionedBy() {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").provisionedBy("flow-framework").build();
+        Assert.assertEquals("flow-framework", connector.getProvisionedBy());
+    }
+
+    @Test
+    public void builder_WithoutProvisionedBy_DefaultsToNull() {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").build();
+        Assert.assertNull(connector.getProvisionedBy());
+    }
+
+    @Test
+    public void toXContent_WithProvisionedBy() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").provisionedBy("flow-framework").build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        Assert.assertTrue(TestHelper.xContentBuilderToString(builder).contains("\"provisioned_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void toXContent_WithoutProvisionedBy_OmitsField() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        Assert.assertFalse(TestHelper.xContentBuilderToString(builder).contains("provisioned_by"));
+    }
+
+    @Test
+    public void parse_WithProvisionedBy() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"protocol\":\"http\",\"provisioned_by\":\"flow-framework\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        HttpConnector connector = new HttpConnector("http", parser);
+        Assert.assertEquals("flow-framework", connector.getProvisionedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithProvisionedBy() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").provisionedBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        connector.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        HttpConnector deserialized = new HttpConnector(streamInput);
+        Assert.assertEquals("flow-framework", deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ProvisionedBy_OldVersion_IsNull() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("http").provisionedBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        connector.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        HttpConnector deserialized = new HttpConnector(streamInput);
+        Assert.assertNull(deserialized.getProvisionedBy());
     }
 
 }

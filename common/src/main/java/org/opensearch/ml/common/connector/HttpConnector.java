@@ -7,8 +7,10 @@ package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
+import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -88,7 +90,8 @@ public class HttpConnector extends AbstractConnector {
         AccessMode accessMode,
         User owner,
         ConnectorClientConfig connectorClientConfig,
-        String tenantId
+        String tenantId,
+        String provisionedBy
     ) {
         validateProtocol(protocol);
         if (actions != null) {
@@ -108,6 +111,7 @@ public class HttpConnector extends AbstractConnector {
         this.owner = owner;
         this.connectorClientConfig = connectorClientConfig;
         this.tenantId = tenantId;
+        this.provisionedBy = provisionedBy;
 
     }
 
@@ -172,6 +176,9 @@ public class HttpConnector extends AbstractConnector {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case PROVISIONED_BY_FIELD:
+                    provisionedBy = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -224,6 +231,9 @@ public class HttpConnector extends AbstractConnector {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (provisionedBy != null) {
+            builder.field(PROVISIONED_BY_FIELD, provisionedBy);
+        }
         builder.endObject();
         return builder;
     }
@@ -269,6 +279,7 @@ public class HttpConnector extends AbstractConnector {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
     }
 
     @Override
@@ -322,6 +333,9 @@ public class HttpConnector extends AbstractConnector {
         }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalString(provisionedBy);
         }
     }
 

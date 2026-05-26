@@ -6,6 +6,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -689,5 +691,75 @@ public class MLRegisterModelInputTest {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLRegisterModelInput parsedInput = new MLRegisterModelInput(streamInput);
         verify.accept(parsedInput);
+    }
+
+    // ---- provisioned_by tests ----
+
+    @Test
+    public void builder_WithProvisionedBy() {
+        MLRegisterModelInput withProvisionedBy = input.toBuilder().provisionedBy("flow-framework").build();
+        assertEquals("flow-framework", withProvisionedBy.getProvisionedBy());
+    }
+
+    @Test
+    public void builder_WithoutProvisionedBy_DefaultsToNull() {
+        assertNull(input.getProvisionedBy());
+    }
+
+    @Test
+    public void toXContent_WithProvisionedBy() throws Exception {
+        MLRegisterModelInput withProvisionedBy = input.toBuilder().provisionedBy("flow-framework").build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        withProvisionedBy.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertTrue(jsonStr.contains("\"provisioned_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void toXContent_WithoutProvisionedBy_OmitsField() throws Exception {
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertFalse(jsonStr.contains("\"provisioned_by\""));
+    }
+
+    @Test
+    public void parse_WithProvisionedBy() throws Exception {
+        String json = "{\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\",\"provisioned_by\":\"flow-framework\"}";
+        testParseFromJsonString("modelName", "version", true, json, parsedInput -> {
+            assertEquals("flow-framework", parsedInput.getProvisionedBy());
+        });
+    }
+
+    @Test
+    public void parse_WithoutModel_WithProvisionedBy() throws Exception {
+        String json = "{\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\",\"provisioned_by\":\"flow-framework\"}";
+        testParseFromJsonString(true, json, parsedInput -> { assertEquals("flow-framework", parsedInput.getProvisionedBy()); });
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithProvisionedBy() throws IOException {
+        MLRegisterModelInput inputWithProvisionedBy = input.toBuilder().provisionedBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_7_0);
+        inputWithProvisionedBy.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_7_0);
+        MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
+        assertEquals("flow-framework", deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ProvisionedBy_OldVersion_IsNull() throws IOException {
+        MLRegisterModelInput inputWithProvisionedBy = input.toBuilder().provisionedBy("flow-framework").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_5_0);
+        inputWithProvisionedBy.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_5_0);
+        MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
+        assertNull(deserialized.getProvisionedBy());
     }
 }

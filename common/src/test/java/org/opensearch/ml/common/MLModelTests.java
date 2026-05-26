@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -451,5 +452,155 @@ public class MLModelTests {
             mlModel
                 .identifyModel("anthropic", "https://test-api.anthropic.com/v1/messages", new JSONObject(requestBody), paramsOnlyConnector)
         );
+    }
+
+    // ---- provisioned_by tests ----
+
+    @Test
+    public void builder_WithProvisionedBy() {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).provisionedBy("flow-framework").build();
+        assertEquals("flow-framework", model.getProvisionedBy());
+    }
+
+    @Test
+    public void builder_WithoutProvisionedBy_DefaultsToNull() {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        assertNull(model.getProvisionedBy());
+    }
+
+    @Test
+    public void toXContent_WithProvisionedBy() throws IOException {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).provisionedBy("flow-framework").build();
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.core.xcontent.XContentBuilder
+            .builder(XContentType.JSON.xContent());
+        model.toXContent(builder, EMPTY_PARAMS);
+        org.junit.Assert
+            .assertTrue(
+                org.opensearch.ml.common.TestHelper.xContentBuilderToString(builder).contains("\"provisioned_by\":\"flow-framework\"")
+            );
+    }
+
+    @Test
+    public void toXContent_WithoutProvisionedBy_OmitsField() throws IOException {
+        MLModel model = MLModel.builder().name("test").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.core.xcontent.XContentBuilder
+            .builder(XContentType.JSON.xContent());
+        model.toXContent(builder, EMPTY_PARAMS);
+        org.junit.Assert.assertFalse(org.opensearch.ml.common.TestHelper.xContentBuilderToString(builder).contains("provisioned_by"));
+    }
+
+    @Test
+    public void parse_WithProvisionedBy() throws IOException {
+        String modelJson = """
+                {
+                    "name": "model_name",
+                    "algorithm": "KMEANS",
+                    "model_version": "1.0.0",
+                    "provisioned_by": "flow-framework"
+                }
+            """;
+        TestHelper.testParseFromString(config, modelJson, function);
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithProvisionedBy() throws IOException {
+        MLModel model = MLModel
+            .builder()
+            .name("test")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1")
+            .provisionedBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        model.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLModel deserialized = new MLModel(streamInput);
+        assertEquals("flow-framework", deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void testGetTags_RemoteModel_ProvisionedBy() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .actions(
+                List
+                    .of(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .build()
+                    )
+            )
+            .build();
+        MLModel withProvisionedBy = MLModel.builder().algorithm(FunctionName.REMOTE).provisionedBy("flow-framework").build();
+        assertEquals("flow-framework", withProvisionedBy.getTags(connector).getTagsMap().get("provisioned_by"));
+
+        MLModel withoutProvisionedBy = MLModel.builder().algorithm(FunctionName.REMOTE).build();
+        assertEquals("unknown", withoutProvisionedBy.getTags(connector).getTagsMap().get("provisioned_by"));
+    }
+
+    @Test
+    public void testGetTags_PreTrainedModel_ProvisionedBy() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
+        MLModel withProvisionedBy = MLModel
+            .builder()
+            .name("huggingface/sentence-transformers/bert-base-uncased")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .provisionedBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", withProvisionedBy.getTags().getTagsMap().get("provisioned_by"));
+
+        MLModel withoutProvisionedBy = MLModel
+            .builder()
+            .name("huggingface/sentence-transformers/bert-base-uncased")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .build();
+        assertEquals("unknown", withoutProvisionedBy.getTags().getTagsMap().get("provisioned_by"));
+    }
+
+    @Test
+    public void testGetTags_CustomModel_ProvisionedBy() {
+        MLModel withProvisionedBy = MLModel
+            .builder()
+            .name("my-custom-model")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .provisionedBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", withProvisionedBy.getTags().getTagsMap().get("provisioned_by"));
+
+        MLModel withoutProvisionedBy = MLModel.builder().name("my-custom-model").algorithm(FunctionName.TEXT_EMBEDDING).build();
+        assertEquals("unknown", withoutProvisionedBy.getTags().getTagsMap().get("provisioned_by"));
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ProvisionedBy_OldVersion_IsNull() throws IOException {
+        MLModel model = MLModel
+            .builder()
+            .name("test")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1")
+            .provisionedBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        model.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        MLModel deserialized = new MLModel(streamInput);
+        assertNull(deserialized.getProvisionedBy());
     }
 }

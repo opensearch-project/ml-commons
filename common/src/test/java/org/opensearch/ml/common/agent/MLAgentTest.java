@@ -18,6 +18,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
+import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -30,6 +31,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.search.SearchModule;
 
 public class MLAgentTest {
@@ -69,6 +71,7 @@ public class MLAgentTest {
             false,
             null,
             null,
+            null,
             null
         );
     }
@@ -91,6 +94,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
             null,
             null,
             null
@@ -117,6 +121,7 @@ public class MLAgentTest {
             false,
             null,
             null,
+            null,
             null
         );
     }
@@ -141,6 +146,7 @@ public class MLAgentTest {
             false,
             null,
             null,
+            null,
             null
         );
     }
@@ -160,6 +166,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
             null,
             null,
             null
@@ -193,6 +200,7 @@ public class MLAgentTest {
             false,
             null,
             null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -217,6 +225,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
             null,
             null,
             null
@@ -245,6 +254,7 @@ public class MLAgentTest {
             false,
             null,
             null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -269,6 +279,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
             null,
             null,
             null
@@ -308,6 +319,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
             null,
             null,
             null
@@ -370,6 +382,7 @@ public class MLAgentTest {
             false,
             null,
             null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -404,6 +417,7 @@ public class MLAgentTest {
             false,
             null,
             null,
+            null,
             null
         );
     }
@@ -424,6 +438,7 @@ public class MLAgentTest {
                 Instant.EPOCH,
                 "test",
                 false,
+                null,
                 null,
                 null,
                 null
@@ -449,6 +464,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             true,
+            null,
             null,
             null,
             null
@@ -519,6 +535,7 @@ public class MLAgentTest {
             true,
             null,
             null,
+            null,
             null
         );
 
@@ -545,6 +562,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             Instant.EPOCH,
             "test_app",
+            null,
             null,
             null,
             null,
@@ -580,6 +598,7 @@ public class MLAgentTest {
             false,
             "template_name",
             new ContextManagementTemplate(),
+            null,
             null
         );
     }
@@ -600,6 +619,7 @@ public class MLAgentTest {
             "test_app",
             false,
             "template_name",
+            null,
             null,
             null
         );
@@ -634,6 +654,7 @@ public class MLAgentTest {
             false,
             null,
             template,
+            null,
             null
         );
 
@@ -658,6 +679,7 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test_app",
             false,
+            null,
             null,
             null,
             null
@@ -685,6 +707,7 @@ public class MLAgentTest {
             "test_app",
             false,
             "template_name",
+            null,
             null,
             null
         );
@@ -727,6 +750,7 @@ public class MLAgentTest {
             false,
             null,
             template,
+            null,
             null
         );
 
@@ -762,6 +786,7 @@ public class MLAgentTest {
             "test_app",
             false,
             "template_name",
+            null,
             null,
             null
         );
@@ -843,6 +868,7 @@ public class MLAgentTest {
             false,
             "template_name",
             null,
+            null,
             null
         );
 
@@ -878,6 +904,7 @@ public class MLAgentTest {
             false,
             null,
             template,
+            null,
             null
         );
 
@@ -888,5 +915,160 @@ public class MLAgentTest {
         assertFalse(content.contains("\"context_management_name\":"));
         assertTrue(content.contains("\"context_management\":"));
         assertTrue(content.contains("\"inline_template\""));
+    }
+
+    // ---- provisioned_by tests ----
+
+    @Test
+    public void builder_WithProvisionedBy() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type(MLAgentType.FLOW.name()).provisionedBy("flow-framework").build();
+
+        assertEquals("flow-framework", agent.getProvisionedBy());
+    }
+
+    @Test
+    public void builder_WithoutProvisionedBy_DefaultsToNull() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type(MLAgentType.FLOW.name()).build();
+
+        assertNull(agent.getProvisionedBy());
+    }
+
+    @Test
+    public void toXContent_WithProvisionedBy() throws IOException {
+        MLAgent agent = MLAgent.builder().name("test").type("FLOW").provisionedBy("flow-framework").build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        assertTrue(content.contains("\"provisioned_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void toXContent_WithoutProvisionedBy_OmitsField() throws IOException {
+        MLAgent agent = MLAgent.builder().name("test").type("FLOW").build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        assertFalse(content.contains("provisioned_by"));
+    }
+
+    @Test
+    public void parse_WithProvisionedBy() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\",\"provisioned_by\":\"flow-framework\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parse(parser);
+
+        assertEquals("flow-framework", agent.getProvisionedBy());
+    }
+
+    @Test
+    public void parse_WithoutProvisionedBy_IsNull() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parse(parser);
+
+        assertNull(agent.getProvisionedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithProvisionedBy() throws IOException {
+        MLAgent agent = MLAgent.builder().name("test").type("FLOW").provisionedBy("flow-framework").build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        agent.writeTo(output);
+
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLAgent deserialized = new MLAgent(streamInput);
+
+        assertEquals("flow-framework", deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ProvisionedBy_OldVersion_IsNull() throws IOException {
+        MLAgent agent = MLAgent.builder().name("test").type("FLOW").provisionedBy("flow-framework").build();
+
+        // Serialize with a version that predates provisioned_by support
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        agent.writeTo(output);
+
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        MLAgent deserialized = new MLAgent(streamInput);
+
+        assertNull(deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void getTags_WithProvisionedBy() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type("FLOW").provisionedBy("flow-framework").build();
+
+        Map<String, ?> tagsMap = agent.getTags().getTagsMap();
+
+        assertEquals("flow-framework", tagsMap.get("provisioned_by"));
+    }
+
+    @Test
+    public void getTags_WithoutProvisionedBy_DefaultsToUnknown() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type("FLOW").build();
+
+        Map<String, ?> tagsMap = agent.getTags().getTagsMap();
+
+        assertEquals("unknown", tagsMap.get("provisioned_by"));
+    }
+
+    @Test
+    public void validate_ProvisionedBy_ValidValue_Passes() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type(MLAgentType.FLOW.name()).provisionedBy("flow-framework").build();
+
+        MLRegisterAgentRequest request = MLRegisterAgentRequest.builder().mlAgent(agent).build();
+        ActionRequestValidationException exception = request.validate();
+
+        assertNull(exception);
+    }
+
+    @Test
+    public void validate_ProvisionedBy_InvalidChars_Fails() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.FLOW.name())
+            .provisionedBy("<script>alert('xss')</script>")
+            .build();
+
+        MLRegisterAgentRequest request = MLRegisterAgentRequest.builder().mlAgent(agent).build();
+        ActionRequestValidationException exception = request.validate();
+
+        assertNotNull(exception);
+        assertTrue(exception.validationErrors().stream().anyMatch(e -> e.contains("provisioned_by")));
+    }
+
+    @Test
+    public void validate_ProvisionedBy_Null_Passes() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type(MLAgentType.FLOW.name()).build();
+
+        MLRegisterAgentRequest request = MLRegisterAgentRequest.builder().mlAgent(agent).build();
+        ActionRequestValidationException exception = request.validate();
+
+        assertNull(exception);
     }
 }

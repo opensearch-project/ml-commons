@@ -649,6 +649,7 @@ public class MLModelManager {
                     .guardrails(registerModelInput.getGuardrails())
                     .modelInterface(registerModelInput.getModelInterface())
                     .tenantId(registerModelInput.getTenantId())
+                    .provisionedBy(registerModelInput.getProvisionedBy())
                     .build();
 
                 PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
@@ -758,6 +759,7 @@ public class MLModelManager {
                 .guardrails(registerModelInput.getGuardrails())
                 .modelInterface(registerModelInput.getModelInterface())
                 .tenantId(registerModelInput.getTenantId())
+                .provisionedBy(registerModelInput.getProvisionedBy())
                 .build();
 
             PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
@@ -850,6 +852,8 @@ public class MLModelManager {
                     .isHidden(registerModelInput.getIsHidden())
                     .guardrails(registerModelInput.getGuardrails())
                     .modelInterface(registerModelInput.getModelInterface())
+                    .tenantId(registerModelInput.getTenantId())
+                    .provisionedBy(registerModelInput.getProvisionedBy())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {

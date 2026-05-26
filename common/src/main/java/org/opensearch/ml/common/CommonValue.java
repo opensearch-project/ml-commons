@@ -23,6 +23,7 @@ public class CommonValue {
 
     /** The field name containing the tenant id */
     public static final String TENANT_ID_FIELD = "tenant_id";
+    public static final String PROVISIONED_BY_FIELD = "provisioned_by";
     /**
      * Internal parameter key for propagating the executing agent's ID through the parameter map
      * for logging. Uses a distinct key to avoid colliding with the "agent_id" tool parameter
@@ -108,7 +109,6 @@ public class CommonValue {
     public static final Version VERSION_3_3_0 = Version.fromString("3.3.0");
     public static final Version VERSION_3_4_0 = Version.fromString("3.4.0");
     public static final Version VERSION_3_5_0 = Version.fromString("3.5.0");
-    public static final Version VERSION_3_6_0 = Version.fromString("3.6.0");
     public static final Version VERSION_3_7_0 = Version.fromString("3.7.0");
 
     // Connector Constants
