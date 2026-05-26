@@ -60,7 +60,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY_TEMPLATE = "{\"system\": [{\"text\": \"${parameters.system_prompt}\"}], "
         + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
-        + "${parameters.tool_configs:-} }";
+        + "${parameters.tool_configs:-}, "
+        + "\"inferenceConfig\": {\"maxTokens\": ${parameters.max_tokens:-4096}, "
+        + "\"temperature\": ${parameters.temperature:-1.0}${parameters.top_p_field:-}}"
+        + " }";
 
     // Body templates for different input types
     private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_text}\"}]}";
@@ -91,6 +94,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
         // Override with any provided model parameters
         if (modelParameters != null) {
             parameters.putAll(modelParameters);
+            // Build top_p_field fragment for the inferenceConfig template
+            if (modelParameters.containsKey("top_p")) {
+                parameters.put("top_p_field", ", \"topP\": " + modelParameters.get("top_p"));
+            }
         }
 
         Map<String, String> headers = new HashMap<>();

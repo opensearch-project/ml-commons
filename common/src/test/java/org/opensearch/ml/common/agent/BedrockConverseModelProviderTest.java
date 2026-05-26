@@ -76,6 +76,60 @@ public class BedrockConverseModelProviderTest {
         assertEquals(modelId, awsConnector.getParameters().get("model"));
         assertNotNull(awsConnector.getActions());
         assertEquals(1, awsConnector.getActions().size());
+        // Verify request body template contains inferenceConfig
+        String requestBody = awsConnector.getActions().get(0).getRequestBody();
+        assertTrue(requestBody.contains("inferenceConfig"));
+        assertTrue(requestBody.contains("${parameters.max_tokens:-4096}"));
+        assertTrue(requestBody.contains("${parameters.temperature:-1.0}"));
+    }
+
+    @Test
+    public void testCreateConnector_WithModelParameters_InferenceConfig() {
+        // Arrange
+        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
+        modelParameters.put("max_tokens", "10");
+        modelParameters.put("temperature", "0.5");
+        modelParameters.put("top_p", "0.9");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        AwsConnector awsConnector = (AwsConnector) connector;
+        assertEquals("10", awsConnector.getParameters().get("max_tokens"));
+        assertEquals("0.5", awsConnector.getParameters().get("temperature"));
+        assertEquals("0.9", awsConnector.getParameters().get("top_p"));
+        // top_p_field should be set for template interpolation
+        String topPField = awsConnector.getParameters().get("top_p_field");
+        assertNotNull(topPField);
+        assertTrue(topPField.contains("topP"));
+        assertTrue(topPField.contains("0.9"));
+    }
+
+    @Test
+    public void testCreateConnector_WithoutTopP_NoTopPField() {
+        // Arrange
+        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
+        modelParameters.put("max_tokens", "100");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        AwsConnector awsConnector = (AwsConnector) connector;
+        assertNull(awsConnector.getParameters().get("top_p_field"));
     }
 
     @Test
