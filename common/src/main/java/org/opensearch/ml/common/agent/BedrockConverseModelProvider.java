@@ -104,8 +104,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
                     parameters.put("temperature_field", ", \"temperature\": " + modelParameters.get("temperature"));
                 }
             } else {
-                parameters
-                    .put("temperature_field", ", \"temperature\": " + modelParameters.getOrDefault("temperature", "1.0"));
+                parameters.put("temperature_field", ", \"temperature\": " + modelParameters.getOrDefault("temperature", "1.0"));
             }
         } else {
             parameters.put("temperature_field", ", \"temperature\": 1.0");

@@ -1329,4 +1329,72 @@ public class OpenaiV1ChatCompletionsModelProviderTest {
         assertTrue(result.contains("tool_calls"));
         assertTrue(result.contains("get_weather"));
     }
+
+    // ==================== Tests for inference config parameters ====================
+
+    @Test
+    public void testCreateConnector_RequestBodyContainsInferenceParams() {
+        // Arrange
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("max_tokens", "100");
+        modelParameters.put("temperature", "0.5");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        HttpConnector httpConnector = (HttpConnector) connector;
+        String requestBody = httpConnector.getActions().get(0).getRequestBody();
+        assertTrue(requestBody.contains("max_completion_tokens"));
+        assertTrue(requestBody.contains("${parameters.max_tokens:-4096}"));
+        assertTrue(requestBody.contains("${parameters.temperature:-1.0}"));
+    }
+
+    @Test
+    public void testCreateConnector_WithTopP() {
+        // Arrange
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("max_tokens", "100");
+        modelParameters.put("temperature", "0.8");
+        modelParameters.put("top_p", "0.9");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertEquals("100", httpConnector.getParameters().get("max_tokens"));
+        assertEquals("0.8", httpConnector.getParameters().get("temperature"));
+        assertEquals("0.9", httpConnector.getParameters().get("top_p"));
+        String topPField = httpConnector.getParameters().get("top_p_field");
+        assertNotNull(topPField);
+        assertTrue(topPField.contains("\"top_p\""));
+        assertTrue(topPField.contains("0.9"));
+    }
+
+    @Test
+    public void testCreateConnector_WithoutTopP_NoTopPField() {
+        // Arrange
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("max_tokens", "100");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        HttpConnector httpConnector = (HttpConnector) connector;
+        assertNull(httpConnector.getParameters().get("top_p_field"));
+    }
 }
