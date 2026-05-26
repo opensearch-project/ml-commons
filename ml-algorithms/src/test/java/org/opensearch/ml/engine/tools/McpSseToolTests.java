@@ -156,7 +156,8 @@ public class McpSseToolTests {
 
         ArgumentCaptor<Tags> tagsCaptor = ArgumentCaptor.forClass(Tags.class);
         verify(counter, times(2)).add(eq(1.0), tagsCaptor.capture());
-        verify(histogram, times(2)).record(anyDouble(), any(Tags.class));
+        ArgumentCaptor<Tags> histTagsCaptor = ArgumentCaptor.forClass(Tags.class);
+        verify(histogram, times(2)).record(anyDouble(), histTagsCaptor.capture());
 
         Map<String, ?> first = tagsCaptor.getAllValues().get(0).getTagsMap();
         Map<String, ?> second = tagsCaptor.getAllValues().get(1).getTagsMap();
@@ -164,5 +165,12 @@ public class McpSseToolTests {
         assertEquals("success", first.get("status"));
         assertEquals("mcp_sse", second.get("protocol"));
         assertEquals("failure", second.get("status"));
+
+        Map<String, ?> histFirst = histTagsCaptor.getAllValues().get(0).getTagsMap();
+        Map<String, ?> histSecond = histTagsCaptor.getAllValues().get(1).getTagsMap();
+        assertEquals("mcp_sse", histFirst.get("protocol"));
+        assertEquals("success", histFirst.get("status"));
+        assertEquals("mcp_sse", histSecond.get("protocol"));
+        assertEquals("failure", histSecond.get("status"));
     }
 }

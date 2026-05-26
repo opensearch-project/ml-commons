@@ -85,11 +85,7 @@ public class McpStreamableHttpTool implements WithModelTool {
         MLMcpConnectorMetricsCounter.getInstance().incrementCounter(McpConnectorMetric.MCP_CONNECTOR_TOOL_INVOCATION_COUNT, tags);
         MLMcpConnectorMetricsCounter
             .getInstance()
-            .recordHistogram(
-                McpConnectorMetric.MCP_CONNECTOR_TOOL_INVOCATION_LATENCY,
-                latencyMs,
-                Tags.create().addTag("protocol", MCP_STREAMABLE_HTTP)
-            );
+            .recordHistogram(McpConnectorMetric.MCP_CONNECTOR_TOOL_INVOCATION_LATENCY, latencyMs, tags);
     }
 
     @Override

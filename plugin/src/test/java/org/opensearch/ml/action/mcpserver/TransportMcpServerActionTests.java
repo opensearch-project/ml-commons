@@ -312,4 +312,18 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         assertEquals("tools/call", t2.get("method"));
         assertEquals("failure", t2.get("status"));
     }
+
+    public void test_doExecute_unknownMethodCollapsedToOther() {
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
+        when(transportProvider.handleRequest(any(McpSchema.JSONRPCMessage.class)))
+            .thenReturn(Mono.just(new McpSchema.JSONRPCResponse("2.0", "1", "ok", null)));
+
+        action
+            .doExecute(task, new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"resources/list\",\"params\":{}}"), listener);
+
+        ArgumentCaptor<Tags> tagsCaptor = ArgumentCaptor.forClass(Tags.class);
+        verify(mcpCounter, times(1)).add(eq(1.0), tagsCaptor.capture());
+        assertEquals("other", tagsCaptor.getValue().getTagsMap().get("method"));
+    }
 }

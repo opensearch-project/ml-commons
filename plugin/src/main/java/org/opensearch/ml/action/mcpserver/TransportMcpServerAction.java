@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -39,6 +40,23 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Log4j2
 public class TransportMcpServerAction extends HandledTransportAction<ActionRequest, MLMcpServerResponse> {
+
+    /**
+     * JSON-RPC methods this server advertises and dispatches. Used to bound the cardinality
+     * of the {@code method} tag on MCP_SERVER_REQUEST_COUNT — anything else is collapsed to
+     * "other" so a misbehaving or hostile client can't inflate the time-series count.
+     *
+     * Keep in sync with {@link McpStatelessServerHolder}'s ServerCapabilities.
+     */
+    private static final Set<String> KNOWN_METHODS = Set
+        .of(
+            McpSchema.METHOD_INITIALIZE,
+            McpSchema.METHOD_NOTIFICATION_INITIALIZED,
+            McpSchema.METHOD_PING,
+            McpSchema.METHOD_TOOLS_LIST,
+            McpSchema.METHOD_TOOLS_CALL,
+            McpSchema.METHOD_LOGGING_SET_LEVEL
+        );
 
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
     JsonMapper objectMapper;
@@ -123,13 +141,15 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
     }
 
     private static String extractMethod(McpSchema.JSONRPCMessage message) {
+        String method;
         if (message instanceof McpSchema.JSONRPCRequest) {
-            return ((McpSchema.JSONRPCRequest) message).method();
+            method = ((McpSchema.JSONRPCRequest) message).method();
+        } else if (message instanceof McpSchema.JSONRPCNotification) {
+            method = ((McpSchema.JSONRPCNotification) message).method();
+        } else {
+            return "unknown";
         }
-        if (message instanceof McpSchema.JSONRPCNotification) {
-            return ((McpSchema.JSONRPCNotification) message).method();
-        }
-        return "unknown";
+        return KNOWN_METHODS.contains(method) ? method : "other";
     }
 
     private static void recordRequest(String method, String status) {

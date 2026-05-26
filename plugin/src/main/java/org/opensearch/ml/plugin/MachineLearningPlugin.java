@@ -952,10 +952,11 @@ public class MachineLearningPlugin extends Plugin
 
         // Always initialize counters so call sites can getInstance() safely. Emission itself is
         // gated inside AbstractMLMetricsCounter by MLFeatureEnabledSetting#isMetricCollectionEnabled().
-        MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
-        MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
-        MLMcpConnectorMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
-        MLMcpServerMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
+        String clusterName = clusterService.getClusterName().toString();
+        MLOperationalMetricsCounter.initialize(clusterName, metricsRegistry, mlFeatureEnabledSetting);
+        MLAdoptionMetricsCounter.initialize(clusterName, metricsRegistry, mlFeatureEnabledSetting);
+        MLMcpConnectorMetricsCounter.initialize(clusterName, metricsRegistry, mlFeatureEnabledSetting);
+        MLMcpServerMetricsCounter.initialize(clusterName, metricsRegistry, mlFeatureEnabledSetting);
 
         mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);

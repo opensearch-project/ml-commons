@@ -111,11 +111,9 @@ public class McpToolsHelper {
 
     private static void recordToolCall(String toolType, String status, long startNanos) {
         double latencyMs = (System.nanoTime() - startNanos) / 1_000_000.0;
-        Tags countTags = Tags.create().addTag("tool_type", toolType).addTag("status", status);
-        MLMcpServerMetricsCounter.getInstance().incrementCounter(McpServerMetric.MCP_SERVER_TOOL_CALL_COUNT, countTags);
-        MLMcpServerMetricsCounter
-            .getInstance()
-            .recordHistogram(McpServerMetric.MCP_SERVER_TOOL_CALL_LATENCY, latencyMs, Tags.create().addTag("tool_type", toolType));
+        Tags tags = Tags.create().addTag("tool_type", toolType).addTag("status", status);
+        MLMcpServerMetricsCounter.getInstance().incrementCounter(McpServerMetric.MCP_SERVER_TOOL_CALL_COUNT, tags);
+        MLMcpServerMetricsCounter.getInstance().recordHistogram(McpServerMetric.MCP_SERVER_TOOL_CALL_LATENCY, latencyMs, tags);
     }
 
     private static String getSchema(Map<String, Object> attrs) {

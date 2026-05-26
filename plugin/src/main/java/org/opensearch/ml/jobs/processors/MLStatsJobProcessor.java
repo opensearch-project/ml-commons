@@ -276,9 +276,9 @@ public class MLStatsJobProcessor extends MLJobProcessor {
         client.search(searchRequest, new ActionListener<SearchResponse>() {
             @Override
             public void onResponse(SearchResponse searchResponse) {
+                warnIfTruncated("MCP connector", searchResponse);
                 for (SearchHit hit : searchResponse.getHits()) {
-                    Object protocolObj = hit.getSourceAsMap().get("protocol");
-                    String protocol = protocolObj == null ? "unknown" : protocolObj.toString();
+                    String protocol = hit.getSourceAsMap().get("protocol").toString();
                     Tags tags = Tags.create().addTag("protocol", protocol);
                     MLMcpConnectorMetricsCounter.getInstance().incrementCounter(McpConnectorMetric.MCP_CONNECTOR_COUNT, tags);
                 }
@@ -306,6 +306,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
         client.search(searchRequest, new ActionListener<SearchResponse>() {
             @Override
             public void onResponse(SearchResponse searchResponse) {
+                warnIfTruncated("MCP server registered tool", searchResponse);
                 for (SearchHit hit : searchResponse.getHits()) {
                     Object typeObj = hit.getSourceAsMap().get("type");
                     String toolType = typeObj == null ? "unknown" : typeObj.toString();
@@ -319,5 +320,17 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                 log.error("Failed to fetch MCP server registered tools for metrics collection", e);
             }
         });
+    }
+
+    private static void warnIfTruncated(String scanName, SearchResponse searchResponse) {
+        if (searchResponse.getHits().getTotalHits() != null && searchResponse.getHits().getTotalHits().value() > BATCH_SIZE) {
+            log
+                .warn(
+                    "{} metrics scan truncated: total hits {} exceeds batch size {}; counts will be under-reported until pagination is added",
+                    scanName,
+                    searchResponse.getHits().getTotalHits().value(),
+                    BATCH_SIZE
+                );
+        }
     }
 }
