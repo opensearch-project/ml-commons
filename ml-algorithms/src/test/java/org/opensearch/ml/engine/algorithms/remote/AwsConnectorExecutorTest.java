@@ -31,6 +31,7 @@ import static org.opensearch.ml.engine.helper.MLTestHelper.endecryptConnectorCre
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -274,6 +275,9 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setConnectorPrivateIpEnabled(false);
+        executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
+        executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         executor.setClient(client);
@@ -812,6 +816,9 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setConnectorPrivateIpEnabled(false);
+        executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
+        executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         ExecutorService executorService = mock(ExecutorService.class);
@@ -1068,7 +1075,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -1090,6 +1097,8 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
@@ -1111,7 +1120,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -1133,6 +1142,8 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
@@ -1154,7 +1165,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -1176,6 +1187,8 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );

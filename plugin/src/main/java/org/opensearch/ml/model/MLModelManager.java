@@ -22,11 +22,13 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
@@ -35,6 +37,8 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_PRIVATE_IP_ENABLED;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_RESTRICTED_IP_PATTERNS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
@@ -71,11 +75,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
@@ -198,6 +204,8 @@ public class MLModelManager {
     private volatile Integer maxDeployTasksPerNode;
     private volatile Integer maxBatchInferenceTasks;
     private volatile Integer maxBatchIngestionTasks;
+    private volatile List<Pattern> connectorTrustedPrivateEndpoints;
+    private volatile List<Pattern> connectorRestrictedIpPatterns;
 
     public static final ImmutableSet<MLModelState> MODEL_DONE_STATES = ImmutableSet
         .of(
@@ -266,6 +274,20 @@ public class MLModelManager {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MAX_BATCH_INGESTION_TASKS, it -> maxBatchIngestionTasks = it);
+
+        connectorTrustedPrivateEndpoints = new CopyOnWriteArrayList<>();
+        connectorTrustedPrivateEndpoints.addAll(compilePatterns(ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX.get(settings)));
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX, it -> {
+            connectorTrustedPrivateEndpoints.clear();
+            connectorTrustedPrivateEndpoints.addAll(compilePatterns(it));
+        });
+
+        connectorRestrictedIpPatterns = new CopyOnWriteArrayList<>();
+        connectorRestrictedIpPatterns.addAll(compilePatterns(ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS.get(settings)));
+    }
+
+    private List<Pattern> compilePatterns(List<String> regexList) {
+        return regexList.stream().map(Pattern::compile).collect(Collectors.toList());
     }
 
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
@@ -1550,6 +1572,8 @@ public class MLModelManager {
             log.info("Setting up ML guard parameter for ML predictor.");
         }
         params.put(CONNECTOR_PRIVATE_IP_ENABLED, mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+        params.put(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS, connectorTrustedPrivateEndpoints);
+        params.put(CONNECTOR_RESTRICTED_IP_PATTERNS, connectorRestrictedIpPatterns);
         params.put(SDK_CLIENT, sdkClient);
         params.put(SETTINGS, settings);
         return Collections.unmodifiableMap(params);

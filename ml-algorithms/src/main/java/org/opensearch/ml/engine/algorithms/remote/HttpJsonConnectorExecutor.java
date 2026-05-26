@@ -16,9 +16,11 @@ import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -77,6 +79,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private MLGuard mlGuard;
     @Setter
     private volatile boolean connectorPrivateIpEnabled;
+    @Setter
+    private volatile List<Pattern> connectorTrustedPrivateEndpoints;
+    @Setter
+    private volatile List<Pattern> connectorRestrictedIpPatterns;
 
     @Setter
     @Getter
@@ -215,6 +221,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                             readTimeout,
                             maxConnection,
                             connectorPrivateIpEnabled,
+                            connectorTrustedPrivateEndpoints,
+                            connectorRestrictedIpPatterns,
                             skipSslVerificationValue
                         )
                 );
