@@ -96,15 +96,14 @@ public class BedrockConverseModelProvider extends ModelProvider {
             parameters.putAll(modelParameters);
             boolean hasTopP = modelParameters.containsKey("top_p");
             boolean hasTemperature = modelParameters.containsKey("temperature");
-            // Claude on Bedrock does not allow both temperature and top_p simultaneously.
-            // Include temperature by default, but omit it when top_p is set without explicit temperature.
+            // Bedrock Converse uses either temperature or topP, not both.
+            // When top_p is set, temperature is omitted to avoid a Bedrock rejection.
             if (hasTopP) {
-                parameters.put("top_p_field", ", \"topP\": " + modelParameters.get("top_p"));
-                if (hasTemperature) {
-                    parameters.put("temperature_field", ", \"temperature\": " + modelParameters.get("temperature"));
-                }
+                String topPValue = validateNumericParameter(modelParameters.get("top_p"), "top_p");
+                parameters.put("top_p_field", ", \"topP\": " + topPValue);
             } else {
-                parameters.put("temperature_field", ", \"temperature\": " + modelParameters.getOrDefault("temperature", "1.0"));
+                String tempValue = validateNumericParameter(modelParameters.getOrDefault("temperature", "1.0"), "temperature");
+                parameters.put("temperature_field", ", \"temperature\": " + tempValue);
             }
         } else {
             parameters.put("temperature_field", ", \"temperature\": 1.0");

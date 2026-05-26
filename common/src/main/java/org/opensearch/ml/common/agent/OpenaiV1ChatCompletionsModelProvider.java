@@ -106,7 +106,8 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
         if (modelParameters != null) {
             parameters.putAll(modelParameters);
             if (modelParameters.containsKey("top_p")) {
-                parameters.put("top_p_field", ", \"top_p\": " + modelParameters.get("top_p"));
+                String topPValue = validateNumericParameter(modelParameters.get("top_p"), "top_p");
+                parameters.put("top_p_field", ", \"top_p\": " + topPValue);
             }
         }
 

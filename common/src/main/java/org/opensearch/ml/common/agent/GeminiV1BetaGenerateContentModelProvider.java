@@ -88,7 +88,8 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         if (modelParameters != null) {
             parameters.putAll(modelParameters);
             if (modelParameters.containsKey("top_p")) {
-                parameters.put("top_p_field", ", \"topP\": " + modelParameters.get("top_p"));
+                String topPValue = validateNumericParameter(modelParameters.get("top_p"), "top_p");
+                parameters.put("top_p_field", ", \"topP\": " + topPValue);
             }
         }
 
