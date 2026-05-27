@@ -1,6 +1,8 @@
 ### OpenAI connector blueprint example for chat:
 
 #### this blueprint is created from OpenAI doc: https://platform.openai.com/docs/api-reference/chat
+
+> **Note:** `supports_structured_output: true` enables JSON schema enforcement for agentic memory fact extraction. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -20,6 +22,7 @@ POST /_plugins/_ml/connectors/_create
       "action_type": "predict",
       "method": "POST",
       "url": "https://${parameters.endpoint}/v1/chat/completions",
+      "supports_structured_output": true,
       "headers": {
         "Authorization": "Bearer ${credential.openAI_key}"
       },

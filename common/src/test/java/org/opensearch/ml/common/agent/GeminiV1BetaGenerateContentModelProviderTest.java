@@ -825,4 +825,86 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
         assertTrue(result.contains("First part"));
         assertTrue(result.contains("Second part"));
     }
+
+    // ==================== Tests for inference config parameters ====================
+
+    @Test
+    public void testCreateConnector_GenerationConfig_SubstitutesToValidJson() {
+        // Arrange
+        String modelId = "gemini-2.5-flash";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("gemini_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("max_tokens", "100");
+        modelParameters.put("temperature", "0.5");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert — perform actual template substitution
+        HttpConnector httpConnector = (HttpConnector) connector;
+        String requestBody = httpConnector.getActions().get(0).getRequestBody();
+        Map<String, String> params = new HashMap<>(httpConnector.getParameters());
+        params.put("system_prompt", "You are helpful.");
+        params.put("body", "{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}");
+        org.apache.commons.text.StringSubstitutor sub = new org.apache.commons.text.StringSubstitutor(params, "${parameters.", "}");
+        sub.setEnableUndefinedVariableException(false);
+        String resolved = sub.replace(requestBody);
+
+        assertTrue(resolved.contains("\"generationConfig\""));
+        assertTrue(resolved.contains("\"maxOutputTokens\":100"));
+        assertTrue(resolved.contains("\"temperature\":0.5"));
+        assertFalse(resolved.contains("topP"));
+    }
+
+    @Test
+    public void testCreateConnector_WithTopP_SubstitutesToValidJson() {
+        // Arrange
+        String modelId = "gemini-2.5-flash";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("gemini_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("max_tokens", "100");
+        modelParameters.put("temperature", "0.8");
+        modelParameters.put("top_p", "0.9");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert — substitution and parse
+        HttpConnector httpConnector = (HttpConnector) connector;
+        String requestBody = httpConnector.getActions().get(0).getRequestBody();
+        Map<String, String> params = new HashMap<>(httpConnector.getParameters());
+        params.put("system_prompt", "You are helpful.");
+        params.put("body", "{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}");
+        org.apache.commons.text.StringSubstitutor sub = new org.apache.commons.text.StringSubstitutor(params, "${parameters.", "}");
+        sub.setEnableUndefinedVariableException(false);
+        String resolved = sub.replace(requestBody);
+
+        assertTrue(resolved.contains("\"maxOutputTokens\":100"));
+        assertTrue(resolved.contains("\"temperature\":0.8"));
+        assertTrue(resolved.contains("\"topP\": 0.9"));
+    }
+
+    @Test
+    public void testCreateConnector_InvalidNumericParameter_ThrowsException() {
+        // Arrange
+        String modelId = "gemini-2.5-flash";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("gemini_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("top_p", "0.9\", \"malicious\": \"value");
+
+        // Act & Assert
+        try {
+            provider.createConnector(modelId, credential, modelParameters);
+            fail("Should throw IllegalArgumentException for invalid numeric parameter");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("top_p"));
+            assertTrue(e.getMessage().contains("must be a valid number"));
+        }
+    }
 }

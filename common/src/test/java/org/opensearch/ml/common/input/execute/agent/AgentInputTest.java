@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.input.execute.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -474,6 +475,40 @@ public class AgentInputTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new AgentInput(parser));
         assertTrue(exception.getMessage().contains("Invalid source type"));
+        assertTrue(exception.getMessage().contains("BASE64, URL"));
+        assertFalse(exception.getMessage().contains("BYTES"));
+    }
+
+    @Test
+    public void testXContentParser_VideoContent_InvalidSourceType() throws IOException {
+        // Arrange
+        String jsonStr = "[{\"type\":\"video\",\"source\":{\"type\":\"invalid\",\"format\":\"mp4\",\"data\":\"data\"}}]";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+        parser.nextToken();
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new AgentInput(parser));
+        assertTrue(exception.getMessage().contains("Invalid source type"));
+        assertTrue(exception.getMessage().contains("BASE64, URL"));
+        assertFalse(exception.getMessage().contains("BYTES"));
+    }
+
+    @Test
+    public void testXContentParser_DocumentContent_InvalidSourceType() throws IOException {
+        // Arrange
+        String jsonStr = "[{\"type\":\"document\",\"source\":{\"type\":\"invalid\",\"format\":\"pdf\",\"data\":\"data\"}}]";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+        parser.nextToken();
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new AgentInput(parser));
+        assertTrue(exception.getMessage().contains("Invalid source type"));
+        assertTrue(exception.getMessage().contains("BASE64, URL"));
+        assertFalse(exception.getMessage().contains("BYTES"));
     }
 
     @Test

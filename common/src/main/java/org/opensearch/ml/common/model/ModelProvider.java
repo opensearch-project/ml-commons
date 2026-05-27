@@ -22,6 +22,27 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 public abstract class ModelProvider {
 
     /**
+     * Validates that a parameter value is a valid number. Prevents JSON injection
+     * via malformed numeric parameters that could break the JSON structure.
+     *
+     * @param value the parameter value to validate
+     * @param paramName the parameter name (for error messages)
+     * @return the validated value string
+     * @throws IllegalArgumentException if the value is not a valid number
+     */
+    protected static String validateNumericParameter(String value, String paramName) {
+        if (value == null) {
+            throw new IllegalArgumentException(paramName + " must not be null");
+        }
+        try {
+            Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(paramName + " must be a valid number, got: " + value);
+        }
+        return value;
+    }
+
+    /**
      * Creates a connector for this model provider
      * @param modelName the model name (e.g., "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
      * @param credential credential map for the connector
