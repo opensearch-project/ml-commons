@@ -17,9 +17,6 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
-import org.opensearch.ml.stats.otel.counters.MLMcpConnectorMetricsCounter;
-import org.opensearch.ml.stats.otel.metrics.McpConnectorMetric;
-import org.opensearch.telemetry.metrics.tags.Tags;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -70,22 +67,13 @@ public class McpStreamableHttpTool implements WithModelTool {
             String resultJson = StringUtils.toJson(result.content());
             @SuppressWarnings("unchecked")
             T response = (T) resultJson;
-            recordInvocation(startNanos, "success");
+            McpToolMetrics.recordConnectorInvocation(MCP_STREAMABLE_HTTP, startNanos, "success");
             listener.onResponse(response);
         } catch (Exception e) {
-            recordInvocation(startNanos, "failure");
+            McpToolMetrics.recordConnectorInvocation(MCP_STREAMABLE_HTTP, startNanos, "failure");
             log.error("Failed to call MCP streamable HTTP tool: {}", this.getName(), e);
             listener.onFailure(e);
         }
-    }
-
-    private void recordInvocation(long startNanos, String status) {
-        double latencyMs = (System.nanoTime() - startNanos) / 1_000_000.0;
-        Tags tags = Tags.create().addTag("protocol", MCP_STREAMABLE_HTTP).addTag("status", status);
-        MLMcpConnectorMetricsCounter.getInstance().incrementCounter(McpConnectorMetric.MCP_CONNECTOR_TOOL_INVOCATION_COUNT, tags);
-        MLMcpConnectorMetricsCounter
-            .getInstance()
-            .recordHistogram(McpConnectorMetric.MCP_CONNECTOR_TOOL_INVOCATION_LATENCY, latencyMs, tags);
     }
 
     @Override
