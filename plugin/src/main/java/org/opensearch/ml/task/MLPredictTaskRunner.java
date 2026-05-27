@@ -585,7 +585,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 // double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
                                 // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
-                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
                     } else {
                         // long startTime = System.nanoTime();
@@ -606,7 +606,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     return;
                 } catch (Exception e) {
                     log.error("Failed to predict model " + modelId, e);
-                    handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
+                    handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName);
                     return;
                 }
             } else if (FunctionName.needDeployFirst(algorithm)) {
@@ -731,6 +731,24 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 );
             }
         }
+    }
+
+    boolean shouldTrackRemoteFailure(Exception e) {
+        // Don't track failures for user configuration issues
+        if (e instanceof IllegalArgumentException) {
+            return false;
+        }
+
+        // Don't track any 4xx client errors (user/configuration issues)
+        if (e instanceof OpenSearchStatusException) {
+            RestStatus status = ((OpenSearchStatusException) e).status();
+            if (status.getStatus() >= 400 && status.getStatus() < 500) {
+                return false;
+            }
+        }
+
+        // Track failures for infrastructure/service issues
+        return true;
     }
 
     private boolean requiresAutoDeployment(String[] workerNodes, String[] targetWorkerNodes) {
