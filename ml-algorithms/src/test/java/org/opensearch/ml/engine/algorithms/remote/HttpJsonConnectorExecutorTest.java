@@ -99,7 +99,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         executor.invokeRemoteService(PREDICT.name(), null, null, null, null, actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
@@ -126,6 +127,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         executor.setConnectorPrivateIpEnabled(false);
         executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
         executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://.*$"));
         executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -164,6 +166,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         executor.setConnectorPrivateIpEnabled(true);
         executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
         executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://.*$"));
         executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -199,6 +202,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         executor.setConnectorPrivateIpEnabled(false);
         executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
         executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://.*$"));
         executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -233,7 +237,8 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         executor.invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
@@ -316,6 +321,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .thenReturn(mockClient);
 
             HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
             executor.setClient(client);
             when(client.threadPool()).thenReturn(threadPool);
             when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -376,6 +382,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .thenReturn(mockClient);
 
             HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
             executor.setClient(client);
             when(client.threadPool()).thenReturn(threadPool);
             when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -436,6 +443,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 .thenReturn(mockClient);
 
             HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+            executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
             executor.setClient(client);
             when(client.threadPool()).thenReturn(threadPool);
             when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -485,6 +493,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         executor.setClient(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -515,6 +524,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .build();
 
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
 
         Map<String, String> parameters = ImmutableMap.of("_llm_interface", "openai/v1/chat/completions", "input", "test input");

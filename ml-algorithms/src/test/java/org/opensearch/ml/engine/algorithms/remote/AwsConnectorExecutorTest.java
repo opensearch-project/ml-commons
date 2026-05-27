@@ -180,6 +180,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -282,6 +283,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         executor.setConnectorPrivateIpEnabled(false);
         executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
         executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         executor.setClient(client);
@@ -532,6 +534,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -823,6 +826,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         executor.setConnectorPrivateIpEnabled(false);
         executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
         executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         ExecutorService executorService = mock(ExecutorService.class);
