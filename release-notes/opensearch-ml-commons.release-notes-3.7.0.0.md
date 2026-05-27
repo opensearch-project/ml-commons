@@ -6,6 +6,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.7.0
 
 * Add `provisioned_by` field to ML agents, connectors, and models for adoption metrics attribution ([#4754](https://github.com/opensearch-project/ml-commons/pull/4754))
 * Enable dynamic header support in ML connectors using `${parameters.*}` placeholders for per-request values ([#4817](https://github.com/opensearch-project/ml-commons/pull/4817))
+* Introduce V2 Chat Agent ([#4732](https://github.com/opensearch-project/ml-commons/pull/4732))
 
 ### Enhancements
 
