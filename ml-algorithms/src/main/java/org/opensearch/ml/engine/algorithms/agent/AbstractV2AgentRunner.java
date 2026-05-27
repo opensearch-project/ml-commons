@@ -28,7 +28,6 @@ import org.opensearch.ml.common.output.execute.agent.AgentV2Output;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -224,15 +223,10 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
             return;
         }
 
-        Map<String, String> toolParams = new HashMap<>();
+        // Inherit outer agent parameters so framework-reserved fields (tenant id, recursion
+        // depth, etc.) flow to the tool. The per-call "input" overrides any inherited value.
+        Map<String, String> toolParams = agentParams == null ? new HashMap<>() : new HashMap<>(agentParams);
         toolParams.put("input", toolInput);
-        // Forward framework recursion-depth marker so nested AgentTool calls remain bounded.
-        if (agentParams != null) {
-            String depth = agentParams.get(AgentTool.AGENT_CALL_DEPTH_FIELD);
-            if (depth != null) {
-                toolParams.put(AgentTool.AGENT_CALL_DEPTH_FIELD, depth);
-            }
-        }
         tool.run(toolParams, ActionListener.wrap(output -> {
             Map<String, Object> result = new HashMap<>();
             result.put("tool_call_id", toolCallId);
