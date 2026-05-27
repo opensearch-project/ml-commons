@@ -186,19 +186,27 @@ public interface Connector extends ToXContentObject, Writeable {
         for (ConnectorAction action : getActions()) {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             String url = substitutor.replace(action.getUrl());
-            boolean hasMatchedUrl = false;
-            for (String urlRegex : urlRegexes) {
-                Pattern pattern = Pattern.compile(urlRegex);
-                Matcher matcher = pattern.matcher(url);
-                if (matcher.matches()) {
-                    hasMatchedUrl = true;
-                    break;
-                }
-            }
-            if (!hasMatchedUrl) {
-                throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex");
+            validateResolvedEndpoint(url, urlRegexes);
+        }
+    }
+
+    default void validateResolvedEndpoint(String resolvedUrl, List<String> urlRegexes) {
+        if (urlRegexes == null || urlRegexes.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Trusted connector endpoints regex is not configured. Please set plugins.ml_commons.trusted_connector_endpoints_regex."
+            );
+        }
+        if (resolvedUrl == null) {
+            throw new IllegalArgumentException("Resolved connector URL is null");
+        }
+        for (String urlRegex : urlRegexes) {
+            Pattern pattern = Pattern.compile(urlRegex);
+            Matcher matcher = pattern.matcher(resolvedUrl);
+            if (matcher.matches()) {
+                return;
             }
         }
+        throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex");
     }
 
     Map<String, String> getDecryptedHeaders();
