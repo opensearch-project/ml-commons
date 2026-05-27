@@ -26,7 +26,9 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -225,7 +227,10 @@ public class AgentToolTests {
         tool.run(parameters, listener);
 
         verify(client, never()).execute(any(), any(), any());
-        verify(listener).onFailure(any(IllegalStateException.class));
+        ArgumentCaptor<Exception> exCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exCaptor.capture());
+        OpenSearchStatusException ex = (OpenSearchStatusException) exCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, ex.status());
     }
 
     @Test
@@ -237,7 +242,10 @@ public class AgentToolTests {
         tool.run(parameters, listener);
 
         verify(client, never()).execute(any(), any(), any());
-        verify(listener).onFailure(any(IllegalStateException.class));
+        ArgumentCaptor<Exception> exCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exCaptor.capture());
+        OpenSearchStatusException ex = (OpenSearchStatusException) exCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, ex.status());
     }
 
     @Test

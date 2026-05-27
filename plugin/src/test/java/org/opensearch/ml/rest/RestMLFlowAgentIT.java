@@ -10,9 +10,11 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
@@ -48,6 +50,23 @@ public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
         String result = (String) responseMap.get("result");
         assertNotNull(result);
         assertTrue(result.contains(".plugins-ml-agent"));
+    }
+
+    public void testAgentToolSelfReferenceIsBoundedByMaxRecursionDepth() throws IOException, ParseException {
+        // Register a flow agent whose only tool is an AgentTool pointing at a placeholder id.
+        Response registerResponse = registerSelfReferencingAgentSkeleton();
+        Map registerMap = parseResponseToMap(registerResponse);
+        String agentId = (String) registerMap.get("agent_id");
+        assertNotNull(agentId);
+
+        // Rewire the AgentTool to point at the agent itself, so executing it tries to recurse.
+        Response updateResponse = updateAgentToolToTargetSelf(agentId);
+        assertEquals(200, updateResponse.getStatusLine().getStatusCode());
+
+        // Executing must fail fast with our recursion-depth guard rather than recursing forever.
+        ResponseException ex = expectThrows(ResponseException.class, () -> executeAgent(agentId, Map.of("question", "\"hi\"")));
+        String body = EntityUtils.toString(ex.getResponse().getEntity());
+        assertTrue("Expected recursion-depth error, got: " + body, body.contains("AgentTool recursion depth"));
     }
 
     public void testAgentSearchIndexTool() throws IOException {
@@ -113,6 +132,44 @@ public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
     public static Response executeAgentSearchIndexTool(String agentId) throws IOException {
         String input = "{\"index\": \"iris_data\", \"query\": {\"size\": 2,  \"_source\": \"petal_length_in_cm\"}}";
         return executeAgent(agentId, Map.of("input", input));
+    }
+
+    public static Response registerSelfReferencingAgentSkeleton() throws IOException {
+        // agent_id is a placeholder; we PUT-update it to the agent's own id after registration.
+        String registerEntity = "{\n"
+            + "  \"name\": \"Test_Agent_Self_Reference\",\n"
+            + "  \"type\": \"flow\",\n"
+            + "  \"description\": \"agent that calls itself via AgentTool\",\n"
+            + "  \"tools\": [\n"
+            + "    {\n"
+            + "      \"type\": \"AgentTool\",\n"
+            + "      \"name\": \"NestedAgentTool\",\n"
+            + "      \"parameters\": {\n"
+            + "        \"agent_id\": \"placeholder-will-be-replaced\"\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        return TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/agents/_register", null, TestHelper.toHttpEntity(registerEntity), null);
+    }
+
+    public static Response updateAgentToolToTargetSelf(String agentId) throws IOException {
+        String updateEntity = "{\n"
+            + "  \"tools\": [\n"
+            + "    {\n"
+            + "      \"type\": \"AgentTool\",\n"
+            + "      \"name\": \"NestedAgentTool\",\n"
+            + "      \"parameters\": {\n"
+            + "        \"agent_id\": \""
+            + agentId
+            + "\"\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        return TestHelper
+            .makeRequest(client(), "PUT", "/_plugins/_ml/agents/" + agentId, null, TestHelper.toHttpEntity(updateEntity), null);
     }
 
     public static Response executeAgent(String agentId, Map<String, String> args) throws IOException {

@@ -449,7 +449,7 @@ public class AbstractV2AgentRunnerTest {
         ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
 
         // Act
-        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+        runner.executeToolsSequentially(toolsMap, toolCalls, null, testListener);
 
         // Assert
         verify(testListener, timeout(1000)).onResponse(argThat(results -> {
@@ -471,7 +471,7 @@ public class AbstractV2AgentRunnerTest {
         ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
 
         // Act
-        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+        runner.executeToolsSequentially(toolsMap, toolCalls, null, testListener);
 
         // Assert
         verify(testListener, timeout(1000)).onResponse(argThat(results -> {
@@ -502,7 +502,7 @@ public class AbstractV2AgentRunnerTest {
         ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
 
         // Act
-        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+        runner.executeToolsSequentially(toolsMap, toolCalls, null, testListener);
 
         // Assert
         verify(testListener, timeout(1000)).onResponse(argThat(results -> {
@@ -512,6 +512,32 @@ public class AbstractV2AgentRunnerTest {
             assertEquals("Tool failed", toolResult.get("error"));
             return true;
         }));
+    }
+
+    @Test
+    public void testExecuteToolsSequentially_ForwardsAgentCallDepthIntoToolParams() {
+        Map<String, Tool> toolsMap = new HashMap<>();
+        Tool mockTool = mock(Tool.class);
+        toolsMap.put("test-tool", mockTool);
+
+        List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+
+        org.mockito.ArgumentCaptor<Map<String, String>> paramsCaptor = org.mockito.ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<Object> l = invocation.getArgument(1);
+            l.onResponse("ok");
+            return null;
+        }).when(mockTool).run(paramsCaptor.capture(), any());
+
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put(org.opensearch.ml.engine.tools.AgentTool.AGENT_CALL_DEPTH_FIELD, "1");
+
+        ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
+        runner.executeToolsSequentially(toolsMap, toolCalls, agentParams, testListener);
+
+        verify(testListener, timeout(1000)).onResponse(any());
+        Map<String, String> seenParams = paramsCaptor.getValue();
+        assertEquals("1", seenParams.get(org.opensearch.ml.engine.tools.AgentTool.AGENT_CALL_DEPTH_FIELD));
     }
 
     @Test
@@ -546,7 +572,7 @@ public class AbstractV2AgentRunnerTest {
         ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
 
         // Act
-        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+        runner.executeToolsSequentially(toolsMap, toolCalls, null, testListener);
 
         // Assert
         verify(testListener, timeout(1000)).onResponse(argThat(results -> {
@@ -873,7 +899,7 @@ public class AbstractV2AgentRunnerTest {
         ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
 
         // Act
-        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+        runner.executeToolsSequentially(toolsMap, toolCalls, null, testListener);
 
         // Assert
         verify(testListener, timeout(1000)).onResponse(argThat(results -> {
@@ -915,7 +941,7 @@ public class AbstractV2AgentRunnerTest {
         ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
 
         // Act
-        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+        runner.executeToolsSequentially(toolsMap, toolCalls, null, testListener);
 
         // Assert
         verify(testListener, timeout(1000)).onResponse(argThat(results -> {
@@ -952,7 +978,7 @@ public class AbstractV2AgentRunnerTest {
         ActionListener<List<Map<String, Object>>> testListener = mock(ActionListener.class);
 
         // Act
-        runner.executeToolsSequentially(toolsMap, toolCalls, testListener);
+        runner.executeToolsSequentially(toolsMap, toolCalls, null, testListener);
 
         // Assert
         verify(testListener, timeout(1000)).onResponse(argThat(results -> {

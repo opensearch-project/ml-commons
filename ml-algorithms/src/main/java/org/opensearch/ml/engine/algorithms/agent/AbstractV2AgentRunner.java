@@ -28,6 +28,7 @@ import org.opensearch.ml.common.output.execute.agent.AgentV2Output;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -177,15 +178,17 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
      *
      * @param toolsMap Pre-created tools (performance optimization - avoids recreating tools on each iteration)
      * @param toolCalls Tool calls to execute
+     * @param agentParams Outer agent parameters (used to forward framework fields like _agent_call_depth)
      * @param listener Listener for tool results
      */
     protected final void executeToolsSequentially(
         Map<String, Tool> toolsMap,
         List<Map<String, String>> toolCalls,
+        Map<String, String> agentParams,
         ActionListener<List<Map<String, Object>>> listener
     ) {
         List<Map<String, Object>> results = new ArrayList<>();
-        executeToolCallsSequentially(toolsMap, toolCalls, results, 0, listener);
+        executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, 0, listener);
     }
 
     /**
@@ -195,6 +198,7 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     private void executeToolCallsSequentially(
         Map<String, Tool> toolsMap,
         List<Map<String, String>> toolCalls,
+        Map<String, String> agentParams,
         List<Map<String, Object>> results,
         int index,
         ActionListener<List<Map<String, Object>>> listener
@@ -216,25 +220,32 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
             errorResult.put("tool_call_id", toolCallId);
             errorResult.put("tool_result", Map.of("error", "Tool not found: " + toolName));
             results.add(errorResult);
-            executeToolCallsSequentially(toolsMap, toolCalls, results, index + 1, listener);
+            executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, index + 1, listener);
             return;
         }
 
         Map<String, String> toolParams = new HashMap<>();
         toolParams.put("input", toolInput);
+        // Forward framework recursion-depth marker so nested AgentTool calls remain bounded.
+        if (agentParams != null) {
+            String depth = agentParams.get(AgentTool.AGENT_CALL_DEPTH_FIELD);
+            if (depth != null) {
+                toolParams.put(AgentTool.AGENT_CALL_DEPTH_FIELD, depth);
+            }
+        }
         tool.run(toolParams, ActionListener.wrap(output -> {
             Map<String, Object> result = new HashMap<>();
             result.put("tool_call_id", toolCallId);
             result.put("tool_result", Map.of("text", output));
             results.add(result);
-            executeToolCallsSequentially(toolsMap, toolCalls, results, index + 1, listener);
+            executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, index + 1, listener);
         }, e -> {
             log.error("Tool execution failed. tool={}", toolName, e);
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("tool_call_id", toolCallId);
             errorResult.put("tool_result", Map.of("error", e.getMessage() != null ? e.getMessage() : "Tool execution failed"));
             results.add(errorResult);
-            executeToolCallsSequentially(toolsMap, toolCalls, results, index + 1, listener);
+            executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, index + 1, listener);
         }));
     }
 

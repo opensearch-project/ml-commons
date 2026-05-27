@@ -9,8 +9,10 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
 import java.util.Map;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -37,12 +39,9 @@ import lombok.extern.log4j.Log4j2;
 public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
 
-    // Reserved framework parameter that tracks how many AgentTool hops we have made
-    // along the current execution chain. It is read+incremented on each hop so that
-    // self-loops and chained recursion (A->A, A->B->A, A->B->C->...) are bounded.
+    // Tracks AgentTool hops on the current chain to bound nested agent recursion.
     public static final String AGENT_CALL_DEPTH_FIELD = "_agent_call_depth";
-    // The root agent may call one nested agent via AgentTool, but that nested agent must
-    // not start another AgentTool chain. So depth 0 -> 1 is allowed and depth >= 1 is blocked.
+    // Allows depth 0 -> 1; a nested AgentTool call (depth >= 1) is blocked.
     public static final int MAX_AGENT_CALL_DEPTH = 1;
 
     private final Client client;
@@ -86,18 +85,18 @@ public class AgentTool implements Tool {
             if (currentDepth >= MAX_AGENT_CALL_DEPTH) {
                 listener
                     .onFailure(
-                        new IllegalStateException(
+                        new OpenSearchStatusException(
                             "AgentTool recursion depth exceeded the maximum allowed ("
                                 + MAX_AGENT_CALL_DEPTH
-                                + "). Aborting nested agent execution to prevent infinite recursion."
+                                + "). Aborting nested agent execution to prevent infinite recursion.",
+                            RestStatus.BAD_REQUEST
                         )
                     );
                 return;
             }
 
             Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
-            // Stamp incremented depth on the parameters that travel to the nested agent so
-            // it is observable by the next AgentTool invocation in the chain.
+            // Propagate incremented depth to the nested agent so subsequent hops can see it.
             extractedParameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(currentDepth + 1));
             String tenantId = parameters.get(TENANT_ID_FIELD);
             AgentMLInput agentMLInput = AgentMLInput
