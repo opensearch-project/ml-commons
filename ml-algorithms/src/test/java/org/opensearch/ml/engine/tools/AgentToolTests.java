@@ -9,9 +9,12 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.tools.AgentTool.AGENT_CALL_DEPTH_FIELD;
 import static org.opensearch.ml.engine.tools.AgentTool.DEFAULT_DESCRIPTION;
+import static org.opensearch.ml.engine.tools.AgentTool.MAX_AGENT_CALL_DEPTH;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -184,6 +188,81 @@ public class AgentToolTests {
         tool.run(parameters, listener);
 
         verify(listener).onFailure(any(Exception.class));
+    }
+
+    @Test
+    public void testRunStampsInitialCallDepth() {
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("k", "v")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput out = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
+
+        ArgumentCaptor<MLExecuteTaskRequest> captor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> al = invocation.getArgument(2);
+            al.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(out).build());
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), captor.capture(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "q");
+        tool.run(parameters, listener);
+
+        AgentMLInput input = (AgentMLInput) captor.getValue().getInput();
+        Map<String, String> innerParams = ((RemoteInferenceInputDataSet) input.getInputDataset()).getParameters();
+        assertEquals("1", innerParams.get(AGENT_CALL_DEPTH_FIELD));
+        verify(listener).onResponse(out);
+    }
+
+    @Test
+    public void testRunBlocksWhenNestedAgentTriesToCallAnotherAgent() {
+        // The first nested agent (depth=1) must not invoke another AgentTool.
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(MAX_AGENT_CALL_DEPTH));
+        tool.run(parameters, listener);
+
+        verify(client, never()).execute(any(), any(), any());
+        verify(listener).onFailure(any(IllegalStateException.class));
+    }
+
+    @Test
+    public void testRunBlocksWhenDepthExceedsMax() {
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(MAX_AGENT_CALL_DEPTH + 1));
+        tool.run(parameters, listener);
+
+        verify(client, never()).execute(any(), any(), any());
+        verify(listener).onFailure(any(IllegalStateException.class));
+    }
+
+    @Test
+    public void testRunIgnoresGarbageDepthValue() {
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("k", "v")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput out = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
+
+        ArgumentCaptor<MLExecuteTaskRequest> captor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> al = invocation.getArgument(2);
+            al.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(out).build());
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), captor.capture(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(AGENT_CALL_DEPTH_FIELD, "not-a-number");
+        tool.run(parameters, listener);
+
+        // Garbage value is treated as depth 0 and the chain is allowed to start at 1.
+        AgentMLInput input = (AgentMLInput) captor.getValue().getInput();
+        Map<String, String> innerParams = ((RemoteInferenceInputDataSet) input.getInputDataset()).getParameters();
+        assertEquals("1", innerParams.get(AGENT_CALL_DEPTH_FIELD));
     }
 
     @Test

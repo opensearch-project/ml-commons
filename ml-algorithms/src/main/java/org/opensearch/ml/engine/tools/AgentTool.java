@@ -36,6 +36,15 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(AgentTool.TYPE)
 public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
+
+    // Reserved framework parameter that tracks how many AgentTool hops we have made
+    // along the current execution chain. It is read+incremented on each hop so that
+    // self-loops and chained recursion (A->A, A->B->A, A->B->C->...) are bounded.
+    public static final String AGENT_CALL_DEPTH_FIELD = "_agent_call_depth";
+    // The root agent may call one nested agent via AgentTool, but that nested agent must
+    // not start another AgentTool chain. So depth 0 -> 1 is allowed and depth >= 1 is blocked.
+    public static final int MAX_AGENT_CALL_DEPTH = 1;
+
     private final Client client;
 
     @Setter
@@ -72,7 +81,24 @@ public class AgentTool implements Tool {
             if (agentId == null || agentId.isBlank()) {
                 throw new IllegalArgumentException("Agent ID not registered in tool");
             }
+
+            int currentDepth = readDepth(parameters);
+            if (currentDepth >= MAX_AGENT_CALL_DEPTH) {
+                listener
+                    .onFailure(
+                        new IllegalStateException(
+                            "AgentTool recursion depth exceeded the maximum allowed ("
+                                + MAX_AGENT_CALL_DEPTH
+                                + "). Aborting nested agent execution to prevent infinite recursion."
+                        )
+                    );
+                return;
+            }
+
             Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
+            // Stamp incremented depth on the parameters that travel to the nested agent so
+            // it is observable by the next AgentTool invocation in the chain.
+            extractedParameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(currentDepth + 1));
             String tenantId = parameters.get(TENANT_ID_FIELD);
             AgentMLInput agentMLInput = AgentMLInput
                 .AgentMLInputBuilder()
@@ -92,6 +118,24 @@ public class AgentTool implements Tool {
         } catch (Exception e) {
             log.error("Failed to run AgentTool with agent: {}", agentId, e);
             listener.onFailure(e);
+        }
+    }
+
+    private static int readDepth(Map<String, String> parameters) {
+        if (parameters == null) {
+            return 0;
+        }
+        String raw = parameters.get(AGENT_CALL_DEPTH_FIELD);
+        if (raw == null || raw.isBlank()) {
+            return 0;
+        }
+        try {
+            int depth = Integer.parseInt(raw);
+            // Defensive: a negative value would let an attacker reset the counter.
+            return Math.max(depth, 0);
+        } catch (NumberFormatException e) {
+            log.warn("Ignoring non-numeric {} value: {}", AGENT_CALL_DEPTH_FIELD, raw);
+            return 0;
         }
     }
 
