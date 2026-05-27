@@ -932,7 +932,7 @@ public class AgentUtils {
                         if (value instanceof String) {
                             String valueStr = (String) value;
                             String previousValue = merged.put(keyStr, valueStr);
-                            if (previousValue != null && previousValue.equals(valueStr) == false) {
+                            if (previousValue != null) {
                                 log
                                     .warn(
                                         "Duplicate tool_descriptions entry for [{}]: previous value [{}] overridden by [{}]",
