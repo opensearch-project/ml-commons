@@ -62,11 +62,15 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY_TEMPLATE = "{\"model\":\"${parameters.model}\","
         + "\"messages\":[${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
-        + "${parameters.tool_configs:-}}";
+        + "${parameters.tool_configs:-}"
+        + ",\"max_completion_tokens\":${parameters.max_tokens:-4096}"
+        + ",\"temperature\":${parameters.temperature:-1.0}"
+        + "${parameters.top_p_field:-}}";
 
     private static final String REQUEST_BODY_REASONING_TEMPLATE = "{\"model\":\"${parameters.model}\","
         + "\"messages\":[${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
         + "${parameters.tool_configs:-}"
+        + ",\"max_completion_tokens\":${parameters.max_tokens:-4096}"
         + ",\"reasoning_effort\":\"${parameters.reasoning_effort}\"}";
 
     // Body templates for different input types
@@ -101,6 +105,10 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
         // Override with any provided model parameters
         if (modelParameters != null) {
             parameters.putAll(modelParameters);
+            if (modelParameters.containsKey("top_p")) {
+                String topPValue = validateNumericParameter(modelParameters.get("top_p"), "top_p");
+                parameters.put("top_p_field", ", \"top_p\": " + topPValue);
+            }
         }
 
         Map<String, String> headers = new HashMap<>();
