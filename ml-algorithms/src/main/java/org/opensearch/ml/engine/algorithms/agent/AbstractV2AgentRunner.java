@@ -177,17 +177,15 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
      *
      * @param toolsMap Pre-created tools (performance optimization - avoids recreating tools on each iteration)
      * @param toolCalls Tool calls to execute
-     * @param agentParams Outer agent parameters (used to forward framework fields like _agent_call_depth)
      * @param listener Listener for tool results
      */
     protected final void executeToolsSequentially(
         Map<String, Tool> toolsMap,
         List<Map<String, String>> toolCalls,
-        Map<String, String> agentParams,
         ActionListener<List<Map<String, Object>>> listener
     ) {
         List<Map<String, Object>> results = new ArrayList<>();
-        executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, 0, listener);
+        executeToolCallsSequentially(toolsMap, toolCalls, results, 0, listener);
     }
 
     /**
@@ -197,7 +195,6 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     private void executeToolCallsSequentially(
         Map<String, Tool> toolsMap,
         List<Map<String, String>> toolCalls,
-        Map<String, String> agentParams,
         List<Map<String, Object>> results,
         int index,
         ActionListener<List<Map<String, Object>>> listener
@@ -219,27 +216,25 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
             errorResult.put("tool_call_id", toolCallId);
             errorResult.put("tool_result", Map.of("error", "Tool not found: " + toolName));
             results.add(errorResult);
-            executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, index + 1, listener);
+            executeToolCallsSequentially(toolsMap, toolCalls, results, index + 1, listener);
             return;
         }
 
-        // Inherit outer agent parameters so framework-reserved fields (tenant id, recursion
-        // depth, etc.) flow to the tool. The per-call "input" overrides any inherited value.
-        Map<String, String> toolParams = agentParams == null ? new HashMap<>() : new HashMap<>(agentParams);
+        Map<String, String> toolParams = new HashMap<>();
         toolParams.put("input", toolInput);
         tool.run(toolParams, ActionListener.wrap(output -> {
             Map<String, Object> result = new HashMap<>();
             result.put("tool_call_id", toolCallId);
             result.put("tool_result", Map.of("text", output));
             results.add(result);
-            executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, index + 1, listener);
+            executeToolCallsSequentially(toolsMap, toolCalls, results, index + 1, listener);
         }, e -> {
             log.error("Tool execution failed. tool={}", toolName, e);
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("tool_call_id", toolCallId);
             errorResult.put("tool_result", Map.of("error", e.getMessage() != null ? e.getMessage() : "Tool execution failed"));
             results.add(errorResult);
-            executeToolCallsSequentially(toolsMap, toolCalls, agentParams, results, index + 1, listener);
+            executeToolCallsSequentially(toolsMap, toolCalls, results, index + 1, listener);
         }));
     }
 

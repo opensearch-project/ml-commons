@@ -275,7 +275,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                     }
 
                     // Execute tools and continue loop using base class method with pre-created tools
-                    executeToolsSequentially(toolsMap, toolCalls, params, ActionListener.wrap(toolResults -> {
+                    executeToolsSequentially(toolsMap, toolCalls, ActionListener.wrap(toolResults -> {
                         // Call supply() once to get LLM-formatted messages
                         var llmMessages = functionCalling.supply(toolResults);
 
