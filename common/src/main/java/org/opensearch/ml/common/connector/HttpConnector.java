@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,6 +43,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -62,6 +64,16 @@ public class HttpConnector extends AbstractConnector {
     public static final String REGION_FIELD = "region";
     // TODO: move the AgentUtils class from algorithm module to common module
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
+
+    // Allowlist of top-level JSON fields that _<field>_json / _<field>_additions_json parameters may inject.
+    // Restricts injection to structured-output fields only; prevents callers from overriding
+    // provider control fields such as "model", "stream", or "max_tokens".
+    static final Set<String> STRUCTURED_OUTPUT_ALLOWED_FIELDS = Set
+        .of(
+            "response_format",  // OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere
+            "generationConfig", // Google Gemini
+            "toolConfig"        // Amazon Bedrock Converse
+        );
 
     // TODO: add RequestConfig like request time out,
 
@@ -380,9 +392,74 @@ public class HttpConnector extends AbstractConnector {
                     payload = jsonObject.toString();
                 }
             }
+            if (parameters != null && isJson(payload) && connectorAction.get().isSupportsStructuredOutput()) {
+                payload = injectStructuredOutputParams(parameters, payload);
+            }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+    }
+
+    // Convention: parameters named _<fieldname>_json inject/replace a top-level JSON object field;
+    // parameters named _<fieldname>_additions_json merge into an existing top-level JSON object field.
+    // Both conventions require: (a) the payload is a JSON object (array payloads are left untouched),
+    // (b) a non-empty, allowlisted field name, and (c) a valid JSON object value string.
+    // Replacements (_X_json) are applied before merges (_X_additions_json) so behaviour is
+    // deterministic when both are present for the same field.
+    // Note: matched parameters are read but not removed from the map.
+    private String injectStructuredOutputParams(Map<String, String> parameters, String payload) {
+        JsonElement parsed = JsonParser.parseString(payload);
+        if (!parsed.isJsonObject())
+            return payload;
+        JsonObject body = parsed.getAsJsonObject();
+        boolean modified = false;
+
+        // Pass 1: _<field>_json — inject or replace a top-level field
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            if (entry.getKey().endsWith("_additions_json"))
+                continue;
+            String fieldName = allowedFieldName(entry.getKey(), "_json");
+            JsonObject value = asJsonObject(entry.getValue());
+            if (fieldName == null || value == null)
+                continue;
+            body.add(fieldName, value);
+            modified = true;
+        }
+
+        // Pass 2: _<field>_additions_json — merge into an existing top-level object
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            String fieldName = allowedFieldName(entry.getKey(), "_additions_json");
+            JsonObject additions = asJsonObject(entry.getValue());
+            if (fieldName == null || additions == null)
+                continue;
+            JsonObject target = body.has(fieldName) && body.get(fieldName).isJsonObject()
+                ? body.getAsJsonObject(fieldName)
+                : new JsonObject();
+            additions.entrySet().forEach(e -> target.add(e.getKey(), e.getValue()));
+            body.add(fieldName, target);
+            modified = true;
+        }
+
+        return modified ? body.toString() : payload;
+    }
+
+    /** Returns the allowlisted field name encoded in a _&lt;field&gt;_&lt;suffix&gt; key, or null if invalid. */
+    private static String allowedFieldName(String key, String suffix) {
+        if (!key.startsWith("_") || !key.endsWith(suffix))
+            return null;
+        int end = key.length() - suffix.length();
+        if (end <= 1)
+            return null;
+        String fieldName = key.substring(1, end);
+        return STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName) ? fieldName : null;
+    }
+
+    /** Parses a JSON string as an object, returning null if absent, invalid, or not an object. */
+    private static JsonObject asJsonObject(String json) {
+        if (json == null || !isJson(json))
+            return null;
+        JsonElement el = JsonParser.parseString(json);
+        return el.isJsonObject() ? el.getAsJsonObject() : null;
     }
 
     private boolean neededStreamParameterInPayload(Map<String, String> parameters) {

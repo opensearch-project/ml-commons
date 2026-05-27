@@ -38,6 +38,9 @@ import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -380,26 +383,34 @@ public class HttpConnectorTest {
     }
 
     public static HttpConnector createHttpConnectorWithRequestBody(String requestBody) {
-        ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
-        String name = null;
-        String method = "POST";
-        String url = "https://test.com";
-        Map<String, String> headers = new HashMap<>();
-        headers.put("api_key", "${credential.key}");
-        String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
-        String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
-
         ConnectorAction action = new ConnectorAction(
-            actionType,
-            name,
-            method,
-            url,
-            headers,
+            ConnectorAction.ActionType.PREDICT,
+            null,
+            "POST",
+            "https://test.com",
+            Map.of("api_key", "${credential.key}"),
             requestBody,
-            preProcessFunction,
-            postProcessFunction
+            MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
+            MLPostProcessFunction.OPENAI_EMBEDDING
         );
+        return buildConnector(action);
+    }
 
+    /** Creates a connector whose PREDICT action has {@code supports_structured_output: true}. */
+    public static HttpConnector createHttpConnectorWithStructuredOutputEnabled(String requestBody) {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://test.com")
+            .headers(Map.of("api_key", "${credential.key}"))
+            .requestBody(requestBody)
+            .supportsStructuredOutput(true)
+            .build();
+        return buildConnector(action);
+    }
+
+    private static HttpConnector buildConnector(ConnectorAction action) {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
 
@@ -408,7 +419,7 @@ public class HttpConnectorTest {
 
         ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30, 30, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
 
-        HttpConnector connector = HttpConnector
+        return HttpConnector
             .builder()
             .name("test_connector_name")
             .description("this is a test connector")
@@ -421,7 +432,6 @@ public class HttpConnectorTest {
             .accessMode(AccessMode.PUBLIC)
             .connectorClientConfig(httpClientConfig)
             .build();
-        return connector;
     }
 
     @Test
@@ -641,6 +651,234 @@ public class HttpConnectorTest {
         Assert.assertTrue(foundByName.isPresent());
         Assert.assertEquals(customActionName, foundByName.get().getName());
         Assert.assertEquals("https://test2.com", foundByName.get().getUrl());
+    }
+
+    @Test
+    public void createPayload_WithResponseFormatJson_MergesIntoPayload() {
+        String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello");
+        parameters
+            .put(
+                "_response_format_json",
+                "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"result\","
+                    + "\"schema\":{\"type\":\"object\",\"properties\":{\"facts\":{\"type\":\"array\","
+                    + "\"items\":{\"type\":\"string\"}}},\"required\":[\"facts\"]}}}"
+            );
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("response_format should be present", json.has("response_format"));
+        Assert.assertEquals("json_schema", json.getAsJsonObject("response_format").get("type").getAsString());
+        Assert.assertEquals("Hello", json.getAsJsonArray("messages").get(0).getAsJsonObject().get("content").getAsString());
+    }
+
+    @Test
+    public void createPayload_WithoutResponseFormatJson_NoResponseFormatField() {
+        String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertFalse("response_format should NOT be present when parameter is absent", json.has("response_format"));
+    }
+
+    @Test
+    public void createPayload_ResponseFormatJson_IsJsonObjectNotString() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "{\"type\":\"json_object\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("response_format must be a JSON object, not a string", json.get("response_format").isJsonObject());
+        Assert.assertEquals("json_object", json.getAsJsonObject("response_format").get("type").getAsString());
+    }
+
+    @Test
+    public void createPayload_ResponseFormatJson_InvalidJson_IgnoresParameter() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "not-valid-json");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertFalse("response_format must be absent when _response_format_json is not valid JSON", json.has("response_format"));
+    }
+
+    @Test
+    public void createPayload_ResponseFormatJson_JsonArray_IgnoresParameter() {
+        String requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "[\"not\", \"an\", \"object\"]");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert
+            .assertFalse(
+                "response_format must be absent when _response_format_json is a JSON array, not an object",
+                json.has("response_format")
+            );
+    }
+
+    @Test
+    public void createPayload_WithDisallowedField_IsNotInjected() {
+        String requestBody = "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        // "model" is not in STRUCTURED_OUTPUT_ALLOWED_FIELDS — must be silently ignored
+        parameters.put("_model_json", "{\"id\":\"attacker-model\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertEquals("model field must not be overridden by disallowed injection", "gpt-4", json.get("model").getAsString());
+    }
+
+    @Test
+    public void createPayload_WithAllowedCamelCaseField_IsInjected() {
+        String requestBody = "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        // "generationConfig" is in STRUCTURED_OUTPUT_ALLOWED_FIELDS — camelCase field must be injected
+        parameters.put("_generationConfig_json", "{\"responseMimeType\":\"application/json\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("generationConfig should be present", json.has("generationConfig"));
+        Assert.assertTrue("generationConfig must be a JSON object", json.get("generationConfig").isJsonObject());
+    }
+
+    @Test
+    public void createPayload_WithGenerationConfigAdditionsJson_MergesIntoExistingField() {
+        String requestBody = "{\"generationConfig\":{\"maxOutputTokens\":1024},\"contents\":[{\"role\":\"user\","
+            + "\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters
+            .put(
+                "_generationConfig_additions_json",
+                "{\"responseMimeType\":\"application/json\",\"responseSchema\":{\"type\":\"OBJECT\"}}"
+            );
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("generationConfig should be present", json.has("generationConfig"));
+        JsonObject genConfig = json.getAsJsonObject("generationConfig");
+        Assert.assertEquals("maxOutputTokens must be preserved", 1024, genConfig.get("maxOutputTokens").getAsInt());
+        Assert.assertEquals("responseMimeType must be merged in", "application/json", genConfig.get("responseMimeType").getAsString());
+        Assert.assertTrue("responseSchema must be merged in", genConfig.has("responseSchema"));
+    }
+
+    @Test
+    public void createPayload_WithToolConfigJson_IsInjected() {
+        // "toolConfig" is in STRUCTURED_OUTPUT_ALLOWED_FIELDS for Bedrock Converse tool-use structured output
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\"," + "\"text\":\"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters
+            .put(
+                "_toolConfig_json",
+                "{\"tools\":[{\"toolSpec\":{\"name\":\"extract_facts\"}}],\"toolChoice\":{\"tool\":{\"name\":\"extract_facts\"}}}"
+            );
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("toolConfig must be injected for Bedrock Converse tool-use structured output", json.has("toolConfig"));
+        Assert.assertTrue("toolConfig must be a JSON object", json.get("toolConfig").isJsonObject());
+    }
+
+    @Test
+    public void createPayload_WithGenerationConfigAdditionsJson_CreatesFieldIfAbsent() {
+        String requestBody = "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_generationConfig_additions_json", "{\"responseMimeType\":\"application/json\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertTrue("generationConfig should be created when absent", json.has("generationConfig"));
+        Assert
+            .assertEquals(
+                "responseMimeType should be set",
+                "application/json",
+                json.getAsJsonObject("generationConfig").get("responseMimeType").getAsString()
+            );
+    }
+
+    @Test
+    public void createPayload_ArrayPayload_StructuredOutputNotInjected() {
+        // Payload is a JSON array, not an object — structured output injection must be skipped
+        // without throwing IllegalStateException from getAsJsonObject().
+        String requestBody = "[{\"role\":\"user\",\"content\":\"hello\"}]";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("_response_format_json", "{\"type\":\"json_object\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        Assert.assertTrue("Payload must remain a JSON array", payload.startsWith("["));
+        Assert.assertFalse("response_format must not be injected into an array payload", payload.contains("response_format"));
+    }
+
+    @Test
+    public void createPayload_EmptyFieldNameKey_DoesNotThrow() {
+        // Keys exactly "_additions_json" or "_json" produce an empty field name after slicing —
+        // must be silently ignored, not throw StringIndexOutOfBoundsException.
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":\"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_additions_json", "{\"type\":\"json_object\"}");
+        parameters.put("_json", "{\"type\":\"json_object\"}");
+
+        // Must not throw; payload must be returned unchanged since field names are empty
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertFalse("Empty-field-name keys must be ignored", json.has(""));
+    }
+
+    @Test
+    public void createPayload_BothReplaceAndMergeForSameField_ReplaceTakesPrecedence() {
+        // When _response_format_json (replace) and _response_format_additions_json (merge) are both
+        // present, the replace pass runs first; the merge then merges into the replaced value.
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":\"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_response_format_json", "{\"type\":\"json_schema\"}");
+        parameters.put("_response_format_additions_json", "{\"extra\":\"field\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        JsonObject rf = json.getAsJsonObject("response_format");
+        Assert.assertNotNull("response_format must be present", rf);
+        Assert.assertEquals("type from replace pass must be preserved", "json_schema", rf.get("type").getAsString());
+        Assert.assertEquals("extra field from merge pass must be added", "field", rf.get("extra").getAsString());
     }
 
     @Test

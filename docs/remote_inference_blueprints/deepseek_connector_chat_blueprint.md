@@ -2,6 +2,8 @@
 This blueprint integrates [DeepSeek Chat Model](https://api-docs.deepseek.com/api/create-chat-completion) for question-answering capabilities for standalone interactions. Full conversational functionality requires additional development. 
 Adapt and extend this blueprint as needed for your specific use case.
 
+> **Note:** `supports_structured_output: true` enables JSON schema enforcement for agentic memory fact extraction. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
+
 ## 1. Add connector endpoint to trusted URLs:
 Note: skip this step starting 2.19.0
 
@@ -36,6 +38,7 @@ POST /_plugins/_ml/connectors/_create
       "action_type": "predict",
       "method": "POST",
       "url": "https://${parameters.endpoint}/v1/chat/completions",
+      "supports_structured_output": true,
       "headers": {
         "Content-Type": "application/json",
         "Authorization": "Bearer ${credential.deepSeek_key}"

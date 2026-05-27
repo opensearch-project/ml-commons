@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -43,6 +44,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String REQUEST_BODY_FIELD = "request_body";
     public static final String ACTION_PRE_PROCESS_FUNCTION = "pre_process_function";
     public static final String ACTION_POST_PROCESS_FUNCTION = "post_process_function";
+    public static final String SUPPORTS_STRUCTURED_OUTPUT_FIELD = "supports_structured_output";
     public static final String OPENAI = "openai";
     public static final String COHERE = "cohere";
     public static final String BEDROCK = "bedrock";
@@ -70,6 +72,20 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     private String requestBody;
     private String preProcessFunction;
     private String postProcessFunction;
+    private boolean supportsStructuredOutput;
+
+    public ConnectorAction(
+        ActionType actionType,
+        String name,
+        String method,
+        String url,
+        Map<String, String> headers,
+        String requestBody,
+        String preProcessFunction,
+        String postProcessFunction
+    ) {
+        this(actionType, name, method, url, headers, requestBody, preProcessFunction, postProcessFunction, false);
+    }
 
     @Builder(toBuilder = true)
     public ConnectorAction(
@@ -80,7 +96,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         Map<String, String> headers,
         String requestBody,
         String preProcessFunction,
-        String postProcessFunction
+        String postProcessFunction,
+        boolean supportsStructuredOutput
     ) {
         if (actionType == null) {
             throw new IllegalArgumentException("action type can't be null");
@@ -101,6 +118,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.requestBody = requestBody;
         this.preProcessFunction = preProcessFunction;
         this.postProcessFunction = postProcessFunction;
+        this.supportsStructuredOutput = supportsStructuredOutput;
     }
 
     public ConnectorAction(StreamInput input) throws IOException {
@@ -115,6 +133,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.postProcessFunction = input.readOptionalString();
         if (input.getVersion().onOrAfter(VERSION_3_5_0)) {
             this.name = input.readOptionalString();
+        }
+        if (input.getVersion().onOrAfter(VERSION_3_7_0)) {
+            this.supportsStructuredOutput = input.readBoolean();
         }
     }
 
@@ -134,6 +155,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         out.writeOptionalString(postProcessFunction);
         if (out.getVersion().onOrAfter(VERSION_3_5_0)) {
             out.writeOptionalString(name);
+        }
+        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+            out.writeBoolean(supportsStructuredOutput);
         }
     }
 
@@ -164,6 +188,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (name != null) {
             builder.field(NAME_FIELD, name);
         }
+        if (supportsStructuredOutput) {
+            builder.field(SUPPORTS_STRUCTURED_OUTPUT_FIELD, true);
+        }
         return builder.endObject();
     }
 
@@ -181,6 +208,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         String requestBody = null;
         String preProcessFunction = null;
         String postProcessFunction = null;
+        boolean supportsStructuredOutput = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -212,6 +240,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                 case ACTION_POST_PROCESS_FUNCTION:
                     postProcessFunction = parser.text();
                     break;
+                case SUPPORTS_STRUCTURED_OUTPUT_FIELD:
+                    supportsStructuredOutput = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -227,6 +258,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             .requestBody(requestBody)
             .preProcessFunction(preProcessFunction)
             .postProcessFunction(postProcessFunction)
+            .supportsStructuredOutput(supportsStructuredOutput)
             .build();
     }
 

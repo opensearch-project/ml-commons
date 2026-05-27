@@ -58,6 +58,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 import okhttp3.MediaType;
@@ -270,9 +271,9 @@ public class ConnectorUtils {
             ProcessorChain processorChain = new ProcessorChain(processorConfigs);
 
             if (responseFilter != null) {
-                // Apply filter first, then processor chain
-                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
-                processedOutput = processorChain.process(filteredResponse);
+                // Apply filter first, then processor chain; fall back to full response on path miss
+                Object filteredResponse = tryReadResponseFilter(response, responseFilter);
+                processedOutput = processorChain.process(filteredResponse != null ? filteredResponse : response);
             } else {
                 // Apply processor chain to whole response
                 processedOutput = processorChain.process(response);
@@ -285,8 +286,8 @@ public class ConnectorUtils {
             if (responseFilter == null) {
                 connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
             } else {
-                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
-                connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
+                Object filteredResponse = tryReadResponseFilter(response, responseFilter);
+                connector.parseResponse(filteredResponse != null ? filteredResponse : response, modelTensors, scriptReturnModelTensor);
             }
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
@@ -487,6 +488,17 @@ public class ConnectorUtils {
             .requestBody(requestBody)
             .headers(batchPredictAction.get().getHeaders())
             .build();
+    }
+
+    // Returns null when the path is absent so callers can fall back to the full response.
+    // Needed for tool-use responses (e.g. Bedrock Converse) where content[0].toolUse replaces content[0].text.
+    private static Object tryReadResponseFilter(String response, String responseFilter) {
+        try {
+            return JsonPath.parse(response).read(responseFilter);
+        } catch (PathNotFoundException e) {
+            log.debug("response_filter path '{}' not found in response, using full response", responseFilter);
+            return null;
+        }
     }
 
     private static String cleanPayloadIfNeeded(String payload, Map<String, String> parameters) {
