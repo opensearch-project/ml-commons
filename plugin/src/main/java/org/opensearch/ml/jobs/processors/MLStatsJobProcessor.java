@@ -139,6 +139,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
         client.search(searchRequest, new ActionListener<SearchResponse>() {
             @Override
             public void onResponse(SearchResponse searchResponse) {
+                warnIfTruncated("ML model", searchResponse);
                 for (SearchHit hit : searchResponse.getHits()) {
                     try {
                         XContentParser parser = XContentType.JSON
@@ -211,6 +212,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
         client.search(searchRequest, new ActionListener<SearchResponse>() {
             @Override
             public void onResponse(SearchResponse searchResponse) {
+                warnIfTruncated("ML agent", searchResponse);
                 for (SearchHit hit : searchResponse.getHits()) {
                     try {
                         XContentParser parser = XContentType.JSON
