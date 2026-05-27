@@ -20,6 +20,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -41,6 +42,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -383,6 +386,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         // model, so no need to verify the connector endpoint as trusted or not
         if (!registerModelInput.getIsHidden()) {
             registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+        }
+
+        for (ConnectorAction action : registerModelInput.getConnector().getActions()) {
+            Map<String, String> headers = action.getHeaders();
+            AbstractConnector.validateConnectorHeaders(headers, registerModelInput.getConnector().getProtocol());
         }
     }
 

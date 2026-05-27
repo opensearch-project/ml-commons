@@ -8,6 +8,9 @@ package org.opensearch.ml.common.httpclient;
 import static org.opensearch.secure_sm.AccessController.doPrivileged;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
@@ -30,7 +33,39 @@ public class MLHttpClientFactory {
         int maxConnections,
         boolean connectorPrivateIpEnabled
     ) {
-        return getAsyncHttpClient(connectionTimeout, readTimeout, maxConnections, connectorPrivateIpEnabled, false);
+        return getAsyncHttpClient(
+            connectionTimeout,
+            readTimeout,
+            maxConnections,
+            connectorPrivateIpEnabled,
+            Collections.emptyList(),
+            Collections.emptyList(),
+            false
+        );
+    }
+
+    public static SdkAsyncHttpClient getAsyncHttpClient(
+        Duration connectionTimeout,
+        Duration readTimeout,
+        int maxConnections,
+        boolean connectorPrivateIpEnabled,
+        List<Pattern> connectorTrustedPrivateEndpoints,
+        List<Pattern> connectorRestrictedIpPatterns,
+        boolean skipSslVerification
+    ) {
+        return getAsyncHttpClient(
+            connectionTimeout,
+            readTimeout,
+            maxConnections,
+            connectorPrivateIpEnabled,
+            connectorTrustedPrivateEndpoints,
+            connectorRestrictedIpPatterns,
+            skipSslVerification,
+            null,
+            null,
+            null,
+            null
+        );
     }
 
     public static SdkAsyncHttpClient getAsyncHttpClient(
@@ -46,28 +81,10 @@ public class MLHttpClientFactory {
             readTimeout,
             maxConnections,
             connectorPrivateIpEnabled,
+            Collections.emptyList(),
+            Collections.emptyList(),
             skipSslVerification,
             sslContext,
-            null,
-            null,
-            null
-        );
-    }
-
-    public static SdkAsyncHttpClient getAsyncHttpClient(
-        Duration connectionTimeout,
-        Duration readTimeout,
-        int maxConnections,
-        boolean connectorPrivateIpEnabled,
-        boolean skipSslVerification
-    ) {
-        return getAsyncHttpClient(
-            connectionTimeout,
-            readTimeout,
-            maxConnections,
-            connectorPrivateIpEnabled,
-            skipSslVerification,
-            null,
             null,
             null,
             null
@@ -88,6 +105,8 @@ public class MLHttpClientFactory {
             readTimeout,
             maxConnections,
             connectorPrivateIpEnabled,
+            Collections.emptyList(),
+            Collections.emptyList(),
             skipSslVerification,
             sslContext,
             clientDescription,
@@ -101,6 +120,8 @@ public class MLHttpClientFactory {
         Duration readTimeout,
         int maxConnections,
         boolean connectorPrivateIpEnabled,
+        List<Pattern> connectorTrustedPrivateEndpoints,
+        List<Pattern> connectorRestrictedIpPatterns,
         boolean skipSslVerification,
         SSLContext sslContext,
         String clientDescription,
@@ -201,7 +222,12 @@ public class MLHttpClientFactory {
                 // Use default SSL configuration
                 delegate = clientBuilder.build();
             }
-            return new MLValidatableAsyncHttpClient(delegate, connectorPrivateIpEnabled);
+            return new MLValidatableAsyncHttpClient(
+                delegate,
+                connectorPrivateIpEnabled,
+                connectorTrustedPrivateEndpoints,
+                connectorRestrictedIpPatterns
+            );
         });
     }
 

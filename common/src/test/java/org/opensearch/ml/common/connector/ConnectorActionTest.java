@@ -48,6 +48,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -710,6 +711,72 @@ public class ConnectorActionTest {
     }
 
     @Test
+    public void toXContent_WritesSupportsStructuredOutputWhenTrue() throws IOException {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(TEST_ACTION_TYPE)
+            .method(TEST_METHOD_POST)
+            .url(URL)
+            .requestBody(TEST_REQUEST_BODY)
+            .supportsStructuredOutput(true)
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        action.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        assertTrue(content.contains("\"supports_structured_output\":true"));
+    }
+
+    @Test
+    public void toXContent_OmitsSupportsStructuredOutputWhenFalse() throws IOException {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(TEST_ACTION_TYPE)
+            .method(TEST_METHOD_POST)
+            .url(URL)
+            .requestBody(TEST_REQUEST_BODY)
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        action.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        assertFalse(content.contains("supports_structured_output"));
+    }
+
+    @Test
+    public void parse_ReadsSupportsStructuredOutputTrue() throws IOException {
+        String jsonStr = "{\"action_type\":\"PREDICT\",\"method\":\"post\",\"url\":\"https://test.com\","
+            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+            + "\"supports_structured_output\":true}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        ConnectorAction action = ConnectorAction.parse(parser);
+        assertTrue(action.isSupportsStructuredOutput());
+    }
+
+    @Test
+    public void parse_DefaultsSupportsStructuredOutputFalse() throws IOException {
+        String jsonStr = "{\"action_type\":\"PREDICT\",\"method\":\"post\",\"url\":\"https://test.com\","
+            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        ConnectorAction action = ConnectorAction.parse(parser);
+        assertFalse(action.isSupportsStructuredOutput());
+    }
+
+    @Test
     public void test_wrongActionType() {
         Throwable exception = assertThrows(IllegalArgumentException.class, () -> { ConnectorAction.ActionType.from("badAction"); });
         assertEquals("Wrong Action Type of badAction", exception.getMessage());
@@ -719,6 +786,73 @@ public class ConnectorActionTest {
     public void test_invalidActionInModelPrediction() {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.from("execute");
         assertEquals(isValidActionInModelPrediction(actionType), false);
+    }
+
+    @Test
+    public void supportsStructuredOutput_DefaultsFalse() {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(TEST_ACTION_TYPE)
+            .method(TEST_METHOD_POST)
+            .url(URL)
+            .requestBody(TEST_REQUEST_BODY)
+            .build();
+
+        assertFalse(action.isSupportsStructuredOutput());
+    }
+
+    @Test
+    public void supportsStructuredOutput_CanBeSetTrue() {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(TEST_ACTION_TYPE)
+            .method(TEST_METHOD_POST)
+            .url(URL)
+            .requestBody(TEST_REQUEST_BODY)
+            .supportsStructuredOutput(true)
+            .build();
+
+        assertTrue(action.isSupportsStructuredOutput());
+    }
+
+    @Test
+    public void writeTo_AndReadFrom_PreservesSupportsStructuredOutput() throws IOException {
+        ConnectorAction original = ConnectorAction
+            .builder()
+            .actionType(TEST_ACTION_TYPE)
+            .method(TEST_METHOD_POST)
+            .url(URL)
+            .requestBody(TEST_REQUEST_BODY)
+            .supportsStructuredOutput(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        original.writeTo(out);
+        ConnectorAction deserialized = new ConnectorAction(out.bytes().streamInput());
+
+        assertTrue(deserialized.isSupportsStructuredOutput());
+    }
+
+    @Test
+    public void writeTo_PreVersion370_SupportsStructuredOutputNotWritten() throws IOException {
+        ConnectorAction original = ConnectorAction
+            .builder()
+            .actionType(TEST_ACTION_TYPE)
+            .method(TEST_METHOD_POST)
+            .url(URL)
+            .requestBody(TEST_REQUEST_BODY)
+            .supportsStructuredOutput(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(Version.fromString("3.6.0"));
+        original.writeTo(out);
+
+        org.opensearch.core.common.io.stream.StreamInput in = out.bytes().streamInput();
+        in.setVersion(Version.fromString("3.6.0"));
+        ConnectorAction deserialized = new ConnectorAction(in);
+
+        assertFalse(deserialized.isSupportsStructuredOutput());
     }
 
     /**

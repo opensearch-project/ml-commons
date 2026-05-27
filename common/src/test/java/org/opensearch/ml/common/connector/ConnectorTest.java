@@ -94,4 +94,46 @@ public class ConnectorTest {
                     )
             );
     }
+
+    @Test
+    public void validateResolvedEndpoint_matches() {
+        HttpConnector connector = createHttpConnector();
+        connector.validateResolvedEndpoint("https://api.openai.com/v1/chat/completions", Arrays.asList("^https://api\\.openai\\.com/.*$"));
+    }
+
+    @Test
+    public void validateResolvedEndpoint_noMatch_rejected() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector URL is not matching the trusted connector endpoint regex");
+        HttpConnector connector = createHttpConnector();
+        connector
+            .validateResolvedEndpoint(
+                "https://attacker.example.com/anything?/v1/chat/completions",
+                Arrays.asList("^https://api\\.openai\\.com/.*$")
+            );
+    }
+
+    @Test
+    public void validateResolvedEndpoint_emptyAllowlist_rejected() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Trusted connector endpoints regex is not configured");
+        HttpConnector connector = createHttpConnector();
+        connector.validateResolvedEndpoint("https://api.openai.com/v1/chat/completions", Collections.emptyList());
+    }
+
+    @Test
+    public void validateResolvedEndpoint_nullAllowlist_rejected() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Trusted connector endpoints regex is not configured");
+        HttpConnector connector = createHttpConnector();
+        connector.validateResolvedEndpoint("https://api.openai.com/v1/chat/completions", null);
+    }
+
+    @Test
+    public void validateResolvedEndpoint_nullResolvedUrl_rejected() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Resolved connector URL is null");
+        HttpConnector connector = createHttpConnector();
+        connector.validateResolvedEndpoint(null, Arrays.asList("^https://api\\.openai\\.com/.*$"));
+    }
 }

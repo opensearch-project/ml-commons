@@ -7,12 +7,14 @@ package org.opensearch.ml.action.register;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,7 +26,9 @@ import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -54,6 +58,7 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -920,6 +925,77 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         SearchHits hits = new SearchHits(new SearchHit[] { modelGroup }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
         when(searchResponse.getHits()).thenReturn(hits);
         return searchResponse;
+    }
+
+    @Test
+    public void test_execute_registerRemoteModel_withInlineConnector_blockedAuthorizationHeader() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getModelName()).thenReturn("Test Model");
+        when(input.getVersion()).thenReturn("1");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getIsHidden()).thenReturn(false);
+
+        // Create connector with Authorization header using ${parameters.*}
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer ${parameters.token}");
+
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://api.example.com/predict")
+            .headers(headers)
+            .build();
+
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(anyString(), any(Map.class))).thenReturn("https://api.example.com/predict");
+        when(connector.getActions()).thenReturn(Arrays.asList(action));
+        when(connector.getParameters()).thenReturn(new HashMap<>());
+        when(input.getConnector()).thenReturn(connector);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Header 'Authorization' cannot use ${parameters.*} placeholders"));
+    }
+
+    @Test
+    public void test_execute_registerRemoteModel_withInlineConnector_validDynamicHeader() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getModelName()).thenReturn("Test Model");
+        when(input.getVersion()).thenReturn("1");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getIsHidden()).thenReturn(false);
+
+        // Create connector with valid dynamic header (not blocked)
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "${parameters.request_id}");
+        headers.put("Authorization", "Bearer ${credential.secretArn.token}"); // credential is OK
+
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://api.example.com/predict")
+            .headers(headers)
+            .build();
+
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(anyString(), any(Map.class))).thenReturn("https://api.example.com/predict");
+        when(connector.getActions()).thenReturn(Arrays.asList(action));
+        when(connector.getParameters()).thenReturn(new HashMap<>());
+        when(input.getConnector()).thenReturn(connector);
+
+        // Should not throw validation error - will proceed to next step
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        // Verify it didn't fail with validation error
+        verify(actionListener, never()).onFailure(argThat(e -> e.getMessage().contains("cannot use ${parameters.*} placeholders")));
     }
 
 }
