@@ -44,7 +44,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -340,6 +342,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         return;
                     }
                     connector.update(updateModelInput.getConnector());
+
+                    // Only validate headers if connector actions were modified in this update
+                    if (updateModelInput.getConnector() != null
+                        && updateModelInput.getConnector().getActions() != null
+                        && connector.getActions() != null) {
+                        for (ConnectorAction action : connector.getActions()) {
+                            Map<String, String> headers = action.getHeaders();
+                            AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
+                        }
+                    }
                     ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(r -> {
                         connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                         updateModelInput.setUpdatedConnector(connector);

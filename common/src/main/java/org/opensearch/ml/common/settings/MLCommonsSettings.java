@@ -14,6 +14,8 @@ import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_
 
 import java.util.List;
 import java.util.function.Function;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.opensearch.common.settings.Setting;
 import org.opensearch.core.common.unit.ByteSizeUnit;
@@ -261,6 +263,31 @@ public final class MLCommonsSettings {
                     REKOGNITION_TRUST_ENDPOINT_REGEX
                 ),
             Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "trusted_connector_private_endpoints_regex",
+            ImmutableList.of(),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                    }
+                }
+            },
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -340,6 +367,23 @@ public final class MLCommonsSettings {
             false,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
+        );
+
+    public static final Setting<List<String>> ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.restricted_ip_patterns",
+            ImmutableList.of(),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Final
         );
 
     // Feature flag for execute tool API
@@ -539,4 +583,25 @@ public final class MLCommonsSettings {
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
+
+    private static void validateRegexSafety(String regex) {
+        // Reject nested quantifiers or backreferences
+        if (regex.matches(".*\\([^)]*[*+?]\\)[*+?{].*") || regex.matches(".*\\\\[1-9].*")) {
+            throw new IllegalArgumentException(
+                "Regex pattern contains nested quantifiers or backreferences that may cause ReDoS: " + regex
+            );
+        }
+
+        // Limit pattern length
+        if (regex.length() > 256) {
+            throw new IllegalArgumentException("Regex pattern too long (max 256 chars): " + regex);
+        }
+
+        // Test compilation
+        try {
+            Pattern.compile(regex);
+        } catch (PatternSyntaxException e) {
+            throw new IllegalArgumentException("Invalid regex pattern: " + regex, e);
+        }
+    }
 }
