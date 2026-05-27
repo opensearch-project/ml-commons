@@ -831,7 +831,7 @@ public class AgentUtils {
                             filteredTools = new ArrayList<>();
                             List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
                             for (MLToolSpec toolSpec : mcpToolspecs) {
-                                if (toolSpec != null) {
+                                if (toolSpec != null && toolSpec.getName() != null) {
                                     for (Pattern pattern : compiledPatterns) {
                                         if (pattern.matcher(toolSpec.getName()).matches()) {
                                             filteredTools.add(applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides));
@@ -957,7 +957,7 @@ public class AgentUtils {
     }
 
     private static MLToolSpec applyToolDescriptionOverride(MLToolSpec toolSpec, Map<String, String> toolDescriptionOverrides) {
-        if (toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty()) {
+        if (toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty() || toolSpec.getName() == null) {
             return toolSpec;
         }
         String overrideDescription = toolDescriptionOverrides.get(toolSpec.getName());
