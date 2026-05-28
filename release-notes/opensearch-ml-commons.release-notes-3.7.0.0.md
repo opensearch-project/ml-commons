@@ -23,15 +23,6 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.7.0
 * Propagate stream errors properly to callers instead of swallowing them ([#4792](https://github.com/opensearch-project/ml-commons/pull/4792))
 * Fix `model_parameters` being silently ignored in inferenceConfig and incorrect SourceType error message in V2 agents ([#4833](https://github.com/opensearch-project/ml-commons/pull/4833))
 
-### Infrastructure
-
-* Add issues write permission to untriaged label workflow ([#4827](https://github.com/opensearch-project/ml-commons/pull/4827))
-* Update Gradle to 9.4.1 and Jacoco to 0.8.14 to fix CI build failures ([#4811](https://github.com/opensearch-project/ml-commons/pull/4811))
-
-### Documentation
-
-* Add `akolarkunnu` as maintainer ([#4788](https://github.com/opensearch-project/ml-commons/pull/4788))
-* Update GitHub username reference from `rithin-pullela-aws` to `rithinpullela` ([#4825](https://github.com/opensearch-project/ml-commons/pull/4825))
 
 ### Maintenance
 
