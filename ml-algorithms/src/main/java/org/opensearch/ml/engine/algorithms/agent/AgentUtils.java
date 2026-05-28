@@ -810,13 +810,6 @@ public class AgentUtils {
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
         List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
 
-        // Guarantees final listener fires exactly once; every code path decrements via try/finally.
-        Runnable completeIfLast = () -> {
-            if (remainingConnectors.decrementAndGet() == 0) {
-                finalListener.onResponse(finalToolSpecs);
-            }
-        };
-
         // We make multiple Async calls in for loop, which happen in parallel
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
@@ -846,17 +839,28 @@ public class AgentUtils {
                     } catch (Throwable t) {
                         log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);
                     } finally {
-                        completeIfLast.run();
+                        completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
                     }
                 }, e -> {
                     log.error("Error processing connector: " + connectorId, e);
-                    completeIfLast.run();
+                    completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
                 }));
             } catch (Throwable t) {
                 // Catch synchronous throws (including Errors) so one bad connector can't strand the counter.
                 log.error("Synchronous failure initiating MCP tool spec lookup for connector: " + connectorId, t);
-                completeIfLast.run();
+                completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
             }
+        }
+    }
+
+    // Guarantees the final listener fires exactly once; every code path decrements via try/finally.
+    private static void completeIfLast(
+        AtomicInteger remainingConnectors,
+        List<MLToolSpec> finalToolSpecs,
+        ActionListener<List<MLToolSpec>> finalListener
+    ) {
+        if (remainingConnectors.decrementAndGet() == 0) {
+            finalListener.onResponse(finalToolSpecs);
         }
     }
 
