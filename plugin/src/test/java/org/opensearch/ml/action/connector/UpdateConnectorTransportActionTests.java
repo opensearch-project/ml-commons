@@ -469,6 +469,76 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals(Result.UPDATED, argumentCaptor.getValue().getResult());
     }
 
+    @Test
+    public void testExecuteWithValidDynamicHeaders() {
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        MLCreateConnectorInput updateContent = MLCreateConnectorInput
+            .builder()
+            .updateConnector(true)
+            .version("2")
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .headers(Map.of("X-Custom-Header", "${parameters.custom_value}"))
+                            .requestBody("{ \"model\": \"${parameters.model}\" }")
+                            .build()
+                    )
+            )
+            .build();
+        when(updateRequest.getUpdateContent()).thenReturn(updateContent);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+    }
+
+    @Test
+    public void testExecuteWithBlockedDynamicHeaderThrowsException() {
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        MLCreateConnectorInput updateContent = MLCreateConnectorInput
+            .builder()
+            .updateConnector(true)
+            .version("2")
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .headers(Map.of("Authorization", "${parameters.token}"))
+                            .requestBody("{ \"model\": \"${parameters.model}\" }")
+                            .build()
+                    )
+            )
+            .build();
+        when(updateRequest.getUpdateContent()).thenReturn(updateContent);
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("cannot use ${parameters.*} placeholders for security reasons"));
+    }
+
     private SearchResponse noneEmptySearchResponse() throws IOException {
         String modelContent = "{\"name\":\"Remote_Model\",\"algorithm\":\"Remote\",\"version\":1,\"connector_id\":\"test_id\"}";
         SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
