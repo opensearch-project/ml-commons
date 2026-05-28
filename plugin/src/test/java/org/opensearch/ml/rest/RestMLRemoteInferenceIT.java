@@ -1133,11 +1133,10 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"method\": \"POST\",\n"
             + "      \"url\": \"https://${parameters.endpoint}/post\",\n"
             + "      \"headers\": {\n"
-            + "        \"X-Request-ID\": \"${parameters.request_id}\",\n"
+            + "        \"X-Custom-Request\": \"${parameters.request_id}\",\n"
             + "        \"X-Model\": \"${parameters.model}\"\n"
             + "      },\n"
-            + "      \"request_body\": \"{\\\"input\\\": \\\"${parameters.input}\\\"}\",\n"
-            + "      \"post_process_function\": \"return params.response;\"\n"
+            + "      \"request_body\": \"{\\\"input\\\": \\\"${parameters.input}\\\"}\"\n"
             + "    }\n"
             + "  ]\n"
             + "}";
@@ -1192,21 +1191,20 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
         // httpbin returns the headers in the response
         Map headers = (Map) dataAsMap.get("headers");
-        if (headers != null) {
-            // Verify our dynamic headers were substituted correctly
-            String requestId = (String) headers.get("X-Request-Id");
-            String model = (String) headers.get("X-Model");
+        assertNotNull("httpbin response should contain headers", headers);
 
-            // httpbin may lowercase header names
-            if (requestId == null) {
-                requestId = (String) headers.get("x-request-id");
-            }
-            if (model == null) {
-                model = (String) headers.get("x-model");
-            }
+        // Verify our dynamic headers were substituted correctly
+        String requestId = (String) headers.get("X-Custom-Request");
+        String model = (String) headers.get("X-Model");
 
-            assertEquals("req-integration-test-12345", requestId);
-            assertEquals("test-model", model);
+        if (requestId == null) {
+            requestId = (String) headers.get("x-custom-request");
         }
+        if (model == null) {
+            model = (String) headers.get("x-model");
+        }
+
+        assertEquals("req-integration-test-12345", requestId);
+        assertEquals("test-model", model);
     }
 }
