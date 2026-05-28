@@ -138,6 +138,7 @@ public class PromptTemplate {
             - If the available data is insufficient to complete the Step, summarize what was obtained so far and clearly state the additional information or access required to proceed (do not guess).
             - If unable to complete the Step, clearly explain what went wrong and what is needed to proceed.
             - Avoid making assumptions and relying on implicit knowledge.
+            - Before generating any PPL or DSL query, always retrieve the index mapping first to ensure correct field names. Do not guess field names.
             - Your response must be self-contained and ready for the planner to use without modification. Never end with a question.
             - Break complex searches into simpler queries when appropriate.
             - Never invoke more than one tool in a single response. Returning multiple tool calls in one response is invalid.""";
