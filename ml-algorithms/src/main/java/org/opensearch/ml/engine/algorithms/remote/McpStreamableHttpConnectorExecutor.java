@@ -49,7 +49,9 @@ import com.google.gson.Gson;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
+import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapperSupplier;
+import io.modelcontextprotocol.json.schema.JsonSchemaValidator;
 import io.modelcontextprotocol.json.schema.jackson3.JacksonJsonSchemaValidatorSupplier;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -60,6 +62,11 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @ConnectorExecutor(MCP_STREAMABLE_HTTP)
 public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecutor {
+
+    // Cached singletons; the suppliers' outputs are thread-safe and the schema validator caches compiled schemas.
+    // Explicit instances also bypass the MCP SDK's ServiceLoader lookup, which fails under plugin classloader isolation.
+    private static final McpJsonMapper JSON_MAPPER = new JacksonMcpJsonMapperSupplier().get();
+    private static final JsonSchemaValidator JSON_SCHEMA_VALIDATOR = new JacksonJsonSchemaValidatorSupplier().get();
 
     @Getter
     private McpStreamableHttpConnector connector;
@@ -93,10 +100,9 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                 getMcpRequestHeaders(builder);
             };
 
-            // Explicit jsonMapper() bypasses MCP SDK's ServiceLoader lookup, which fails under plugin classloader isolation.
             McpClientTransport transport = HttpClientStreamableHttpTransport
                 .builder(mcpServerUrl)
-                .jsonMapper(new JacksonMcpJsonMapperSupplier().get())
+                .jsonMapper(JSON_MAPPER)
                 .endpoint(endpoint)
                 .customizeClient(clientBuilder -> {
                     clientBuilder.connectTimeout(connectionTimeout);
@@ -105,12 +111,11 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                 .customizeRequest(headerConfig)
                 .build();
 
-            // Explicit jsonSchemaValidator() bypasses another ServiceLoader lookup under plugin classloader isolation.
             McpSyncClient client = McpClient
                 .sync(transport)
                 .requestTimeout(readTimeout)
                 .capabilities(McpSchema.ClientCapabilities.builder().roots(false).build())
-                .jsonSchemaValidator(new JacksonJsonSchemaValidatorSupplier().get())
+                .jsonSchemaValidator(JSON_SCHEMA_VALIDATOR)
                 .build();
 
             client.initialize();
