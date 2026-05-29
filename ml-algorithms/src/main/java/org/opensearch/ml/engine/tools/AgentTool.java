@@ -6,11 +6,13 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_MAX_CALL_DEPTH;
 
 import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
@@ -41,8 +43,8 @@ public class AgentTool implements Tool {
 
     // Tracks AgentTool hops on the current chain to bound nested agent recursion.
     public static final String AGENT_CALL_DEPTH_FIELD = "_agent_call_depth";
-    // Allows depth 0 -> 1; a nested AgentTool call (depth >= 1) is blocked.
-    public static final int MAX_AGENT_CALL_DEPTH = 1;
+    // Fallback when no ClusterService is wired (e.g. in unit tests that use init(Client)).
+    public static final int DEFAULT_MAX_AGENT_CALL_DEPTH = 1;
 
     private final Client client;
 
@@ -81,14 +83,15 @@ public class AgentTool implements Tool {
                 throw new IllegalArgumentException("Agent ID not registered in tool");
             }
 
+            int maxDepth = Factory.getInstance().getMaxCallDepth();
             int currentDepth = readDepth(parameters);
-            if (currentDepth >= MAX_AGENT_CALL_DEPTH) {
+            if (currentDepth >= maxDepth) {
                 listener
                     .onFailure(
                         new OpenSearchStatusException(
-                            "AgentTool recursion depth exceeded the maximum allowed ("
-                                + MAX_AGENT_CALL_DEPTH
-                                + "). Aborting nested agent execution to prevent infinite recursion.",
+                            "AgentTool nested call depth exceeded the maximum ("
+                                + maxDepth
+                                + "). Check that your agent's tools do not transitively reference the agent itself.",
                             RestStatus.BAD_REQUEST
                         )
                     );
@@ -165,6 +168,8 @@ public class AgentTool implements Tool {
 
     public static class Factory implements Tool.Factory<AgentTool> {
         private Client client;
+        // volatile so a setting update on any thread is visible to executor threads reading depth.
+        private volatile int maxCallDepth = DEFAULT_MAX_AGENT_CALL_DEPTH;
 
         private static Factory INSTANCE;
 
@@ -183,6 +188,25 @@ public class AgentTool implements Tool {
 
         public void init(Client client) {
             this.client = client;
+        }
+
+        public void init(Client client, ClusterService clusterService) {
+            this.client = client;
+            if (clusterService != null) {
+                this.maxCallDepth = ML_COMMONS_AGENT_MAX_CALL_DEPTH.get(clusterService.getSettings());
+                clusterService
+                    .getClusterSettings()
+                    .addSettingsUpdateConsumer(ML_COMMONS_AGENT_MAX_CALL_DEPTH, it -> this.maxCallDepth = it);
+            }
+        }
+
+        public int getMaxCallDepth() {
+            return maxCallDepth;
+        }
+
+        @VisibleForTesting
+        void setMaxCallDepth(int maxCallDepth) {
+            this.maxCallDepth = maxCallDepth;
         }
 
         @Override

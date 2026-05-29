@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.tools.AgentTool.AGENT_CALL_DEPTH_FIELD;
 import static org.opensearch.ml.engine.tools.AgentTool.DEFAULT_DESCRIPTION;
-import static org.opensearch.ml.engine.tools.AgentTool.MAX_AGENT_CALL_DEPTH;
+import static org.opensearch.ml.engine.tools.AgentTool.DEFAULT_MAX_AGENT_CALL_DEPTH;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -65,6 +65,8 @@ public class AgentToolTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         AgentTool.Factory.getInstance().init(client);
+        // Reset to default; individual tests override via setMaxCallDepth.
+        AgentTool.Factory.getInstance().setMaxCallDepth(DEFAULT_MAX_AGENT_CALL_DEPTH);
 
         indicesParams = Map.of("index", "[\"foo\"]");
         otherParams = Map.of("other", "[\"bar\"]");
@@ -223,7 +225,7 @@ public class AgentToolTests {
         Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
 
         Map<String, String> parameters = new HashMap<>();
-        parameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(MAX_AGENT_CALL_DEPTH));
+        parameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(DEFAULT_MAX_AGENT_CALL_DEPTH));
         tool.run(parameters, listener);
 
         verify(client, never()).execute(any(), any(), any());
@@ -238,7 +240,7 @@ public class AgentToolTests {
         Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
 
         Map<String, String> parameters = new HashMap<>();
-        parameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(MAX_AGENT_CALL_DEPTH + 1));
+        parameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(DEFAULT_MAX_AGENT_CALL_DEPTH + 1));
         tool.run(parameters, listener);
 
         verify(client, never()).execute(any(), any(), any());
@@ -246,6 +248,69 @@ public class AgentToolTests {
         verify(listener).onFailure(exCaptor.capture());
         OpenSearchStatusException ex = (OpenSearchStatusException) exCaptor.getValue();
         assertEquals(RestStatus.BAD_REQUEST, ex.status());
+    }
+
+    @Test
+    public void testRunClampsNegativeDepth() {
+        // A negative supplied depth must be clamped to 0 — otherwise an attacker could reset the counter.
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("k", "v")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput out = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
+
+        ArgumentCaptor<MLExecuteTaskRequest> captor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> al = invocation.getArgument(2);
+            al.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(out).build());
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), captor.capture(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(AGENT_CALL_DEPTH_FIELD, "-5");
+        tool.run(parameters, listener);
+
+        AgentMLInput input = (AgentMLInput) captor.getValue().getInput();
+        Map<String, String> innerParams = ((RemoteInferenceInputDataSet) input.getInputDataset()).getParameters();
+        // -5 clamped to 0, then incremented to 1.
+        assertEquals("1", innerParams.get(AGENT_CALL_DEPTH_FIELD));
+    }
+
+    @Test
+    public void testMaxCallDepthSettingControlsBound() {
+        // With max depth bumped to 2, depth=1 must be allowed through.
+        AgentTool.Factory.getInstance().setMaxCallDepth(2);
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("k", "v")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput out = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
+
+        ArgumentCaptor<MLExecuteTaskRequest> captor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> al = invocation.getArgument(2);
+            al.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(out).build());
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), captor.capture(), any());
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(AGENT_CALL_DEPTH_FIELD, "1");
+        tool.run(parameters, listener);
+
+        AgentMLInput input = (AgentMLInput) captor.getValue().getInput();
+        Map<String, String> innerParams = ((RemoteInferenceInputDataSet) input.getInputDataset()).getParameters();
+        assertEquals("2", innerParams.get(AGENT_CALL_DEPTH_FIELD));
+
+        // And depth=2 is still blocked since max=2 means the chain may reach 2 but not exceed it.
+        Tool blockedTool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "child"));
+        Map<String, String> blockedParams = new HashMap<>();
+        blockedParams.put(AGENT_CALL_DEPTH_FIELD, "2");
+        ActionListener<ModelTensorOutput> blockedListener = org.mockito.Mockito.mock(ActionListener.class);
+        blockedTool.run(blockedParams, blockedListener);
+        ArgumentCaptor<Exception> exCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(blockedListener).onFailure(exCaptor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) exCaptor.getValue()).status());
     }
 
     @Test

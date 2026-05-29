@@ -361,6 +361,10 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    // Maximum nested AgentTool call depth; bounds runaway recursion from cyclic agent graphs.
+    public static final Setting<Integer> ML_COMMONS_AGENT_MAX_CALL_DEPTH = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "agent.max_call_depth", 1, 1, 5, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "connector.private_ip_enabled",
