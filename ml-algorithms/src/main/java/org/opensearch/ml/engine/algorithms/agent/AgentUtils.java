@@ -823,10 +823,10 @@ public class AgentUtils {
                         List<MLToolSpec> filteredTools;
                         if (toolFilters == null || toolFilters.isEmpty()) {
                             filteredTools = mcpToolspecs
-                                    .stream()
-                                    .filter(Objects::nonNull)
-                                    .map(toolSpec -> applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides))
-                                    .collect(Collectors.toList());
+                                .stream()
+                                .filter(Objects::nonNull)
+                                .map(toolSpec -> applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides))
+                                .collect(Collectors.toList());
                         } else {
                             filteredTools = new ArrayList<>();
                             List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
