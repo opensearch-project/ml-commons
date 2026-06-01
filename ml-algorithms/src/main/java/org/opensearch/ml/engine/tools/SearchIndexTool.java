@@ -75,6 +75,7 @@ public class SearchIndexTool implements Tool {
         + "\"properties\":{"
         + "\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. Example: index1\"},"
         + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch Query DSL as a JSON object. "
+        + "You need to get index mapping to write correct search query. "
         + "The object MUST follow OpenSearch Query DSL and MUST include a top-level 'query' field. "
         + "Preferred format for reliable parsing. "
         + "Example: {\\\"query\\\":{\\\"match\\\":{\\\"field\\\":\\\"value\\\"}},\\\"size\\\":10}. "
