@@ -60,4 +60,16 @@ public interface FunctionCalling {
     default TokenUsage extractTokenUsage(Map<String, ?> llmResponseDataAsMap) {
         return null; // Default: no token tracking
     }
+
+    /**
+     * Indicates whether this provider supports strict schema enforcement.
+     * When true, the provider guarantees that tool outputs conform to the declared schema.
+     * When false, the framework will apply additional validation before tool execution.
+     *
+     * @return true if provider supports strict schema enforcement (e.g., OpenAI with strict=true),
+     *         false if framework-level validation is needed (e.g., Bedrock, Gemini)
+     */
+    default boolean supportsStrictSchema() {
+        return false; // Default: assume no strict schema support
+    }
 }

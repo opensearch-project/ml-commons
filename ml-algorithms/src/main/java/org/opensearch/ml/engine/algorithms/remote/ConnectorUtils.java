@@ -53,10 +53,12 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 import okhttp3.MediaType;
@@ -269,9 +271,9 @@ public class ConnectorUtils {
             ProcessorChain processorChain = new ProcessorChain(processorConfigs);
 
             if (responseFilter != null) {
-                // Apply filter first, then processor chain
-                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
-                processedOutput = processorChain.process(filteredResponse);
+                // Apply filter first, then processor chain; fall back to full response on path miss
+                Object filteredResponse = tryReadResponseFilter(response, responseFilter);
+                processedOutput = processorChain.process(filteredResponse != null ? filteredResponse : response);
             } else {
                 // Apply processor chain to whole response
                 processedOutput = processorChain.process(response);
@@ -284,8 +286,8 @@ public class ConnectorUtils {
             if (responseFilter == null) {
                 connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
             } else {
-                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
-                connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
+                Object filteredResponse = tryReadResponseFilter(response, responseFilter);
+                connector.parseResponse(filteredResponse != null ? filteredResponse : response, modelTensors, scriptReturnModelTensor);
             }
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
@@ -376,7 +378,8 @@ public class ConnectorUtils {
             .method(method)
             .uri(uri)
             .contentStreamProvider(requestBody.contentStreamProvider());
-        Map<String, String> headers = connector.getDecryptedHeaders();
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
                 builder.putHeader(key, headers.get(key));
@@ -413,7 +416,8 @@ public class ConnectorUtils {
             );
         }
         Request.Builder requestBuilder = new Request.Builder();
-        Map<String, String> headers = connector.getDecryptedHeaders();
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
                 requestBuilder.addHeader(key, headers.get(key));
@@ -486,6 +490,17 @@ public class ConnectorUtils {
             .build();
     }
 
+    // Returns null when the path is absent so callers can fall back to the full response.
+    // Needed for tool-use responses (e.g. Bedrock Converse) where content[0].toolUse replaces content[0].text.
+    private static Object tryReadResponseFilter(String response, String responseFilter) {
+        try {
+            return JsonPath.parse(response).read(responseFilter);
+        } catch (PathNotFoundException e) {
+            log.debug("response_filter path '{}' not found in response, using full response", responseFilter);
+            return null;
+        }
+    }
+
     private static String cleanPayloadIfNeeded(String payload, Map<String, String> parameters) {
         String model = parameters.get("model");
         if (payload != null && model != null && model.equals(BEDROCK_NOVA_MODEL)) {
@@ -525,6 +540,40 @@ public class ConnectorUtils {
 
         if (element != null && element.isJsonNull()) {
             parent.remove(fieldName);
+        }
+    }
+
+    @VisibleForTesting
+    static void validateSubstitutedHeaders(Map<String, String> headers) {
+        if (headers == null)
+            return;
+
+        int totalSize = 0;
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String value = entry.getValue();
+            if (value == null)
+                continue;
+
+            // Check for header injection
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if ((c < 0x20 && c != '\t') || c == 0x7F) {
+                    throw new IllegalArgumentException("Header value contains invalid control character");
+                }
+            }
+
+            // Check per-header size (key + value)
+            int headerSize = entry.getKey().length() + value.length();
+            if (headerSize > 8192) {
+                throw new IllegalArgumentException("Header size (key + value) exceeds 8KB limit");
+            }
+
+            totalSize += headerSize;
+        }
+
+        // Check total size
+        if (totalSize > 65536) {
+            throw new IllegalArgumentException("Total headers size (key + value) exceeds 64KB limit");
         }
     }
 }

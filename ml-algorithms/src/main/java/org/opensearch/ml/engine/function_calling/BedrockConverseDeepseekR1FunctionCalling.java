@@ -150,4 +150,9 @@ public class BedrockConverseDeepseekR1FunctionCalling implements FunctionCalling
             return null;
         }
     }
+
+    @Override
+    public boolean supportsStrictSchema() {
+        return false;
+    }
 }

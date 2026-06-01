@@ -209,6 +209,11 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         }
     }
 
+    @Override
+    public boolean supportsStrictSchema() {
+        return false;
+    }
+
     @Data
     public static class ToolResult {
         private String toolUseId;

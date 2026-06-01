@@ -1329,4 +1329,83 @@ public class OpenaiV1ChatCompletionsModelProviderTest {
         assertTrue(result.contains("tool_calls"));
         assertTrue(result.contains("get_weather"));
     }
+
+    // ==================== Tests for inference config parameters ====================
+
+    @Test
+    public void testCreateConnector_InferenceParams_SubstitutesToValidJson() {
+        // Arrange
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("max_tokens", "100");
+        modelParameters.put("temperature", "0.5");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert — perform actual template substitution
+        HttpConnector httpConnector = (HttpConnector) connector;
+        String requestBody = httpConnector.getActions().get(0).getRequestBody();
+        Map<String, String> params = new HashMap<>(httpConnector.getParameters());
+        params.put("body", "{\"role\":\"user\",\"content\":\"hi\"}");
+        org.apache.commons.text.StringSubstitutor sub = new org.apache.commons.text.StringSubstitutor(params, "${parameters.", "}");
+        sub.setEnableUndefinedVariableException(false);
+        String resolved = sub.replace(requestBody);
+
+        assertTrue(resolved.contains("\"max_completion_tokens\":100"));
+        assertTrue(resolved.contains("\"temperature\":0.5"));
+        assertFalse(resolved.contains("top_p"));
+    }
+
+    @Test
+    public void testCreateConnector_WithTopP_SubstitutesToValidJson() {
+        // Arrange
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("max_tokens", "100");
+        modelParameters.put("temperature", "0.8");
+        modelParameters.put("top_p", "0.9");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert — substitution and parse
+        HttpConnector httpConnector = (HttpConnector) connector;
+        String requestBody = httpConnector.getActions().get(0).getRequestBody();
+        Map<String, String> params = new HashMap<>(httpConnector.getParameters());
+        params.put("body", "{\"role\":\"user\",\"content\":\"hi\"}");
+        org.apache.commons.text.StringSubstitutor sub = new org.apache.commons.text.StringSubstitutor(params, "${parameters.", "}");
+        sub.setEnableUndefinedVariableException(false);
+        String resolved = sub.replace(requestBody);
+
+        assertTrue(resolved.contains("\"max_completion_tokens\":100"));
+        assertTrue(resolved.contains("\"temperature\":0.8"));
+        assertTrue(resolved.contains("\"top_p\": 0.9"));
+    }
+
+    @Test
+    public void testCreateConnector_InvalidNumericParameter_ThrowsException() {
+        // Arrange
+        String modelId = "gpt-4o";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("openai_api_key", "test_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("top_p", "0.9\", \"malicious\": \"value");
+
+        // Act & Assert
+        try {
+            provider.createConnector(modelId, credential, modelParameters);
+            fail("Should throw IllegalArgumentException for invalid numeric parameter");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("top_p"));
+            assertTrue(e.getMessage().contains("must be a valid number"));
+        }
+    }
 }
