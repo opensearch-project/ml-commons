@@ -11,11 +11,13 @@ import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTenso
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.resolveFlowToolSpecsWithMcpValidation;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -83,7 +85,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         this.encryptor = encryptor;
     }
 
-    @SuppressWarnings("removal")
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
         resolveFlowToolSpecsWithMcpValidation(mlAgent, params, client, sdkClient, encryptor, ActionListener.wrap(toolSpecs -> {
@@ -103,6 +104,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+        Map<String, Tool> tools = new HashMap<>();
         if (toolSpecs == null || toolSpecs.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
@@ -117,6 +119,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
                 Tool tool = createTool(toolFactories, firstToolExecuteParams, toolSpec);
+                tools.put(tool.getName(), tool);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -147,13 +150,16 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
                     if (finalI == toolSpecs.size()) {
                         if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
+                            cleanUpResource(tools);
                             listener.onResponse(flowAgentOutput);
                         } else {
                             ActionListener<UpdateResponse> updateListener = ActionListener.wrap(updateResponse -> {
                                 log.info("Updated additional info for interaction ID: {} in the flow agent.", updateResponse.getId());
+                                cleanUpResource(tools);
                                 listener.onResponse(flowAgentOutput);
                             }, e -> {
                                 log.error("Failed to update root interaction", e);
+                                cleanUpResource(tools);
                                 listener.onResponse(flowAgentOutput);
                             });
                             updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
@@ -164,19 +170,27 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
                     Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
                     Tool tool = createTool(toolFactories, executeParams, toolSpec);
+                    tools.put(tool.getName(), tool);
                     if (finalI < toolSpecs.size()) {
                         tool.run(executeParams, nextStepListener);
                     }
 
                 }, e -> {
                     log.error("Failed to run flow agent", e);
+                    cleanUpResource(tools);
                     listener.onFailure(e);
                 });
                 previousStepListener = nextStepListener;
             }
         }
         if (toolSpecs.size() == 1) {
-            firstTool.run(firstToolExecuteParams, listener);
+            firstTool.run(firstToolExecuteParams, ActionListener.wrap(r -> {
+                cleanUpResource(tools);
+                listener.onResponse(r);
+            }, e -> {
+                cleanUpResource(tools);
+                listener.onFailure(e);
+            }));
         } else {
             firstTool.run(firstToolExecuteParams, firstStepListener);
         }

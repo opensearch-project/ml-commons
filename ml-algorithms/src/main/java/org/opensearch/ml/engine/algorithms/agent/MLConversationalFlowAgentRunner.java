@@ -17,6 +17,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
@@ -26,6 +27,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -203,6 +205,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+        Map<String, Tool> tools = new HashMap<>();
 
         if (toolSpecs == null || toolSpecs.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
@@ -220,6 +223,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
                 Tool tool = createTool(toolFactories, firstToolExecuteParams, toolSpec);
+                tools.put(tool.getName(), tool);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -243,10 +247,12 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         finalI,
                         output,
                         mlAgent.getTenantId(),
-                        nextStepListener
+                        nextStepListener,
+                        tools
                     );
                 }, e -> {
                     log.error("Failed to run flow agent", e);
+                    cleanUpResource(tools);
                     listener.onFailure(e);
                 });
                 previousStepListener = nextStepListener;
@@ -270,9 +276,13 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     1,
                     output,
                     mlAgent.getTenantId(),
-                    null
+                    null,
+                    tools
                 );
-            }, e -> { listener.onFailure(e); }));
+            }, e -> {
+                cleanUpResource(tools);
+                listener.onFailure(e);
+            }));
         } else {
             firstTool.run(firstToolExecuteParams, firstStepListener);
         }
@@ -294,7 +304,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         int finalI,
         Object output,
         String tenantId,
-        StepListener<Object> nextStepListener
+        StepListener<Object> nextStepListener,
+        Map<String, Tool> tools
     ) throws PrivilegedActionException {
         String toolName = getToolName(previousToolSpec);
         String outputKey = toolName + ".output";
@@ -322,13 +333,16 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         if (finalI == toolSpecs.size()) {
             ActionListener updateListener = ActionListener.<UpdateResponse>wrap(r -> {
                 log.info("Updated additional info for interaction {} of flow agent.", r.getId());
+                cleanUpResource(tools);
                 listener.onResponse(flowAgentOutput);
             }, e -> {
                 log.error("Failed to update root interaction", e);
+                cleanUpResource(tools);
                 listener.onResponse(flowAgentOutput);
             });
             if (memory == null) {
                 if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
+                    cleanUpResource(tools);
                     listener.onResponse(flowAgentOutput);
                 } else {
                     updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
@@ -350,13 +364,14 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         memory.update(parentInteractionId, updateContent, updateListener);
                     }, e -> {
                         log.error("Failed to update root interaction ", e);
+                        cleanUpResource(tools);
                         listener.onFailure(e);
                     })
                 );
             }
         } else {
             if (memory == null) {
-                runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener);
+                runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener, tools);
             } else {
                 saveMessage(
                     params,
@@ -368,9 +383,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     traceNumber,
                     traceDisabled,
                     ActionListener.wrap(r -> {
-                        runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener);
+                        runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener, tools);
                     }, e -> {
                         log.error("Failed to update root interaction ", e);
+                        cleanUpResource(tools);
                         listener.onFailure(e);
                     })
                 );
@@ -383,11 +399,13 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         List<MLToolSpec> toolSpecs,
         int finalI,
         String tenantId,
-        StepListener<Object> nextStepListener
+        StepListener<Object> nextStepListener,
+        Map<String, Tool> tools
     ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
         Map<String, String> toolExecutionParameters = ToolUtils.buildToolParameters(params, toolSpec, tenantId);
         Tool tool = createTool(toolFactories, toolExecutionParameters, toolSpec);
+        tools.put(tool.getName(), tool);
         if (finalI < toolSpecs.size()) {
             tool.run(toolExecutionParameters, nextStepListener);
         }

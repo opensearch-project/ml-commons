@@ -6,9 +6,11 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,6 +24,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
@@ -64,6 +67,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -1410,6 +1420,100 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testGetMcpToolSpecs_DuplicateToolNamesWarning() throws Exception {
+        String loggerName = AgentUtils.class.getName();
+        DuplicateToolWarningLogAppender appender = new DuplicateToolWarningLogAppender("DuplicateToolWarningAppender");
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(loggerName);
+        Level originalLevel = loggerConfig.getLevel();
+        loggerConfig.addAppender(appender, Level.ALL, null);
+        context.updateLoggers();
+
+        try {
+            loggerConfig.setLevel(Level.WARN);
+            context.updateLoggers();
+            appender.clear();
+
+            List<MLToolSpec> responseWithWarn = fetchMcpToolSpecsFromDuplicateConnectors();
+            assertEquals(2, responseWithWarn.size());
+            assertEquals("shared_tool", responseWithWarn.get(0).getName());
+            assertEquals("shared_tool", responseWithWarn.get(1).getName());
+            assertTrue(hasDuplicateToolNameWarning(appender, "shared_tool", "connector-A", "connector-B"));
+
+            // Setting log level as ERROR disables WARN, so duplicate-tool tracking is skipped.
+            loggerConfig.setLevel(Level.ERROR);
+            context.updateLoggers();
+            appender.clear();
+
+            List<MLToolSpec> responseWhenWarnDisabled = fetchMcpToolSpecsFromDuplicateConnectors();
+            assertEquals(2, responseWhenWarnDisabled.size());
+            assertFalse(hasDuplicateToolNameWarning(appender, "shared_tool", "connector-A", "connector-B"));
+        } finally {
+            loggerConfig.removeAppender(appender.getName());
+            appender.stop();
+            loggerConfig.setLevel(originalLevel);
+            context.updateLoggers();
+        }
+    }
+
+    private List<MLToolSpec> fetchMcpToolSpecsFromDuplicateConnectors() throws Exception {
+        stubGetConnector();
+
+        MLToolSpec toolFromA = MLToolSpec.builder().type(McpSseTool.TYPE).name("shared_tool").description("from-A").build();
+        MLToolSpec toolFromB = MLToolSpec.builder().type(McpSseTool.TYPE).name("shared_tool").description("from-B").build();
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(toolFromA), List.of(toolFromB));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"connector-A\"},"
+                + "{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"connector-B\"}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            assertNotNull(response.get());
+            return response.get();
+        }
+    }
+
+    private boolean hasDuplicateToolNameWarning(DuplicateToolWarningLogAppender appender, String toolName, String... connectorIds) {
+        for (LogEvent event : appender.getLogEvents()) {
+            if (event.getLevel() != Level.WARN) {
+                continue;
+            }
+            String message = event.getMessage().getFormattedMessage();
+            if (!message.contains(toolName)) {
+                continue;
+            }
+            boolean allConnectorsPresent = true;
+            for (String connectorId : connectorIds) {
+                if (!message.contains(connectorId)) {
+                    allConnectorsPresent = false;
+                    break;
+                }
+            }
+            if (allConnectorsPresent) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Test
     public void testGetMcpToolSpecs_NonMcpConnectorReturnsEmpty() throws Exception {
         stubGetConnector();
         try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
@@ -2070,14 +2174,14 @@ public class AgentUtilsTest extends MLStaticMockBase {
                         .type(McpStreamableHttpTool.TYPE)
                         .name("mcp_price")
                         .description("remote price tool")
-                        .runtimeResources(Map.of("MCP_SYNC_CLIENT", "remote_client"))
+                        .runtimeResources(Map.of(MCP_SYNC_CLIENT, "remote_client"))
                         .build(),
                     MLToolSpec
                         .builder()
                         .type(McpStreamableHttpTool.TYPE)
                         .name("mcp_trending")
                         .description("remote trending tool")
-                        .runtimeResources(Map.of("MCP_SYNC_CLIENT", "remote_client"))
+                        .runtimeResources(Map.of(MCP_SYNC_CLIENT, "remote_client"))
                         .build()
                 );
             McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
@@ -2125,13 +2229,13 @@ public class AgentUtilsTest extends MLStaticMockBase {
             // MCP tool #1 takes remote description fallback and merged runtime resources
             MLToolSpec resolvedMcp1 = response.get().get(1);
             assertEquals("remote price tool", resolvedMcp1.getDescription());
-            assertEquals("remote_client", resolvedMcp1.getRuntimeResources().get("MCP_SYNC_CLIENT"));
+            assertEquals("remote_client", resolvedMcp1.getRuntimeResources().get(MCP_SYNC_CLIENT));
             assertEquals("agent_value", resolvedMcp1.getRuntimeResources().get("custom_runtime"));
 
             // MCP tool #2 keeps configured description
             MLToolSpec resolvedMcp2 = response.get().get(3);
             assertEquals("configured trending description", resolvedMcp2.getDescription());
-            assertEquals("remote_client", resolvedMcp2.getRuntimeResources().get("MCP_SYNC_CLIENT"));
+            assertEquals("remote_client", resolvedMcp2.getRuntimeResources().get(MCP_SYNC_CLIENT));
         }
     }
 
@@ -2247,7 +2351,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
                                 + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}"
                         )
                 )
-                .runtimeResources(Map.of("MCP_SYNC_CLIENT", "from_remote"))
+                .runtimeResources(Map.of(MCP_SYNC_CLIENT, "from_remote"))
                 .build();
             McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
             when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
@@ -2285,10 +2389,58 @@ public class AgentUtilsTest extends MLStaticMockBase {
                 "\"{\"type\":\"object\",\"properties\":{\"query\":" + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}",
                 mergedMcp.getAttributes().get("input_schema")
             );
-            assertEquals("from_remote", mergedMcp.getRuntimeResources().get("MCP_SYNC_CLIENT"));
+            assertEquals("from_remote", mergedMcp.getRuntimeResources().get(MCP_SYNC_CLIENT));
             assertEquals("from_agent", mergedMcp.getRuntimeResources().get("custom_runtime"));
             assertEquals("summarizer", response.get().get(1).getName());
             assertEquals("keep me", response.get().get(1).getDescription());
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_ConfiguredMcpSyncClientIsIgnored() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            Object remoteClient = new Object();
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_price")
+                .description("remote desc")
+                .runtimeResources(Map.of(MCP_SYNC_CLIENT, remoteClient))
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_price")
+                .runtimeResources(Map.of(MCP_SYNC_CLIENT, "agent_override", "custom_runtime", "agent_value"))
+                .build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertNotNull(response.get());
+            assertEquals(1, response.get().size());
+            MLToolSpec mergedMcp = response.get().get(0);
+            assertSame(remoteClient, mergedMcp.getRuntimeResources().get(MCP_SYNC_CLIENT));
+            assertEquals("agent_value", mergedMcp.getRuntimeResources().get("custom_runtime"));
         }
     }
 
@@ -2338,8 +2490,66 @@ public class AgentUtilsTest extends MLStaticMockBase {
             assertEquals(1, response.get().size());
             MLToolSpec mergedMcp = response.get().get(0);
             assertEquals("configured desc", mergedMcp.getDescription());
+            assertEquals("remote", mergedMcp.getAttributes().get("remote_attr"));
             assertEquals("configured", mergedMcp.getAttributes().get("configured_attr"));
             assertNull(mergedMcp.getRuntimeResources());
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_PartialConfiguredAttributesMergeWithRemote() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .description("remote")
+                .attributes(
+                    Map
+                        .of(
+                            "input_schema",
+                            "\"{\"type\":\"object\",\"properties\":{\"query\":"
+                                + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}"
+                        )
+                )
+                .runtimeResources(null)
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .attributes(Map.of("cache_ttl", "300"))
+                .build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertEquals(1, response.get().size());
+            MLToolSpec merged = response.get().get(0);
+            assertEquals("300", merged.getAttributes().get("cache_ttl"));
+            assertEquals(
+                "\"{\"type\":\"object\",\"properties\":{\"query\":" + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}",
+                merged.getAttributes().get("input_schema")
+            );
         }
     }
 
@@ -3143,5 +3353,27 @@ public class AgentUtilsTest extends MLStaticMockBase {
         assertNotNull(result.get());
         assertEquals("model-1", result.get()[0]); // falls back to modelId
         assertEquals("model-1", result.get()[1]); // falls back to modelId
+    }
+
+    private static class DuplicateToolWarningLogAppender extends AbstractAppender {
+        private final List<LogEvent> logEvents = new ArrayList<>();
+
+        DuplicateToolWarningLogAppender(String name) {
+            super(name, null, PatternLayout.createDefaultLayout(), false);
+            start();
+        }
+
+        @Override
+        public void append(LogEvent event) {
+            logEvents.add(event.toImmutable());
+        }
+
+        List<LogEvent> getLogEvents() {
+            return logEvents;
+        }
+
+        void clear() {
+            logEvents.clear();
+        }
     }
 }
