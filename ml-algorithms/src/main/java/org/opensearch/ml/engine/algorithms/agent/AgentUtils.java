@@ -864,7 +864,7 @@ public class AgentUtils {
         }
     }
 
-    private static void getMCPToolSpecsFromConnector(
+    public static void getMCPToolSpecsFromConnector(
         String connectorId,
         String tenantId,
         SdkClient sdkClient,
