@@ -9,6 +9,7 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
@@ -58,6 +59,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -155,6 +157,9 @@ public class AgentUtils {
     private static final String DESCRIPTION = "description";
     private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
         .compile(",\\s*\"additionalProperties\"\\s*:\\s*(?:false|true)", Pattern.CASE_INSENSITIVE);
+
+    private static final Set<String> MCP_SYSTEM_RUNTIME_RESOURCE_KEYS = Set.of(MCP_SYNC_CLIENT);
+
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
@@ -786,6 +791,91 @@ public class AgentUtils {
         return toolSpecs;
     }
 
+    public static void resolveFlowToolSpecsWithMcpValidation(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        Client client,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> listener
+    ) {
+        List<MLToolSpec> configuredToolSpecs = getMlToolSpecs(mlAgent, params);
+        if (configuredToolSpecs == null || configuredToolSpecs.isEmpty()) {
+            listener.onResponse(Collections.emptyList());
+            return;
+        }
+        boolean hasMcpTool = configuredToolSpecs
+            .stream()
+            .anyMatch(toolSpec -> McpSseTool.TYPE.equals(toolSpec.getType()) || McpStreamableHttpTool.TYPE.equals(toolSpec.getType()));
+        if (!hasMcpTool) {
+            listener.onResponse(configuredToolSpecs);
+            return;
+        }
+        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpToolSpecs -> {
+            // If several connectors expose a tool with the same name, it picks the first one from the
+            // configured mcp connectors.
+            Map<String, MLToolSpec> mcpToolSpecMap = mcpToolSpecs
+                .stream()
+                .filter(spec -> spec.getName() != null)
+                .collect(Collectors.toMap(MLToolSpec::getName, spec -> spec, (firstSpec, ignoredDuplicate) -> firstSpec));
+            List<MLToolSpec> resolvedSpecs = new ArrayList<>();
+            for (MLToolSpec configuredSpec : configuredToolSpecs) {
+                if (!McpSseTool.TYPE.equals(configuredSpec.getType()) && !McpStreamableHttpTool.TYPE.equals(configuredSpec.getType())) {
+                    resolvedSpecs.add(configuredSpec);
+                } else {
+                    String configuredToolName = getToolName(configuredSpec);
+                    MLToolSpec mcpSpec = mcpToolSpecMap.get(configuredToolName);
+                    if (mcpSpec == null) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "MCP tool ["
+                                        + configuredToolName
+                                        + "] configured in agent is not available in the MCP connector(s). "
+                                        + "Check connector configuration or MCP server logs."
+                                )
+                            );
+                        return;
+                    }
+                    // Layer agent configuration on top of the connector-fetched MCP tool definition:
+                    // - description: configured value wins when non-empty, else remote
+                    // - attributes, runtime_resources: merged with configured values winning on key collision;
+                    // connector-injected runtime keys (e.g. mcp_sync_client) cannot be overridden in agent JSON
+                    Map<String, Object> mergedRuntimeResources = new HashMap<>();
+                    if (mcpSpec.getRuntimeResources() != null) {
+                        mergedRuntimeResources.putAll(mcpSpec.getRuntimeResources());
+                    }
+                    if (configuredSpec.getRuntimeResources() != null) {
+                        for (Map.Entry<String, Object> entry : configuredSpec.getRuntimeResources().entrySet()) {
+                            if (!MCP_SYSTEM_RUNTIME_RESOURCE_KEYS.contains(entry.getKey())) {
+                                mergedRuntimeResources.put(entry.getKey(), entry.getValue());
+                            }
+                        }
+                    }
+                    Map<String, String> mergedAttributes = new HashMap<>();
+                    if (mcpSpec.getAttributes() != null) {
+                        mergedAttributes.putAll(mcpSpec.getAttributes());
+                    }
+                    if (configuredSpec.getAttributes() != null) {
+                        mergedAttributes.putAll(configuredSpec.getAttributes());
+                    }
+                    MLToolSpec resolved = configuredSpec
+                        .toBuilder()
+                        .description(
+                            Strings.isNullOrEmpty(configuredSpec.getDescription())
+                                ? mcpSpec.getDescription()
+                                : configuredSpec.getDescription()
+                        )
+                        .attributes(mergedAttributes)
+                        .runtimeResources(mergedRuntimeResources.isEmpty() ? null : mergedRuntimeResources)
+                        .build();
+                    resolvedSpecs.add(resolved);
+                }
+            }
+            listener.onResponse(resolvedSpecs);
+        }, listener::onFailure));
+    }
+
     public static void getMcpToolSpecs(
         MLAgent mlAgent,
         Client client,
@@ -809,6 +899,8 @@ public class AgentUtils {
         // Use AtomicInteger to track completion of all async operations
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
         List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
+        boolean isLogWarnEnabled = log.isWarnEnabled();
+        Map<String, List<String>> toolNameToConnectorIds = isLogWarnEnabled ? new ConcurrentHashMap<>() : null;
 
         // We make multiple Async calls in for loop, which happen in parallel
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
@@ -835,20 +927,37 @@ public class AgentUtils {
                             }
                         }
 
+                        if (isLogWarnEnabled) {
+                            recordMcpToolNamesForConnector(toolNameToConnectorIds, connectorId, filteredTools);
+                        }
                         finalToolSpecs.addAll(filteredTools);
                     } catch (Throwable t) {
                         log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);
                     } finally {
-                        completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
+                        completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
                     }
                 }, e -> {
                     log.error("Error processing connector: " + connectorId, e);
-                    completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
+                    completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
                 }));
             } catch (Throwable t) {
                 // Catch synchronous throws (including Errors) so one bad connector can't strand the counter.
                 log.error("Synchronous failure initiating MCP tool spec lookup for connector: " + connectorId, t);
-                completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
+                completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
+            }
+        }
+    }
+
+    private static void recordMcpToolNamesForConnector(
+        Map<String, List<String>> toolNameToConnectorIds,
+        String connectorId,
+        List<MLToolSpec> connectorTools
+    ) {
+        for (MLToolSpec toolSpec : connectorTools) {
+            if (toolSpec.getName() != null) {
+                toolNameToConnectorIds
+                    .computeIfAbsent(toolSpec.getName(), arg -> Collections.synchronizedList(new ArrayList<>()))
+                    .add(connectorId);
             }
         }
     }
@@ -856,11 +965,32 @@ public class AgentUtils {
     // Guarantees the final listener fires exactly once; every code path decrements via try/finally.
     private static void completeIfLast(
         AtomicInteger remainingConnectors,
+        Map<String, List<String>> toolNameToConnectorIds,
         List<MLToolSpec> finalToolSpecs,
         ActionListener<List<MLToolSpec>> finalListener
     ) {
         if (remainingConnectors.decrementAndGet() == 0) {
+            if (toolNameToConnectorIds != null) {
+                warnOnDuplicateMcpToolNames(toolNameToConnectorIds);
+            }
             finalListener.onResponse(finalToolSpecs);
+        }
+    }
+
+    private static void warnOnDuplicateMcpToolNames(Map<String, List<String>> toolNameToConnectorIds) {
+        if (!log.isWarnEnabled()) {
+            return;
+        }
+        for (Map.Entry<String, List<String>> entry : toolNameToConnectorIds.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                log
+                    .warn(
+                        "MCP tool name [{}] is exposed by multiple connectors {}. "
+                            + "Only one definition will be used; disambiguate via tool_filters or rename the tool on one connector.",
+                        entry.getKey(),
+                        entry.getValue()
+                    );
+            }
         }
     }
 
