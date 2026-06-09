@@ -32,6 +32,7 @@ buildscript {
     repositories {
         mavenLocal()
         maven { url "https://ci.opensearch.org/ci/dbc/snapshots/maven/" }
+        maven { url "https://ci.opensearch.org/maven2/" }
         mavenCentral()
         maven { url "https://plugins.gradle.org/m2/" }
         maven { url "https://ci.opensearch.org/ci/dbc/snapshots/lucene/" }
@@ -82,7 +83,7 @@ allprojects {
     }
 
     plugins.withId('jacoco') {
-        jacoco.toolVersion = '0.8.13'
+        jacoco.toolVersion = '0.8.14'
     }
 
     project.getExtensions().getExtraProperties().set("versions", VersionProperties.getVersions());

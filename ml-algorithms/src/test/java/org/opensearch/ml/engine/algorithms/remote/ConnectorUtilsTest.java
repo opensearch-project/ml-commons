@@ -1347,4 +1347,137 @@ public class ConnectorUtilsTest {
         assertEquals(1, tensors.getMlModelTensors().size());
         assertEquals("response", tensors.getMlModelTensors().get(0).getName());
     }
+
+    @Test
+    public void testValidateSubstitutedHeaders_ValidHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("X-Request-ID", "req-123");
+
+        // Should not throw exception
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_NullHeaders() {
+        // Should not throw exception
+        ConnectorUtils.validateSubstitutedHeaders(null);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_EmptyHeaders() {
+        // Should not throw exception
+        ConnectorUtils.validateSubstitutedHeaders(new HashMap<>());
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithCRLF() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header value contains invalid control character");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\r\nX-Injected: malicious");
+
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithCR() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header value contains invalid control character");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\rmalicious");
+
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithLF() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header value contains invalid control character");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\nmalicious");
+
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithNUL() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header value contains invalid control character");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\u0000malicious");
+
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithESC() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header value contains invalid control character");
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\u001Bmalicious");
+
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderWithTab() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Request-ID", "value\twith\ttabs");
+
+        // Should not throw - tab is allowed
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_HeaderExceeds8KB() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Header size (key + value) exceeds 8KB limit");
+
+        Map<String, String> headers = new HashMap<>();
+        // Create a string with 8193 characters (exceeds 8KB limit)
+        StringBuilder largeValue = new StringBuilder();
+        for (int i = 0; i < 8193; i++) {
+            largeValue.append("a");
+        }
+        headers.put("X-Large-Header", largeValue.toString());
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_TotalSizeExceeds64KB() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Total headers size (key + value) exceeds 64KB limit");
+
+        Map<String, String> headers = new HashMap<>();
+        for (int i = 0; i < 9; i++) {
+            String key = "X-Header-" + i;
+            StringBuilder value = new StringBuilder();
+            for (int j = 0; j < 8192 - key.length(); j++) {
+                value.append("a");
+            }
+            headers.put(key, value.toString());
+        }
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_ExactlyAt8KB() {
+        Map<String, String> headers = new HashMap<>();
+        // Create a header with key + value exactly 8192 bytes
+        String key = "X-Large-Header";
+        StringBuilder value = new StringBuilder();
+        for (int i = 0; i < 8192 - key.length(); i++) {
+            value.append("a");
+        }
+        headers.put(key, value.toString());
+
+        // Should not throw exception
+        ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
 }
