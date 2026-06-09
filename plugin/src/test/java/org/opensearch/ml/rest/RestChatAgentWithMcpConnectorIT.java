@@ -77,6 +77,19 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
             );
         assertEquals(200, registerResponse.getStatusLine().getStatusCode());
 
+        // MCP per-node tool registration is fire-and-forget, so HTTP 200 doesn't guarantee
+        // the tool is visible yet. Poll /_list until ListIndexTool shows up (15s max).
+        Thread.sleep(500);
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < deadline) {
+            Response listResponse = TestHelper
+                .makeRequest(client(), "GET", "/_plugins/_ml/mcp/tools/_list", null, "", null);
+            if (TestHelper.httpEntityToString(listResponse.getEntity()).contains("ListIndexTool")) {
+                break;
+            }
+            Thread.sleep(500);
+        }
+
         ingestIrisData(irisIndex);
         llmModelId = registerAndDeployBedrockModel();
     }
