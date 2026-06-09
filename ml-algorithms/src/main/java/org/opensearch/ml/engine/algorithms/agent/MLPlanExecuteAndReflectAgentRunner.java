@@ -203,13 +203,23 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void setupPromptParameters(Map<String, String> params, boolean injectDate, String currentDateTime) {
+    void setupPromptParameters(Map<String, String> params) {
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
 
         String userPrompt = params.get(QUESTION_FIELD);
         params.put(USER_PROMPT_FIELD, userPrompt);
+
+        boolean injectDate = Boolean.parseBoolean(params.getOrDefault(INJECT_DATETIME_FIELD, "false"));
+        String dateFormat = params.get(DATETIME_FORMAT_FIELD);
+        String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
+
+        String template = this.plannerPromptTemplate;
+        if (injectDate) {
+            template = template + "\n\n" + currentDateTime;
+        }
+        params.put(PROMPT_TEMPLATE_FIELD, template);
 
         String clientBusinessPrompt = params.get(SYSTEM_PROMPT_FIELD);
 
@@ -221,12 +231,20 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         String resultExpandOverride = params.get(RESULT_EXPAND_OVERRIDE);
         String importantRulesExpand = params.get(IMPORTANT_RULES_EXPAND);
-        String plannerSystemPromptPrefix = params.getOrDefault(PLANNER_SYSTEM_PROMPT_PREFIX, DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX);
+        String plannerSystemPromptPrefix = params.get(PLANNER_SYSTEM_PROMPT_PREFIX);
 
         // Append / mutate the system prompt through these 3 parameters: plannerSystemPromptPrefix, resultExpandOverride and importantRulesExpand
-        if (plannerSystemPromptPrefix != null && !plannerSystemPromptPrefix.isEmpty()
-                && resultExpandOverride != null && !resultExpandOverride.isEmpty()
-                && importantRulesExpand != null && !importantRulesExpand.isEmpty()) {
+        boolean hasPlannerSystemPromptPrefix = plannerSystemPromptPrefix != null && !plannerSystemPromptPrefix.isEmpty();
+        boolean hasResultExpandOverride = resultExpandOverride != null && !resultExpandOverride.isEmpty();
+        boolean hasImportantRulesExpand = importantRulesExpand != null && !importantRulesExpand.isEmpty();
+        long providedCount = (hasPlannerSystemPromptPrefix ? 1 : 0) + (hasResultExpandOverride ? 1 : 0) + (hasImportantRulesExpand ? 1 : 0);
+        if (providedCount > 0 && providedCount < 3) {
+            log.warn(
+                    "Partial prompt customization params provided: planner_system_prompt_prefix={}, result_expand_and_override={}, important_rules_expand={}. All 3 must be set for custom system prompt to take effect.",
+                    hasPlannerSystemPromptPrefix, hasResultExpandOverride, hasImportantRulesExpand
+            );
+        }
+        if (hasPlannerSystemPromptPrefix && hasResultExpandOverride && hasImportantRulesExpand) {
             StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.append(plannerSystemPromptPrefix).append("\n");
             stringBuilder.append(getCorePlanningInstructions()).append("\n");
@@ -283,12 +301,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void usePlannerPromptTemplate(Map<String, String> params, boolean injectDate, String currentDateTime) {
-        String template = this.plannerPromptTemplate;
-        if (injectDate) {
-            template = template + "\n\n" + currentDateTime;
-        }
-        params.put(PROMPT_TEMPLATE_FIELD, template);
+    void usePlannerPromptTemplate(Map<String, String> params) {
+        params.put(PROMPT_TEMPLATE_FIELD, this.plannerPromptTemplate);
         populatePrompt(params);
     }
 
@@ -324,10 +338,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String dateFormat = allParams.get(DATETIME_FORMAT_FIELD);
         String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
 
-        setupPromptParameters(allParams, injectDate, currentDateTime);
+        setupPromptParameters(allParams);
 
         // planner prompt for the first call
-        usePlannerPromptTemplate(allParams, injectDate, currentDateTime);
+        usePlannerPromptTemplate(allParams);
 
         // Token tracking: resolve model metadata, then proceed with memory setup and execution.
         String llmModelId = mlAgent.getLlm().getModelId();

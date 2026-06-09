@@ -618,7 +618,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
         testParams.put(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD, "custom system prompt");
 
-        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams, false, "");
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
 
         assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
         assertTrue(testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD).contains("custom system prompt"));
@@ -637,7 +637,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "true");
         testParams.put(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD, "");
 
-        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams, true, "2025-01-01T00:00:00");
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
 
         assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
 
@@ -663,7 +663,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
         testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "false");
 
-        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams, false, "");
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
 
         assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
 
@@ -678,7 +678,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     @Test
     public void testUsePlannerPromptTemplate() {
         Map<String, String> testParams = new HashMap<>();
-        mlPlanExecuteAndReflectAgentRunner.usePlannerPromptTemplate(testParams, false, "");
+        mlPlanExecuteAndReflectAgentRunner.usePlannerPromptTemplate(testParams);
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_TEMPLATE_FIELD));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_FIELD));
     }
