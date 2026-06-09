@@ -78,16 +78,18 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
         assertEquals(200, registerResponse.getStatusLine().getStatusCode());
 
         // MCP per-node tool registration is fire-and-forget, so HTTP 200 doesn't guarantee
-        // the tool is visible yet. Poll /_list until ListIndexTool shows up (15s max).
-        Thread.sleep(500);
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (System.currentTimeMillis() < deadline) {
-            Response listResponse = TestHelper
-                .makeRequest(client(), "GET", "/_plugins/_ml/mcp/tools/_list", null, "", null);
+        // the tool is visible yet. Poll /_list until ListIndexTool shows up (20 x 500ms = 10s max).
+        boolean toolVisible = false;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            Thread.sleep(500);
+            Response listResponse = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/mcp/tools/_list", null, "", null);
             if (TestHelper.httpEntityToString(listResponse.getEntity()).contains("ListIndexTool")) {
+                toolVisible = true;
                 break;
             }
-            Thread.sleep(500);
+        }
+        if (!toolVisible) {
+            throw new AssertionError("ListIndexTool did not become visible in /_plugins/_ml/mcp/tools/_list within 10s");
         }
 
         ingestIrisData(irisIndex);
