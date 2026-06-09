@@ -202,15 +202,15 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
     @Test
     public void test_onError_connectionPoolAcquireTimeout_returns429() {
-        mlSdkAsyncHttpResponseHandler.onError(
-            new RuntimeException("Acquire operation took longer than the configured maximum time"));
+        mlSdkAsyncHttpResponseHandler.onError(new RuntimeException("Acquire operation took longer than the configured maximum time"));
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
         assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) captor.getValue()).status());
         assertEquals(
             "Error communicating with remote model: Acquire operation took longer than the configured maximum time",
-            captor.getValue().getMessage());
+            captor.getValue().getMessage()
+        );
     }
 
     @Test
