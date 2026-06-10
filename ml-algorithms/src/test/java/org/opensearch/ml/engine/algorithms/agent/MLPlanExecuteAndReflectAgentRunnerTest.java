@@ -65,6 +65,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.MLTaskUtils;
 import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -648,6 +649,12 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         // Verify executor system prompt contains date/time
         String executorSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_SYSTEM_PROMPT_FIELD);
         assertTrue(executorSystemPrompt.contains(MLPlanExecuteAndReflectAgentRunner.DEFAULT_EXECUTOR_SYSTEM_PROMPT));
+        assertTrue(executorSystemPrompt.contains(AgentUtils.DEFAULT_DATETIME_PREFIX));
+
+        // Verify datetime was appended to PROMPT_TEMPLATE_FIELD
+        String promptTemplate = testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_TEMPLATE_FIELD);
+        assertNotNull(promptTemplate);
+        assertTrue(promptTemplate.contains(AgentUtils.DEFAULT_DATETIME_PREFIX));
 
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD));

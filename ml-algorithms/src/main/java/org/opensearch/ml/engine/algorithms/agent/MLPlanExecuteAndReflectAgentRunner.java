@@ -240,9 +240,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         long providedCount = (hasPlannerSystemPromptPrefix ? 1 : 0) + (hasResultExpandOverride ? 1 : 0) + (hasImportantRulesExpand ? 1 : 0);
         if (providedCount > 0 && providedCount < 3) {
             log.warn(
-                    "Partial prompt customization params provided: planner_system_prompt_prefix={}, result_expand_and_override={}, important_rules_expand={}. All 3 must be set for custom system prompt to take effect.",
-                    hasPlannerSystemPromptPrefix, hasResultExpandOverride, hasImportantRulesExpand
+                "Partial prompt customization params provided (missing: {}{}{}). All 3 params [planner_system_prompt_prefix, result_expand_and_override, important_rules_expand] must be set together. Using defaults for missing params.",
+                hasPlannerSystemPromptPrefix ? "" : "planner_system_prompt_prefix ",
+                hasResultExpandOverride ? "" : "result_expand_and_override ",
+                hasImportantRulesExpand ? "" : "important_rules_expand"
             );
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.append(hasPlannerSystemPromptPrefix ? plannerSystemPromptPrefix : DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX).append("\n");
+            stringBuilder.append(getCorePlanningInstructions()).append("\n");
+            stringBuilder.append(getPlanExecuteReflectResponseFormat(resultExpandOverride, importantRulesExpand));
+            String finalPlannerPrompt = stringBuilder.toString();
+
+            params.put(SYSTEM_PROMPT_FIELD, finalPlannerPrompt);
         }
         if (hasPlannerSystemPromptPrefix && hasResultExpandOverride && hasImportantRulesExpand) {
             StringBuilder stringBuilder = new StringBuilder();
