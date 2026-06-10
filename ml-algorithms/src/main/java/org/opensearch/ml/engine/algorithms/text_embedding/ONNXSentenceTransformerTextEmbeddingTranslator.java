@@ -122,7 +122,7 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
                 embeddings = embeddings.get(0);
                 break;
             case LAST_TOKEN:
-                embeddings = lastTokenPool(embeddings, inputAttentionMask);
+                embeddings = TextEmbeddingPoolingUtils.lastTokenPool(embeddings, inputAttentionMask);
                 break;
             case NONE:
                 // No pooling - use pre-pooled output as-is
@@ -185,18 +185,6 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         NDArray maskSum = attentionMask.sum(AXIS);
         NDArray embeddingSum = embeddings.mul(attentionMask).sum(AXIS);
         return embeddingSum.div(maskSum);
-    }
-
-    private NDArray lastTokenPool(NDArray embeddings, NDArray attentionMask) {
-        // Sum attention mask to get count of real tokens
-        long tokenCount = attentionMask.sum().toLongArray()[0];
-        // Last token index (0-based)
-        long lastTokenIdx = tokenCount - 1;
-        // Handle edge case
-        if (lastTokenIdx < 0) {
-            lastTokenIdx = 0;
-        }
-        return embeddings.get(lastTokenIdx);
     }
 
     @Override
