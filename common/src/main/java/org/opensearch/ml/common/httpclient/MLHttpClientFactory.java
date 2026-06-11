@@ -12,8 +12,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.SdkHttpConfigurationOption;
+import software.amazon.awssdk.http.TlsKeyManagersProvider;
+import software.amazon.awssdk.http.TlsTrustManagersProvider;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.utils.AttributeMap;
@@ -47,6 +53,81 @@ public class MLHttpClientFactory {
         List<Pattern> connectorRestrictedIpPatterns,
         boolean skipSslVerification
     ) {
+        return getAsyncHttpClient(
+            connectionTimeout,
+            readTimeout,
+            maxConnections,
+            connectorPrivateIpEnabled,
+            connectorTrustedPrivateEndpoints,
+            connectorRestrictedIpPatterns,
+            skipSslVerification,
+            null,
+            null,
+            null,
+            null
+        );
+    }
+
+    public static SdkAsyncHttpClient getAsyncHttpClient(
+        Duration connectionTimeout,
+        Duration readTimeout,
+        int maxConnections,
+        boolean connectorPrivateIpEnabled,
+        boolean skipSslVerification,
+        SSLContext sslContext
+    ) {
+        return getAsyncHttpClient(
+            connectionTimeout,
+            readTimeout,
+            maxConnections,
+            connectorPrivateIpEnabled,
+            Collections.emptyList(),
+            Collections.emptyList(),
+            skipSslVerification,
+            sslContext,
+            null,
+            null,
+            null
+        );
+    }
+
+    public static SdkAsyncHttpClient getAsyncHttpClient(
+        Duration connectionTimeout,
+        Duration readTimeout,
+        int maxConnections,
+        boolean connectorPrivateIpEnabled,
+        boolean skipSslVerification,
+        SSLContext sslContext,
+        String clientDescription
+    ) {
+        return getAsyncHttpClient(
+            connectionTimeout,
+            readTimeout,
+            maxConnections,
+            connectorPrivateIpEnabled,
+            Collections.emptyList(),
+            Collections.emptyList(),
+            skipSslVerification,
+            sslContext,
+            clientDescription,
+            null,
+            null
+        );
+    }
+
+    public static SdkAsyncHttpClient getAsyncHttpClient(
+        Duration connectionTimeout,
+        Duration readTimeout,
+        int maxConnections,
+        boolean connectorPrivateIpEnabled,
+        List<Pattern> connectorTrustedPrivateEndpoints,
+        List<Pattern> connectorRestrictedIpPatterns,
+        boolean skipSslVerification,
+        SSLContext sslContext,
+        String clientDescription,
+        KeyManager[] keyManagers,
+        TrustManager[] trustManagers
+    ) {
         return doPrivileged(() -> {
             if (skipSslVerification) {
                 log
@@ -55,22 +136,92 @@ public class MLHttpClientFactory {
                             + " attacks. Only use this setting in trusted environments."
                     );
             }
+
+            String description = clientDescription != null ? clientDescription : "standard";
+            boolean hasMutualTls = sslContext != null;
+            boolean hasMutualTlsManagers = keyManagers != null && keyManagers.length > 0;
+
+            // Critical security warning: mTLS + skipSslVerification defeats server certificate validation
+            if (hasMutualTlsManagers && skipSslVerification) {
+                log
+                    .error(
+                        "CRITICAL SECURITY WARNING: mutual_tls_enabled=true with skip_ssl_verification=true. "
+                            + "Client certificate will be presented but server certificate validation is DISABLED. "
+                            + "This defeats half the purpose of mutual TLS and allows man-in-the-middle attacks. "
+                            + "Consider using proper trust managers or disable mTLS for development/testing."
+                    );
+            }
+
             log
                 .debug(
-                    "Creating MLHttpClient with connectionTimeout: {}, readTimeout: {}, maxConnections: {}," + " skipSslVerification: {}",
+                    "Creating MLHttpClient ({}) with connectionTimeout: {}, readTimeout: {}, maxConnections: {}, skipSslVerification: {}, mutualTLS: {}",
+                    description,
                     connectionTimeout,
                     readTimeout,
                     maxConnections,
-                    skipSslVerification
+                    skipSslVerification,
+                    hasMutualTls
                 );
-            SdkAsyncHttpClient delegate = NettyNioAsyncHttpClient
+
+            NettyNioAsyncHttpClient.Builder clientBuilder = NettyNioAsyncHttpClient
                 .builder()
                 .connectionTimeout(connectionTimeout)
                 .readTimeout(readTimeout)
-                .maxConcurrency(maxConnections)
-                .buildWithDefaults(
-                    AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, skipSslVerification).build()
-                );
+                .maxConcurrency(maxConnections);
+
+            SdkAsyncHttpClient delegate;
+
+            if (keyManagers != null || trustManagers != null) {
+                // Configure mutual TLS using AWS SDK v2 proper approach
+                log.debug("Configuring HTTP client with mutual TLS authentication using AWS SDK TLS providers");
+
+                try {
+                    // Configure the client builder with TLS providers
+                    if (keyManagers != null && keyManagers.length > 0) {
+                        // Create TLS key managers provider
+                        TlsKeyManagersProvider keyManagersProvider = () -> keyManagers;
+                        clientBuilder.tlsKeyManagersProvider(keyManagersProvider);
+                        log.debug("Configured TLS key managers provider for client certificate authentication");
+                    }
+
+                    if (trustManagers != null && trustManagers.length > 0 && !skipSslVerification) {
+                        // Create TLS trust managers provider
+                        TlsTrustManagersProvider trustManagersProvider = () -> trustManagers;
+                        clientBuilder.tlsTrustManagersProvider(trustManagersProvider);
+                        log.debug("Configured TLS trust managers provider for server certificate validation");
+                    }
+
+                    // Create client with SSL verification settings
+                    if (skipSslVerification) {
+                        delegate = clientBuilder
+                            .buildWithDefaults(AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, true).build());
+                        log.debug("Built HTTP client with SSL verification disabled");
+                    } else {
+                        delegate = clientBuilder.build();
+                        log.debug("Built HTTP client with custom TLS configuration");
+                    }
+
+                    // Consolidated INFO log with relevant configuration details
+                    log
+                        .info(
+                            "HTTP client configured with mTLS - keyManagers: {}, trustManagers: {}, skipSslVerification: {}",
+                            keyManagers != null ? keyManagers.length : 0,
+                            trustManagers != null ? trustManagers.length : 0,
+                            skipSslVerification
+                        );
+
+                } catch (Exception e) {
+                    log.error("Failed to configure AWS SDK TLS providers, falling back to default", e);
+                    delegate = clientBuilder.build();
+                }
+            } else if (skipSslVerification) {
+                // Configure to skip SSL verification
+                delegate = clientBuilder
+                    .buildWithDefaults(AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, true).build());
+            } else {
+                // Use default SSL configuration
+                delegate = clientBuilder.build();
+            }
             return new MLValidatableAsyncHttpClient(
                 delegate,
                 connectorPrivateIpEnabled,
@@ -79,4 +230,5 @@ public class MLHttpClientFactory {
             );
         });
     }
+
 }

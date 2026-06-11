@@ -19,8 +19,14 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -29,9 +35,11 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
@@ -87,6 +95,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private volatile List<String> trustedConnectorEndpointsRegex;
+
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+    private final AtomicReference<String> httpClientCacheKey = new AtomicReference<>();
+    private final CertificateProcessor certificateProcessor = new CertificateProcessor();
 
     @Setter
     @Getter
@@ -205,15 +217,129 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     @VisibleForTesting
     protected SdkAsyncHttpClient getHttpClient() {
-        if (httpClientRef.get() == null) {
-            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
-            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
-            if (skipSslVerificationValue) {
-                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
+        String currentCacheKey = generateHttpClientCacheKey();
+
+        if (httpClientRef.get() == null || !Objects.equals(httpClientCacheKey.get(), currentCacheKey)) {
+            synchronized (this) {
+                if (httpClientRef.get() == null || !Objects.equals(httpClientCacheKey.get(), currentCacheKey)) {
+                    SdkAsyncHttpClient existingClient = httpClientRef.get();
+                    if (existingClient != null) {
+                        try {
+                            existingClient.close();
+                            log.debug("Closed existing HTTP client due to configuration change");
+                        } catch (Exception e) {
+                            log.warn("Failed to close existing HTTP client: {}", e.getMessage());
+                        }
+                    }
+
+                    SdkAsyncHttpClient newClient = createHttpClient();
+                    httpClientRef.set(newClient);
+                    httpClientCacheKey.set(currentCacheKey);
+
+                    log.debug("Created new HTTP client with cache key: {}", currentCacheKey);
+                }
             }
+        }
+        return httpClientRef.get();
+    }
+
+    /**
+     * Generate a cache key that includes all configuration parameters that affect HTTP client creation.
+     * This ensures the client is recreated when credentials or SSL configuration changes.
+     */
+    private String generateHttpClientCacheKey() {
+        StringBuilder keyBuilder = new StringBuilder();
+
+        keyBuilder.append("conn:").append(super.getConnectorClientConfig().getConnectionTimeout());
+        keyBuilder.append(",read:").append(super.getConnectorClientConfig().getReadTimeout());
+        keyBuilder.append(",max:").append(super.getConnectorClientConfig().getMaxConnections());
+
+        Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
+        Boolean mutualTlsEnabled = super.getConnectorClientConfig().getMutualTlsEnabled();
+        keyBuilder.append(",skipSsl:").append(skipSslVerification != null ? skipSslVerification : false);
+        keyBuilder.append(",mtls:").append(mutualTlsEnabled != null ? mutualTlsEnabled : false);
+
+        if (mutualTlsEnabled != null && mutualTlsEnabled && connector.getDecryptedCredential() != null) {
+            int credentialHash = Objects
+                .hash(
+                    connector.getDecryptedCredential().get("client_cert"),
+                    connector.getDecryptedCredential().get("client_key"),
+                    connector.getDecryptedCredential().get("ca_cert"),
+                    connector.getDecryptedCredential().get("client_cert_path"),
+                    connector.getDecryptedCredential().get("client_key_path"),
+                    connector.getDecryptedCredential().get("ca_cert_path")
+                );
+            keyBuilder.append(",creds:").append(credentialHash);
+        }
+
+        return keyBuilder.toString();
+    }
+
+    /**
+     * Create a new HTTP client with current configuration.
+     * Extracted from the original getHttpClient method for better separation of concerns.
+     */
+    private SdkAsyncHttpClient createHttpClient() {
+        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+        Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
+        Boolean mutualTlsEnabled = super.getConnectorClientConfig().getMutualTlsEnabled();
+
+        boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
+        boolean mutualTlsEnabledValue = mutualTlsEnabled != null ? mutualTlsEnabled : false;
+
+        if (skipSslVerificationValue) {
+            log.warn("SSL certificate verification is DISABLED");
+        }
+
+        SSLContext sslContext = null;
+        KeyManager[] keyManagers = null;
+        TrustManager[] trustManagers = null;
+        String clientDescription = "standard";
+
+        // Build SSL context for mutual TLS if enabled
+        // Note: connector.getDecryptedCredential() is guaranteed to be non-null when mTLS is enabled
+        // due to the decryption-precedes-execution invariant enforced by the connector framework
+        if (mutualTlsEnabledValue) {
+            try {
+                certificateProcessor.validateCertificateConfig(super.getConnectorClientConfig(), connector.getDecryptedCredential());
+
+                // Enforce certificate-only authentication (no mixed auth methods)
+                certificateProcessor
+                    .validateCertificateOnlyAuthentication(super.getConnectorClientConfig(), connector.getDecryptedCredential());
+
+                CertificateProcessor.SSLContextWithManagers contextWithManagers = certificateProcessor
+                    .buildSSLContext(super.getConnectorClientConfig(), connector.getDecryptedCredential());
+
+                if (contextWithManagers != null) {
+                    sslContext = contextWithManagers.getSslContext();
+                    keyManagers = contextWithManagers.getKeyManagers();
+                    trustManagers = contextWithManagers.getTrustManagers();
+
+                    log.debug("Successfully extracted SSL context and managers");
+                    log
+                        .debug(
+                            "Key managers: {}, Trust managers: {}",
+                            keyManagers != null ? keyManagers.length : 0,
+                            trustManagers != null ? trustManagers.length : 0
+                        );
+                }
+
+                clientDescription = "mutual-TLS";
+                log.debug("Successfully configured certificate-only mutual TLS");
+
+            } catch (MLValidationException e) {
+                log.error("Certificate validation failed: {}", e.getMessage());
+                throw e;
+            } catch (SecurityException e) {
+                log.error("Security policy violation during SSL context initialization: {}", e.getMessage());
+                throw new MLException("SSL security policy violation: " + e.getMessage(), e);
+            } catch (Exception e) {
+                log.error("Failed to configure mutual TLS: {}", e.getMessage());
+                throw new MLException("Failed to configure mutual TLS: " + e.getMessage(), e);
+            }
+        } else {
             log
                 .info(
                     "HttpJsonConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
@@ -222,21 +348,31 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     super.getConnectorClientConfig().getConnectionTimeout(),
                     super.getConnectorClientConfig().getReadTimeout()
                 );
-            this.httpClientRef
-                .compareAndSet(
-                    null,
-                    MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            connectionTimeout,
-                            readTimeout,
-                            maxConnection,
-                            connectorPrivateIpEnabled,
-                            connectorTrustedPrivateEndpoints,
-                            connectorRestrictedIpPatterns,
-                            skipSslVerificationValue
-                        )
-                );
         }
-        return httpClientRef.get();
+
+        log
+            .info(
+                "HTTP client created - type: {}, maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s, mutualTLS: {}",
+                clientDescription,
+                maxConnection,
+                super.getConnectorClientConfig().getConnectionTimeout(),
+                super.getConnectorClientConfig().getReadTimeout(),
+                mutualTlsEnabledValue
+            );
+
+        return MLHttpClientFactory
+            .getAsyncHttpClient(
+                connectionTimeout,
+                readTimeout,
+                maxConnection,
+                connectorPrivateIpEnabled,
+                connectorTrustedPrivateEndpoints,
+                connectorRestrictedIpPatterns,
+                skipSslVerificationValue,
+                sslContext,
+                clientDescription,
+                keyManagers,
+                trustManagers
+            );
     }
 }
