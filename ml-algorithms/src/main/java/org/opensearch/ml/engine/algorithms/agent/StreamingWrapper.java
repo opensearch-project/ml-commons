@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
@@ -20,7 +18,6 @@ import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.agui.BaseEvent;
 import org.opensearch.ml.common.agui.MessagesSnapshotEvent;
-import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.ToolCallResultEvent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.Message;
@@ -164,25 +161,9 @@ public class StreamingWrapper {
     }
 
     public void sendRunFinishedAndCloseStream(String sessionId, String parentInteractionId) {
-        try {
-            String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-            String runId = parameters.get(AGUI_PARAM_RUN_ID);
-
-            // Ensure non-null values to avoid NPE in RunFinishedEvent.writeTo()
-            if (threadId == null) {
-                log.warn("AG-UI threadId is null, using generated value. This may cause frontend errors.");
-                threadId = "thread_" + System.nanoTime();
-            }
-            if (runId == null) {
-                log.warn("AG-UI runId is null, using generated value. This may cause frontend errors.");
-                runId = "run_" + System.nanoTime();
-            }
-
-            BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-            sendAGUIEvent(runFinishedEvent, true);
-        } catch (Exception e) {
-            log.error("Failed to send run finished event and close stream", e);
-        }
+        // Send an empty completion chunk with is_last=true.
+        // RestMLExecuteStreamAction will emit RUN_FINISHED when it sees the final chunk.
+        sendCompletionChunk(sessionId, parentInteractionId);
     }
 
     public void sendMessagesSnapshot(List<Message> history, String memoryId, ActionListener<Object> listener) {
