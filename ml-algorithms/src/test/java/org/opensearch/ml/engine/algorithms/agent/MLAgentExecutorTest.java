@@ -1979,4 +1979,36 @@ public class MLAgentExecutorTest {
         // MCP check passes (enabled), so execution must reach executeV2Agent
         verify(memory, timeout(5000).atLeastOnce()).getStructuredMessages(any());
     }
+
+    @Test
+    public void test_Execute_CrossTenantAgentExecution_BlockedWithForbidden() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        mlAgentExecutor.onMultiTenancyEnabledChanged(true);
+        when(clusterService.state().metadata().hasIndex(anyString())).thenReturn(true);
+
+        MLAgent agentOwnedByTenantA = MLAgent
+            .builder()
+            .name("tenant_a_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .tenantId("tenant-A")
+            .createdTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
+
+        mockSdkClientWithAgent(serializeAgentToGetResponseJson(agentOwnedByTenantA));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test-agent-id", "tenant-B", FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, listener, channel);
+
+        verify(listener, timeout(5000)).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals("You don't have permission to access this resource", exception.getMessage());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exception).status());
+    }
 }
