@@ -257,6 +257,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                         RestStatus.FORBIDDEN
                                                     )
                                                 );
+                                            return;
                                         }
 
                                         processAgentInput(agentMLInput, mlAgent);
