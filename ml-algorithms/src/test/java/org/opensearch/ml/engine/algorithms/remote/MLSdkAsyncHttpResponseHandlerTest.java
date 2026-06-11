@@ -28,6 +28,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -197,6 +198,19 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     @Test
     public void test_MLSdkAsyncHttpResponseHandler_onError() {
         mlSdkAsyncHttpResponseHandler.onError(new Exception("error"));
+    }
+
+    @Test
+    public void test_onError_connectionPoolAcquireTimeout_returns429() {
+        mlSdkAsyncHttpResponseHandler.onError(new RuntimeException("Acquire operation took longer than the configured maximum time"));
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assert captor.getValue() instanceof OpenSearchStatusException;
+        assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) captor.getValue()).status());
+        assertEquals(
+            "Error communicating with remote model: Acquire operation took longer than the configured maximum time",
+            captor.getValue().getMessage()
+        );
     }
 
     @Test
