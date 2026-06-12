@@ -12,12 +12,12 @@ import java.util.Map;
 
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
-import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -54,7 +54,7 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
     private String llmModelId;
 
     @Before
-    public void setup() throws IOException, ParseException, InterruptedException {
+    public void setup() throws Exception {
         Assume.assumeNotNull(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY);
 
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
@@ -78,19 +78,15 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
         assertEquals(200, registerResponse.getStatusLine().getStatusCode());
 
         // MCP per-node tool registration is fire-and-forget, so HTTP 200 doesn't guarantee
-        // the tool is visible yet. Poll /_list until ListIndexTool shows up (20 x 500ms = 10s max).
-        boolean toolVisible = false;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            Thread.sleep(500);
+        // the tool is visible yet. Poll /_list until ListIndexTool shows up; assertBusyWithFixedSleepTime
+        // retries every 500ms up to 15s and throws if the tool never appears.
+        assertBusyWithFixedSleepTime(() -> {
             Response listResponse = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/mcp/tools/_list", null, "", null);
-            if (TestHelper.httpEntityToString(listResponse.getEntity()).contains("ListIndexTool")) {
-                toolVisible = true;
-                break;
-            }
-        }
-        if (!toolVisible) {
-            throw new AssertionError("ListIndexTool did not become visible in /_plugins/_ml/mcp/tools/_list within 10s");
-        }
+            assertTrue(
+                "ListIndexTool did not become visible in /_plugins/_ml/mcp/tools/_list within 15s",
+                TestHelper.httpEntityToString(listResponse.getEntity()).contains("ListIndexTool")
+            );
+        }, TimeValue.timeValueSeconds(15), TimeValue.timeValueMillis(500));
 
         ingestIrisData(irisIndex);
         llmModelId = registerAndDeployBedrockModel();
