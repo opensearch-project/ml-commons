@@ -20,6 +20,7 @@ package org.opensearch.ml.engine.algorithms.text_similarity;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
@@ -27,6 +28,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.engine.algorithms.DLModel;
 import org.opensearch.ml.engine.annotation.Function;
 
@@ -43,16 +45,31 @@ public class TextSimilarityCrossEncoderModel extends DLModel {
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
-        Output output;
         TextSimilarityInputDataSet textSimInput = (TextSimilarityInputDataSet) inputDataSet;
         String queryText = textSimInput.getQueryText();
-        for (String doc : textSimInput.getTextDocs()) {
-            Input input = new Input();
-            input.add(queryText);
-            input.add(doc);
-            output = getPredictor().predict(input);
-            ModelTensors outputTensors = ModelTensors.fromBytes(output.getData().getAsBytes());
-            tensorOutputs.add(outputTensors);
+        List<String> textDocs = textSimInput.getTextDocs();
+
+        Settings clusterSettings = getClusterSettings();
+        final int batchSize = MLCommonsSettings.ML_COMMONS_TEXT_SIMILARITY_BATCH_SIZE.get(clusterSettings);
+
+        for (int i = 0; i < textDocs.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, textDocs.size());
+            List<String> batchDocs = textDocs.subList(i, endIndex);
+            List<Input> batchInputs = new ArrayList<>(batchDocs.size());
+
+            for (String doc : batchDocs) {
+                Input input = new Input();
+                input.add(queryText);
+                input.add(doc);
+                batchInputs.add(input);
+            }
+
+            List<Output> batchOutputs = getPredictor().batchPredict(batchInputs);
+
+            for (Output output : batchOutputs) {
+                ModelTensors outputTensors = ModelTensors.fromBytes(output.getData().getAsBytes());
+                tensorOutputs.add(outputTensors);
+            }
         }
         return new ModelTensorOutput(tensorOutputs);
     }
