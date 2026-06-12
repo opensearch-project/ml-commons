@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
@@ -1388,5 +1389,215 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
             verify(agentActionListener).onResponse(any());
         }
+    }
+
+    @Test
+    public void testTokenBudgetPlannerRequestReceivesFullBudget() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "{\"result\":\"final result\"}")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent");
+        params.put("max_tokens", "100");
+
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+        ArgumentCaptor<MLPredictionTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), requestCaptor.capture(), any());
+        assertEquals("100", getPredictionParams(requestCaptor.getValue()).get("max_tokens"));
+        assertEquals("100", getPredictionParams(requestCaptor.getValue()).get("maxTokens"));
+        assertEquals("100", getPredictionParams(requestCaptor.getValue()).get("maxOutputTokens"));
+        assertEquals("100", params.get("max_tokens"));
+    }
+
+    @Test
+    public void testTokenBudgetExecutorParamsReceiveRemainingBudget() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        try (MockedStatic<FunctionCallingFactory> factoryMock = mockStatic(FunctionCallingFactory.class)) {
+            FunctionCalling mockFunctionCalling = mock(FunctionCalling.class);
+            when(mockFunctionCalling.extractTokenUsage(any())).thenReturn(TokenUsage.builder().totalTokens(30L).build());
+            factoryMock.when(() -> FunctionCallingFactory.create(anyString())).thenReturn(mockFunctionCalling);
+
+            mockPlannerStepThenSummaryResponses();
+            mockExecutorResponse(null);
+            mockMemoryUpdates();
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test question");
+            params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent");
+            params.put("_llm_interface", "openai/v1/chat/completions");
+            params.put("max_tokens", "100");
+            params.put("max_steps", "1");
+
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+            ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+            verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());
+            AgentMLInput agentInput = (AgentMLInput) executeCaptor.getValue().getInput();
+            RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+            assertEquals("70", dataSet.getParameters().get("max_tokens"));
+        }
+    }
+
+    @Test
+    public void testTokenBudgetDoesNotDispatchExecutorWhenPlannerExhaustsBudget() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        try (MockedStatic<FunctionCallingFactory> factoryMock = mockStatic(FunctionCallingFactory.class)) {
+            FunctionCalling mockFunctionCalling = mock(FunctionCalling.class);
+            when(mockFunctionCalling.extractTokenUsage(any())).thenReturn(TokenUsage.builder().totalTokens(100L).build());
+            factoryMock.when(() -> FunctionCallingFactory.create(anyString())).thenReturn(mockFunctionCalling);
+
+            mockPlannerStepResponse();
+            mockMemoryUpdates();
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test question");
+            params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent");
+            params.put("_llm_interface", "openai/v1/chat/completions");
+            params.put("max_tokens", "100");
+            params.put("max_steps", "5");
+
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+            verify(client, never()).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+            verify(agentActionListener).onResponse(any());
+        }
+    }
+
+    @Test
+    public void testTokenBudgetStopsAfterExecutorUsageWithoutAnotherPlannerCall() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        try (MockedStatic<FunctionCallingFactory> factoryMock = mockStatic(FunctionCallingFactory.class)) {
+            FunctionCalling mockFunctionCalling = mock(FunctionCalling.class);
+            when(mockFunctionCalling.extractTokenUsage(any())).thenReturn(TokenUsage.builder().totalTokens(30L).build());
+            factoryMock.when(() -> FunctionCallingFactory.create(anyString())).thenReturn(mockFunctionCalling);
+
+            mockPlannerStepResponse();
+            mockExecutorResponse(tokenUsageMap("executor-model", 80L));
+            mockMemoryUpdates();
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test question");
+            params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent");
+            params.put("_llm_interface", "openai/v1/chat/completions");
+            params.put("max_tokens", "100");
+            params.put("max_steps", "5");
+
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+            verify(client, org.mockito.Mockito.times(1))
+                .execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+            verify(agentActionListener).onResponse(any());
+        }
+    }
+
+    private void mockPlannerStepResponse() {
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"]}")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+    }
+
+    private void mockPlannerStepThenSummaryResponses() {
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"]}")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "summary")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+    }
+
+    private void mockExecutorResponse(Map<String, Object> tokenUsageMap) {
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            List<ModelTensor> tensors = new java.util.ArrayList<>();
+            tensors
+                .add(
+                    ModelTensor
+                        .builder()
+                        .name(MLPlanExecuteAndReflectAgentRunner.STEP_RESULT_FIELD)
+                        .dataAsMap(ImmutableMap.of("response", "executor result"))
+                        .build()
+                );
+            if (tokenUsageMap != null) {
+                tensors.add(ModelTensor.builder().name(AgentTokenTracker.TOKEN_USAGE).dataAsMap(tokenUsageMap).build());
+            }
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(tensors).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlExecuteTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+    }
+
+    private void mockMemoryUpdates() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+    }
+
+    private Map<String, Object> tokenUsageMap(String modelId, long totalTokens) {
+        Map<String, Object> modelUsage = new HashMap<>();
+        modelUsage.put(AgentTokenTracker.MODEL_ID, modelId);
+        modelUsage.put(AgentTokenTracker.MODEL_NAME, modelId);
+        modelUsage.put(AgentTokenTracker.MODEL_URL, modelId);
+        modelUsage.put(TokenUsage.TOTAL_TOKENS, totalTokens);
+        modelUsage.put(AgentTokenTracker.CALL_COUNT, 1);
+
+        Map<String, Object> turnUsage = new HashMap<>(modelUsage);
+        turnUsage.put(AgentTokenTracker.TURN, 1);
+
+        Map<String, Object> tokenUsage = new HashMap<>();
+        tokenUsage.put(AgentTokenTracker.PER_MODEL_USAGE, List.of(modelUsage));
+        tokenUsage.put(AgentTokenTracker.PER_TURN_USAGE, List.of(turnUsage));
+        return tokenUsage;
+    }
+
+    private Map<String, String> getPredictionParams(MLPredictionTaskRequest request) {
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+        return inputDataSet.getParameters();
     }
 }

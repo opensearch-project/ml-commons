@@ -24,6 +24,8 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.model.ModelProvider;
@@ -85,6 +87,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         List<Message> messages = new ArrayList<>(conversationHistory);
         AtomicInteger iteration = new AtomicInteger(0);
         TokenUsage[] accumulatedTokenUsage = new TokenUsage[1];
+        AgentTokenBudget tokenBudget = AgentTokenBudget.fromExecutionParams(params);
         List<String> toolInteractionJsonList = new ArrayList<>(); // Track tool interaction JSON strings for persistence (like V1)
 
         // Create tools once and reuse across all ReAct iterations (performance optimization)
@@ -112,6 +115,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 iteration,
                 maxIterations,
                 accumulatedTokenUsage,
+                tokenBudget,
                 toolsMap,
                 toolInteractionJsonList,
                 listener
@@ -135,6 +139,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 iteration,
                 maxIterations,
                 accumulatedTokenUsage,
+                tokenBudget,
                 toolsMap,
                 toolInteractionJsonList,
                 listener
@@ -160,6 +165,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         AtomicInteger iteration,
         int maxIterations,
         TokenUsage[] accumulatedTokenUsage,
+        AgentTokenBudget tokenBudget,
         Map<String, Tool> toolsMap,
         List<String> toolInteractionJsonList,
         ActionListener<AgentLogicResult> listener
@@ -167,6 +173,23 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         String agentId = params.get(AGENT_ID_LOG_FIELD);
         String tenantId = mlAgent.getTenantId();
         int currentIteration = iteration.getAndIncrement();
+        long consumedBeforeCall = AgentTokenBudget.consumedTokens(accumulatedTokenUsage[0]);
+
+        if (tokenBudget.isExhausted(consumedBeforeCall)) {
+            List<Message> toolInteractionMessages = toolInteractionJsonList.isEmpty()
+                ? null
+                : parseToolInteractionsForPersistence(toolInteractionJsonList, modelProvider);
+            listener
+                .onResponse(
+                    new AgentLogicResult(
+                        createBudgetExhaustedMessage(tokenBudget.exhaustedMessage(consumedBeforeCall)),
+                        AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED,
+                        accumulatedTokenUsage[0],
+                        toolInteractionMessages
+                    )
+                );
+            return;
+        }
 
         try {
             // Build LLM request parameters using base class method
@@ -185,6 +208,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
 
             // Execute LLM call
             LLMSpec llmSpec = mlAgent.getLlm();
+            tokenBudget.applyRemainingToParams(llmParams, llmSpec.getParameters(), consumedBeforeCall);
             ActionRequest request = new MLPredictionTaskRequest(
                 llmSpec.getModelId(),
                 RemoteInferenceMLInput
@@ -213,6 +237,34 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
 
                     // Extract assistant message from response using base class method
                     Message assistantMessage = extractAssistantMessage(output, modelProvider);
+
+                    if (tokenBudget.isExhausted(accumulatedTokenUsage[0])) {
+                        long consumed = AgentTokenBudget.consumedTokens(accumulatedTokenUsage[0]);
+                        log
+                            .warn(
+                                "ReAct loop stopped (token budget exhausted). agentId={}, maxTokens={}, consumedTokens={}",
+                                agentId,
+                                tokenBudget.getMaxTokens(),
+                                consumed
+                            );
+                        List<Message> toolInteractionMessages = toolInteractionJsonList.isEmpty()
+                            ? null
+                            : parseToolInteractionsForPersistence(toolInteractionJsonList, modelProvider);
+                        Message resultMessage = toolCalls == null || toolCalls.isEmpty()
+                            ? assistantMessage
+                            : createBudgetExhaustedMessage(tokenBudget.exhaustedMessage(consumed));
+                        listener
+                            .onResponse(
+                                new AgentLogicResult(
+                                    resultMessage,
+                                    AgentTokenBudget.STOP_REASON_BUDGET_EXHAUSTED,
+                                    accumulatedTokenUsage[0],
+                                    toolInteractionMessages
+                                )
+                            );
+                        return;
+                    }
+
                     messages.add(assistantMessage);
 
                     // Check if we should continue the loop
@@ -301,6 +353,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                             iteration,
                             maxIterations,
                             accumulatedTokenUsage,
+                            tokenBudget,
                             toolsMap,
                             toolInteractionJsonList,
                             listener
@@ -323,5 +376,12 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
             log.error("Failed to build LLM request. agentId={}", agentId, e);
             listener.onFailure(e);
         }
+    }
+
+    private static Message createBudgetExhaustedMessage(String text) {
+        ContentBlock content = new ContentBlock();
+        content.setType(ContentType.TEXT);
+        content.setText(text);
+        return new Message("assistant", List.of(content));
     }
 }

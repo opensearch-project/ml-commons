@@ -140,7 +140,6 @@ public class AgentTokenTracker {
      *
      * @param tokenUsageMap the token_usage dataAsMap from the sub-agent response tensor
      */
-    @SuppressWarnings("unchecked")
     public void mergeSubAgentUsage(Map<String, Object> tokenUsageMap) {
         if (tokenUsageMap == null) {
             return;
@@ -149,8 +148,12 @@ public class AgentTokenTracker {
         // Merge per-turn usage: re-number turns sequentially
         Object perTurnObj = tokenUsageMap.get(PER_TURN_USAGE);
         if (perTurnObj instanceof List) {
-            List<Map<String, Object>> subTurns = (List<Map<String, Object>>) perTurnObj;
-            for (Map<String, Object> subTurn : subTurns) {
+            List<?> subTurns = (List<?>) perTurnObj;
+            for (Object subTurnObj : subTurns) {
+                if (!(subTurnObj instanceof Map)) {
+                    continue;
+                }
+                Map<String, Object> subTurn = toObjectMap((Map<?, ?>) subTurnObj);
                 turnCounter++;
                 Map<String, Object> mergedTurn = new HashMap<>(subTurn);
                 mergedTurn.put(TURN, turnCounter);
@@ -161,15 +164,19 @@ public class AgentTokenTracker {
         // Merge per-model usage: aggregate into existing model data
         Object perModelObj = tokenUsageMap.get(PER_MODEL_USAGE);
         if (perModelObj instanceof List) {
-            List<Map<String, Object>> subModels = (List<Map<String, Object>>) perModelObj;
-            for (Map<String, Object> subModel : subModels) {
-                String modelId = (String) subModel.get(MODEL_ID);
+            List<?> subModels = (List<?>) perModelObj;
+            for (Object subModelObj : subModels) {
+                if (!(subModelObj instanceof Map)) {
+                    continue;
+                }
+                Map<String, Object> subModel = toObjectMap((Map<?, ?>) subModelObj);
+                String modelId = getStringFromMap(subModel, MODEL_ID, null);
                 if (modelId == null) {
                     continue;
                 }
 
-                String modelUrl = (String) subModel.getOrDefault(MODEL_URL, modelId);
-                String modelName = (String) subModel.getOrDefault(MODEL_NAME, modelId);
+                String modelUrl = getStringFromMap(subModel, MODEL_URL, modelId);
+                String modelName = getStringFromMap(subModel, MODEL_NAME, modelId);
 
                 TokenUsage subUsage = TokenUsage
                     .builder()
@@ -181,7 +188,7 @@ public class AgentTokenTracker {
                     .reasoningTokens(getLongFromMap(subModel, TokenUsage.REASONING_TOKENS))
                     .build();
 
-                int subCallCount = subModel.containsKey(CALL_COUNT) ? ((Number) subModel.get(CALL_COUNT)).intValue() : 1;
+                int subCallCount = getIntFromMap(subModel, CALL_COUNT, 1);
 
                 if (!modelMetadataMap.containsKey(modelId)) {
                     modelMetadataMap.put(modelId, new ModelMetadata(modelUrl, modelName));
@@ -193,6 +200,34 @@ public class AgentTokenTracker {
                     .mergeAggregated(subUsage, subCallCount);
             }
         }
+    }
+
+    public void recordReservedTokens(String modelId, long tokenCount) {
+        if (tokenCount <= 0) {
+            return;
+        }
+        String effectiveModelId = modelId != null ? modelId : "unknown";
+        recordTurn(effectiveModelId, TokenUsage.builder().totalTokens(tokenCount).build());
+    }
+
+    private static Map<String, Object> toObjectMap(Map<?, ?> map) {
+        Map<String, Object> objectMap = new HashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() instanceof String) {
+                objectMap.put((String) entry.getKey(), entry.getValue());
+            }
+        }
+        return objectMap;
+    }
+
+    private static String getStringFromMap(Map<String, Object> map, String key, String fallback) {
+        Object value = map.get(key);
+        return value instanceof String ? (String) value : fallback;
+    }
+
+    private static int getIntFromMap(Map<String, Object> map, String key, int fallback) {
+        Object value = map.get(key);
+        return value instanceof Number ? ((Number) value).intValue() : fallback;
     }
 
     private static Long getLongFromMap(Map<String, Object> map, String key) {
@@ -210,6 +245,34 @@ public class AgentTokenTracker {
      */
     public boolean hasUsage() {
         return !perTurnUsage.isEmpty();
+    }
+
+    /**
+     * Returns the cumulative total tokens consumed across all recorded turns.
+     * Used for enforcing agent-level token budgets.
+     *
+     * @return Total tokens consumed, or 0 if no usage has been recorded
+     */
+    public long getCumulativeTotalTokens() {
+        long total = 0;
+        for (ModelUsageAggregation agg : perModelUsage.values()) {
+            TokenUsage usage = agg.getAggregatedUsage();
+            total += effectiveTotalTokens(usage);
+        }
+        return total;
+    }
+
+    private static long effectiveTotalTokens(TokenUsage usage) {
+        Long totalTokens = usage.getTotalTokens();
+        if (totalTokens != null) {
+            return totalTokens;
+        }
+        Long inputTokens = usage.getInputTokens();
+        Long outputTokens = usage.getOutputTokens();
+        if (inputTokens != null || outputTokens != null) {
+            return (inputTokens != null ? inputTokens : 0L) + (outputTokens != null ? outputTokens : 0L);
+        }
+        return 0L;
     }
 
     /**
