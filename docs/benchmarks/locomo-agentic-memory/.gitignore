@@ -1,0 +1,4 @@
+.env
+results/
+dataset/
+__pycache__/
