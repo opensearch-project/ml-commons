@@ -440,7 +440,10 @@ public class HttpConnector extends AbstractConnector {
             JsonObject target = body.has(fieldName) && body.get(fieldName).isJsonObject()
                 ? body.getAsJsonObject(fieldName)
                 : new JsonObject();
-            additions.entrySet().forEach(e -> { if (!target.has(e.getKey())) target.add(e.getKey(), e.getValue()); });
+            additions.entrySet().forEach(e -> {
+                if (!target.has(e.getKey()))
+                    target.add(e.getKey(), e.getValue());
+            });
             body.add(fieldName, target);
             modified = true;
         }
