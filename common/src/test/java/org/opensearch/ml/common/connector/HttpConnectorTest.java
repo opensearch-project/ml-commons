@@ -882,6 +882,58 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_StructuredOutputDisabled_ParameterNotInjected() {
+        // Gate check: when supports_structured_output is false, _response_format_json in the
+        // parameters map must be ignored even though it has the correct naming convention.
+        String requestBody = "{\"messages\":[{\"role\":\"user\",\"content\":\"${parameters.input}\"}]}";
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://api.openai.com/v1/chat/completions")
+            .headers(Map.of("api_key", "${credential.key}"))
+            .requestBody(requestBody)
+            .supportsStructuredOutput(false)
+            .build();
+        HttpConnector connector = buildConnector(action);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello");
+        parameters.put("_response_format_json", "{\"type\":\"json_schema\"}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        Assert.assertFalse(
+            "response_format must NOT be injected when supports_structured_output is false",
+            json.has("response_format")
+        );
+    }
+
+    @Test
+    public void createPayload_AdditionsJson_DoesNotOverrideExistingKey() {
+        // _additions_json is strictly additive: keys already present in the target object are
+        // preserved. Use _<field>_json for a full replacement when overriding existing keys.
+        String requestBody = "{\"generationConfig\":{\"temperature\":0.5,\"responseMimeType\":\"text/plain\"},"
+            + "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"${parameters.input}\"}]}]}";
+        HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test");
+        parameters.put("_generationConfig_additions_json", "{\"responseMimeType\":\"application/json\",\"responseSchema\":{\"type\":\"OBJECT\"}}");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        JsonObject genConfig = JsonParser.parseString(payload).getAsJsonObject().getAsJsonObject("generationConfig");
+        Assert.assertNotNull("generationConfig must be present", genConfig);
+        Assert.assertEquals("non-colliding key temperature must be preserved", "0.5", genConfig.get("temperature").getAsString());
+        Assert.assertEquals(
+            "colliding key responseMimeType: existing value must be preserved, not overwritten",
+            "text/plain",
+            genConfig.get("responseMimeType").getAsString()
+        );
+        Assert.assertTrue("new key responseSchema from additions must be added", genConfig.has("responseSchema"));
+    }
+
+    @Test
     public void testFindAction_MultipleActionsWithSameType() {
         ConnectorAction action1 = new ConnectorAction(
             PREDICT,
