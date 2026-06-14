@@ -244,6 +244,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                     supportsStructuredOutput = parser.booleanValue();
                     break;
                 default:
+                    logger.debug("Skipping unknown connector action field: {}", fieldName);
                     parser.skipChildren();
                     break;
             }
