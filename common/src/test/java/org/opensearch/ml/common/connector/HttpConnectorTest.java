@@ -903,10 +903,7 @@ public class HttpConnectorTest {
         String payload = connector.createPayload(PREDICT.name(), parameters);
 
         JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
-        Assert.assertFalse(
-            "response_format must NOT be injected when supports_structured_output is false",
-            json.has("response_format")
-        );
+        Assert.assertFalse("response_format must NOT be injected when supports_structured_output is false", json.has("response_format"));
     }
 
     @Test
@@ -918,18 +915,23 @@ public class HttpConnectorTest {
         HttpConnector connector = createHttpConnectorWithStructuredOutputEnabled(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test");
-        parameters.put("_generationConfig_additions_json", "{\"responseMimeType\":\"application/json\",\"responseSchema\":{\"type\":\"OBJECT\"}}");
+        parameters
+            .put(
+                "_generationConfig_additions_json",
+                "{\"responseMimeType\":\"application/json\",\"responseSchema\":{\"type\":\"OBJECT\"}}"
+            );
 
         String payload = connector.createPayload(PREDICT.name(), parameters);
 
         JsonObject genConfig = JsonParser.parseString(payload).getAsJsonObject().getAsJsonObject("generationConfig");
         Assert.assertNotNull("generationConfig must be present", genConfig);
         Assert.assertEquals("non-colliding key temperature must be preserved", "0.5", genConfig.get("temperature").getAsString());
-        Assert.assertEquals(
-            "colliding key responseMimeType: existing value must be preserved, not overwritten",
-            "text/plain",
-            genConfig.get("responseMimeType").getAsString()
-        );
+        Assert
+            .assertEquals(
+                "colliding key responseMimeType: existing value must be preserved, not overwritten",
+                "text/plain",
+                genConfig.get("responseMimeType").getAsString()
+            );
         Assert.assertTrue("new key responseSchema from additions must be added", genConfig.has("responseSchema"));
     }
 

@@ -578,8 +578,8 @@ public class MemoryContainerHelper {
             return Map.of();
         }
         // TODO: extend to support multi-action connectors — currently only the first PREDICT action
-        //       with supports_structured_output=true is used; connectors with multiple PREDICT actions
-        //       each targeting different providers would need per-action URL routing.
+        // with supports_structured_output=true is used; connectors with multiple PREDICT actions
+        // each targeting different providers would need per-action URL routing.
         return connector
             .getActions()
             .stream()
