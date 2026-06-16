@@ -75,6 +75,31 @@
         },
         "index_settings": {
           "type": "flat_object"
+        },
+        "retention_policy": {
+          "type": "object",
+          "properties": {
+            "sessions": {
+              "type": "object",
+              "properties": {
+                "retention_days": { "type": "integer" },
+                "max_count": { "type": "integer" }
+              }
+            },
+            "long-term": {
+              "type": "object",
+              "properties": {
+                "retention_days": { "type": "integer" },
+                "max_count": { "type": "integer" }
+              }
+            },
+            "history": {
+              "type": "object",
+              "properties": {
+                "max_count": { "type": "integer" }
+              }
+            }
+          }
         }
       }
     },
