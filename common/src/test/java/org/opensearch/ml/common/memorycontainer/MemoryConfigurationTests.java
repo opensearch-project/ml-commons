@@ -1234,10 +1234,7 @@ public class MemoryConfigurationTests {
         assertNotNull(deserialized.getRetentionPolicy());
         assertEquals(2, deserialized.getRetentionPolicy().size());
         assertEquals(config.getRetentionPolicy().get(MemoryType.SESSIONS), deserialized.getRetentionPolicy().get(MemoryType.SESSIONS));
-        assertEquals(
-            config.getRetentionPolicy().get(MemoryType.LONG_TERM),
-            deserialized.getRetentionPolicy().get(MemoryType.LONG_TERM)
-        );
+        assertEquals(config.getRetentionPolicy().get(MemoryType.LONG_TERM), deserialized.getRetentionPolicy().get(MemoryType.LONG_TERM));
     }
 
     @Test
