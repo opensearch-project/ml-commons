@@ -49,14 +49,14 @@ public class MLJobParameter implements ScheduledJobParameter {
 
     public MLJobParameter() {}
 
-    public MLJobParameter(String name, Schedule schedule, Long lockDurationSeconds, Double jitter, MLJobType jobType) {
+    public MLJobParameter(String name, Schedule schedule, Long lockDurationSeconds, Double jitter, MLJobType jobType, boolean isEnabled) {
         this.jobName = name;
         this.schedule = schedule;
         this.lockDurationSeconds = lockDurationSeconds;
         this.jitter = jitter;
 
         Instant now = Instant.now();
-        this.isEnabled = true;
+        this.isEnabled = isEnabled;
         this.enabledTime = now;
         this.lastUpdateTime = now;
         this.jobType = jobType;
