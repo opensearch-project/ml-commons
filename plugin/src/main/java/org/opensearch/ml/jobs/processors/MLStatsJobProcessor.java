@@ -135,7 +135,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                                     );
                             }
 
-                            return;
+                            continue;
                         }
 
                         MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.MODEL_COUNT, model.getTags());
