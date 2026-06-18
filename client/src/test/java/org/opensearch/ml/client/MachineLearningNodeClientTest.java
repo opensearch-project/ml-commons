@@ -1033,7 +1033,7 @@ public class MachineLearningNodeClientTest {
             .name("test")
             .description("description")
             .version("testModelVersion")
-            .protocol("testProtocol")
+            .protocol("http")
             .parameters(params)
             .credential(credentials)
             .actions(null)

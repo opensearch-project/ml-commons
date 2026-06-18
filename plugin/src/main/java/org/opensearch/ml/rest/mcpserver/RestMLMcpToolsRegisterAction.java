@@ -109,7 +109,7 @@ public class RestMLMcpToolsRegisterAction extends BaseRestHandler {
             .filter(type -> !buildInToolNames.contains(type))
             .collect(Collectors.toSet());
         if (!unrecognizedTools.isEmpty()) {
-            exception.addValidationError(String.format(Locale.ROOT, "Unrecognized tool in request: %s", unrecognizedTools));
+            exception.addValidationError("Unrecognized tool in request");
             throw exception;
         }
         return channel -> client.execute(MLMcpToolsRegisterAction.INSTANCE, registerNodesRequest, new RestToXContentListener<>(channel));

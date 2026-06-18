@@ -12,6 +12,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.VALID_PROTOCOLS;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -167,6 +168,29 @@ public class MLCreateConnectorInputTests {
                 .build();
         });
         assertEquals("Connector protocol is null", exception.getMessage());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_InvalidProtocol() {
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol("dummy")
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals(
+            "Unsupported connector protocol. Please use one of " + Arrays.toString(VALID_PROTOCOLS.toArray(new String[0])),
+            exception.getMessage()
+        );
     }
 
     @Test

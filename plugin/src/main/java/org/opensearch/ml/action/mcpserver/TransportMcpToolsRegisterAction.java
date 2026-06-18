@@ -112,8 +112,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                             .map(McpToolRegisterInput::getName)
                             .filter(registerToolNames::contains)
                             .toList();
-                        String exceptionMessage = String
-                            .format(Locale.ROOT, "Unable to register tools: %s as they already exist", existingTools);
+                        String exceptionMessage = "Unable to register tool: a tool with the same name already exists.";
                         log.warn(exceptionMessage);
                         restoreListener.onFailure(new IllegalArgumentException(exceptionMessage));
                     } else {
@@ -192,16 +191,18 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                         errMsgBuilder.append("\n");
                     }
                     log.error(errMsgBuilder.toString());
+                    StringBuilder respErrMsgBuilder = new StringBuilder(
+                        String.format(Locale.ROOT, "Failed to persist %s mcp tool(s) into system index", indexFailedTools.get().size())
+                    );
                     if (!indexSucceedTools.get().isEmpty()) {
                         registerMcpToolsOnNodes(
-                            errMsgBuilder,
+                            respErrMsgBuilder,
                             updateVersion(registerNodesRequest, bulkResponse),
                             indexSucceedTools.get(),
                             restoreListener
                         );
                     } else {
-                        restoreListener
-                            .onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                        restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
                     }
                 }
             }, e -> {
@@ -248,6 +249,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
         Set<String> indexSucceedTools,
         ActionListener<MLMcpToolsRegisterNodesResponse> listener
     ) {
+        StringBuilder respErrBuilder = new StringBuilder(errMsgBuilder.toString());
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLMcpToolsRegisterNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<MLMcpToolsRegisterNodesResponse> addToMemoryResultListener = ActionListener.wrap(r -> {
@@ -267,13 +269,13 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     });
                     errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1);
                     log.error(errMsgBuilder.toString());
-                    restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
+                    respErrBuilder.append("Tools are persisted successfully but failed to register to mcp server memory");
+                    restoreListener.onFailure(new OpenSearchException(respErrBuilder.toString()));
                 } else {
                     if (errMsgBuilder.isEmpty()) {
                         restoreListener.onResponse(r);
                     } else {
-                        restoreListener
-                            .onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                        restoreListener.onFailure(new OpenSearchException(respErrBuilder.toString()));
                     }
                 }
             }, e -> {

@@ -27,7 +27,7 @@ public class FunctionCallingFactory {
             case LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1:
                 return new BedrockConverseDeepseekR1FunctionCalling();
             default:
-                throw new IllegalArgumentException(String.format("Invalid _llm_interface: %s", llmInterface));
+                throw new IllegalArgumentException("Invalid _llm_interface");
         }
     }
 }

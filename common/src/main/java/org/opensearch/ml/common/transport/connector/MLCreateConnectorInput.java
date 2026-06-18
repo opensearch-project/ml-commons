@@ -31,6 +31,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 
 import lombok.Builder;
 import lombok.Data;
@@ -121,6 +122,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             if ((url == null || url.isBlank()) && isMcpConnector) {
                 throw new IllegalArgumentException("MCP Connector url is null or blank");
             }
+            ConnectorProtocols.validateProtocol(protocol);
         }
         this.name = name;
         this.description = description;
