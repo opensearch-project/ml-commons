@@ -39,6 +39,9 @@
     },
     "tenant_id": {
       "type": "keyword"
+    },
+    "pinned": {
+      "type": "boolean"
     }
   }
 }
