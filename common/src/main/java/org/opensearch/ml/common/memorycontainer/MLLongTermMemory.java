@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
@@ -58,6 +59,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
     private String ownerId;
     private String memoryContainerId;
     private String strategyId;
+    private Boolean pinned;
 
     @Builder
     public MLLongTermMemory(
@@ -70,7 +72,8 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         Object memoryEmbedding,
         String ownerId,
         String memoryContainerId,
-        String strategyId
+        String strategyId,
+        Boolean pinned
     ) {
         this.memory = memory;
         this.strategyType = strategyType;
@@ -82,6 +85,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         this.ownerId = ownerId;
         this.memoryContainerId = memoryContainerId;
         this.strategyId = strategyId;
+        this.pinned = pinned;
     }
 
     public MLLongTermMemory(StreamInput in) throws IOException {
@@ -98,6 +102,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         this.ownerId = in.readOptionalString();
         this.memoryContainerId = in.readOptionalString();
         this.strategyId = in.readOptionalString();
+        this.pinned = in.readOptionalBoolean();
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
 
@@ -122,6 +127,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         out.writeOptionalString(ownerId);
         out.writeOptionalString(memoryContainerId);
         out.writeOptionalString(strategyId);
+        out.writeOptionalBoolean(pinned);
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
 
@@ -151,6 +157,9 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         if (strategyId != null) {
             builder.field(STRATEGY_ID_FIELD, strategyId);
         }
+        if (pinned != null) {
+            builder.field(PINNED_FIELD, pinned);
+        }
 
         builder.endObject();
         return builder;
@@ -167,6 +176,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         String ownerId = null;
         String memoryContainerId = null;
         String strategyId = null;
+        Boolean pinned = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -211,6 +221,9 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
                 case STRATEGY_ID_FIELD:
                     strategyId = parser.text();
                     break;
+                case PINNED_FIELD:
+                    pinned = parser.currentToken() == XContentParser.Token.VALUE_NULL ? null : parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -229,6 +242,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
             .ownerId(ownerId)
             .memoryContainerId(memoryContainerId)
             .strategyId(strategyId)
+            .pinned(pinned)
             .build();
     }
 
@@ -269,6 +283,9 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         }
         if (strategyId != null) {
             result.put(STRATEGY_ID_FIELD, strategyId);
+        }
+        if (pinned != null) {
+            result.put(PINNED_FIELD, pinned);
         }
         return result;
     }
