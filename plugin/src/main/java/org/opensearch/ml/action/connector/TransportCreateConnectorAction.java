@@ -131,7 +131,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             User user = RestActionUtils.getUserContext(client);
             if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
                 validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
-                indexConnector(connector, listener);
+                indexConnector(connector, mlCreateConnectorInput.getConnectorId(), listener);
             } else {
                 validateRequest4AccessControl(mlCreateConnectorInput, user);
                 if (Boolean.TRUE.equals(mlCreateConnectorInput.getAddAllBackendRoles())) {
@@ -140,7 +140,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 connector.setBackendRoles(mlCreateConnectorInput.getBackendRoles());
                 connector.setOwner(user);
                 connector.setAccess(mlCreateConnectorInput.getAccess());
-                indexConnector(connector, listener);
+                indexConnector(connector, mlCreateConnectorInput.getConnectorId(), listener);
             }
         } catch (MetaDataException e) {
             log.error("The masterKey for credential encryption is missing in connector creation");
@@ -151,7 +151,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
     }
 
-    private void indexConnector(Connector connector, ActionListener<MLCreateConnectorResponse> listener) {
+    private void indexConnector(Connector connector, String id, ActionListener<MLCreateConnectorResponse> listener) {
         ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(res -> {
             log.info("connector created, indexing into the connector system index");
             mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
@@ -169,6 +169,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                                 .builder()
                                 .tenantId(connector.getTenantId())
                                 .index(ML_CONNECTOR_INDEX)
+                                .id(id)
+                                // a custom id fails on conflict instead of overwriting (null = auto-generate)
+                                .overwriteIfExists(id == null)
                                 .dataObject(connector)
                                 .build()
                         )

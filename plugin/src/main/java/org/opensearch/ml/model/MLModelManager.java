@@ -675,10 +675,16 @@ public class MLModelManager {
                     .provisionedBy(registerModelInput.getProvisionedBy())
                     .build();
 
+                // hidden models use the model name; otherwise use the user-specified id (null = auto-generate)
+                String docId = Boolean.TRUE.equals(registerModelInput.getIsHidden())
+                    ? modelName
+                    : registerModelInput.getModelId();
                 PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
                     .builder()
                     .index(ML_MODEL_INDEX)
-                    .id(Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : null)
+                    .id(docId)
+                    // a custom id fails on conflict instead of overwriting
+                    .overwriteIfExists(Boolean.TRUE.equals(registerModelInput.getIsHidden()) || registerModelInput.getModelId() == null)
                     .tenantId(registerModelInput.getTenantId())
                     .dataObject(mlModelMeta)
                     .build();

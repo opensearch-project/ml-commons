@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -648,6 +649,86 @@ public class MLCreateConnectorInputTests {
         streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
         assertNull(deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void toXContent_WithConnectorId() throws Exception {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .connectorId("my-openai-connector")
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"id\":\"my-openai-connector\""));
+    }
+
+    @Test
+    public void toXContent_WithoutConnectorId() throws Exception {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertFalse(builder.toString().contains("\"id\":"));
+    }
+
+    @Test
+    public void parse_WithConnectorId() throws Exception {
+        String json =
+            "{\"id\":\"my-openai-connector\",\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"key\":\"val\"}}";
+        testParseFromJsonString(json, parsedInput -> assertEquals("my-openai-connector", parsedInput.getConnectorId()));
+    }
+
+    @Test
+    public void parse_WithoutConnectorId_IsNull() throws Exception {
+        String json = "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"key\":\"val\"}}";
+        testParseFromJsonString(json, parsedInput -> assertNull(parsedInput.getConnectorId()));
+    }
+
+    @Test
+    public void readInputStream_WithConnectorId() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .connectorId("my-openai-connector")
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_8_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_8_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertEquals("my-openai-connector", deserialized.getConnectorId());
+    }
+
+    @Test
+    public void readInputStream_ConnectorId_OldVersion_IsNull() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .connectorId("my-openai-connector")
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNull(deserialized.getConnectorId());
     }
 
     // Helper method to create XContentParser from a JSON string
