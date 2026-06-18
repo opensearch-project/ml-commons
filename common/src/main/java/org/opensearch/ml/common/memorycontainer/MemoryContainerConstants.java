@@ -148,6 +148,15 @@ public class MemoryContainerConstants {
         "Backend role contains invalid characters. Only alphanumeric characters and :+=,.@-_/ are allowed: %s";
     public static final String BACKEND_ROLE_EMPTY_ERROR = "Backend role cannot be empty or blank";
 
+
+    // Pinned field
+    public static final String PINNED_FIELD = "pinned";
+
+    // Retention policy field names
+    public static final String RETENTION_POLICY_FIELD = "retention_policy";
+    public static final String RETENTION_DAYS_FIELD = "retention_days";
+    public static final String MAX_COUNT_FIELD = "max_count";
+
     // Model validation error messages
     public static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model with ID %s not found";
     public static final String LLM_MODEL_NOT_REMOTE_ERROR = "LLM model must be a REMOTE model, found: %s";

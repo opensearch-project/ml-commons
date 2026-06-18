@@ -38,6 +38,9 @@
     "owner": USER_MAPPING_PLACEHOLDER,
     "tenant_id": {
       "type": "keyword"
+    },
+    "pinned": {
+      "type": "boolean"
     }
   }
 }
