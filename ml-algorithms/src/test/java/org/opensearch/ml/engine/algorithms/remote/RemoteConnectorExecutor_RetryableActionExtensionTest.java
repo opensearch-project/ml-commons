@@ -7,9 +7,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.apache.logging.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
@@ -108,7 +110,42 @@ public class RemoteConnectorExecutor_RetryableActionExtensionTest {
         return attempt;
     }
 
+    @Test
+    public void test_ShouldRetry_onRetryableStatusCodeException() {
+        var attempts = retryAttempts(-1, this::createRetryableException);
+
+        assertThat(attempts, equalTo(TEST_ATTEMPT_LIMIT));
+    }
+
+    @Test
+    public void test_ShouldRetry_retryableStatusCodeException_stopAtMaxAttempts() {
+        int maxAttempts = 3;
+        var attempts = retryAttempts(maxAttempts, this::createRetryableException);
+
+        assertThat(attempts, equalTo(maxAttempts));
+    }
+
+    @Test
+    public void test_RetryableException_serializationRoundTrip() throws IOException {
+        RemoteConnectorRetryableException original = new RemoteConnectorRetryableException(
+            "Remote server returned retryable status code: 503",
+            RestStatus.SERVICE_UNAVAILABLE
+        );
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+
+        RemoteConnectorRetryableException deserialized = new RemoteConnectorRetryableException(output.bytes().streamInput());
+
+        assertThat(original.getMessage(), equalTo(deserialized.getMessage()));
+        assertThat(original.status(), equalTo(deserialized.status()));
+    }
+
     private RemoteConnectorThrottlingException createThrottleException() {
         return new RemoteConnectorThrottlingException("Throttle", RestStatus.TOO_MANY_REQUESTS);
+    }
+
+    private RemoteConnectorRetryableException createRetryableException() {
+        return new RemoteConnectorRetryableException("Remote server returned retryable status code: 503", RestStatus.SERVICE_UNAVAILABLE);
     }
 }

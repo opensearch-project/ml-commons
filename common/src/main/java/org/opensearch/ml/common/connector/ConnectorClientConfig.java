@@ -8,6 +8,9 @@ package org.opensearch.ml.common.connector;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -37,6 +40,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String MAX_RETRY_TIMES_FIELD = "max_retry_times";
     public static final String RETRY_BACKOFF_POLICY_FIELD = "retry_backoff_policy";
     public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
+    public static final String RETRYABLE_STATUS_CODES_FIELD = "retryable_status_codes";
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
     public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
@@ -47,6 +51,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
     public static final Boolean SKIP_SSL_VERIFICATION_DEFAULT_VALUE = Boolean.FALSE;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRYABLE_STATUS_CODES = Version.V_3_7_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
@@ -55,8 +60,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     private Integer maxRetryTimes;
     private RetryBackoffPolicy retryBackoffPolicy;
     private Boolean skipSslVerification;
+    private List<Integer> retryableStatusCodes;
 
-    @Builder(toBuilder = true)
     public ConnectorClientConfig(
         Integer maxConnections,
         Integer connectionTimeout,
@@ -67,6 +72,31 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         RetryBackoffPolicy retryBackoffPolicy,
         Boolean skipSslVerification
     ) {
+        this(
+            maxConnections,
+            connectionTimeout,
+            readTimeout,
+            retryBackoffMillis,
+            retryTimeoutSeconds,
+            maxRetryTimes,
+            retryBackoffPolicy,
+            skipSslVerification,
+            null
+        );
+    }
+
+    @Builder(toBuilder = true)
+    public ConnectorClientConfig(
+        Integer maxConnections,
+        Integer connectionTimeout,
+        Integer readTimeout,
+        Integer retryBackoffMillis,
+        Integer retryTimeoutSeconds,
+        Integer maxRetryTimes,
+        RetryBackoffPolicy retryBackoffPolicy,
+        Boolean skipSslVerification,
+        List<Integer> retryableStatusCodes
+    ) {
         this.maxConnections = maxConnections;
         this.connectionTimeout = connectionTimeout;
         this.readTimeout = readTimeout;
@@ -75,6 +105,12 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.maxRetryTimes = maxRetryTimes;
         this.retryBackoffPolicy = retryBackoffPolicy;
         this.skipSslVerification = skipSslVerification;
+        this.retryableStatusCodes = retryableStatusCodes != null ? List.copyOf(retryableStatusCodes) : null;
+        if (this.retryableStatusCodes != null && !this.retryableStatusCodes.isEmpty()) {
+            if (this.maxRetryTimes == null || (this.maxRetryTimes <= 0 && this.maxRetryTimes != -1)) {
+                throw new IllegalArgumentException("retryable_status_codes requires max_retry_times to be a positive number or -1 (unlimited)");
+            }
+        }
     }
 
     public ConnectorClientConfig(StreamInput input) throws IOException {
@@ -90,6 +126,12 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 this.retryBackoffPolicy = RetryBackoffPolicy.from(input.readString());
             }
             this.skipSslVerification = input.readOptionalBoolean();
+            if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRYABLE_STATUS_CODES)) {
+                if (input.readBoolean()) {
+                    int[] codes = input.readVIntArray();
+                    this.retryableStatusCodes = List.of(Arrays.stream(codes).boxed().toArray(Integer[]::new));
+                }
+            }
         }
     }
 
@@ -102,6 +144,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         this.retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
         this.skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
+        this.retryableStatusCodes = null;
     }
 
     @Override
@@ -121,6 +164,14 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
             out.writeOptionalBoolean(skipSslVerification);
+            if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRYABLE_STATUS_CODES)) {
+                if (retryableStatusCodes != null) {
+                    out.writeBoolean(true);
+                    out.writeVIntArray(retryableStatusCodes.stream().mapToInt(Integer::intValue).toArray());
+                } else {
+                    out.writeBoolean(false);
+                }
+            }
         }
     }
 
@@ -151,6 +202,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         if (skipSslVerification != null) {
             builder.field(SKIP_SSL_VERIFICATION_FIELD, skipSslVerification);
         }
+        if (retryableStatusCodes != null) {
+            builder.field(RETRYABLE_STATUS_CODES_FIELD, retryableStatusCodes);
+        }
         return builder.endObject();
     }
 
@@ -168,6 +222,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         RetryBackoffPolicy retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
         Boolean skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
+        List<Integer> retryableStatusCodes = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -199,6 +254,14 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 case SKIP_SSL_VERIFICATION_FIELD:
                     skipSslVerification = parser.booleanValue();
                     break;
+                case RETRYABLE_STATUS_CODES_FIELD:
+                    List<Integer> parsedCodes = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        parsedCodes.add(parser.intValue());
+                    }
+                    retryableStatusCodes = List.copyOf(parsedCodes);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -214,6 +277,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             .maxRetryTimes(maxRetryTimes)
             .retryBackoffPolicy(retryBackoffPolicy)
             .skipSslVerification(skipSslVerification)
+            .retryableStatusCodes(retryableStatusCodes)
             .build();
     }
 }

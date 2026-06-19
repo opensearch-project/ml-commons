@@ -89,6 +89,10 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
             log.error("Received error from remote service with status code {}, response headers: {}", statusCode, sdkResponse.headers());
             handleThrottlingInHeader(sdkResponse);
+            // Skip retryable status code check if exception has already been set in throttling header.
+            if (exceptionHolder.get() == null) {
+                handleRetryableStatusCode(statusCode);
+            }
             // add more handling here for other exceptions in headers
         }
     }
@@ -110,7 +114,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                 status = RestStatus.INTERNAL_SERVER_ERROR;
             }
         } else {
-            status = RestStatus.fromCode(statusCode);
+            status = safeRestStatus(statusCode);
         }
         String errorMessage = "Error communicating with remote model: " + error.getMessage();
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
@@ -140,7 +144,28 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                     REMOTE_SERVICE_ERROR
                         + "The request was denied due to remote server throttling. "
                         + "To change the retry policy and behavior, please update the connector client_config.",
-                    RestStatus.fromCode(statusCode)
+                    safeRestStatus(statusCode)
+                )
+            );
+        }
+    }
+
+    private void handleRetryableStatusCode(int statusCode) {
+        List<Integer> retryableStatusCodes = connector.getConnectorClientConfig() != null
+            ? connector.getConnectorClientConfig().getRetryableStatusCodes() : null;
+        if (retryableStatusCodes == null) {
+            return;
+        }
+        if (retryableStatusCodes.contains(statusCode)) {
+            log.error("Remote server returned retryable status code: {}", statusCode);
+            handleException(
+                new RemoteConnectorRetryableException(
+                    REMOTE_SERVICE_ERROR
+                        + "Remote server returned retryable status code: "
+                        + statusCode
+                        + ". "
+                        + "To change the retry policy and behavior, please update the connector client_config.",
+                    safeRestStatus(statusCode)
                 )
             );
         }
@@ -189,7 +214,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
         // Handle error status codes (4xx, 5xx)
         if (statusCode == null || statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
-            RestStatus status = (statusCode != null) ? RestStatus.fromCode(statusCode) : RestStatus.INTERNAL_SERVER_ERROR;
+            RestStatus status = safeRestStatus(statusCode);
             String errorMsg = Strings.isBlank(body)
                 ? String.format("Remote service returned error status %d with empty body", statusCode)
                 : REMOTE_SERVICE_ERROR + body;
@@ -223,4 +248,22 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
         }
     }
+
+    /**
+     * Returns a safe RestStatus for the given status code.
+     * If the status code is null or cannot be resolved to a valid RestStatus, returns INTERNAL_SERVER_ERROR.
+     *
+     * @param statusCode the status code
+     * @return the safe RestStatus
+     */
+    private RestStatus safeRestStatus(Integer statusCode) {
+        if (statusCode != null) {
+            RestStatus resolved = RestStatus.fromCode(statusCode);
+            if (resolved != null) {
+                return resolved;
+            }
+        }
+        return RestStatus.INTERNAL_SERVER_ERROR;
+    }
+
 }
