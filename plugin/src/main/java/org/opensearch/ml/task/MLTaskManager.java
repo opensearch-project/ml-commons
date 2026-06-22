@@ -84,6 +84,7 @@ public class MLTaskManager implements SettingsChangeListener {
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
     private boolean taskPollingJobStarted;
     private boolean statsCollectorJobStarted;
+    private boolean memoryRetentionJobStarted;
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
@@ -567,6 +568,37 @@ public class MLTaskManager implements SettingsChangeListener {
             indexJob(indexRequest, MLJobType.BATCH_TASK_UPDATE, () -> this.taskPollingJobStarted = true);
         } catch (IOException e) {
             log.error("Failed to index task polling job", e);
+        }
+    }
+
+    public void indexMemoryRetentionJob() {
+        if (this.memoryRetentionJobStarted) {
+            log.debug("Memory retention job already started");
+            return;
+        }
+
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.MEMORY_RETENTION.name(),
+                new IntervalSchedule(Instant.now(), 24, ChronoUnit.HOURS),
+                120L,
+                null,
+                MLJobType.MEMORY_RETENTION,
+                true
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.MEMORY_RETENTION.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            indexJob(indexRequest, MLJobType.MEMORY_RETENTION, () -> {
+                this.memoryRetentionJobStarted = true;
+                log.debug("Memory retention job started successfully");
+            });
+        } catch (IOException e) {
+            log.error("Failed to index memory retention job", e);
         }
     }
 

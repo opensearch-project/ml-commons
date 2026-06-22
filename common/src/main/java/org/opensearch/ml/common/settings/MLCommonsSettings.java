@@ -595,6 +595,40 @@ public final class MLCommonsSettings {
     public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
 
+    // Memory retention job settings
+    public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_interval_hours",
+            24,
+            1,
+            168,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_throttle_seconds",
+            5,
+            1,
+            60,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "memory.orphan_ttl_days", 7, 1, 365, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.working_memory_ttl_days",
+            30,
+            1,
+            365,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
     private static void validateRegexSafety(String regex) {
         // Reject nested quantifiers or backreferences
         if (regex.matches(".*\\([^)]*[*+?]\\)[*+?{].*") || regex.matches(".*\\\\[1-9].*")) {
