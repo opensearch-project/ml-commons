@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_BLOB_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FIELD;
@@ -136,6 +137,20 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                     return;
                 }
 
+                // Reject pinned field for working memory type
+                Map<String, Object> updateContent = updateRequest.getMlUpdateMemoryInput().getUpdateContent();
+                if (memoryType == MemoryType.WORKING && updateContent.containsKey(PINNED_FIELD)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "pinned field is not supported for working memory type."
+                                    + " To preserve a conversation, pin the session instead.",
+                                RestStatus.BAD_REQUEST
+                            )
+                        );
+                    return;
+                }
+
                 // Prepare the update
                 Map<String, Object> newDoc = constructNewDoc(updateRequest.getMlUpdateMemoryInput(), memoryType, originalDoc);
                 IndexRequest indexRequest = new IndexRequest(memoryIndexName).id(memoryId).source(newDoc);
@@ -186,6 +201,9 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         if (updateContent.containsKey(ADDITIONAL_INFO_FIELD)) {
             updateFields.put(ADDITIONAL_INFO_FIELD, updateContent.get(ADDITIONAL_INFO_FIELD));
         }
+        if (updateContent.containsKey(PINNED_FIELD)) {
+            updateFields.put(PINNED_FIELD, updateContent.get(PINNED_FIELD));
+        }
         return updateFields;
     }
 
@@ -217,6 +235,9 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }
         if (updateContent.containsKey(TAGS_FIELD)) {
             updateFields.put(TAGS_FIELD, updateContent.get(TAGS_FIELD));
+        }
+        if (updateContent.containsKey(PINNED_FIELD)) {
+            updateFields.put(PINNED_FIELD, updateContent.get(PINNED_FIELD));
         }
         return updateFields;
     }
