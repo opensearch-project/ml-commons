@@ -21,6 +21,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +66,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
@@ -1937,6 +1940,58 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     }
 
     // Helper method to mock successful LLM validation (without embedding validation which will be tested)
+    public void testDoExecuteSuccess_WithRetentionPolicy() throws InterruptedException {
+        // Create config with retention_policy to verify it passes through
+        Map<MemoryType, RetentionRule> retentionPolicy = new EnumMap<>(MemoryType.class);
+        retentionPolicy.put(MemoryType.SESSIONS, RetentionRule.builder().retentionDays(30).maxCount(100).build());
+        retentionPolicy.put(MemoryType.LONG_TERM, RetentionRule.builder().maxCount(500).build());
+
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        strategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .namespace(List.of(SESSION_ID_FIELD))
+                    .id("strategy-id1")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .build()
+            );
+
+        MemoryConfiguration configWithRetention = spy(
+            MemoryConfiguration
+                .builder()
+                .indexPrefix("test-memory-index")
+                .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+                .embeddingModelId("test-embedding-model")
+                .llmId("test-llm-model")
+                .dimension(768)
+                .maxInferSize(5)
+                .strategies(strategies)
+                .retentionPolicy(retentionPolicy)
+                .build()
+        );
+
+        MLCreateMemoryContainerInput retentionInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("retention-container")
+            .description("Container with retention policy")
+            .configuration(configWithRetention)
+            .tenantId(TENANT_ID)
+            .build();
+
+        MLCreateMemoryContainerRequest retentionRequest = new MLCreateMemoryContainerRequest(retentionInput);
+
+        mockSuccessfulCreatePipeline();
+        mockAndRunExecuteMethod(retentionRequest);
+
+        // Verify the configuration retains the retention policy
+        assertNotNull(configWithRetention.getRetentionPolicy());
+        assertEquals(2, configWithRetention.getRetentionPolicy().size());
+        assertEquals(Integer.valueOf(30), configWithRetention.getRetentionPolicy().get(MemoryType.SESSIONS).getRetentionDays());
+        assertEquals(Integer.valueOf(500), configWithRetention.getRetentionPolicy().get(MemoryType.LONG_TERM).getMaxCount());
+    }
+
     private void mockSuccessfulLLMValidation() {
         // Mock valid LLM model
         MLModel llmModel = mock(MLModel.class);
