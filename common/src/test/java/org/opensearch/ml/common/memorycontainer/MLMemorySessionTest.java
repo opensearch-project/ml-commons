@@ -24,6 +24,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 
 public class MLMemorySessionTest {
@@ -189,6 +190,7 @@ public class MLMemorySessionTest {
         assertEquals(sessionWithoutNamespace.getAdditionalInfo(), deserialized.getAdditionalInfo());
         assertEquals(sessionWithoutNamespace.getNamespace(), deserialized.getNamespace());
         assertEquals(sessionWithoutNamespace.getTenantId(), deserialized.getTenantId());
+        assertNull(deserialized.getPinned());
     }
 
     @Test
@@ -804,6 +806,22 @@ public class MLMemorySessionTest {
         StreamInput in = out.bytes().streamInput();
         MLMemorySession deserialized = new MLMemorySession(in);
 
+        assertNull(deserialized.getPinned());
+    }
+
+    @Test
+    public void testBackwardCompatStreamFromOldNode() throws IOException {
+        MLMemorySession session = MLMemorySession.builder().ownerId("owner-123").pinned(true).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_5_0);
+        session.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_5_0);
+        MLMemorySession deserialized = new MLMemorySession(in);
+
+        assertEquals("owner-123", deserialized.getOwnerId());
         assertNull(deserialized.getPinned());
     }
 }

@@ -17,11 +17,14 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 
@@ -116,10 +119,82 @@ public class MLMemoryHistoryTest {
         assertNull(historyWithNullFields.getPinned());
     }
 
-    // Note: Stream round-trip tests are omitted for MLMemoryHistory because the original writeTo/StreamInput
-    // constructor has a pre-existing serialization order mismatch (writeTo writes namespace/tags before
-    // createdTime, but the StreamInput constructor reads createdTime before namespace/tags).
-    // The pinned field is tested via XContent round-trip instead.
+    @Test
+    public void testStreamInputOutputWithAllFields() throws IOException {
+        BytesStreamOutput out = new BytesStreamOutput();
+        historyWithAllFields.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLMemoryHistory deserialized = new MLMemoryHistory(in);
+
+        assertEquals(historyWithAllFields.getOwnerId(), deserialized.getOwnerId());
+        assertEquals(historyWithAllFields.getMemoryContainerId(), deserialized.getMemoryContainerId());
+        assertEquals(historyWithAllFields.getMemoryId(), deserialized.getMemoryId());
+        assertEquals(historyWithAllFields.getAction(), deserialized.getAction());
+        assertEquals(historyWithAllFields.getBefore(), deserialized.getBefore());
+        assertEquals(historyWithAllFields.getAfter(), deserialized.getAfter());
+        assertEquals(historyWithAllFields.getCreatedTime(), deserialized.getCreatedTime());
+        assertEquals(historyWithAllFields.getTenantId(), deserialized.getTenantId());
+        assertEquals(historyWithAllFields.getPinned(), deserialized.getPinned());
+    }
+
+    @Test
+    public void testStreamInputOutputWithNullFields() throws IOException {
+        BytesStreamOutput out = new BytesStreamOutput();
+        historyWithNullFields.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLMemoryHistory deserialized = new MLMemoryHistory(in);
+
+        assertNull(deserialized.getOwnerId());
+        assertNull(deserialized.getMemoryContainerId());
+        assertNull(deserialized.getMemoryId());
+        assertNull(deserialized.getAction());
+        assertNull(deserialized.getBefore());
+        assertNull(deserialized.getAfter());
+        assertNull(deserialized.getCreatedTime());
+        assertNull(deserialized.getTenantId());
+        assertNull(deserialized.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldStreamRoundTrip() throws IOException {
+        MLMemoryHistory pinnedHistory = MLMemoryHistory
+            .builder()
+            .ownerId("owner-123")
+            .memoryId("memory-456")
+            .action(MemoryEvent.ADD)
+            .createdTime(testCreatedTime)
+            .pinned(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        pinnedHistory.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLMemoryHistory deserialized = new MLMemoryHistory(in);
+
+        assertEquals(true, deserialized.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldStreamRoundTripNull() throws IOException {
+        MLMemoryHistory history = MLMemoryHistory
+            .builder()
+            .ownerId("owner-123")
+            .action(MemoryEvent.ADD)
+            .createdTime(testCreatedTime)
+            .pinned(null)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        history.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLMemoryHistory deserialized = new MLMemoryHistory(in);
+
+        assertNull(deserialized.getPinned());
+    }
 
     @Test
     public void testToXContentWithAllFields() throws IOException {
@@ -272,5 +347,31 @@ public class MLMemoryHistoryTest {
         assertEquals("owner-123", parsed.getOwnerId());
         assertEquals(MemoryEvent.ADD, parsed.getAction());
         assertNull(parsed.getPinned());
+    }
+
+    @Test
+    public void testBackwardCompatStreamFromOldNode() throws IOException {
+        MLMemoryHistory history = MLMemoryHistory
+            .builder()
+            .ownerId("owner-123")
+            .memoryId("memory-456")
+            .action(MemoryEvent.UPDATE)
+            .createdTime(testCreatedTime)
+            .pinned(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_5_0);
+        history.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_5_0);
+        MLMemoryHistory deserialized = new MLMemoryHistory(in);
+
+        assertEquals("owner-123", deserialized.getOwnerId());
+        assertEquals("memory-456", deserialized.getMemoryId());
+        assertEquals(MemoryEvent.UPDATE, deserialized.getAction());
+        assertEquals(testCreatedTime, deserialized.getCreatedTime());
+        assertNull(deserialized.getPinned());
     }
 }

@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 
 public class MLLongTermMemoryTest {
@@ -540,6 +541,31 @@ public class MLLongTermMemoryTest {
         StreamInput in = out.bytes().streamInput();
         MLLongTermMemory deserialized = new MLLongTermMemory(in);
 
+        assertNull(deserialized.getPinned());
+    }
+
+    @Test
+    public void testBackwardCompatStreamFromOldNode() throws IOException {
+        MLLongTermMemory memory = MLLongTermMemory
+            .builder()
+            .namespace(Map.of(SESSION_ID_FIELD, "session-123"))
+            .memory("Test memory")
+            .strategyType(MemoryStrategyType.SEMANTIC)
+            .createdTime(testCreatedTime)
+            .lastUpdatedTime(testUpdatedTime)
+            .pinned(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_5_0);
+        memory.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_5_0);
+        MLLongTermMemory deserialized = new MLLongTermMemory(in);
+
+        assertEquals("Test memory", deserialized.getMemory());
+        assertEquals(MemoryStrategyType.SEMANTIC, deserialized.getStrategyType());
         assertNull(deserialized.getPinned());
     }
 }
