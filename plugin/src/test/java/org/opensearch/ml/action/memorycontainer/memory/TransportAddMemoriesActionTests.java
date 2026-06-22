@@ -166,17 +166,36 @@ public class TransportAddMemoriesActionTests {
     }
 
     @Test
-    public void testDoExecute_BlankMemoryContainerId() {
+    public void testDoExecute_PinnedFieldRejected() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
-        
+
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        when(input.getMemoryContainerId()).thenReturn("");
-        
+        when(input.getPinned()).thenReturn(true);
+
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
-        
+
         transportAddMemoriesAction.doExecute(task, request, actionListener);
-        
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assert captor.getValue() instanceof OpenSearchStatusException;
+        assert captor.getValue().getMessage().contains("pinned field is not supported for working memory type");
+    }
+
+    @Test
+    public void testDoExecute_BlankMemoryContainerId() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
+        when(input.getMemoryContainerId()).thenReturn("");
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
         verify(actionListener).onFailure(any(IllegalArgumentException.class));
     }
 
@@ -185,6 +204,7 @@ public class TransportAddMemoriesActionTests {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
@@ -213,6 +233,7 @@ public class TransportAddMemoriesActionTests {
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -248,6 +269,7 @@ public class TransportAddMemoriesActionTests {
         namespace.put("session_id", "session-123");
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -300,6 +322,7 @@ public class TransportAddMemoriesActionTests {
         namespace.put("session_id", "session-123");
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -348,6 +371,7 @@ public class TransportAddMemoriesActionTests {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
@@ -382,6 +406,7 @@ public class TransportAddMemoriesActionTests {
         namespace.put("session_id", "session-123");
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -431,6 +456,7 @@ public class TransportAddMemoriesActionTests {
         // No session_id in namespace
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -485,6 +511,7 @@ public class TransportAddMemoriesActionTests {
         // No session_id - should trigger session creation
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -556,6 +583,7 @@ public class TransportAddMemoriesActionTests {
         // No session_id - should trigger session creation
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -613,6 +641,7 @@ public class TransportAddMemoriesActionTests {
         namespace.put("session_id", "existing-session-123"); // User provided session_id
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -664,6 +693,7 @@ public class TransportAddMemoriesActionTests {
         // No session_id - would normally trigger session creation, but getLlmId() is null
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -715,6 +745,7 @@ public class TransportAddMemoriesActionTests {
         Map<String, String> namespace = new HashMap<>();
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
@@ -773,6 +804,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -831,6 +863,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(disabledStrategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -890,6 +923,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -949,6 +983,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1014,6 +1049,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy2);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1071,6 +1107,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(disabledStrategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1128,6 +1165,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1184,6 +1222,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1250,6 +1289,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1335,6 +1375,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1430,6 +1471,7 @@ public class TransportAddMemoriesActionTests {
         strategies.add(strategy);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
@@ -1498,6 +1540,7 @@ public class TransportAddMemoriesActionTests {
         Map<String, String> namespace = new HashMap<>();
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(false);
