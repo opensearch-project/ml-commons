@@ -241,4 +241,22 @@ public class RetentionRuleTests {
         assertEquals(rule1, rule2);
         assertEquals(rule1.hashCode(), rule2.hashCode());
     }
+
+    @Test
+    public void testBuilder_NegativeRetentionDaysThrows() {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> RetentionRule.builder().retentionDays(-1).maxCount(10).build()
+        );
+        assertEquals("retention_days must be a positive integer or null", e.getMessage());
+    }
+
+    @Test
+    public void testBuilder_ZeroMaxCountThrows() {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> RetentionRule.builder().retentionDays(5).maxCount(0).build()
+        );
+        assertEquals("max_count must be a positive integer or null", e.getMessage());
+    }
 }
