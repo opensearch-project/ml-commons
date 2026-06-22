@@ -123,8 +123,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             actionListener
                 .onFailure(
                     new OpenSearchStatusException(
-                        "pinned field is not supported for working memory type."
-                            + " To preserve a conversation, pin the session instead.",
+                        "pinned field is not supported for working memory type." + " To preserve a conversation, pin the session instead.",
                         RestStatus.BAD_REQUEST
                     )
                 );

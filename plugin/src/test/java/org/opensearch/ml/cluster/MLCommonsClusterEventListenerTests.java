@@ -120,6 +120,43 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).indexStatsCollectorJob(anyBoolean());
     }
 
+    public void testClusterChanged_MemoryRetentionJobStarted() {
+        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
+        setupClusterState(dataNode, false);
+        when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager).indexMemoryRetentionJob();
+    }
+
+    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenMultiTenancyEnabled() {
+        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
+        setupClusterState(dataNode, false);
+        when(clusterService.getSettings())
+            .thenReturn(org.opensearch.common.settings.Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob();
+    }
+
+    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenAgenticMemoryDisabled() {
+        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
+        setupClusterState(dataNode, false);
+        when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob();
+    }
+
     private DiscoveryNode createDataNode(Version version) {
         return new DiscoveryNode(
             "dataNode",
