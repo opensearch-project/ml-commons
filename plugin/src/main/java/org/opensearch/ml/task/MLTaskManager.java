@@ -571,7 +571,7 @@ public class MLTaskManager implements SettingsChangeListener {
         }
     }
 
-    public void indexMemoryRetentionJob() {
+    public void indexMemoryRetentionJob(int intervalHours) {
         if (this.memoryRetentionJobStarted) {
             log.debug("Memory retention job already started");
             return;
@@ -580,7 +580,7 @@ public class MLTaskManager implements SettingsChangeListener {
         try {
             MLJobParameter jobParameter = new MLJobParameter(
                 MLJobType.MEMORY_RETENTION.name(),
-                new IntervalSchedule(Instant.now(), 24, ChronoUnit.HOURS),
+                new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.HOURS),
                 120L,
                 null,
                 MLJobType.MEMORY_RETENTION,

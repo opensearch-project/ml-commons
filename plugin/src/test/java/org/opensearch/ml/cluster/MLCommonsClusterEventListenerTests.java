@@ -6,6 +6,7 @@
 package org.opensearch.ml.cluster;
 
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -129,7 +130,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
         listener.clusterChanged(event);
 
-        verify(mlTaskManager).indexMemoryRetentionJob();
+        verify(mlTaskManager).indexMemoryRetentionJob(24);
     }
 
     public void testClusterChanged_MemoryRetentionJobNotStarted_WhenMultiTenancyEnabled() {
@@ -142,7 +143,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
         listener.clusterChanged(event);
 
-        verify(mlTaskManager, never()).indexMemoryRetentionJob();
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
     }
 
     public void testClusterChanged_MemoryRetentionJobNotStarted_WhenAgenticMemoryDisabled() {
@@ -154,7 +155,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
         listener.clusterChanged(event);
 
-        verify(mlTaskManager, never()).indexMemoryRetentionJob();
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
     }
 
     private DiscoveryNode createDataNode(Version version) {
