@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ERROR_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_AFTER_FIELD;
@@ -110,7 +111,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         }
         this.tenantId = in.readOptionalString();
         this.error = in.readOptionalString();
-        this.pinned = in.readOptionalBoolean();
+        if (in.getVersion().onOrAfter(VERSION_3_7_0)) {
+            this.pinned = in.readOptionalBoolean();
+        }
     }
 
     @Override
@@ -136,6 +139,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalInstant(createdTime);
         if (namespace != null && !namespace.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(namespace, StreamOutput::writeString, StreamOutput::writeString);
@@ -148,10 +152,11 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalInstant(createdTime);
         out.writeOptionalString(tenantId);
         out.writeOptionalString(error);
-        out.writeOptionalBoolean(pinned);
+        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalBoolean(pinned);
+        }
     }
 
     @Override
