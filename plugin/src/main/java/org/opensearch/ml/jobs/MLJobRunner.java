@@ -13,6 +13,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
 import org.opensearch.ml.jobs.processors.MLStatsJobProcessor;
+import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -105,6 +106,9 @@ public class MLJobRunner implements ScheduledJobRunner {
                 break;
             case BATCH_TASK_UPDATE:
                 MLBatchTaskUpdateProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);
+                break;
+            case MEMORY_RETENTION:
+                MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported job type " + jobParameter.getJobType());

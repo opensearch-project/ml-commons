@@ -1436,7 +1436,11 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                 MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
-                MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
+                MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
             );
         return settings;
     }
