@@ -876,11 +876,7 @@ public class MLAddMemoriesInputTest {
 
     @Test
     public void testPinnedFieldNull() {
-        MLAddMemoriesInput input = MLAddMemoriesInput
-            .builder()
-            .memoryContainerId("container-123")
-            .messages(testMessages)
-            .build();
+        MLAddMemoriesInput input = MLAddMemoriesInput.builder().memoryContainerId("container-123").messages(testMessages).build();
 
         assertNull(input.getPinned());
     }
