@@ -105,7 +105,8 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                 if (mlFeatureEnabledSetting.isAgenticMemoryEnabled()
                     && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
                     && !this.startedMemoryRetentionJob) {
-                    mlTaskManager.indexMemoryRetentionJob();
+                    int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(clusterService.getSettings());
+                    mlTaskManager.indexMemoryRetentionJob(intervalHours);
                     this.startedMemoryRetentionJob = true;
                 }
 
