@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BINARY_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CHECKPOINT_ID_FIELD;
@@ -22,6 +23,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PAYLOAD_TYPE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_BLOB_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
@@ -34,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -73,6 +76,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     private Map<String, Object> parameters;
     private String ownerId;
 
+    // Pinned field (only valid for session/long-term/history, rejected for working memory)
+    private Boolean pinned;
+
     // Checkpoint field
     private String checkpointId;
     private String tenantId;
@@ -91,6 +97,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> tags,
         Map<String, Object> parameters,
         String ownerId,
+        Boolean pinned,
         String checkpointId,
         String tenantId
     ) {
@@ -112,6 +119,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             this.parameters.putAll(parameters);
         }
         this.ownerId = ownerId;
+        this.pinned = pinned;
         this.checkpointId = checkpointId;
         this.tenantId = tenantId;
         validate();
@@ -161,6 +169,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             this.parameters = in.readMap();
         }
         this.ownerId = in.readOptionalString();
+        if (in.getVersion().onOrAfter(VERSION_3_7_0)) {
+            this.pinned = in.readOptionalBoolean();
+        }
         this.checkpointId = in.readOptionalString();
         this.tenantId = in.readOptionalString();
     }
@@ -218,6 +229,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalString(ownerId);
+        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalBoolean(pinned);
+        }
         out.writeOptionalString(checkpointId);
         out.writeOptionalString(tenantId);
     }
@@ -297,6 +311,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> tags = null;
         Map<String, Object> parameters = null;
         String ownerId = null;
+        Boolean pinned = null;
         String checkpointId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -348,6 +363,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
                 case OWNER_ID_FIELD:
                     ownerId = parser.text();
                     break;
+                case PINNED_FIELD:
+                    pinned = parser.booleanValue();
+                    break;
                 case CHECKPOINT_ID_FIELD:
                     checkpointId = parser.text();
                     break;
@@ -375,6 +393,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             .tags(tags)
             .parameters(parameters)
             .ownerId(ownerId)
+            .pinned(pinned)
             .checkpointId(checkpointId)
             .tenantId(tenantId)
             .build();
