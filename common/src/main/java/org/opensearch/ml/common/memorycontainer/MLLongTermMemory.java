@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
@@ -102,7 +103,9 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         this.ownerId = in.readOptionalString();
         this.memoryContainerId = in.readOptionalString();
         this.strategyId = in.readOptionalString();
-        this.pinned = in.readOptionalBoolean();
+        if (in.getVersion().onOrAfter(VERSION_3_7_0)) {
+            this.pinned = in.readOptionalBoolean();
+        }
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
 
@@ -127,7 +130,9 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         out.writeOptionalString(ownerId);
         out.writeOptionalString(memoryContainerId);
         out.writeOptionalString(strategyId);
-        out.writeOptionalBoolean(pinned);
+        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalBoolean(pinned);
+        }
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
 
