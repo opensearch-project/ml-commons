@@ -24,13 +24,13 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 @Getter
-@Builder
 @EqualsAndHashCode
 public class RetentionRule implements ToXContentObject, Writeable {
 
     private final Integer retentionDays;
     private final Integer maxCount;
 
+    @Builder
     public RetentionRule(Integer retentionDays, Integer maxCount) {
         if (retentionDays != null && retentionDays <= 0) {
             throw new IllegalArgumentException("retention_days must be a positive integer or null");
