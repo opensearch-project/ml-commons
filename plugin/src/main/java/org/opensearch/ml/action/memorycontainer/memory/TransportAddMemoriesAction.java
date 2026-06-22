@@ -118,6 +118,18 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             return;
         }
 
+        // Reject pinned field — add-memories creates working memory which cannot be pinned
+        if (input.getPinned() != null) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "pinned field is not supported for working memory type." + " To preserve a conversation, pin the session instead.",
+                        RestStatus.BAD_REQUEST
+                    )
+                );
+            return;
+        }
+
         String memoryContainerId = input.getMemoryContainerId();
 
         if (StringUtils.isBlank(memoryContainerId)) {

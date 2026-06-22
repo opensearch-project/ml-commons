@@ -795,4 +795,163 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         verify(memoryContainerHelper, never()).indexData(any(), any(), any());
     }
 
+    @Test
+    public void testDoExecute_PinnedRejectedForWorkingMemory() {
+        String memoryContainerId = "container-123";
+        String memoryId = "memory-456";
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("pinned", true);
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(MemoryType.WORKING)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put("owner_id", "user-123");
+        when(mockGetResponse.isExists()).thenReturn(true);
+        when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, MemoryType.WORKING)).thenReturn("test-working-index");
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
+
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
+
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) capturedError).status());
+        assertTrue(capturedError.getMessage().contains("pinned field is not supported for working memory type"));
+    }
+
+    @Test
+    public void testDoExecute_PinnedAcceptedForSessionMemory() {
+        String memoryContainerId = "container-123";
+        String memoryId = "memory-456";
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("pinned", true);
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(MemoryType.SESSIONS)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        IndexResponse mockIndexResponse = mock(IndexResponse.class);
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put("owner_id", "user-123");
+        when(mockGetResponse.isExists()).thenReturn(true);
+        when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, MemoryType.SESSIONS)).thenReturn("test-session-index");
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
+
+        doAnswer(invocation -> {
+            IndexRequest request = invocation.getArgument(1);
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            // Verify pinned field is included in the indexed document
+            assertTrue(request.sourceAsMap().containsKey("pinned"));
+            assertEquals(true, request.sourceAsMap().get("pinned"));
+            listener.onResponse(mockIndexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(), any(IndexRequest.class), any());
+
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
+
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener, times(1)).onResponse(mockIndexResponse);
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testDoExecute_PinnedAcceptedForLongTermMemory() {
+        String memoryContainerId = "container-123";
+        String memoryId = "memory-456";
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("pinned", true);
+        updateContent.put(MEMORY_FIELD, "some memory text");
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(MemoryType.LONG_TERM)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        IndexResponse mockIndexResponse = mock(IndexResponse.class);
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put("owner_id", "user-123");
+        sourceMap.put(MEMORY_FIELD, "old memory");
+        when(mockGetResponse.isExists()).thenReturn(true);
+        when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, MemoryType.LONG_TERM)).thenReturn("test-lt-index");
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
+
+        doAnswer(invocation -> {
+            IndexRequest request = invocation.getArgument(1);
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            assertTrue(request.sourceAsMap().containsKey("pinned"));
+            assertEquals(true, request.sourceAsMap().get("pinned"));
+            listener.onResponse(mockIndexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(), any(IndexRequest.class), any());
+
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
+
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener, times(1)).onResponse(mockIndexResponse);
+        verify(actionListener, never()).onFailure(any());
+    }
+
 }

@@ -862,4 +862,53 @@ public class MLAddMemoriesInputTest {
         assertEquals("new-checkpoint-id", input.getCheckpointId());
     }
 
+    @Test
+    public void testPinnedField() {
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(testMessages)
+            .pinned(true)
+            .build();
+
+        assertEquals(Boolean.TRUE, input.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldNull() {
+        MLAddMemoriesInput input = MLAddMemoriesInput.builder().memoryContainerId("container-123").messages(testMessages).build();
+
+        assertNull(input.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldStreamSerialization() throws IOException {
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(testMessages)
+            .pinned(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        input.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
+        assertEquals(Boolean.TRUE, deserialized.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldParsing() throws IOException {
+        String json = "{\"memory_container_id\":\"container-123\",\"payload_type\":\"conversational\","
+            + "\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}],"
+            + "\"pinned\":true}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "container-123", null);
+        assertEquals(Boolean.TRUE, parsed.getPinned());
+    }
+
 }
