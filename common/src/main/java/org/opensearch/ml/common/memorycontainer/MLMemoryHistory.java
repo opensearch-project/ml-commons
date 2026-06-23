@@ -8,7 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ERROR_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_AFTER_FIELD;
@@ -111,7 +111,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         }
         this.tenantId = in.readOptionalString();
         this.error = in.readOptionalString();
-        if (in.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (in.getVersion().onOrAfter(VERSION_3_8_0)) {
             this.pinned = in.readOptionalBoolean();
         }
     }
@@ -154,7 +154,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         }
         out.writeOptionalString(tenantId);
         out.writeOptionalString(error);
-        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
             out.writeOptionalBoolean(pinned);
         }
     }
