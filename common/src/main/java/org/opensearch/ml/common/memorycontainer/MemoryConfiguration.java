@@ -74,9 +74,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private String llmId;
     private Integer dimension;
     private Integer maxInferSize;
-    private List<MemoryStrategy> strategies;
-    private Map<String, Map<String, Object>> indexSettings;
-    private Map<String, Object> parameters;
+    private List<MemoryStrategy> strategies = new ArrayList<>();
+    private Map<String, Map<String, Object>> indexSettings = new HashMap<>();
+    private Map<String, Object> parameters = new HashMap<>();
     private boolean disableHistory;
     private boolean disableSession;
     private boolean useSystemIndex;
