@@ -24,7 +24,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.logging.HeaderWarning;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -33,8 +32,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
-import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerAction;
@@ -191,7 +188,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                     updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, currentConfig);
 
                     // Emit warning if sessions retention is set on a container with disableSession=true
-                    emitDisableSessionRetentionWarning(currentConfig);
+                    MemoryContainerHelper.emitDisableSessionRetentionWarning(currentConfig);
                 } catch (Exception e) {
                     log.error("Failed to update configuration for container {}", memoryContainerId, e);
                     actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
@@ -257,20 +254,6 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                         + "Create a new memory container if you need different embedding configuration."
                 );
             }
-        }
-    }
-
-    private void emitDisableSessionRetentionWarning(MemoryConfiguration config) {
-        if (config == null) {
-            return;
-        }
-        Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
-        if (config.isDisableSession() && retentionPolicy != null && retentionPolicy.containsKey(MemoryType.SESSIONS)) {
-            HeaderWarning
-                .addWarning(
-                    "sessions retention_policy has no effect when disableSession=true;"
-                        + " working memory TTL is governed by cluster setting plugins.ml_commons.memory.working_memory_ttl_days"
-                );
         }
     }
 

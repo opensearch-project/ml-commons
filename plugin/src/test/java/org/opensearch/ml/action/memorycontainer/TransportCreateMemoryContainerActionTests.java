@@ -1939,7 +1939,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(captor.getValue().getMessage().contains("Internal server error"));
     }
 
-    // Helper method to mock successful LLM validation (without embedding validation which will be tested)
     public void testDoExecuteSuccess_WithRetentionPolicy() throws InterruptedException {
         // Create config with retention_policy to verify it passes through
         Map<MemoryType, RetentionRule> retentionPolicy = new EnumMap<>(MemoryType.class);

@@ -44,6 +44,7 @@ import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.logging.HeaderWarning;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -68,6 +69,7 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -679,5 +681,19 @@ public class MemoryContainerHelper {
 
         // Use default if nothing found
         return DEFAULT_LLM_RESULT_PATH;
+    }
+
+    public static void emitDisableSessionRetentionWarning(MemoryConfiguration config) {
+        if (config == null) {
+            return;
+        }
+        Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
+        if (config.isDisableSession() && retentionPolicy != null && retentionPolicy.containsKey(MemoryType.SESSIONS)) {
+            HeaderWarning
+                .addWarning(
+                    "sessions retention_policy has no effect when disableSession=true;"
+                        + " working memory TTL is governed by cluster setting plugins.ml_commons.memory.working_memory_ttl_days"
+                );
+        }
     }
 }
