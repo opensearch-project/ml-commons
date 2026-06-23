@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -403,6 +404,9 @@ public class QueryPlanningTool implements WithModelTool {
                     if (e instanceof IndexNotFoundException) {
                         log.warn("Index does not exist or is not available");
                         listener.onFailure(new IllegalArgumentException("Index does not exist or is not available", e));
+                    } else if (e instanceof OpenSearchStatusException) {
+                        log.warn("Remote service error during index mapping extraction", e);
+                        listener.onFailure(e);
                     } else {
                         log.warn("Failed to extract index mapping");
                         listener.onFailure(new IllegalStateException("Failed to extract index mapping", e));
