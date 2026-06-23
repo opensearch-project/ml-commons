@@ -148,7 +148,6 @@ public class MemoryContainerConstants {
         "Backend role contains invalid characters. Only alphanumeric characters and :+=,.@-_/ are allowed: %s";
     public static final String BACKEND_ROLE_EMPTY_ERROR = "Backend role cannot be empty or blank";
 
-
     // Pinned field
     public static final String PINNED_FIELD = "pinned";
 
