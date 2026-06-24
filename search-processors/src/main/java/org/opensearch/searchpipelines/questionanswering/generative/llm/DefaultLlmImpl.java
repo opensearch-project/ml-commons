@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -152,7 +153,7 @@ public class DefaultLlmImpl implements Llm {
                     chatCompletionInput.getLlmMessages()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
-            if (chatCompletionInput.getSystemPrompt() != null) {
+            if (!Strings.isNullOrEmpty(chatCompletionInput.getSystemPrompt())) {
                 inputParameters.put(CONNECTOR_INPUT_PARAMETER_SYSTEM_PROMPT, chatCompletionInput.getSystemPrompt());
             }
         } else {
