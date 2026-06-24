@@ -138,6 +138,8 @@ public class DefaultLlmImpl implements Llm {
                 );
         } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK_CONVERSE) {
             // Bedrock Converse API does not include the system prompt as part of the Messages block.
+            // Instead, it is passed as a separate runtime parameter for the connector to place
+            // in the Converse API's top-level "system" field via ${parameters.system_prompt}.
             String messages = PromptUtil
                 .getChatCompletionPrompt(
                     chatCompletionInput.getModelProvider(),
@@ -149,6 +151,9 @@ public class DefaultLlmImpl implements Llm {
                     chatCompletionInput.getLlmMessages()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
+            if (chatCompletionInput.getSystemPrompt() != null) {
+                inputParameters.put("system_prompt", chatCompletionInput.getSystemPrompt());
+            }
         } else {
             throw new IllegalArgumentException(
                 "Unknown/unsupported model provider: "
