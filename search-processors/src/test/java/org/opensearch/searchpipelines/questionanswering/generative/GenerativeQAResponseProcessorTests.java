@@ -295,15 +295,14 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         processor.setMemoryClient(memoryClient);
 
-        // GenerativeQAParameters overrides system_prompt and user_instructions at query time
         SearchRequest request = new SearchRequest();
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         GenerativeQAParameters params = new GenerativeQAParameters(
             "12345",
             "llm_model",
-            "What is the meaning of life?",
-            "query-level-system-prompt",       // overrides processor-level
-            "query-level-user-instructions",   // overrides processor-level
+            "You are kind.",
+            "query-level-system-prompt",
+            "query-level-user-instructions",
             null,
             null,
             null,
@@ -337,7 +336,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             ((ActionListener<ChatCompletionOutput>) invocation.getArguments()[1]).onResponse(output);
             return null;
         }).when(llm).doChatCompletion(any(), any());
-        when(output.getAnswers()).thenReturn(List.of("42"));
+        when(output.getAnswers()).thenReturn(List.of("foo"));
 
         processor.setLlm(llm);
 
@@ -356,7 +355,6 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         verify(llm).doChatCompletion(captor.capture(), any());
         ChatCompletionInput input = captor.getValue();
 
-        // Assert that query-level overrides were passed, NOT the processor-level values
         assertEquals("query-level-system-prompt", input.getSystemPrompt());
         assertEquals("query-level-user-instructions", input.getUserInstructions());
     }
