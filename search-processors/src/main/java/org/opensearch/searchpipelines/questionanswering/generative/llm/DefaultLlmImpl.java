@@ -47,6 +47,7 @@ public class DefaultLlmImpl implements Llm {
 
     private static final String CONNECTOR_INPUT_PARAMETER_MODEL = "model";
     private static final String CONNECTOR_INPUT_PARAMETER_MESSAGES = "messages";
+    private static final String CONNECTOR_INPUT_PARAMETER_SYSTEM_PROMPT = "system_prompt";
     private static final String CONNECTOR_OUTPUT_CHOICES = "choices";
     private static final String CONNECTOR_OUTPUT_MESSAGE = "message";
     private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
@@ -152,7 +153,7 @@ public class DefaultLlmImpl implements Llm {
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
             if (chatCompletionInput.getSystemPrompt() != null) {
-                inputParameters.put("system_prompt", chatCompletionInput.getSystemPrompt());
+                inputParameters.put(CONNECTOR_INPUT_PARAMETER_SYSTEM_PROMPT, chatCompletionInput.getSystemPrompt());
             }
         } else {
             throw new IllegalArgumentException(
