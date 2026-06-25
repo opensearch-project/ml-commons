@@ -44,6 +44,7 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
 import lombok.Data;
@@ -160,6 +161,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                                                    // it doesn't necessitate a model configuration.
                 throw new IllegalArgumentException("model config is null");
             }
+        }
+        StringUtils.validateCustomId(modelId, "model id");
+        // hidden models always use the model name as their document id, so a custom model id would be silently ignored
+        if (modelId != null && Boolean.TRUE.equals(isHidden)) {
+            throw new IllegalArgumentException("custom model id is not supported for hidden models");
         }
         this.modelId = modelId;
         this.modelName = modelName;
@@ -348,9 +354,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(FUNCTION_NAME_FIELD, functionName);
-        if (modelId != null) {
-            builder.field(MODEL_ID_FIELD, modelId);
-        }
         builder.field(NAME_FIELD, modelName);
         if (version != null) {
             builder.field(VERSION_FIELD, version);

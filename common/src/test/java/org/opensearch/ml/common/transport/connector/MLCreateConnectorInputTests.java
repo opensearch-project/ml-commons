@@ -652,7 +652,8 @@ public class MLCreateConnectorInputTests {
     }
 
     @Test
-    public void toXContent_WithConnectorId() throws Exception {
+    public void toXContent_WithConnectorId_OmitsField() throws Exception {
+        // connectorId is only used as the OpenSearch document id, so it is intentionally excluded from the serialized body
         MLCreateConnectorInput input = MLCreateConnectorInput
             .builder()
             .connectorId("my-openai-connector")
@@ -663,7 +664,7 @@ public class MLCreateConnectorInputTests {
             .build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        assertTrue(builder.toString().contains("\"id\":\"my-openai-connector\""));
+        assertFalse(builder.toString().contains("\"id\":\"my-openai-connector\""));
     }
 
     @Test
@@ -763,6 +764,50 @@ public class MLCreateConnectorInputTests {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLCreateConnectorInput parsedInput = new MLCreateConnectorInput(streamInput);
         verify.accept(parsedInput);
+    }
+
+    @Test
+    public void constructor_WithBlankConnectorId_Throws() {
+        Throwable e = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .connectorId("  ")
+                .name(TEST_CONNECTOR_NAME)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(TEST_CONNECTOR_PROTOCOL)
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .build();
+        });
+        assertEquals("connector id cannot be blank", e.getMessage());
+    }
+
+    @Test
+    public void constructor_WithTooLongConnectorId_Throws() {
+        Throwable e = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .connectorId("a".repeat(513))
+                .name(TEST_CONNECTOR_NAME)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(TEST_CONNECTOR_PROTOCOL)
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .build();
+        });
+        assertTrue(e.getMessage().contains("too long"));
+    }
+
+    @Test
+    public void constructor_WithUnsafeConnectorId_Throws() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .connectorId("bad<id>")
+                .name(TEST_CONNECTOR_NAME)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(TEST_CONNECTOR_PROTOCOL)
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .build();
+        });
     }
 
 }

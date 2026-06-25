@@ -778,12 +778,13 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
-    public void toXContent_WithModelId() throws Exception {
+    public void toXContent_WithModelId_OmitsField() throws Exception {
+        // modelId is only used as the OpenSearch document id, so it is intentionally excluded from the serialized body
         MLRegisterModelInput withModelId = input.toBuilder().modelId("my-model").build();
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         withModelId.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertTrue(jsonStr.contains("\"id\":\"my-model\""));
+        assertFalse(jsonStr.contains("\"id\":\"my-model\""));
     }
 
     @Test
@@ -837,5 +838,32 @@ public class MLRegisterModelInputTest {
         streamInput.setVersion(VERSION_3_7_0);
         MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
         assertNull(deserialized.getModelId());
+    }
+
+    @Test
+    public void builder_WithBlankModelId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model id cannot be blank");
+        input.toBuilder().modelId("  ").build();
+    }
+
+    @Test
+    public void builder_WithTooLongModelId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("too long");
+        input.toBuilder().modelId("a".repeat(513)).build();
+    }
+
+    @Test
+    public void builder_WithUnsafeModelId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        input.toBuilder().modelId("bad<id>").build();
+    }
+
+    @Test
+    public void builder_WithModelIdAndHidden_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("custom model id is not supported for hidden models");
+        input.toBuilder().modelId("my-model").isHidden(true).build();
     }
 }

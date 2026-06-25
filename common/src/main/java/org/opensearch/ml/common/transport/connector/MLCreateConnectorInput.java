@@ -35,6 +35,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
 import lombok.Data;
@@ -132,6 +133,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
             ConnectorProtocols.validateProtocol(protocol);
         }
+        StringUtils.validateCustomId(connectorId, "connector id");
         this.connectorId = connectorId;
         this.name = name;
         this.description = description;
@@ -270,9 +272,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        if (connectorId != null) {
-            builder.field(CONNECTOR_ID_FIELD, connectorId);
-        }
         if (name != null) {
             builder.field(CONNECTOR_NAME_FIELD, name);
         }
