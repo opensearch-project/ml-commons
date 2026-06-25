@@ -676,9 +676,7 @@ public class MLModelManager {
                     .build();
 
                 // hidden models use the model name; otherwise use the user-specified id (null = auto-generate)
-                String docId = Boolean.TRUE.equals(registerModelInput.getIsHidden())
-                    ? modelName
-                    : registerModelInput.getModelId();
+                String docId = Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : registerModelInput.getModelId();
                 PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
                     .builder()
                     .index(ML_MODEL_INDEX)
