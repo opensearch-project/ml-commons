@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -20,6 +21,7 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration.EmbeddingConfig;
 
@@ -1097,5 +1099,317 @@ public class MemoryConfigurationTests {
     public void testBuildIndexPrefix_AcceptsHyphenAndUnderscore() {
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("valid_prefix-with-chars").build();
         assertEquals("valid_prefix-with-chars", config.getIndexPrefix());
+    }
+
+    // ==================== Retention Policy Tests ====================
+
+    @Test
+    public void testParse_WithRetentionPolicy() throws Exception {
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"sessions\":{\"retention_days\":30,\"max_count\":100},"
+            + "\"long-term\":{\"retention_days\":90,\"max_count\":500}}}";
+
+        XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration config = MemoryConfiguration.parse(parser);
+
+        assertNotNull(config.getRetentionPolicy());
+        assertEquals(2, config.getRetentionPolicy().size());
+
+        RetentionRule sessionsRule = config.getRetentionPolicy().get(MemoryType.SESSIONS);
+        assertNotNull(sessionsRule);
+        assertEquals(Integer.valueOf(30), sessionsRule.getRetentionDays());
+        assertEquals(Integer.valueOf(100), sessionsRule.getMaxCount());
+
+        RetentionRule longTermRule = config.getRetentionPolicy().get(MemoryType.LONG_TERM);
+        assertNotNull(longTermRule);
+        assertEquals(Integer.valueOf(90), longTermRule.getRetentionDays());
+        assertEquals(Integer.valueOf(500), longTermRule.getMaxCount());
+    }
+
+    @Test
+    public void testParse_RetentionPolicy_WorkingKeyRejected() {
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"working\":{\"max_count\":10}}}";
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
+            XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+                .xContent()
+                .createParser(
+                    org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                    org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                    json
+                );
+            parser.nextToken();
+            MemoryConfiguration.parse(parser);
+        });
+        assertTrue(e.getMessage().contains("Working memory retention cannot be configured directly"));
+        assertTrue(e.getMessage().contains("sessions"));
+    }
+
+    @Test
+    public void testParse_RetentionPolicy_HistoryWithRetentionDaysRejected() {
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"history\":{\"retention_days\":30}}}";
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
+            XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+                .xContent()
+                .createParser(
+                    org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                    org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                    json
+                );
+            parser.nextToken();
+            MemoryConfiguration.parse(parser);
+        });
+        assertTrue(e.getMessage().contains("retention_days is not supported for history memory type"));
+    }
+
+    @Test
+    public void testParse_RetentionPolicy_UnknownKeyRejected() {
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"unknown_type\":{\"max_count\":10}}}";
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
+            XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+                .xContent()
+                .createParser(
+                    org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                    org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                    json
+                );
+            parser.nextToken();
+            MemoryConfiguration.parse(parser);
+        });
+        assertTrue(e.getMessage().contains("unknown memory type: unknown_type"));
+    }
+
+    @Test
+    public void testRetentionPolicy_XContentRoundTrip() throws Exception {
+        Map<MemoryType, RetentionRule> policy = new java.util.EnumMap<>(MemoryType.class);
+        policy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        policy.put(MemoryType.LONG_TERM, new RetentionRule(90, null));
+        policy.put(MemoryType.HISTORY, new RetentionRule(null, 1000));
+
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(policy).build();
+
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.core.xcontent.MediaTypeRegistry
+            .contentBuilder(org.opensearch.common.xcontent.XContentType.JSON);
+        config.toXContent(builder, org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS);
+        String json = org.opensearch.ml.common.TestHelper.xContentBuilderToString(builder);
+
+        XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration parsed = MemoryConfiguration.parse(parser);
+
+        assertNotNull(parsed.getRetentionPolicy());
+        assertEquals(3, parsed.getRetentionPolicy().size());
+        assertEquals(config.getRetentionPolicy().get(MemoryType.SESSIONS), parsed.getRetentionPolicy().get(MemoryType.SESSIONS));
+        assertEquals(config.getRetentionPolicy().get(MemoryType.LONG_TERM), parsed.getRetentionPolicy().get(MemoryType.LONG_TERM));
+        assertEquals(config.getRetentionPolicy().get(MemoryType.HISTORY), parsed.getRetentionPolicy().get(MemoryType.HISTORY));
+    }
+
+    @Test
+    public void testRetentionPolicy_StreamRoundTrip() throws Exception {
+        Map<MemoryType, RetentionRule> policy = new java.util.EnumMap<>(MemoryType.class);
+        policy.put(MemoryType.SESSIONS, new RetentionRule(7, 50));
+        policy.put(MemoryType.LONG_TERM, new RetentionRule(365, 10000));
+
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(policy).build();
+
+        org.opensearch.common.io.stream.BytesStreamOutput output = new org.opensearch.common.io.stream.BytesStreamOutput();
+        config.writeTo(output);
+
+        org.opensearch.core.common.io.stream.StreamInput input = output.bytes().streamInput();
+        MemoryConfiguration deserialized = new MemoryConfiguration(input);
+
+        assertNotNull(deserialized.getRetentionPolicy());
+        assertEquals(2, deserialized.getRetentionPolicy().size());
+        assertEquals(config.getRetentionPolicy().get(MemoryType.SESSIONS), deserialized.getRetentionPolicy().get(MemoryType.SESSIONS));
+        assertEquals(config.getRetentionPolicy().get(MemoryType.LONG_TERM), deserialized.getRetentionPolicy().get(MemoryType.LONG_TERM));
+    }
+
+    @Test
+    public void testRetentionPolicy_StreamRoundTrip_NullPolicy() throws Exception {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
+
+        org.opensearch.common.io.stream.BytesStreamOutput output = new org.opensearch.common.io.stream.BytesStreamOutput();
+        config.writeTo(output);
+
+        org.opensearch.core.common.io.stream.StreamInput input = output.bytes().streamInput();
+        MemoryConfiguration deserialized = new MemoryConfiguration(input);
+
+        assertNull(deserialized.getRetentionPolicy());
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_TypeLevelReplacement() {
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        existingPolicy.put(MemoryType.LONG_TERM, new RetentionRule(90, 500));
+
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        // Update sessions with only max_count — full replacement at type level
+        Map<MemoryType, RetentionRule> updatePolicy = new java.util.EnumMap<>(MemoryType.class);
+        updatePolicy.put(MemoryType.SESSIONS, new RetentionRule(null, 200));
+
+        MemoryConfiguration updateContent = MemoryConfiguration.builder().retentionPolicy(updatePolicy).build();
+        config.update(updateContent);
+
+        // Sessions: fully replaced — retentionDays is now null (not preserved)
+        RetentionRule sessionsRule = config.getRetentionPolicy().get(MemoryType.SESSIONS);
+        assertNull(sessionsRule.getRetentionDays());
+        assertEquals(Integer.valueOf(200), sessionsRule.getMaxCount());
+
+        // Long-term: untouched (type not in update)
+        RetentionRule longTermRule = config.getRetentionPolicy().get(MemoryType.LONG_TERM);
+        assertEquals(Integer.valueOf(90), longTermRule.getRetentionDays());
+        assertEquals(Integer.valueOf(500), longTermRule.getMaxCount());
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_AddNewType() {
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        Map<MemoryType, RetentionRule> updatePolicy = new java.util.EnumMap<>(MemoryType.class);
+        updatePolicy.put(MemoryType.HISTORY, new RetentionRule(null, 1000));
+
+        MemoryConfiguration updateContent = MemoryConfiguration.builder().retentionPolicy(updatePolicy).build();
+        config.update(updateContent);
+
+        assertEquals(2, config.getRetentionPolicy().size());
+        assertNotNull(config.getRetentionPolicy().get(MemoryType.SESSIONS));
+        assertEquals(Integer.valueOf(1000), config.getRetentionPolicy().get(MemoryType.HISTORY).getMaxCount());
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_NullIncomingDoesNotRemove() {
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        // Update without retention_policy field — should not touch existing
+        MemoryConfiguration updateContent = MemoryConfiguration.builder().llmId("new-llm").build();
+        config.update(updateContent);
+
+        assertNotNull(config.getRetentionPolicy());
+        assertEquals(1, config.getRetentionPolicy().size());
+    }
+
+    @Test
+    public void testParse_RetentionPolicy_HistoryWithMaxCountOnly() throws Exception {
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"history\":{\"max_count\":500}}}";
+
+        XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration config = MemoryConfiguration.parse(parser);
+
+        assertNotNull(config.getRetentionPolicy());
+        RetentionRule historyRule = config.getRetentionPolicy().get(MemoryType.HISTORY);
+        assertNotNull(historyRule);
+        assertNull(historyRule.getRetentionDays());
+        assertEquals(Integer.valueOf(500), historyRule.getMaxCount());
+    }
+
+    @Test
+    public void testRetentionPolicy_ConstructorValidation_RejectsWorkingKey() {
+        Map<MemoryType, RetentionRule> policy = new java.util.EnumMap<>(MemoryType.class);
+        policy.put(MemoryType.WORKING, new RetentionRule(null, 10));
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(policy).build()
+        );
+        assertTrue(e.getMessage().contains("Working memory retention cannot be configured directly"));
+    }
+
+    @Test
+    public void testRetentionPolicy_ConstructorValidation_RejectsHistoryRetentionDays() {
+        Map<MemoryType, RetentionRule> policy = new java.util.EnumMap<>(MemoryType.class);
+        policy.put(MemoryType.HISTORY, new RetentionRule(30, null));
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(policy).build()
+        );
+        assertTrue(e.getMessage().contains("retention_days is not supported for history memory type"));
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_ExplicitNullWipesPolicy() throws Exception {
+        // Setup: config with existing policy
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        // Simulate parsing an update with "retention_policy": null
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":null}";
+        org.opensearch.core.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration updateContent = MemoryConfiguration.parse(parser);
+
+        // Verify the flag is set
+        assertTrue(updateContent.isRetentionPolicyExplicitlyNull());
+
+        // Apply update
+        config.update(updateContent);
+
+        // Policy should be wiped
+        assertNull(config.getRetentionPolicy());
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_AbsentDoesNotWipe() throws Exception {
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        // Parse an update WITHOUT retention_policy field
+        String json = "{\"index_prefix\":\"test\"}";
+        org.opensearch.core.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration updateContent = MemoryConfiguration.parse(parser);
+
+        // Flag should NOT be set
+        assertFalse(updateContent.isRetentionPolicyExplicitlyNull());
+
+        // Apply update
+        config.update(updateContent);
+
+        // Policy should still be there
+        assertNotNull(config.getRetentionPolicy());
+        assertEquals(1, config.getRetentionPolicy().size());
     }
 }
