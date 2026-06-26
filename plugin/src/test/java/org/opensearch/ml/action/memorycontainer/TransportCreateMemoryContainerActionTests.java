@@ -2062,6 +2062,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals(Integer.valueOf(500), configWithRetention.getRetentionPolicy().get(MemoryType.LONG_TERM).getMaxCount());
     }
 
+    // Helper method to mock successful LLM validation (without embedding validation which will be tested)
     private void mockSuccessfulLLMValidation() {
         // Mock valid LLM model
         MLModel llmModel = mock(MLModel.class);

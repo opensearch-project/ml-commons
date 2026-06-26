@@ -599,7 +599,7 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_interval_hours",
-            24,
+            2, // DEMO: default 2 minutes (was 24 hours)
             1,
             168,
             Setting.Property.NodeScope,

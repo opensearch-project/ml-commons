@@ -102,13 +102,13 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.after = in.readMap();
         }
-        this.createdTime = in.readOptionalInstant();
         if (in.readBoolean()) {
             namespace = in.readMap(StreamInput::readString, StreamInput::readString);
         }
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
         }
+        this.createdTime = in.readOptionalInstant();
         this.tenantId = in.readOptionalString();
         this.error = in.readOptionalString();
         if (in.getVersion().onOrAfter(VERSION_3_8_0)) {
@@ -139,7 +139,6 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalInstant(createdTime);
         if (namespace != null && !namespace.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(namespace, StreamOutput::writeString, StreamOutput::writeString);
@@ -152,6 +151,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalInstant(createdTime);
         out.writeOptionalString(tenantId);
         out.writeOptionalString(error);
         if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
