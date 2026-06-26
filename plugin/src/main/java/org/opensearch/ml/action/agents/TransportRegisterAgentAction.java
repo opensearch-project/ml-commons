@@ -210,6 +210,9 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         // Create CONVERSATION agent with same configuration but different type and name
         MLAgent conversationAgent = planExecuteReflectAgent
             .toBuilder()
+            // the child executor agent must get its own auto-generated id; otherwise it would collide with the
+            // user-supplied id that the parent PER agent is about to be persisted with
+            .agentId(null)
             .name(planExecuteReflectAgent.getName() + " (ReAct)")
             .type(MLAgentType.CONVERSATIONAL.name())
             .description("Execution Agent for Plan Execute Reflect - " + planExecuteReflectAgent.getName())
@@ -231,7 +234,15 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     sdkClient
                         .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()
+                            PutDataObjectRequest
+                                .builder()
+                                .index(ML_AGENT_INDEX)
+                                .id(mlAgent.getAgentId())
+                                // a custom id fails on conflict instead of overwriting (null = auto-generate)
+                                .overwriteIfExists(mlAgent.getAgentId() == null)
+                                .tenantId(tenantId)
+                                .dataObject(mlAgent)
+                                .build()
                         )
                         .whenComplete((r, throwable) -> {
                             context.restore();

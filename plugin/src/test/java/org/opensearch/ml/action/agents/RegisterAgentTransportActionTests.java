@@ -22,6 +22,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectA
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -608,5 +609,137 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Model registration failed", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_PlanExecuteAndReflect_withCustomAgentId_childDoesNotInheritId() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("tools", "[]");
+        parameters.put("memory", "{}");
+
+        LLMSpec llmSpec = new LLMSpec("test-model-id", new HashMap<>());
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .agentId("my-per-agent")
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Test agent for plan-execute-and-reflect")
+            .parameters(parameters)
+            .llm(llmSpec)
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            IndexRequest captured = invocation.getArgument(0);
+            // echo back whatever id the request carried (null id -> auto-generated id in real OpenSearch)
+            String returnedId = captured.id() != null ? captured.id() : "auto-generated-child-id";
+            al.onResponse(new IndexResponse(new ShardId("test", "test", 1), returnedId, 1l, 1l, 1l, true));
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        // first index call is the child executor agent, second is the parent PER agent
+        verify(client, times(2)).index(indexRequestCaptor.capture(), any());
+        List<IndexRequest> indexRequests = indexRequestCaptor.getAllValues();
+        assertNull("child executor agent must not inherit the parent's custom id", indexRequests.get(0).id());
+        assertEquals("my-per-agent", indexRequests.get(1).id());
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals("my-per-agent", argumentCaptor.getValue().getAgentId());
+    }
+
+    @Test
+    public void test_execute_registerAgent_withCustomAgentId_usesItAsDocId() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .agentId("my-custom-agent")
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            IndexResponse indexResponse = new IndexResponse(new ShardId("test", "test", 1), "my-custom-agent", 1l, 1l, 1l, true);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        verify(client).index(indexRequestCaptor.capture(), any());
+        assertEquals("my-custom-agent", indexRequestCaptor.getValue().id());
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals("my-custom-agent", argumentCaptor.getValue().getAgentId());
+    }
+
+    @Test
+    public void test_execute_registerAgent_PlanExecuteAndReflect_withCustomAgentId_andExistingExecutor_noChildCreated() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("tools", "[]");
+        parameters.put("memory", "{}");
+        // user supplies an existing executor agent id, so no child agent should be created
+        parameters.put(EXECUTOR_AGENT_ID_FIELD, "existing-executor-id");
+
+        LLMSpec llmSpec = new LLMSpec("test-model-id", new HashMap<>());
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .agentId("my-per-agent")
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Test agent for plan-execute-and-reflect")
+            .parameters(parameters)
+            .llm(llmSpec)
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(new IndexResponse(new ShardId("test", "test", 1), "my-per-agent", 1l, 1l, 1l, true));
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        // only the parent PER agent is indexed; no child executor agent is created
+        verify(client, times(1)).index(indexRequestCaptor.capture(), any());
+        assertEquals("my-per-agent", indexRequestCaptor.getValue().id());
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals("my-per-agent", argumentCaptor.getValue().getAgentId());
     }
 }
