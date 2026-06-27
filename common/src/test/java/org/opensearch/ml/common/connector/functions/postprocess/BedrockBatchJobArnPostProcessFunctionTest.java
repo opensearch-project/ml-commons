@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector.functions.postprocess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.connector.functions.postprocess.BedrockBatchJobArnPostProcessFunction.JOB_ARN;
 import static org.opensearch.ml.common.connector.functions.postprocess.BedrockBatchJobArnPostProcessFunction.PROCESSED_JOB_ARN;
 
@@ -13,16 +14,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class BedrockBatchJobArnPostProcessFunctionTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     BedrockBatchJobArnPostProcessFunction function;
 
     @Before
@@ -32,16 +27,17 @@ public class BedrockBatchJobArnPostProcessFunctionTest {
 
     @Test
     public void process_WrongInput_NotMap() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Post process function input is not a Map.");
-        function.apply("abc", null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply("abc", null));
+        assertEquals("Post process function input is not a Map.", exception.getMessage());
     }
 
     @Test
     public void process_WrongInput_NotContainJobArn() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("job arn is missing.");
-        function.apply(Map.of("test", "value"), null);
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> function.apply(Map.of("test", "value"), null)
+        );
+        assertEquals("job arn is missing.", exception.getMessage());
     }
 
     @Test

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.memory.MockitoTestHelper.mockActionListener;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -65,8 +66,7 @@ public class GetTracesTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        @SuppressWarnings("unchecked")
-        ActionListener<GetTracesResponse> al = (ActionListener<GetTracesResponse>) Mockito.mock(ActionListener.class);
+        ActionListener<GetTracesResponse> al = mockActionListener();
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 

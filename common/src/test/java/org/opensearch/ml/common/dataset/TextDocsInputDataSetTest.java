@@ -10,17 +10,11 @@ import static org.junit.Assert.assertEquals;
 import java.io.IOException;
 import java.util.Arrays;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 
 public class TextDocsInputDataSetTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void writeTo_Success() throws IOException {
         TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2")).build();

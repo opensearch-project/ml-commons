@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.MockitoTestHelper.mockActionListener;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,28 +54,28 @@ public class MLTaskUtilsTests {
 
     @Test
     public void testUpdateMLTaskDirectly_NullFields() {
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly("task_id", null, null, client, sdkClient, listener);
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }
 
     @Test
     public void testUpdateMLTaskDirectly_EmptyFields() {
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly("task_id", null, new HashMap<>(), client, sdkClient, listener);
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }
 
     @Test
     public void testUpdateMLTaskDirectly_NullTaskId() {
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly(null, null, new HashMap<>(), client, sdkClient, listener);
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }
 
     @Test
     public void testUpdateMLTaskDirectly_EmptyTaskId() {
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly("", null, new HashMap<>(), client, sdkClient, listener);
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }
@@ -92,7 +93,7 @@ public class MLTaskUtilsTests {
         CompletableFuture<UpdateDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
         when(sdkClient.updateDataObjectAsync(any(UpdateDataObjectRequest.class))).thenReturn(future);
 
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly("task_id", "tenant1", updatedFields, client, sdkClient, listener);
         verify(listener).onResponse(any(UpdateResponse.class));
     }
@@ -102,7 +103,7 @@ public class MLTaskUtilsTests {
         Map<String, Object> updatedFields = new HashMap<>();
         updatedFields.put("state", "INVALID_STATE");
 
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly("task_id", null, updatedFields, client, sdkClient, listener);
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }
@@ -120,7 +121,7 @@ public class MLTaskUtilsTests {
         CompletableFuture<UpdateDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
         when(sdkClient.updateDataObjectAsync(any(UpdateDataObjectRequest.class))).thenReturn(future);
 
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly("task_id", "tenant1", updatedFields, client, sdkClient, listener);
         verify(listener).onResponse(any(UpdateResponse.class));
     }
@@ -134,7 +135,7 @@ public class MLTaskUtilsTests {
         future.completeExceptionally(new RuntimeException("Test exception"));
         when(sdkClient.updateDataObjectAsync(any(UpdateDataObjectRequest.class))).thenReturn(future);
 
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> listener = mockActionListener();
         MLTaskUtils.updateMLTaskDirectly("task_id", "tenant1", updatedFields, client, sdkClient, listener);
         verify(listener).onFailure(any(Exception.class));
     }

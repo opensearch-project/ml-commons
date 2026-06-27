@@ -43,6 +43,7 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.config.Property;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -863,7 +864,7 @@ public class ConnectorActionTest {
         private final List<LogEvent> logEvents = new ArrayList<>();
 
         public TestLogAppender(String name) {
-            super(name, null, PatternLayout.createDefaultLayout(), false);
+            super(name, null, PatternLayout.createDefaultLayout(), false, Property.EMPTY_ARRAY);
             start();
         }
 

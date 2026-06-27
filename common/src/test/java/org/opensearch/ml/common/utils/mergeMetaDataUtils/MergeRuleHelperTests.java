@@ -8,6 +8,7 @@ import java.util.Map;
 import org.junit.Test;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 public class MergeRuleHelperTests {
 
@@ -26,7 +27,8 @@ public class MergeRuleHelperTests {
             }
 
             """;
-        Map<String, Object> tmpMap = gson.fromJson(mapBlock, Map.class);
+        Map<String, Object> tmpMap = gson.fromJson(mapBlock, new TypeToken<Map<String, Object>>() {
+        }.getType());
         return tmpMap;
     }
 
@@ -43,7 +45,8 @@ public class MergeRuleHelperTests {
             }
 
             """;
-        Map<String, Object> tmpMap = gson.fromJson(mapBlock, Map.class);
+        Map<String, Object> tmpMap = gson.fromJson(mapBlock, new TypeToken<Map<String, Object>>() {
+        }.getType());
         return tmpMap;
     }
 
@@ -64,7 +67,8 @@ public class MergeRuleHelperTests {
             }
 
             """;
-        Map<String, Object> tmpMap = gson.fromJson(mapBlock, Map.class);
+        Map<String, Object> tmpMap = gson.fromJson(mapBlock, new TypeToken<Map<String, Object>>() {
+        }.getType());
         return tmpMap;
     }
 
@@ -84,7 +88,8 @@ public class MergeRuleHelperTests {
             }
 
             """;
-        Map<String, Object> tmpMap = gson.fromJson(mapBlock, Map.class);
+        Map<String, Object> tmpMap = gson.fromJson(mapBlock, new TypeToken<Map<String, Object>>() {
+        }.getType());
         return tmpMap;
     }
 
@@ -202,7 +207,8 @@ public class MergeRuleHelperTests {
             }
 
             """;
-        Map<String, Object> tmpMap = gson.fromJson(mapBlock, Map.class);
+        Map<String, Object> tmpMap = gson.fromJson(mapBlock, new TypeToken<Map<String, Object>>() {
+        }.getType());
         return tmpMap;
     }
 
@@ -226,7 +232,8 @@ public class MergeRuleHelperTests {
             }
 
             """;
-        Map<String, Object> tmpMap = gson.fromJson(mapBlock, Map.class);
+        Map<String, Object> tmpMap = gson.fromJson(mapBlock, new TypeToken<Map<String, Object>>() {
+        }.getType());
         return tmpMap;
     }
 }

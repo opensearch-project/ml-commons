@@ -15,9 +15,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
@@ -34,9 +32,6 @@ public class MLValidatableAsyncHttpClientTests {
         Collections.emptyList(),
         Collections.emptyList()
     );
-
-    @Rule
-    public ExpectedException expectedException = ExpectedException.none();
 
     @Test
     public void test_invalidIP_localHost_privateIPDisabled() {
@@ -163,23 +158,29 @@ public class MLValidatableAsyncHttpClientTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_notAllowedSchema_throwException() throws Exception {
-        expectedException.expect(IllegalArgumentException.class);
-        validatingHttpClient.validate("ftp://api.openai.com", "ftp", TEST_HOST, 80, PRIVATE_IP_DISABLED);
+    public void test_validateSchemaAndPort_notAllowedSchema_throwException() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> validatingHttpClient.validate("ftp://api.openai.com", "ftp", TEST_HOST, 80, PRIVATE_IP_DISABLED)
+        );
     }
 
     @Test
-    public void test_validateSchemaAndPort_portNotInRange1_throwException() throws Exception {
-        expectedException.expect(IllegalArgumentException.class);
-        expectedException.expectMessage("Port out of range: 65537");
-        validatingHttpClient.validate("https://api.openai.com", HTTPS, TEST_HOST, 65537, PRIVATE_IP_DISABLED);
+    public void test_validateSchemaAndPort_portNotInRange1_throwException() {
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> validatingHttpClient.validate("https://api.openai.com", HTTPS, TEST_HOST, 65537, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Port out of range: 65537", exception.getMessage());
     }
 
     @Test
-    public void test_validateSchemaAndPort_portNotInRange2_throwException() throws Exception {
-        expectedException.expect(IllegalArgumentException.class);
-        expectedException.expectMessage("Port out of range: -10");
-        validatingHttpClient.validate("http://api.openai.com", HTTP, TEST_HOST, -10, PRIVATE_IP_DISABLED);
+    public void test_validateSchemaAndPort_portNotInRange2_throwException() {
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> validatingHttpClient.validate("http://api.openai.com", HTTP, TEST_HOST, -10, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Port out of range: -10", exception.getMessage());
     }
 
     @Test

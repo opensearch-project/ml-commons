@@ -16,9 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -31,8 +29,6 @@ import org.opensearch.ml.common.contextmanager.ContextManagerConfig;
 public class MLRegisterAgentRequestTest {
 
     MLAgent mlAgent;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -101,21 +97,22 @@ public class MLRegisterAgentRequestTest {
 
     @Test
     public void fromActionRequest_Exception() {
-        exceptionRule.expect(UncheckedIOException.class);
-        exceptionRule.expectMessage("Failed to parse ActionRequest into MLRegisterAgentRequest");
-        MLRegisterAgentRequest registerAgentRequest = new MLRegisterAgentRequest(mlAgent);
-        ActionRequest actionRequest = new ActionRequest() {
-            @Override
-            public ActionRequestValidationException validate() {
-                return null;
-            }
+        UncheckedIOException exception = assertThrows(UncheckedIOException.class, () -> {
+            MLRegisterAgentRequest registerAgentRequest = new MLRegisterAgentRequest(mlAgent);
+            ActionRequest actionRequest = new ActionRequest() {
+                @Override
+                public ActionRequestValidationException validate() {
+                    return null;
+                }
 
-            @Override
-            public void writeTo(StreamOutput out) throws IOException {
-                throw new IOException();
-            }
-        };
-        MLRegisterAgentRequest.fromActionRequest(actionRequest);
+                @Override
+                public void writeTo(StreamOutput out) throws IOException {
+                    throw new IOException();
+                }
+            };
+            MLRegisterAgentRequest.fromActionRequest(actionRequest);
+        });
+        assertEquals("Failed to parse ActionRequest into MLRegisterAgentRequest", exception.getMessage());
     }
 
     @Test

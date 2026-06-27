@@ -6,21 +6,17 @@
 package org.opensearch.ml.common.connector.functions.postprocess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class BedrockRerankPostProcessFunctionTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     BedrockRerankPostProcessFunction function;
 
     @Before
@@ -30,58 +26,59 @@ public class BedrockRerankPostProcessFunctionTest {
 
     @Test
     public void process_WrongInput_NotList() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Post process function input is not a List.");
-        function.apply("abc", null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply("abc", null));
+        assertEquals("Post process function input is not a List.", exception.getMessage());
     }
 
     @Test
     public void process_EmptyInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Post process function input is empty.");
-        function.apply(Arrays.asList(), null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply(Arrays.asList(), null));
+        assertEquals("Post process function input is empty.", exception.getMessage());
     }
 
     @Test
     public void process_WrongInput_NotCorrectListOfMapsFormat() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Rerank result is not a Map.");
-        function.apply(Arrays.asList("abc"), null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply(Arrays.asList("abc"), null));
+        assertEquals("Rerank result is not a Map.", exception.getMessage());
     }
 
     @Test
     public void process_EmptyMapInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Rerank result is empty.");
-        function.apply(Arrays.asList(Map.of()), null);
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> function.apply(Arrays.asList(Map.of()), null)
+        );
+        assertEquals("Rerank result is empty.", exception.getMessage());
     }
 
     @Test
     public void process_WrongInput_NotCorrectMap() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Rerank result should have both index and relevanceScore.");
-        List<Map<String, Object>> rerankResults = List
-            .of(
-                Map.of("index", 2, "relevanceScore", 0.7711548805236816),
-                Map.of("index", 0, "relevanceScore", 0.0025114635936915874),
-                Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
-                Map.of("test1", "value1")
-            );
-        function.apply(rerankResults, null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            List<Map<String, Object>> rerankResults = List
+                .of(
+                    Map.of("index", 2, "relevanceScore", 0.7711548805236816),
+                    Map.of("index", 0, "relevanceScore", 0.0025114635936915874),
+                    Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
+                    Map.of("test1", "value1")
+                );
+            function.apply(rerankResults, null);
+        });
+        assertEquals("Rerank result should have both index and relevanceScore.", exception.getMessage());
     }
 
     @Test
     public void process_WrongInput_NotCorrectRelevanceScore() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("relevanceScore is not BigDecimal or Double.");
-        List<Map<String, Object>> rerankResults = List
-            .of(
-                Map.of("index", 2, "relevanceScore", 0.7711548805236816),
-                Map.of("index", 0, "relevanceScore", 0.0025114635936915874),
-                Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
-                Map.of("index", 3, "relevanceScore", "value1")
-            );
-        function.apply(rerankResults, null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            List<Map<String, Object>> rerankResults = List
+                .of(
+                    Map.of("index", 2, "relevanceScore", 0.7711548805236816),
+                    Map.of("index", 0, "relevanceScore", 0.0025114635936915874),
+                    Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
+                    Map.of("index", 3, "relevanceScore", "value1")
+                );
+            function.apply(rerankResults, null);
+        });
+        assertEquals("relevanceScore is not BigDecimal or Double.", exception.getMessage());
     }
 
     @Test

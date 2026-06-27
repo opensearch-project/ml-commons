@@ -189,9 +189,9 @@ public class StringUtilsTest {
             .fromJson("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "response");
         assertEquals(1, response.size());
         assertTrue(response.get("key") instanceof Map);
-        Map nestedMap = (Map) response.get("key");
+        Map<String, Object> nestedMap = castToMap(response.get("key"));
         assertEquals("nested_value", nestedMap.get("nested_key"));
-        List list = (List) nestedMap.get("nested_array");
+        List<Object> list = castToList(nestedMap.get("nested_array"));
         assertEquals(2, list.size());
         assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
@@ -202,7 +202,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJson("[1, \"a\"]", "response");
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
-        List list = (List) response.get("response");
+        List<Object> list = castToList(response.get("response"));
         assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
     }
@@ -212,7 +212,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJson("[1, \"a\", [2, 3], {\"key\": \"value\"}]", "response");
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
-        List list = (List) response.get("response");
+        List<Object> list = castToList(response.get("response"));
         assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
         assertTrue(list.get(2) instanceof List);
@@ -224,7 +224,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{\"key\": \"value\"}", "wrapper");
         assertEquals(1, response.size());
         assertTrue(response.get("wrapper") instanceof Map);
-        Map wrappedMap = (Map) response.get("wrapper");
+        Map<String, Object> wrappedMap = castToMap(response.get("wrapper"));
         assertEquals("value", wrappedMap.get("key"));
     }
 
@@ -234,11 +234,11 @@ public class StringUtilsTest {
             .fromJsonWithWrappingKey("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "wrapper");
         assertEquals(1, response.size());
         assertTrue(response.get("wrapper") instanceof Map);
-        Map wrappedMap = (Map) response.get("wrapper");
+        Map<String, Object> wrappedMap = castToMap(response.get("wrapper"));
         assertTrue(wrappedMap.get("key") instanceof Map);
-        Map nestedMap = (Map) wrappedMap.get("key");
+        Map<String, Object> nestedMap = castToMap(wrappedMap.get("key"));
         assertEquals("nested_value", nestedMap.get("nested_key"));
-        List list = (List) nestedMap.get("nested_array");
+        List<Object> list = castToList(nestedMap.get("nested_array"));
         assertEquals(2, list.size());
         assertEquals(1.0, list.get(0));
         assertEquals("a", list.get(1));
@@ -249,7 +249,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\"]", "wrapper");
         assertEquals(1, response.size());
         assertTrue(response.get("wrapper") instanceof List);
-        List list = (List) response.get("wrapper");
+        List<Object> list = castToList(response.get("wrapper"));
         assertEquals(1.0, list.get(0));
         assertEquals("a", list.get(1));
     }
@@ -259,7 +259,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\", [2, 3], {\"key\": \"value\"}]", "wrapper");
         assertEquals(1, response.size());
         assertTrue(response.get("wrapper") instanceof List);
-        List list = (List) response.get("wrapper");
+        List<Object> list = castToList(response.get("wrapper"));
         assertEquals(1.0, list.get(0));
         assertEquals("a", list.get(1));
         assertTrue(list.get(2) instanceof List);
@@ -271,7 +271,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{}", "wrapper");
         assertEquals(1, response.size());
         assertTrue(response.get("wrapper") instanceof Map);
-        Map wrappedMap = (Map) response.get("wrapper");
+        Map<String, Object> wrappedMap = castToMap(response.get("wrapper"));
         assertTrue(wrappedMap.isEmpty());
     }
 
@@ -280,7 +280,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[]", "wrapper");
         assertEquals(1, response.size());
         assertTrue(response.get("wrapper") instanceof List);
-        List list = (List) response.get("wrapper");
+        List<Object> list = castToList(response.get("wrapper"));
         assertTrue(list.isEmpty());
     }
 
@@ -837,9 +837,9 @@ public class StringUtilsTest {
         Object result = StringUtils.prepareNestedStructures(jsonObject, "a.b.c");
 
         assertTrue(jsonObject.get("a") instanceof Map);
-        Map<String, Object> aMap = (Map<String, Object>) jsonObject.get("a");
+        Map<String, Object> aMap = castToMap(jsonObject.get("a"));
         assertTrue(aMap.get("b") instanceof Map);
-        Map<String, Object> bMap = (Map<String, Object>) aMap.get("b");
+        Map<String, Object> bMap = castToMap(aMap.get("b"));
         assertTrue(bMap.containsKey("c"));
     }
 
@@ -853,10 +853,10 @@ public class StringUtilsTest {
         Object result = StringUtils.prepareNestedStructures(jsonObject, "a[1].b");
 
         assertTrue(jsonObject.get("a") instanceof List);
-        List<Object> aList = (List<Object>) jsonObject.get("a");
+        List<Object> aList = castToList(jsonObject.get("a"));
         assertEquals(2, aList.size());
         assertTrue(aList.get(1) instanceof Map);
-        Map<String, Object> aMap = (Map<String, Object>) aList.get(1);
+        Map<String, Object> aMap = castToMap(aList.get(1));
         assertTrue(aMap.containsKey("b"));
     }
 
@@ -871,7 +871,7 @@ public class StringUtilsTest {
 
         assertEquals(jsonObject, result);
         assertTrue(jsonObject.get("a") instanceof List);
-        List<Object> aList = (List<Object>) jsonObject.get("a");
+        List<Object> aList = castToList(jsonObject.get("a"));
         assertEquals("not a map", aList.get(0));
     }
 
@@ -892,13 +892,13 @@ public class StringUtilsTest {
         Object result = StringUtils.prepareNestedStructures(jsonObject, "a[0].b[1].c");
 
         assertTrue(jsonObject.get("a") instanceof List);
-        List<Object> aList = (List<Object>) jsonObject.get("a");
+        List<Object> aList = castToList(jsonObject.get("a"));
         assertTrue(aList.get(0) instanceof Map);
-        Map<String, Object> aMap = (Map<String, Object>) aList.get(0);
+        Map<String, Object> aMap = castToMap(aList.get(0));
         assertTrue(aMap.get("b") instanceof List);
-        List<Object> bList = (List<Object>) aMap.get("b");
+        List<Object> bList = castToList(aMap.get("b"));
         assertTrue(bList.get(1) instanceof Map);
-        Map<String, Object> bMap = (Map<String, Object>) bList.get(1);
+        Map<String, Object> bMap = castToMap(bList.get(1));
         assertTrue(bMap.containsKey("c"));
     }
 
@@ -1189,6 +1189,7 @@ public class StringUtilsTest {
     }
 
     // reflect method for PlainDoubleAdapter
+    @SuppressWarnings("unchecked") // PlainDoubleAdapter is package-private and must be loaded via reflection
     private static TypeAdapter<Double> createPlainDoubleAdapter() {
         try {
             Class<?> clazz = Class.forName("org.opensearch.ml.common.utils.StringUtils$PlainDoubleAdapter");
@@ -1415,5 +1416,15 @@ public class StringUtilsTest {
             () -> StringUtils.fromJson(jsonWithNestedDuplicates, "response")
         );
         assertTrue(exception.getMessage().contains("Invalid JSON format"));
+    }
+
+    @SuppressWarnings("unchecked") // JSON parsing returns nested Map structures as Object values
+    private static Map<String, Object> castToMap(Object value) {
+        return (Map<String, Object>) value;
+    }
+
+    @SuppressWarnings("unchecked") // JSON parsing returns nested List structures as Object values
+    private static List<Object> castToList(Object value) {
+        return (List<Object>) value;
     }
 }

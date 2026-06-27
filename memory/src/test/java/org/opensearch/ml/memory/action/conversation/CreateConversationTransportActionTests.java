@@ -24,6 +24,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+import static org.opensearch.ml.memory.MockitoTestHelper.anyActionListener;
+import static org.opensearch.ml.memory.MockitoTestHelper.mockActionListener;
 
 import java.io.IOException;
 import java.util.Set;
@@ -90,8 +92,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         this.xContentRegistry = Mockito.mock(NamedXContentRegistry.class);
         this.transportService = Mockito.mock(TransportService.class);
         this.actionFilters = Mockito.mock(ActionFilters.class);
-        @SuppressWarnings("unchecked")
-        ActionListener<CreateConversationResponse> al = (ActionListener<CreateConversationResponse>) Mockito.mock(ActionListener.class);
+        ActionListener<CreateConversationResponse> al = mockActionListener();
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
@@ -126,7 +127,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
             ActionListener<String> listener = invocation.getArgument(0);
             listener.onResponse("testID-2");
             return null;
-        }).when(cmHandler).createConversation(any(ActionListener.class));
+        }).when(cmHandler).createConversation(anyActionListener());
         String nullstr = null;
         this.request = new CreateConversationRequest(nullstr);
         action.doExecute(null, request, actionListener);

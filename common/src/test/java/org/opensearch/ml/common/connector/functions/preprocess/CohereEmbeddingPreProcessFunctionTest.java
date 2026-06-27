@@ -6,13 +6,12 @@
 package org.opensearch.ml.common.connector.functions.preprocess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.util.Arrays;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
@@ -20,9 +19,6 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
 public class CohereEmbeddingPreProcessFunctionTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     CohereEmbeddingPreProcessFunction function;
 
     TextSimilarityInputDataSet textSimilarityInputDataSet;
@@ -37,17 +33,20 @@ public class CohereEmbeddingPreProcessFunctionTest {
 
     @Test
     public void process_NullInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Preprocess function input can't be null");
-        function.apply(null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply(null));
+        assertEquals("Preprocess function input can't be null", exception.getMessage());
     }
 
     @Test
     public void process_WrongInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("This pre_process_function can only support TextDocsInputDataSet");
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(textSimilarityInputDataSet).build();
-        function.apply(mlInput);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(textSimilarityInputDataSet).build();
+            function.apply(mlInput);
+        });
+        assertEquals(
+            "This pre_process_function can only support TextDocsInputDataSet which including a list of string with key 'text_docs'",
+            exception.getMessage()
+        );
     }
 
     @Test

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.dataframe;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.TestHelper.testParse;
 import static org.opensearch.ml.common.TestHelper.testParseFromString;
@@ -17,9 +18,7 @@ import java.util.Iterator;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
@@ -30,9 +29,6 @@ public class RowTest {
     Row row;
 
     Function<XContentParser, Row> function;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setup() {
@@ -106,18 +102,20 @@ public class RowTest {
 
     @Test
     public void remove_WrongIndex() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("removed index can't be negative or bigger than row's values length:0");
-        row = new Row(0);
-        row.remove(0);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            row = new Row(0);
+            row.remove(0);
+        });
+        assertEquals("removed index can't be negative or bigger than row's values length:0", exception.getMessage());
     }
 
     @Test
     public void remove_WrongNegativeIndex() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("removed index can't be negative or bigger than row's values length:0");
-        row = new Row(0);
-        row.remove(-1);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            row = new Row(0);
+            row.remove(-1);
+        });
+        assertEquals("removed index can't be negative or bigger than row's values length:0", exception.getMessage());
     }
 
     @Test
@@ -214,32 +212,34 @@ public class RowTest {
 
     @Test
     public void testParse_WrongColumnTypeField() throws IOException {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("wrong column type, expect column_type field but got column_type_wrong");
-        ColumnValue[] values = new ColumnValue[] {
-            new IntValue(1),
-            new DoubleValue(2.0),
-            new NullValue(),
-            new StringValue("test"),
-            new BooleanValue(true) };
-        Row row = new Row(values);
-        String jsonStr = "{\"values\":[{\"column_type_wrong\":\"INTEGER\",\"value\":1}]}";
-        testParseFromString(row, jsonStr, function);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            ColumnValue[] values = new ColumnValue[] {
+                new IntValue(1),
+                new DoubleValue(2.0),
+                new NullValue(),
+                new StringValue("test"),
+                new BooleanValue(true) };
+            Row row = new Row(values);
+            String jsonStr = "{\"values\":[{\"column_type_wrong\":\"INTEGER\",\"value\":1}]}";
+            testParseFromString(row, jsonStr, function);
+        });
+        assertEquals("wrong column type, expect column_type field but got column_type_wrong", exception.getMessage());
     }
 
     @Test
     public void testParse_WrongValueField() throws IOException {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("wrong column value, expect value field but got value_wrong");
-        ColumnValue[] values = new ColumnValue[] {
-            new IntValue(1),
-            new DoubleValue(2.0),
-            new NullValue(),
-            new StringValue("test"),
-            new BooleanValue(true) };
-        Row row = new Row(values);
-        String jsonStr = "{\"values\":[{\"column_type\":\"INTEGER\",\"value_wrong\":1}]}";
-        testParseFromString(row, jsonStr, function);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            ColumnValue[] values = new ColumnValue[] {
+                new IntValue(1),
+                new DoubleValue(2.0),
+                new NullValue(),
+                new StringValue("test"),
+                new BooleanValue(true) };
+            Row row = new Row(values);
+            String jsonStr = "{\"values\":[{\"column_type\":\"INTEGER\",\"value_wrong\":1}]}";
+            testParseFromString(row, jsonStr, function);
+        });
+        assertEquals("wrong column value, expect value field but got value_wrong", exception.getMessage());
     }
 
     @Test

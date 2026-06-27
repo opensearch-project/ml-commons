@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector.functions.preprocess;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -15,9 +16,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
@@ -25,9 +24,6 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
 public class NovaMultiModalEmbeddingPreProcessFunctionTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     NovaMultiModalEmbeddingPreProcessFunction function;
 
     TextSimilarityInputDataSet textSimilarityInputDataSet;
@@ -48,16 +44,17 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
 
     @Test
     public void process_NullInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Preprocess function input can't be null");
-        function.apply(null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply(null));
+        assertEquals("Preprocess function input can't be null", exception.getMessage());
     }
 
     @Test
     public void process_WrongInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("This pre_process_function can only support TextDocsInputDataSet");
-        function.apply(textSimilarityInput);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply(textSimilarityInput));
+        assertEquals(
+            "This pre_process_function can only support TextDocsInputDataSet which including a list of string with key 'text_docs'",
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -102,9 +99,8 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         when(mockDataSet.getDocs()).thenReturn(Collections.emptyList());
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(mockDataSet).build();
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("No input provided");
-        function.apply(mlInput);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply(mlInput));
+        assertEquals("No input provided", exception.getMessage());
     }
 
     @Test

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+import static org.opensearch.ml.memory.MockitoTestHelper.mockActionListener;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -92,8 +93,7 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         this.xContentRegistry = Mockito.mock(NamedXContentRegistry.class);
         this.transportService = Mockito.mock(TransportService.class);
         this.actionFilters = Mockito.mock(ActionFilters.class);
-        @SuppressWarnings("unchecked")
-        ActionListener<GetConversationsResponse> al = (ActionListener<GetConversationsResponse>) Mockito.mock(ActionListener.class);
+        ActionListener<GetConversationsResponse> al = mockActionListener();
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
@@ -154,8 +154,7 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().hasMorePages());
         assert (argCaptor.getValue().getNextToken() == 2);
 
-        @SuppressWarnings("unchecked")
-        ActionListener<GetConversationsResponse> al1 = (ActionListener<GetConversationsResponse>) Mockito.mock(ActionListener.class);
+        ActionListener<GetConversationsResponse> al1 = mockActionListener();
         GetConversationsRequest r1 = new GetConversationsRequest(2, 2);
         action.doExecute(null, r1, al1);
         argCaptor = ArgumentCaptor.forClass(GetConversationsResponse.class);
@@ -164,8 +163,7 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().hasMorePages());
         assert (argCaptor.getValue().getNextToken() == 4);
 
-        @SuppressWarnings("unchecked")
-        ActionListener<GetConversationsResponse> al2 = (ActionListener<GetConversationsResponse>) Mockito.mock(ActionListener.class);
+        ActionListener<GetConversationsResponse> al2 = mockActionListener();
         GetConversationsRequest r2 = new GetConversationsRequest(20, 4);
         action.doExecute(null, r2, al2);
         argCaptor = ArgumentCaptor.forClass(GetConversationsResponse.class);

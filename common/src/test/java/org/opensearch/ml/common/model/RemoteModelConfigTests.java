@@ -7,6 +7,7 @@ package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -15,9 +16,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
@@ -30,8 +29,6 @@ public class RemoteModelConfigTests {
 
     RemoteModelConfig config;
     Function<XContentParser, RemoteModelConfig> function;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -77,35 +74,42 @@ public class RemoteModelConfigTests {
 
     @Test
     public void nullFields_ModelType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model type is null");
-        config = RemoteModelConfig.builder().build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = RemoteModelConfig.builder().build()
+        );
+        assertEquals("model type is null", exception.getMessage());
     }
 
     @Test
     public void textEmbedding_MissingEmbeddingDimension() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Embedding dimension must be provided for remote text embedding model");
-        RemoteModelConfig.builder().modelType("text_embedding").additionalConfig(Map.of("space_type", "l2")).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> RemoteModelConfig.builder().modelType("text_embedding").additionalConfig(Map.of("space_type", "l2")).build()
+        );
+        assertEquals("Embedding dimension must be provided for remote text embedding model", exception.getMessage());
     }
 
     @Test
     public void textEmbedding_MissingFrameworkType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Framework type must be provided for remote text embedding model");
-        RemoteModelConfig.builder().modelType("text_embedding").embeddingDimension(100).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> RemoteModelConfig.builder().modelType("text_embedding").embeddingDimension(100).build()
+        );
+        assertEquals("Framework type must be provided for remote text embedding model", exception.getMessage());
     }
 
     @Test
     public void textEmbedding_MissingSpaceType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Space type must be provided in additional_config for remote text embedding model");
-        RemoteModelConfig
-            .builder()
-            .modelType("text_embedding")
-            .embeddingDimension(100)
-            .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            RemoteModelConfig
+                .builder()
+                .modelType("text_embedding")
+                .embeddingDimension(100)
+                .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .build();
+        });
+        assertEquals("Space type must be provided in additional_config for remote text embedding model", exception.getMessage());
     }
 
     @Test
@@ -140,16 +144,20 @@ public class RemoteModelConfigTests {
 
     @Test
     public void frameworkType_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong framework type");
-        RemoteModelConfig.FrameworkType.from("test_wrong_value");
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> RemoteModelConfig.FrameworkType.from("test_wrong_value")
+        );
+        assertEquals("Wrong framework type", exception.getMessage());
     }
 
     @Test
     public void poolingMode_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong pooling method");
-        RemoteModelConfig.PoolingMode.from("test_wrong_value");
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> RemoteModelConfig.PoolingMode.from("test_wrong_value")
+        );
+        assertEquals("Wrong pooling method", exception.getMessage());
     }
 
     @Test

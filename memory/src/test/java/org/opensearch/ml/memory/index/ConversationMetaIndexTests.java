@@ -26,6 +26,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.memory.MockitoTestHelper.forListClass;
+import static org.opensearch.ml.memory.MockitoTestHelper.mockActionListener;
 
 import java.util.List;
 
@@ -151,8 +153,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testInit_DoesNotCreateIndex() {
         setupDoesNotMakeIndex();
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        ActionListener<Boolean> createIndexListener = mockActionListener();
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(createIndexListener, times(1)).onResponse(argCaptor.capture());
@@ -166,8 +167,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Test Error"));
             return null;
         }).when(indicesAdminClient).create(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        ActionListener<Boolean> createIndexListener = mockActionListener();
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
@@ -181,8 +181,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new SendRequestTransportException(null, "action", new Exception("some other exception")));
             return null;
         }).when(indicesAdminClient).create(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        ActionListener<Boolean> createIndexListener = mockActionListener();
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
@@ -193,8 +192,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     public void testInit_ClientFails_WithResourceExists_ThenOK() {
         doReturn(false).when(metadata).hasIndex(anyString());
         doThrow(new ResourceAlreadyExistsException("Test index exists")).when(indicesAdminClient).create(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        ActionListener<Boolean> createIndexListener = mockActionListener();
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(createIndexListener, times(1)).onResponse(argCaptor.capture());
@@ -206,8 +204,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         doThrow(new SendRequestTransportException(null, "action", new ResourceAlreadyExistsException("Test index exists")))
             .when(indicesAdminClient)
             .create(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        ActionListener<Boolean> createIndexListener = mockActionListener();
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(createIndexListener, times(1)).onResponse(argCaptor.capture());
@@ -219,8 +216,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         doThrow(new SendRequestTransportException(null, "action", new Exception("Some other exception")))
             .when(indicesAdminClient)
             .create(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        ActionListener<Boolean> createIndexListener = mockActionListener();
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
@@ -231,8 +227,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     public void testInit_ClientFails_ThenFail() {
         doReturn(false).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Test Client Failure")).when(indicesAdminClient).create(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        ActionListener<Boolean> createIndexListener = mockActionListener();
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
@@ -241,8 +236,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testCreate_DoesntMakeIndex_ThenFail() {
         setupDoesNotMakeIndex();
-        @SuppressWarnings("unchecked")
-        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        ActionListener<String> createConversationListener = mockActionListener();
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
@@ -258,8 +252,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onResponse(response);
             return null;
         }).when(client).index(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        ActionListener<String> createConversationListener = mockActionListener();
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
@@ -273,8 +266,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Test Failure"));
             return null;
         }).when(client).index(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        ActionListener<String> createConversationListener = mockActionListener();
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
@@ -284,8 +276,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     public void testCreate_ClientFails_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Test Failure")).when(client).index(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        ActionListener<String> createConversationListener = mockActionListener();
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
@@ -295,8 +286,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     public void testCreate_InitFails_ThenFail() {
         doReturn(false).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Test Init Client Failure")).when(indicesAdminClient).create(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        ActionListener<String> createConversationListener = mockActionListener();
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
@@ -305,11 +295,9 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testGet_NoIndex_ThenEmpty() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        @SuppressWarnings("unchecked")
-        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        ActionListener<List<ConversationMeta>> getConversationsListener = mockActionListener();
         conversationMetaIndex.getConversations(10, getConversationsListener);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<ConversationMeta>> argCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<ConversationMeta>> argCaptor = forListClass();
         verify(getConversationsListener, times(1)).onResponse(argCaptor.capture());
         assert (argCaptor.getValue().size() == 0);
     }
@@ -322,8 +310,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Test Exception"));
             return null;
         }).when(client).search(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        ActionListener<List<ConversationMeta>> getConversationsListener = mockActionListener();
         conversationMetaIndex.getConversations(10, getConversationsListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getConversationsListener, times(1)).onFailure(argCaptor.capture());
@@ -337,8 +324,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Refresh Exception"));
             return null;
         }).when(indicesAdminClient).refresh(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        ActionListener<List<ConversationMeta>> getConversationsListener = mockActionListener();
         conversationMetaIndex.getConversations(10, getConversationsListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getConversationsListener, times(1)).onFailure(argCaptor.capture());
@@ -348,8 +334,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     public void testGet_ClientFails_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Refresh Client Failure")).when(indicesAdminClient).refresh(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        ActionListener<List<ConversationMeta>> getConversationsListener = mockActionListener();
         conversationMetaIndex.getConversations(10, getConversationsListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getConversationsListener, times(1)).onFailure(argCaptor.capture());
@@ -358,8 +343,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testDelete_NoIndex_ThenReturnTrue() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteConversationListener = mockActionListener();
         conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
@@ -376,8 +360,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onResponse(response);
             return null;
         }).when(client).delete(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteConversationListener = mockActionListener();
         conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
@@ -393,8 +376,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onResponse(response);
             return null;
         }).when(client).delete(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteConversationListener = mockActionListener();
         conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
@@ -409,8 +391,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Test Fail in Delete"));
             return null;
         }).when(client).delete(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteConversationListener = mockActionListener();
         conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
@@ -421,8 +402,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         doReturn(true).when(metadata).hasIndex(anyString());
         blanketGrantAccess();
         doThrow(new RuntimeException("Client Fail in Delete")).when(client).delete(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteConversationListener = mockActionListener();
         conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
@@ -440,8 +420,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onResponse(response);
             return null;
         }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        ActionListener<Boolean> accessListener = mockActionListener();
         conversationMetaIndex.checkAccess("test id", accessListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
@@ -461,8 +440,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onResponse(response);
             return null;
         }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        ActionListener<Boolean> accessListener = mockActionListener();
         conversationMetaIndex.checkAccess("test id", accessListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
@@ -479,8 +457,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Test Fail"));
             return null;
         }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        ActionListener<Boolean> accessListener = mockActionListener();
         conversationMetaIndex.checkAccess("test id", accessListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
@@ -492,8 +469,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         setupRefreshSuccess();
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Client Test Fail")).when(client).admin();
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        ActionListener<Boolean> accessListener = mockActionListener();
         conversationMetaIndex.checkAccess("test id", accessListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
@@ -513,8 +489,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             listener.onResponse(dummyGetResponse);
             return null;
         }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        ActionListener<Boolean> accessListener = mockActionListener();
         conversationMetaIndex.checkAccess(id, accessListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(accessListener, times(1)).onResponse(argCaptor.capture());
@@ -529,8 +504,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Refresh Exception"));
             return null;
         }).when(indicesAdminClient).refresh(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        ActionListener<Boolean> accessListener = mockActionListener();
         conversationMetaIndex.checkAccess("test id", accessListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
@@ -544,8 +518,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Refresh Exception"));
             return null;
         }).when(indicesAdminClient).refresh(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<SearchResponse> searchConversationsListener = mock(ActionListener.class);
+        ActionListener<SearchResponse> searchConversationsListener = mockActionListener();
         conversationMetaIndex.searchConversations(request, searchConversationsListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(searchConversationsListener, times(1)).onFailure(argCaptor.capture());
@@ -556,8 +529,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         SearchRequest request = dummyRequest();
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Client Test Fail")).when(client).admin();
-        @SuppressWarnings("unchecked")
-        ActionListener<SearchResponse> accessListener = mock(ActionListener.class);
+        ActionListener<SearchResponse> accessListener = mockActionListener();
         conversationMetaIndex.searchConversations(request, accessListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
@@ -566,8 +538,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testGetConversation_NoIndex_ThenFail() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        @SuppressWarnings("unchecked")
-        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        ActionListener<ConversationMeta> getListener = mockActionListener();
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
@@ -587,8 +558,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onResponse(response);
             return null;
         }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        ActionListener<ConversationMeta> getListener = mockActionListener();
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
@@ -606,8 +576,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onResponse(response);
             return null;
         }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        ActionListener<ConversationMeta> getListener = mockActionListener();
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
@@ -621,8 +590,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             al.onFailure(new Exception("Refresh Exception"));
             return null;
         }).when(indicesAdminClient).refresh(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        ActionListener<ConversationMeta> getListener = mockActionListener();
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
@@ -632,8 +600,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     public void testGetConversation_ClientFails_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Client Failure")).when(client).admin();
-        @SuppressWarnings("unchecked")
-        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        ActionListener<ConversationMeta> getListener = mockActionListener();
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
@@ -642,8 +609,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testUpdateConversation_NoIndex_ThenFail() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        @SuppressWarnings("unchecked")
-        ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> getListener = mockActionListener();
         conversationMetaIndex.updateConversation("tester_id", new UpdateRequest(), getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
@@ -665,8 +631,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
         doReturn(true).when(metadata).hasIndex(anyString());
-        @SuppressWarnings("unchecked")
-        ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> getListener = mockActionListener();
 
         doAnswer(invocation -> {
             ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
@@ -692,8 +657,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
         doReturn(true).when(metadata).hasIndex(anyString());
-        @SuppressWarnings("unchecked")
-        ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> getListener = mockActionListener();
 
         doThrow(new RuntimeException("Client Failure")).when(client).update(any(), any());
         conversationMetaIndex.updateConversation("test_id", new UpdateRequest(), getListener);
@@ -710,7 +674,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             return null;
         }).when(conversationMetaIndex).checkAccess(anyString(), any());
 
-        ActionListener<UpdateResponse> updateListener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> updateListener = mockActionListener();
         conversationMetaIndex.updateConversation("conversationId", new UpdateRequest(), updateListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(updateListener, times(1)).onFailure(argCaptor.capture());

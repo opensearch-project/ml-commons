@@ -88,7 +88,7 @@ public class CustomEventTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked") // CustomEvent.getValue() returns Object; cast to Map for assertion
     public void testSerialization_roundTrip() throws IOException {
         Map<String, Object> value = new HashMap<>();
         value.put("inputTokens", 100);

@@ -12,9 +12,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
@@ -33,10 +31,6 @@ import org.opensearch.search.SearchModule;
 public class TextDocsMLInputTest {
 
     MLInput input;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     private final FunctionName algorithm = FunctionName.TEXT_EMBEDDING;
 
     @Before

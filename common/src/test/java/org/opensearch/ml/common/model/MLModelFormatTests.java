@@ -6,16 +6,11 @@
 package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class MLModelFormatTests {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void from() {
         MLModelFormat modelFormat = MLModelFormat.from("TORCH_SCRIPT");
@@ -24,8 +19,7 @@ public class MLModelFormatTests {
 
     @Test
     public void from_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong model format");
-        MLModelFormat.from("test_wrong_value");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MLModelFormat.from("test_wrong_value"));
+        assertEquals("Wrong model format", exception.getMessage());
     }
 }

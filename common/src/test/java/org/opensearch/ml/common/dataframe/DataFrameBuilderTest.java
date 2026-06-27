@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.dataframe;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -13,16 +14,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 
 public class DataFrameBuilderTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void emptyDataFrame_Success() {
         ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build() };
@@ -98,37 +93,40 @@ public class DataFrameBuilderTest {
 
     @Test
     public void load_Exception_DifferentColumnsInColumnMetasAndInputMapList() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("input item map size is different in the map");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        Map<String, Object> map = new HashMap<>();
-        map.put("k1", 2.3D);
-        ColumnMeta[] columnMetas = new ColumnMeta[] {
-            ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build(),
-            ColumnMeta.builder().name("k2").columnType(ColumnType.DOUBLE).build() };
-        DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
+            Map<String, Object> map = new HashMap<>();
+            map.put("k1", 2.3D);
+            ColumnMeta[] columnMetas = new ColumnMeta[] {
+                ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build(),
+                ColumnMeta.builder().name("k2").columnType(ColumnType.DOUBLE).build() };
+            DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
+        });
+        assertEquals("input item map size is different in the map", exception.getMessage());
     }
 
     @Test
     public void load_Exception_DifferentTypesForSameField() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("the same field has different data type");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        Map<String, Object> map = new HashMap<>();
-        map.put("k1", 2.3D);
-        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build() };
-        DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
+            Map<String, Object> map = new HashMap<>();
+            map.put("k1", 2.3D);
+            ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build() };
+            DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
+        });
+        assertEquals("the same field has different data type", exception.getMessage());
     }
 
     @Test
     public void load_Exception_DifferentFields() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("field of input item doesn't exist in columns, filed:k2");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        Map<String, Object> map = new HashMap<>();
-        map.put("k2", 2.3D);
-        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build() };
-        DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
+            Map<String, Object> map = new HashMap<>();
+            map.put("k2", 2.3D);
+            ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build() };
+            DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
+        });
+        assertEquals("field of input item doesn't exist in columns, filed:k2", exception.getMessage());
     }
 
     @Test

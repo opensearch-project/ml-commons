@@ -6,16 +6,11 @@
 package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class MLModelStateTests {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void from() {
         MLModelState modelState = MLModelState.from("REGISTERED");
@@ -24,9 +19,8 @@ public class MLModelStateTests {
 
     @Test
     public void from_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong model state");
-        MLModelState.from("test_wrong_value");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MLModelState.from("test_wrong_value"));
+        assertEquals("Wrong model state", exception.getMessage());
     }
 
 }

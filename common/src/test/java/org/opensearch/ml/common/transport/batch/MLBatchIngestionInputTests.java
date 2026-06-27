@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.batch;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -16,9 +17,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -36,9 +35,6 @@ public class MLBatchIngestionInputTests {
     private MLBatchIngestionInput mlBatchIngestionInput;
 
     private Map<String, Object> dataSource;
-
-    @Rule
-    public final ExpectedException exceptionRule = ExpectedException.none();
 
     private final String expectedInputStr = "{"
         + "\"index_name\":\"test index\","
@@ -74,18 +70,23 @@ public class MLBatchIngestionInputTests {
 
     @Test
     public void constructorMLBatchIngestionInput_NullName() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("The index name for data ingestion is missing. Please provide a valid index name to proceed.");
-
-        MLBatchIngestionInput.builder().indexName(null).dataSources(dataSource).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLBatchIngestionInput.builder().indexName(null).dataSources(dataSource).build()
+        );
+        assertEquals("The index name for data ingestion is missing. Please provide a valid index name to proceed.", exception.getMessage());
     }
 
     @Test
     public void constructorMLBatchIngestionInput_NullSource() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule
-            .expectMessage("No data sources were provided for ingestion. Please specify at least one valid data source to proceed.");
-        MLBatchIngestionInput.builder().indexName("test index").dataSources(null).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLBatchIngestionInput.builder().indexName("test index").dataSources(null).build()
+        );
+        assertEquals(
+            "No data sources were provided for ingestion. Please specify at least one valid data source to proceed.",
+            exception.getMessage()
+        );
     }
 
     @Test

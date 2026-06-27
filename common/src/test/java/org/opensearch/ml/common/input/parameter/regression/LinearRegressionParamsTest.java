@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.input.parameter.regression;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.TestHelper.contentObjectToString;
 import static org.opensearch.ml.common.TestHelper.testParseFromString;
 
@@ -13,19 +14,13 @@ import java.io.IOException;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
 public class LinearRegressionParamsTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     private Function<XContentParser, LinearRegressionParams> function = parser -> {
         try {
             return (LinearRegressionParams) LinearRegressionParams.parse(parser);
@@ -90,10 +85,11 @@ public class LinearRegressionParamsTest {
 
     @Test
     public void parse_InvalidParam_InvalidDoubleValue() throws IOException {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Double value passed as String");
-        String paramsStr = contentObjectToString(params);
-        testParseFromString(params, paramsStr.replace("\"epsilon\":0.3,", "\"epsilon\":\"0.3\","), function);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            String paramsStr = contentObjectToString(params);
+            testParseFromString(params, paramsStr.replace("\"epsilon\":0.3,", "\"epsilon\":\"0.3\","), function);
+        });
+        assertEquals("Double value passed as String", exception.getMessage());
     }
 
     @Test

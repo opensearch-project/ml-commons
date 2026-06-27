@@ -58,7 +58,7 @@ public class AGUIEventTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked") // Event.getResult()/getValue() returns Object; cast to Map for assertion
     public void testRunFinishedEvent_Constructor() {
         Map<String, Object> result = new HashMap<>();
         result.put("status", "success");
@@ -397,7 +397,7 @@ public class AGUIEventTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked") // Event.getResult()/getValue() returns Object; cast to Map for assertion
     public void testCustomEvent_Serialization() throws IOException {
         Map<String, Object> value = new HashMap<>();
         value.put("input_tokens", 100);

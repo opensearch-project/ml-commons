@@ -17,9 +17,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -50,10 +48,6 @@ import lombok.NonNull;
 public class MLInputTest {
 
     MLInput input;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     private final FunctionName algorithm = FunctionName.LINEAR_REGRESSION;
 
     private Function<XContentParser, MLInput> function = parser -> {
@@ -82,9 +76,8 @@ public class MLInputTest {
 
     @Test
     public void constructor_NullAlgorithm() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("algorithm can't be null");
-        MLInput.builder().build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MLInput.builder().build());
+        assertEquals("algorithm can't be null", exception.getMessage());
     }
 
     @Test

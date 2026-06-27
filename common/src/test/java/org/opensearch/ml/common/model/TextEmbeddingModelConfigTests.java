@@ -7,6 +7,7 @@ package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -15,9 +16,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
@@ -30,8 +29,6 @@ public class TextEmbeddingModelConfigTests {
 
     TextEmbeddingModelConfig config;
     Function<XContentParser, TextEmbeddingModelConfig> function;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -70,23 +67,29 @@ public class TextEmbeddingModelConfigTests {
 
     @Test
     public void nullFields_ModelType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model type is null");
-        config = TextEmbeddingModelConfig.builder().build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = TextEmbeddingModelConfig.builder().build()
+        );
+        assertEquals("model type is null", exception.getMessage());
     }
 
     @Test
     public void nullFields_EmbeddingDimension() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("embedding dimension is null");
-        config = TextEmbeddingModelConfig.builder().modelType("testModelType").build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = TextEmbeddingModelConfig.builder().modelType("testModelType").build()
+        );
+        assertEquals("embedding dimension is null", exception.getMessage());
     }
 
     @Test
     public void nullFields_FrameworkType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("framework type is null");
-        config = TextEmbeddingModelConfig.builder().modelType("testModelType").embeddingDimension(100).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = TextEmbeddingModelConfig.builder().modelType("testModelType").embeddingDimension(100).build()
+        );
+        assertEquals("framework type is null", exception.getMessage());
     }
 
     @Test
@@ -98,9 +101,11 @@ public class TextEmbeddingModelConfigTests {
 
     @Test
     public void frameworkType_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong framework type");
-        TextEmbeddingModelConfig.FrameworkType.from("test_wrong_value");
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> TextEmbeddingModelConfig.FrameworkType.from("test_wrong_value")
+        );
+        assertEquals("Wrong framework type", exception.getMessage());
     }
 
     @Test

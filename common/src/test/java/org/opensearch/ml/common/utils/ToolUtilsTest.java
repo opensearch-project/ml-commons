@@ -391,7 +391,7 @@ public class ToolUtilsTest {
         assertEquals(outputKey, result.getName());
         // JSON object should be wrapped with "output" key using fromJsonWithWrappingKey
         assertTrue(result.getDataAsMap().containsKey(ToolUtils.TOOL_OUTPUT_KEY));
-        Map<String, Object> wrappedOutput = (Map<String, Object>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY);
+        Map<String, Object> wrappedOutput = castToMap(result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
         assertEquals("value1", wrappedOutput.get("key1"));
         assertEquals("value2", wrappedOutput.get("key2"));
     }
@@ -406,7 +406,7 @@ public class ToolUtilsTest {
         assertEquals(outputKey, result.getName());
         // JSON array should be wrapped with "output" key using fromJsonWithWrappingKey
         assertTrue(result.getDataAsMap().containsKey(ToolUtils.TOOL_OUTPUT_KEY));
-        List<String> wrappedOutput = (List<String>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY);
+        List<String> wrappedOutput = castToStringList(result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
         assertEquals(3, wrappedOutput.size());
         assertEquals("item1", wrappedOutput.get(0));
         assertEquals("item2", wrappedOutput.get(1));
@@ -461,15 +461,15 @@ public class ToolUtilsTest {
 
         assertEquals(outputKey, result.getName());
         assertTrue(result.getDataAsMap().containsKey(ToolUtils.TOOL_OUTPUT_KEY));
-        Map<String, Object> wrappedOutput = (Map<String, Object>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY);
+        Map<String, Object> wrappedOutput = castToMap(result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
         assertTrue(wrappedOutput.containsKey("user"));
         assertTrue(wrappedOutput.containsKey("items"));
 
-        Map<String, Object> user = (Map<String, Object>) wrappedOutput.get("user");
+        Map<String, Object> user = castToMap(wrappedOutput.get("user"));
         assertEquals("John", user.get("name"));
         assertEquals(30.0, user.get("age")); // Gson parses numbers as Double
 
-        List<String> items = (List<String>) wrappedOutput.get("items");
+        List<String> items = castToStringList(wrappedOutput.get("items"));
         assertEquals(2, items.size());
         assertEquals("a", items.get(0));
         assertEquals("b", items.get(1));
@@ -513,5 +513,15 @@ public class ToolUtilsTest {
         expectedMap.put(ToolUtils.TOOL_OUTPUT_KEY, null);
         assertEquals(expectedMap, result.getDataAsMap());
         assertEquals(null, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @SuppressWarnings("unchecked") // ModelTensor dataAsMap values are dynamically typed tool outputs
+    private static Map<String, Object> castToMap(Object value) {
+        return (Map<String, Object>) value;
+    }
+
+    @SuppressWarnings("unchecked") // ModelTensor dataAsMap values are dynamically typed tool outputs
+    private static List<String> castToStringList(Object value) {
+        return (List<String>) value;
     }
 }

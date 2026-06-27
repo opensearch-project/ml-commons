@@ -5,26 +5,27 @@
 
 package org.opensearch.ml.common.connector;
 
-import org.junit.Rule;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class ConnectorProtocolsTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void validateProtocol_Null() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector protocol is null. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
-        ConnectorProtocols.validateProtocol(null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> ConnectorProtocols.validateProtocol(null));
+        assertEquals(
+            "Connector protocol is null. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]",
+            exception.getMessage()
+        );
     }
 
     @Test
     public void validateProtocol_WrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
-        ConnectorProtocols.validateProtocol("abc");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> ConnectorProtocols.validateProtocol("abc"));
+        assertEquals(
+            "Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]",
+            exception.getMessage()
+        );
     }
 }

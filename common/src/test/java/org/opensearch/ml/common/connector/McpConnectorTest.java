@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.common.connector;
 
-import static org.mockito.Mockito.mock;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.opensearch.ml.common.MockitoTestHelper.mockActionListener;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.RetryBackoffPolicy.CONSTANT;
 
@@ -18,9 +20,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
@@ -37,24 +37,25 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.search.SearchModule;
 
 public class McpConnectorTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     TriConsumer<List<String>, String, ActionListener<List<String>>> encryptFunction = (s, v, t) -> t
         .onResponse(List.of(s.stream().map(x -> "encrypted: " + x.toLowerCase(Locale.ROOT)).toArray(String[]::new)));
     TriConsumer<List<String>, String, ActionListener<List<String>>> decryptFunction = (s, v, t) -> t
         .onResponse(List.of(s.stream().map(x -> "decrypted: " + x.toUpperCase(Locale.ROOT)).toArray(String[]::new)));
 
-    private ActionListener<Boolean> actionListener = mock(ActionListener.class);
+    private ActionListener<Boolean> actionListener = mockActionListener();
     String TEST_CONNECTOR_JSON_STRING =
         "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30,\"read_timeout\":30,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"sse_endpoint\":\"/custom/sse\"}}";
 
     @Test
     public void constructor_InvalidProtocol() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        McpConnector.builder().protocol("wrong protocol").build();
+            McpConnector.builder().protocol("wrong protocol").build();
+        });
+        assertEquals(
+            "Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]",
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -158,18 +159,19 @@ public class McpConnectorTest {
             );
 
         // Test invalid URL
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector URL is not matching the trusted connector endpoint regex");
-        connector
-            .validateConnectorURL(
-                Arrays
-                    .asList(
-                        "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                        "^https://api\\.openai\\.com/.*$",
-                        "^https://api\\.cohere\\.ai/.*$",
-                        "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
-                    )
-            );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            connector
+                .validateConnectorURL(
+                    Arrays
+                        .asList(
+                            "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                            "^https://api\\.openai\\.com/.*$",
+                            "^https://api\\.cohere\\.ai/.*$",
+                            "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
+                        )
+                );
+        });
+        assertEquals("Connector URL is not matching the trusted connector endpoint regex", exception.getMessage());
     }
 
     @Test
@@ -286,9 +288,8 @@ public class McpConnectorTest {
             .updateConnector(true)
             .build();
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MCP Connector url is blank");
-        connector.update(updateInput);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> connector.update(updateInput));
+        assertEquals("MCP Connector url is blank", exception.getMessage());
     }
 
     @Test

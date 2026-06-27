@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -18,9 +19,7 @@ import java.util.function.Consumer;
 
 import org.junit.Before;
 import org.junit.Ignore;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -42,9 +41,6 @@ public class MLControllerTest {
 
     private final String expectedInputStr = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":"
         + "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -160,16 +156,17 @@ public class MLControllerTest {
 
     @Test
     public void parseWithNullField() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
-        final String expectedInputStrWithNullField = "{\"model_id\":null,\"user_rate_limiter\":"
-            + "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
+        assertThrows(IllegalStateException.class, () -> {
+            final String expectedInputStrWithNullField = "{\"model_id\":null,\"user_rate_limiter\":"
+                + "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
 
-        testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
-            try {
-                assertEquals(expectedInputStr, serializationWithToXContent(parsedInput));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
+                try {
+                    assertEquals(expectedInputStr, serializationWithToXContent(parsedInput));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         });
     }
 
@@ -192,32 +189,34 @@ public class MLControllerTest {
     // This will throw a ParsingException because MLRateLimiter parser cannot parse
     // null field.
     public void parseWithNullMLRateLimiterInUserRateLimiterFieldWithException() throws Exception {
-        exceptionRule.expect(RuntimeException.class);
-        final String expectedInputStrWithNullField = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":null}}";
-        final String expectedOutputStr = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":null}}";
+        assertThrows(RuntimeException.class, () -> {
+            final String expectedInputStrWithNullField = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":null}}";
+            final String expectedOutputStr = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":null}}";
 
-        testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
-            try {
-                assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
+                try {
+                    assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         });
     }
 
     @Test
     public void parseWithIllegalRateLimiterFieldWithException() throws Exception {
-        exceptionRule.expect(RuntimeException.class);
-        final String expectedInputStrWithIllegalField =
-            "{\"model_id\":\"testModelId\",\"illegal_field\":\"This field need to be skipped.\",\"user_rate_limiter\":"
-                + "{\"testUser\":\"Some illegal content that MLRateLimiter parser cannot parse.\"}}";
+        assertThrows(RuntimeException.class, () -> {
+            final String expectedInputStrWithIllegalField =
+                "{\"model_id\":\"testModelId\",\"illegal_field\":\"This field need to be skipped.\",\"user_rate_limiter\":"
+                    + "{\"testUser\":\"Some illegal content that MLRateLimiter parser cannot parse.\"}}";
 
-        testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
-            try {
-                assertEquals(expectedInputStr, serializationWithToXContent(parsedInput));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
+                try {
+                    assertEquals(expectedInputStr, serializationWithToXContent(parsedInput));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         });
     }
 

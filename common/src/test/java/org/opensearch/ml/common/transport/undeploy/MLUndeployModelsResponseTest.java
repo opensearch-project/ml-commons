@@ -18,9 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
@@ -37,8 +35,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 public class MLUndeployModelsResponseTest {
 
     MLUndeployModelNodesResponse undeployModelNodesResponse;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -107,15 +103,16 @@ public class MLUndeployModelsResponseTest {
 
     @Test
     public void fromActionResponse_Exception() {
-        exceptionRule.expect(UncheckedIOException.class);
-        exceptionRule.expectMessage("Failed to parse ActionResponse into MLUndeployModelsResponse");
-        MLUndeployModelsResponse undeployModelsResponse = new MLUndeployModelsResponse(undeployModelNodesResponse);
-        ActionResponse actionResponse = new ActionResponse() {
-            @Override
-            public void writeTo(StreamOutput out) throws IOException {
-                throw new IOException();
-            }
-        };
-        MLUndeployModelsResponse.fromActionResponse(actionResponse);
+        UncheckedIOException exception = assertThrows(UncheckedIOException.class, () -> {
+            MLUndeployModelsResponse undeployModelsResponse = new MLUndeployModelsResponse(undeployModelNodesResponse);
+            ActionResponse actionResponse = new ActionResponse() {
+                @Override
+                public void writeTo(StreamOutput out) throws IOException {
+                    throw new IOException();
+                }
+            };
+            MLUndeployModelsResponse.fromActionResponse(actionResponse);
+        });
+        assertEquals("Failed to parse ActionResponse into MLUndeployModelsResponse", exception.getMessage());
     }
 }

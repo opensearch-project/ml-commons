@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
@@ -21,9 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.TriConsumer;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -37,9 +37,6 @@ import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
 
 public class AwsConnectorTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     TriConsumer<List<String>, String, ActionListener<List<String>>> encryptFunction = (s, v, t) -> t
         .onResponse(List.of(s.stream().map(x -> "encrypted: " + x.toLowerCase(Locale.ROOT)).toArray(String[]::new)));
     TriConsumer<List<String>, String, ActionListener<List<String>>> decryptFunction = (s, v, t) -> t
@@ -47,53 +44,58 @@ public class AwsConnectorTest {
 
     @Test
     public void constructor_NullCredential() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).build();
+            AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).build();
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
     public void constructor_NullAccessKey() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        Map<String, String> credential = new HashMap<>();
-        AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).build();
+            Map<String, String> credential = new HashMap<>();
+            AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).build();
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
     public void constructor_NullSecretKey() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        Map<String, String> credential = new HashMap<>();
-        credential.put(ACCESS_KEY_FIELD, "test_access_key");
-        AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).build();
+            Map<String, String> credential = new HashMap<>();
+            credential.put(ACCESS_KEY_FIELD, "test_access_key");
+            AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).build();
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
     public void constructor_NullServiceName() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing service name");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        Map<String, String> credential = new HashMap<>();
-        credential.put(ACCESS_KEY_FIELD, "test_access_key");
-        credential.put(SECRET_KEY_FIELD, "test_secret_key");
-        AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).build();
+            Map<String, String> credential = new HashMap<>();
+            credential.put(ACCESS_KEY_FIELD, "test_access_key");
+            credential.put(SECRET_KEY_FIELD, "test_secret_key");
+            AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).build();
+        });
+        assertEquals("Missing service name", exception.getMessage());
     }
 
     @Test
     public void constructor_NullRegion() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing region");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        Map<String, String> credential = new HashMap<>();
-        credential.put(ACCESS_KEY_FIELD, "test_access_key");
-        credential.put(SECRET_KEY_FIELD, "test_secret_key");
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put(SERVICE_NAME_FIELD, "test_service");
-        AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).parameters(parameters).build();
+            Map<String, String> credential = new HashMap<>();
+            credential.put(ACCESS_KEY_FIELD, "test_access_key");
+            credential.put(SECRET_KEY_FIELD, "test_secret_key");
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put(SERVICE_NAME_FIELD, "test_service");
+            AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).parameters(parameters).build();
+        });
+        assertEquals("Missing region", exception.getMessage());
     }
 
     @Test

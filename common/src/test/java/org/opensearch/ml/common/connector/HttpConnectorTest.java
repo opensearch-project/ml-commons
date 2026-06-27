@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.common.connector;
 
-import static org.mockito.Mockito.mock;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.opensearch.ml.common.MockitoTestHelper.mockActionListener;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.io.IOException;
@@ -19,9 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
@@ -42,15 +42,12 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 public class HttpConnectorTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     TriConsumer<List<String>, String, ActionListener<List<String>>> encryptFunction = (s, v, t) -> t
         .onResponse(List.of(s.stream().map(x -> "encrypted: " + x.toLowerCase(Locale.ROOT)).toArray(String[]::new)));
     TriConsumer<List<String>, String, ActionListener<List<String>>> decryptFunction = (s, v, t) -> t
         .onResponse(List.of(s.stream().map(x -> "decrypted: " + x.toUpperCase(Locale.ROOT)).toArray(String[]::new)));
 
-    ActionListener<Boolean> listener = mock(ActionListener.class);
+    ActionListener<Boolean> listener = mockActionListener();
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
@@ -66,10 +63,14 @@ public class HttpConnectorTest {
 
     @Test
     public void constructor_InvalidProtocol() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        HttpConnector.builder().protocol("wrong protocol").build();
+            HttpConnector.builder().protocol("wrong protocol").build();
+        });
+        assertEquals(
+            "Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]",
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -171,21 +172,23 @@ public class HttpConnectorTest {
 
     @Test
     public void createPayload_Invalid() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Some parameter placeholder not filled in payload: input");
-        HttpConnector connector = createHttpConnector();
-        String predictPayload = connector.createPayload(PREDICT.name(), null);
-        connector.validatePayload(predictPayload);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            HttpConnector connector = createHttpConnector();
+            String predictPayload = connector.createPayload(PREDICT.name(), null);
+            connector.validatePayload(predictPayload);
+        });
+        assertEquals("Some parameter placeholder not filled in payload: input", exception.getMessage());
     }
 
     @Test
     public void createPayload_InvalidJson() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Invalid payload: {\"input\": ${parameters.input} }");
-        String requestBody = "{\"input\": ${parameters.input} }";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        String predictPayload = connector.createPayload(PREDICT.name(), null);
-        connector.validatePayload(predictPayload);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            String requestBody = "{\"input\": ${parameters.input} }";
+            HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+            String predictPayload = connector.createPayload(PREDICT.name(), null);
+            connector.validatePayload(predictPayload);
+        });
+        assertEquals("Invalid payload: {\"input\": ${parameters.input} }", exception.getMessage());
     }
 
     @Test
@@ -218,19 +221,20 @@ public class HttpConnectorTest {
 
     @Test
     public void createPayload_MissingParamsInvalidJson() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule
-            .expectMessage(
-                "Invalid payload: {\"input\": \"test value\", \"parameters\": {\"sparseEmbeddingFormat\": \"WORD\", \"content_type\": ${parameters.content_type} }}"
-            );
-        String requestBody =
-            "{\"input\": \"${parameters.input}\", \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": ${parameters.content_type} }}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("input", "test value");
-        parameters.put("sparseEmbeddingFormat", "WORD");
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
-        connector.validatePayload(predictPayload);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            String requestBody =
+                "{\"input\": \"${parameters.input}\", \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": ${parameters.content_type} }}";
+            HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put("input", "test value");
+            parameters.put("sparseEmbeddingFormat", "WORD");
+            String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+            connector.validatePayload(predictPayload);
+        });
+        assertEquals(
+            "Invalid payload: {\"input\": \"test value\", \"parameters\": {\"sparseEmbeddingFormat\": \"WORD\", \"content_type\": ${parameters.content_type} }}",
+            exception.getMessage()
+        );
     }
 
     @Test

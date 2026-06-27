@@ -6,18 +6,13 @@
 package org.opensearch.ml.common.dataframe;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.math.BigDecimal;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class ColumnValueBuilderTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void build() {
         ColumnValue value = ColumnValueBuilder.build(null);
@@ -58,9 +53,10 @@ public class ColumnValueBuilderTest {
 
     @Test
     public void build_IllegalType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("unsupported type:java.math.BigDecimal");
-        Object obj = new BigDecimal("0");
-        ColumnValueBuilder.build(obj);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            Object obj = new BigDecimal("0");
+            ColumnValueBuilder.build(obj);
+        });
+        assertEquals("unsupported type:java.math.BigDecimal", exception.getMessage());
     }
 }

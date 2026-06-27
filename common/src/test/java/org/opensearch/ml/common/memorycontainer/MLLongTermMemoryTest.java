@@ -296,7 +296,7 @@ public class MLLongTermMemoryTest {
     @Test
     public void testToIndexMap() {
         Map<String, Object> indexMap = memoryWithAllFields.toIndexMap();
-        Map<String, String> namespace = (Map<String, String>) indexMap.get("namespace");
+        Map<String, String> namespace = castToStringMap(indexMap.get("namespace"));
         assertEquals("session-123", namespace.get(SESSION_ID_FIELD));
         assertEquals("This is a test memory content", indexMap.get("memory"));
         assertEquals("SEMANTIC", indexMap.get("strategy_type"));
@@ -311,7 +311,7 @@ public class MLLongTermMemoryTest {
     @Test
     public void testToIndexMapMinimal() {
         Map<String, Object> indexMap = memoryMinimal.toIndexMap();
-        Map<String, String> namespace = (Map<String, String>) indexMap.get("namespace");
+        Map<String, String> namespace = castToStringMap(indexMap.get("namespace"));
         assertEquals("session-minimal", namespace.get("session_id"));
         assertEquals("Minimal memory", indexMap.get("memory"));
         assertEquals("SEMANTIC", indexMap.get("strategy_type"));
@@ -423,5 +423,10 @@ public class MLLongTermMemoryTest {
         assertEquals(specialMemory.getNamespace().get(SESSION_ID_FIELD), parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals(specialMemory.getMemory(), parsed.getMemory());
         assertEquals(specialMemory.getTags(), parsed.getTags());
+    }
+
+    @SuppressWarnings("unchecked") // Index map values are deserialized from generic Object maps
+    private static Map<String, String> castToStringMap(Object value) {
+        return (Map<String, String>) value;
     }
 }

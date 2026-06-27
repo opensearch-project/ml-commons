@@ -25,8 +25,6 @@ import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -44,9 +42,6 @@ import org.opensearch.test.rest.FakeRestRequest;
 import com.google.gson.Gson;
 
 public class CreateConversationRequestTests extends OpenSearchTestCase {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
     Gson gson;
 
     @Before

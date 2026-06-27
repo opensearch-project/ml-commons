@@ -6,16 +6,11 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class IndexInsightTaskStatusTests {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void testValidStatuses() {
         assertEquals(IndexInsightTaskStatus.GENERATING, IndexInsightTaskStatus.fromString("GENERATING"));
@@ -25,15 +20,16 @@ public class IndexInsightTaskStatusTests {
 
     @Test
     public void testNullInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Index insight task status can't be null");
-        IndexInsightTaskStatus.fromString(null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> IndexInsightTaskStatus.fromString(null));
+        assertEquals("Index insight task status can't be null", exception.getMessage());
     }
 
     @Test
     public void testInvalidStatus() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong index insight task status");
-        IndexInsightTaskStatus.fromString("INVALID_STATUS");
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> IndexInsightTaskStatus.fromString("INVALID_STATUS")
+        );
+        assertEquals("Wrong index insight task status", exception.getMessage());
     }
 }

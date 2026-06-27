@@ -14,9 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -35,10 +33,6 @@ import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.search.SearchModule;
 
 public class MLAgentTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     MLToolSpec mlToolSpec = new MLToolSpec(
         "test",
         "test",
@@ -53,102 +47,106 @@ public class MLAgentTest {
 
     @Test
     public void constructor_NullName() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Agent name can't be null");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        MLAgent agent = new MLAgent(
-            null,
-            MLAgentType.CONVERSATIONAL.name(),
-            "test",
-            new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            null, // MLAgentModelSpec model
-            List.of(mlToolSpec),
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            "test",
-            false,
-            null,
-            null,
-            null,
-            null
-        );
+            MLAgent agent = new MLAgent(
+                null,
+                MLAgentType.CONVERSATIONAL.name(),
+                "test",
+                new LLMSpec("test_model", Map.of("test_key", "test_value")),
+                null, // MLAgentModelSpec model
+                List.of(mlToolSpec),
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "test",
+                false,
+                null,
+                null,
+                null,
+                null
+            );
+        });
+        assertEquals("Agent name can't be null", exception.getMessage());
     }
 
     @Test
     public void constructor_NullType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Agent type can't be null");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        MLAgent agent = new MLAgent(
-            "test_agent",
-            null,
-            "test",
-            new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            null, // MLAgentModelSpec model
-            List.of(mlToolSpec),
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            "test",
-            false,
-            null,
-            null,
-            null,
-            null
-        );
+            MLAgent agent = new MLAgent(
+                "test_agent",
+                null,
+                "test",
+                new LLMSpec("test_model", Map.of("test_key", "test_value")),
+                null, // MLAgentModelSpec model
+                List.of(mlToolSpec),
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "test",
+                false,
+                null,
+                null,
+                null,
+                null
+            );
+        });
+        assertEquals("Agent type can't be null", exception.getMessage());
     }
 
     @Test
     public void constructor_NullLLMSpec() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("We need model information for the conversational agent type");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        MLAgent agent = new MLAgent(
-            "test_agent",
-            MLAgentType.CONVERSATIONAL.name(),
-            "test",
-            null,
-            null, // MLAgentModelSpec model
-            List.of(mlToolSpec),
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            "test",
-            false,
-            null,
-            null,
-            null,
-            null
-        );
+            MLAgent agent = new MLAgent(
+                "test_agent",
+                MLAgentType.CONVERSATIONAL.name(),
+                "test",
+                null,
+                null, // MLAgentModelSpec model
+                List.of(mlToolSpec),
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "test",
+                false,
+                null,
+                null,
+                null,
+                null
+            );
+        });
+        assertEquals("We need model information for the conversational agent type", exception.getMessage());
     }
 
     @Test
     public void constructor_DuplicateTool() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate tool defined in agent configuration");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        MLAgent agent = new MLAgent(
-            "test_name",
-            MLAgentType.CONVERSATIONAL.name(),
-            "test_description",
-            new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            null, // MLAgentModelSpec model
-            List.of(mlToolSpec, mlToolSpec),
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            "test",
-            false,
-            null,
-            null,
-            null,
-            null
-        );
+            MLAgent agent = new MLAgent(
+                "test_name",
+                MLAgentType.CONVERSATIONAL.name(),
+                "test_description",
+                new LLMSpec("test_model", Map.of("test_key", "test_value")),
+                null, // MLAgentModelSpec model
+                List.of(mlToolSpec, mlToolSpec),
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "test",
+                false,
+                null,
+                null,
+                null,
+                null
+            );
+        });
+        assertEquals("Duplicate tool defined in agent configuration", exception.getMessage());
     }
 
     @Test
@@ -399,27 +397,28 @@ public class MLAgentTest {
 
     @Test
     public void constructor_InvalidAgentType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Invalid Agent Type");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        new MLAgent(
-            "test_name",
-            "INVALID_TYPE",
-            "test_description",
-            null,
-            null, // MLAgentModelSpec model
-            null,
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            "test",
-            false,
-            null,
-            null,
-            null,
-            null
-        );
+            new MLAgent(
+                "test_name",
+                "INVALID_TYPE",
+                "test_description",
+                null,
+                null, // MLAgentModelSpec model
+                null,
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "test",
+                false,
+                null,
+                null,
+                null,
+                null
+            );
+        });
+        assertEquals("Invalid Agent Type", exception.getMessage());
     }
 
     @Test
@@ -580,27 +579,28 @@ public class MLAgentTest {
 
     @Test
     public void constructor_ConflictingContextManagement() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Cannot specify both context_management_name and context_management");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        MLAgent agent = new MLAgent(
-            "test_agent",
-            MLAgentType.FLOW.name(),
-            "test description",
-            null,
-            null, // MLAgentModelSpec model
-            null,
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            "test_app",
-            false,
-            "template_name",
-            new ContextManagementTemplate(),
-            null,
-            null
-        );
+            MLAgent agent = new MLAgent(
+                "test_agent",
+                MLAgentType.FLOW.name(),
+                "test description",
+                null,
+                null, // MLAgentModelSpec model
+                null,
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "test_app",
+                false,
+                "template_name",
+                new ContextManagementTemplate(),
+                null,
+                null
+            );
+        });
+        assertEquals("Cannot specify both context_management_name and context_management", exception.getMessage());
     }
 
     @Test
