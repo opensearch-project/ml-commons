@@ -33,11 +33,14 @@ PUT /_cluster/settings
 
 ## 2. Enable private addresses
 
+A local server uses a private IP, so allow it. Starting in OpenSearch 3.7, private IP access also requires an allowlist regex (`trusted_connector_private_endpoints_regex`); adjust the pattern to your local IP.
+
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
-      "plugins.ml_commons.connector.private_ip_enabled": true
+      "plugins.ml_commons.connector.private_ip_enabled": true,
+      "plugins.ml_commons.trusted_connector_private_endpoints_regex": ["^http://127\\.0\\.0\\.1:11434/.*$"]
     }
 }
 ```
