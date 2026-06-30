@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.utils;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -20,6 +19,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Rule;
@@ -100,10 +100,7 @@ public class FileUtilsTest {
         Files.write(new File(chunksDir, "chunk2").toPath(), part2);
 
         File merged = new File(tempDir.newFolder("out"), "merged.bin");
-        FileUtils.mergeFiles(
-            new ArrayDeque<>(Arrays.asList(new File(chunksDir, "chunk1"), new File(chunksDir, "chunk2"))),
-            merged
-        );
+        FileUtils.mergeFiles(new ArrayDeque<>(Arrays.asList(new File(chunksDir, "chunk1"), new File(chunksDir, "chunk2"))), merged);
 
         byte[] expected = new byte[part1.length + part2.length];
         System.arraycopy(part1, 0, expected, 0, part1.length);
@@ -144,9 +141,7 @@ public class FileUtilsTest {
 
         String hash = FileUtils.calculateFileHash(file);
 
-        assertNotNull(hash);
-        assertEquals(64, hash.length());
-        assertTrue(hash.matches("[0-9a-f]+"));
+        assertEquals("0badac3c6df445ad3aea62da1350683923aba37c685978afed96a515d12921a3", hash);
     }
 
     @Test
@@ -166,9 +161,7 @@ public class FileUtilsTest {
 
         var names = FileUtils.getFileNames(dir.toPath());
 
-        assertEquals(2, names.size());
-        assertTrue(names.contains("alpha.txt"));
-        assertTrue(names.contains("beta.txt"));
+        assertEquals(Set.of("alpha.txt", "beta.txt"), names);
     }
 
     @Test
