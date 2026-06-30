@@ -42,8 +42,8 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TO
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_DESCRIPTIONS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
@@ -1931,7 +1931,6 @@ public class AgentUtilsTest extends MLStaticMockBase {
                 );
         }
     }
-
 
     @Test
     public void testGetMcpToolSpecs_MultipleConnectorsMerged() throws Exception {
