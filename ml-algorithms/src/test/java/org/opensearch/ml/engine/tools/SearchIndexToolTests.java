@@ -113,21 +113,21 @@ public class SearchIndexToolTests {
         // Test that the text block schema is valid JSON and contains expected fields
         Map<String, Object> attributes = mockedSearchIndexTool.getAttributes();
         String schema = (String) attributes.get(INPUT_SCHEMA_FIELD);
-        
+
         // Parse the schema to verify it's valid JSON
         com.google.gson.JsonObject schemaJson = com.google.gson.JsonParser.parseString(schema).getAsJsonObject();
-        
+
         // Verify schema structure
         assertEquals("object", schemaJson.get("type").getAsString());
         assertTrue(schemaJson.has("properties"));
         assertTrue(schemaJson.has("required"));
         assertEquals(false, schemaJson.get("additionalProperties").getAsBoolean());
-        
+
         // Verify properties
         com.google.gson.JsonObject properties = schemaJson.getAsJsonObject("properties");
         assertTrue(properties.has("index"));
         assertTrue(properties.has("query"));
-        
+
         // Verify required fields
         com.google.gson.JsonArray required = schemaJson.getAsJsonArray("required");
         assertEquals(2, required.size());
@@ -140,10 +140,10 @@ public class SearchIndexToolTests {
     public void testTextBlockSchemaReadability() {
         // Test that the text block maintains readability while being valid JSON
         String schema = SearchIndexTool.DEFAULT_INPUT_SCHEMA;
-        
+
         // Should be valid JSON
         com.google.gson.JsonParser.parseString(schema);
-        
+
         // Should contain readable descriptions
         assertTrue("Schema should contain index description", schema.contains("OpenSearch index name"));
         assertTrue("Schema should contain query description", schema.contains("OpenSearch Query DSL"));
@@ -596,7 +596,8 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testSimplifiedTool_withComplexValidQuery() {
         // Test complex but valid query structure
-        String complexInput = "{\"index\":\"test-index\",\"query\":{\"query\":{\"bool\":{\"must\":[{\"match\":{\"title\":\"test\"}},{\"range\":{\"date\":{\"gte\":\"2023-01-01\"}}}]}},\"size\":5}}";
+        String complexInput =
+            "{\"index\":\"test-index\",\"query\":{\"query\":{\"bool\":{\"must\":[{\"match\":{\"title\":\"test\"}},{\"range\":{\"date\":{\"gte\":\"2023-01-01\"}}}]}},\"size\":5}}";
         Map<String, String> parameters = Map.of("input", complexInput);
 
         ActionListener<String> listener = mock(ActionListener.class);
