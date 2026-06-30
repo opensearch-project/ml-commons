@@ -127,7 +127,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
                     mlModel.set(model);
                 }
             } catch (Exception e) {
-                logger.error("Failed to get model " + id, e);
+                logger.error("Failed to get model {}", id, e);
             }
             return modelId.get() != null;
         }, 20, TimeUnit.SECONDS);

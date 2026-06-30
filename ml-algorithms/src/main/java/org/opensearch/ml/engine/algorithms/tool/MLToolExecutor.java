@@ -96,11 +96,11 @@ public class MLToolExecutor implements Executable {
                 ModelTensors tensors = ModelTensors.builder().mlModelTensors(modelTensors).build();
                 listener.onResponse(new ModelTensorOutput(List.of(tensors)));
             }, error -> {
-                log.error("Failed to execute tool: " + toolName, error);
+                log.error("Failed to execute tool: {}", toolName, error);
                 listener.onFailure(error);
             }));
         } catch (Exception e) {
-            log.error("Failed to execute tool: " + toolName, e);
+            log.error("Failed to execute tool: {}", toolName, e);
             listener.onFailure(e);
         }
     }

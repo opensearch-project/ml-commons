@@ -317,10 +317,12 @@ public class ConversationIndexMemory implements Memory<org.opensearch.ml.common.
         }
 
         save(pairs.get(index), null, null, null, ActionListener.wrap(interaction -> {
-            log.info("Stored message pair {} of {} with interaction ID: {}", index + 1, pairs.size(), interaction.getId());
+            int pairIndex = index + 1;
+            log.info("Stored message pair {} of {} with interaction ID: {}", pairIndex, pairs.size(), interaction.getId());
             savePairsSequentially(pairs, index + 1, hasError, finalListener);
         }, ex -> {
-            log.error("Failed to store message pair {} of {}", index + 1, pairs.size(), ex);
+            int pairIndex = index + 1;
+            log.error("Failed to store message pair {} of {}", pairIndex, pairs.size(), ex);
             hasError.set(true);
             savePairsSequentially(pairs, index + 1, hasError, finalListener);
         }));

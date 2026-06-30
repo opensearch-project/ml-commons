@@ -81,7 +81,7 @@ public class ConnectorTool implements Tool {
                 ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
                 listener.onResponse((T) outputParser.parse(modelTensorOutput));
             }, e -> {
-                log.error("Failed to run model " + connectorId, e);
+                log.error("Failed to run model {}", connectorId, e);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {

@@ -155,7 +155,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             internalListener.onResponse(response);
         } catch (Exception e) {
             // todo need to specify what exception
-            log.error("Failed to train and predict " + mlInput.getAlgorithm(), e);
+            log.error("Failed to train and predict {}", mlInput.getAlgorithm(), e);
             handlePredictFailure(mlTask, listener, e, true);
             return;
         }

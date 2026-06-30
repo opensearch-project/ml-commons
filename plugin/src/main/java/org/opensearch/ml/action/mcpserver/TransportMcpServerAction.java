@@ -80,7 +80,7 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
             try {
                 message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(objectMapper), mlMcpServerRequest.getRequestBody());
             } catch (Exception e) {
-                log.error("Parse error: " + e.getMessage(), e);
+                log.error("Parse error: {}", e.getMessage(), e);
                 handleError(null, JSON_RPC_PARSE_ERROR, "Parse error: " + e.getMessage(), listener);
                 return;
             }
@@ -98,11 +98,11 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
                     String responseJson = objectMapper.writeValueAsString(response);
                     listener.onResponse(new MLMcpServerResponse(true, responseJson, null));
                 } catch (Exception e) {
-                    log.error("Response serialization failed: " + e.getMessage(), e);
+                    log.error("Response serialization failed: {}", e.getMessage(), e);
                     handleError(id, JSON_RPC_INTERNAL_ERROR, "Response serialization failed: " + e.getMessage(), listener);
                 }
             }, error -> {
-                log.error("Internal server error: " + error.getMessage(), error);
+                log.error("Internal server error: {}", error.getMessage(), error);
                 handleError(id, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + error.getMessage(), listener);
             });
         } catch (Exception e) {

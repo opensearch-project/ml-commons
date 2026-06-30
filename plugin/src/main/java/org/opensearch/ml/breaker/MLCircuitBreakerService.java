@@ -54,7 +54,7 @@ public class MLCircuitBreakerService {
         }
 
         breakers.remove(name);
-        log.info("Removed ML breakers " + name);
+        log.info("Removed ML breakers {}", name);
     }
 
     public void clearBreakers() {

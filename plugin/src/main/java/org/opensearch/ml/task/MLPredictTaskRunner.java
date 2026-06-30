@@ -291,7 +291,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             }
                             mlTaskDispatcher.dispatchPredictTask(planningWorkerNodes, actionListener);
                         }, e -> {
-                            log.error("Failed to get model " + modelId, e);
+                            log.error("Failed to get model {}", modelId, e);
                             listener.onFailure(e);
                         }), context::restore));
                     }
@@ -307,7 +307,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             }
             mlTaskDispatcher.dispatchPredictTask(workerNodes, actionListener);
         } catch (Exception e) {
-            log.error("Failed to predict model " + modelId, e);
+            log.error("Failed to predict model {}", modelId, e);
             listener.onFailure(e);
         }
     }
@@ -351,7 +351,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 if (exceedLimits) {
                     String error =
                         "Exceeded maximum limit for BATCH_PREDICTION tasks. To increase the limit, update the plugins.ml_commons.max_batch_inference_tasks setting.";
-                    log.warn(error + " in task " + mlTask.getTaskId());
+                    log.warn("{} in task {}", error, mlTask.getTaskId());
                     listener.onFailure(new OpenSearchStatusException(error, RestStatus.TOO_MANY_REQUESTS));
                 } else {
                     executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, tenantId, listener, channel);
@@ -605,7 +605,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     }
                     return;
                 } catch (Exception e) {
-                    log.error("Failed to predict model " + modelId, e);
+                    log.error("Failed to predict model {}", modelId, e);
                     handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName);
                     return;
                 }
@@ -656,12 +656,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         MLTaskResponse response = MLTaskResponse.builder().output(output).build();
                         internalListener.onResponse(response);
                     } catch (Exception e) {
-                        log.error("Failed to predict model " + modelId, e);
+                        log.error("Failed to predict model {}", modelId, e);
                         internalListener.onFailure(e);
                     }
 
                 }, e -> {
-                    log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + mlTask.getModelId(), e);
+                    log.error("Failed to predict {}, modelId: {}", mlInput.getAlgorithm(), mlTask.getModelId(), e);
                     handlePredictFailure(mlTask, internalListener, e, true, modelId, actionName);
                 });
                 GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
@@ -674,7 +674,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         )
                     );
             } catch (Exception e) {
-                log.error("Failed to get model " + mlTask.getModelId(), e);
+                log.error("Failed to get model {}", mlTask.getModelId(), e);
                 handlePredictFailure(mlTask, internalListener, e, true, modelId, actionName);
             }
         } else {

@@ -133,7 +133,7 @@ public class TransportDeleteMemoriesByQueryAction extends
             executeDeleteByQuery(memoryContainerId, memoryType, user, container.getConfiguration(), deleteByQueryRequest, actionListener);
 
         }, error -> {
-            log.error("Failed to get memory container: " + memoryContainerId, error);
+            log.error("Failed to get memory container: {}", memoryContainerId, error);
             actionListener.onFailure(error);
         }));
     }

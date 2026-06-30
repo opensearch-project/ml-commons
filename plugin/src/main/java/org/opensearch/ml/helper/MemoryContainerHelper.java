@@ -519,13 +519,13 @@ public class MemoryContainerHelper {
                 long totalHits = response.getHits().getTotalHits().value();
                 listener.onResponse(totalHits);
             }, e -> {
-                log.error("Failed to count containers with prefix: " + indexPrefix, e);
+                log.error("Failed to count containers with prefix: {}", indexPrefix, e);
                 listener.onFailure(e);
             }), context::restore);
 
             sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
         } catch (Exception e) {
-            log.error("Failed to search for containers with prefix: " + indexPrefix, e);
+            log.error("Failed to search for containers with prefix: {}", indexPrefix, e);
             listener.onFailure(e);
         }
     }

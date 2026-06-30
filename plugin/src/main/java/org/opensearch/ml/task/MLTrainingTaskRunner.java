@@ -131,7 +131,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                     mlTask.setModelId(modelId);
                     handleAsyncMLTaskComplete(mlTask);
                 }, ex -> {
-                    log.error("Failed to train ML model for task " + taskId);
+                    log.error("Failed to train ML model for task {}", taskId, ex);
                     handleAsyncMLTaskFailure(mlTask, ex);
                 });
                 startTrainingTask(mlTask, request.getMlInput(), internalListener);
@@ -178,7 +178,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 threadPool.executor(TRAIN_THREAD_POOL).execute(() -> { train(mlTask, mlInput, internalListener); });
             }
         } catch (Exception e) {
-            log.error("Failed to train " + mlInput.getAlgorithm(), e);
+            log.error("Failed to train {}", mlInput.getAlgorithm(), e);
             internalListener.onFailure(e);
         }
     }
@@ -223,7 +223,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
             }));
         } catch (Exception e) {
             // todo need to specify what exception
-            log.error("Failed to train " + mlInput.getAlgorithm(), e);
+            log.error("Failed to train {}", mlInput.getAlgorithm(), e);
             listener.onFailure(e);
         }
     }

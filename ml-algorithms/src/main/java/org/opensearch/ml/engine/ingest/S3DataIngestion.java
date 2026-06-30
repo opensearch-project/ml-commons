@@ -139,7 +139,7 @@ public class S3DataIngestion extends AbstractIngestion {
             int totalBatches = successfulBatches.get() + failedBatches.get();
             successRate = (totalBatches == 0) ? 100 : (double) successfulBatches.get() / totalBatches * 100;
         } catch (S3Exception e) {
-            log.error("Error reading from S3: " + e.awsErrorDetails().errorMessage());
+            log.error("Error reading from S3: {}", e.awsErrorDetails().errorMessage());
             throw e;
         } catch (PrivilegedActionException e) {
             throw new RuntimeException("Failed to get S3 Object: ", e);

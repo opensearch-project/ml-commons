@@ -38,7 +38,7 @@ public class CountMinSketch implements Counter {
         this.numBuckets = (int) Math.ceil(INV_EPSILON);
         this.counts = new double[this.numHashes][this.numBuckets];
         this.hashes = new Random().ints(this.numHashes).toArray();
-        log.info("count min sketch size " + this.numHashes + " * " + this.numBuckets + " = " + this.numHashes * this.numBuckets);
+        log.info("count min sketch size {} * {} = {}", this.numHashes, this.numBuckets, this.numHashes * this.numBuckets);
     }
 
     @Override

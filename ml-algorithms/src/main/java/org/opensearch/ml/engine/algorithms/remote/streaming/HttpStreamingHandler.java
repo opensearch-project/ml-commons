@@ -201,7 +201,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         public void onFailure(EventSource eventSource, Throwable t, Response response) {
             if (t != null) {
                 // Network/connection error
-                log.error("Error: " + t.getMessage(), t);
+                log.error("Error: {}", t.getMessage(), t);
                 if (t instanceof StreamResetException && t.getMessage().contains("NO_ERROR")) {
                     // TODO: reconnect
                 } else {

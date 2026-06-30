@@ -198,7 +198,7 @@ public class MLModelChunkUploader {
                                 })
                             );
                     } catch (Exception e) {
-                        log.error("Failed to parse ml model " + r.getId(), e);
+                        log.error("Failed to parse ml model {}", r.getId(), e);
                         wrappedListener.onFailure(e);
                     }
                 } else {
@@ -208,12 +208,12 @@ public class MLModelChunkUploader {
                 if (e instanceof IndexNotFoundException) {
                     wrappedListener.onFailure(new MLResourceNotFoundException("Failed to find model"));
                 } else {
-                    log.error("Failed to get ML model " + modelId, e);
+                    log.error("Failed to get ML model {}", modelId, e);
                     wrappedListener.onFailure(e);
                 }
             }));
         } catch (Exception e) {
-            log.error("Fail to upload chunk for model " + modelId, e);
+            log.error("Fail to upload chunk for model {}", modelId, e);
             listener.onFailure(e);
         }
     }

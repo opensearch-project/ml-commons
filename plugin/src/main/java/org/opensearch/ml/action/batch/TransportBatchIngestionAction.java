@@ -147,7 +147,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             if (exceedLimits) {
                 String error =
                     "Exceeded maximum limit for BATCH_INGEST tasks. To increase the limit, update the plugins.ml_commons.max_batch_ingestion_tasks setting.";
-                log.warn(error + " in task " + mlTask.getTaskId());
+                log.warn("{} in task {}", error, mlTask.getTaskId());
                 listener.onFailure(new OpenSearchStatusException(error, RestStatus.TOO_MANY_REQUESTS));
             } else {
                 mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {

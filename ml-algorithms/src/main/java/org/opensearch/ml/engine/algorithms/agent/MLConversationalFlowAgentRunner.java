@@ -332,7 +332,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     traceNumber,
                     traceDisabled,
                     ActionListener.wrap(r -> {
-                        log.info("saved last trace for interaction " + parentInteractionId + " of flow agent");
+                        log.info("saved last trace for interaction {} of flow agent", parentInteractionId);
                         Map<String, Object> updateContent = Map
                             .of(AI_RESPONSE_FIELD, filteredOutput, ADDITIONAL_INFO_FIELD, additionalInfo);
                         memory.update(parentInteractionId, updateContent, updateListener);
@@ -425,7 +425,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 ActionListener
                     .wrap(
                         memory -> memory.update(interactionId, Map.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo), listener),
-                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                        e -> log.error("Failed create memory from id: {}", memoryId, e)
                     )
             );
     }
