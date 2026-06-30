@@ -8,7 +8,6 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -162,7 +161,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                             listener.onFailure(cause);
                         } else {
                             try {
-                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                IndexResponse indexResponse = r.indexResponse();
                                 log
                                     .info(
                                         "Connector creation result: {}, connector id: {}",
@@ -170,7 +169,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                                         indexResponse.getId()
                                     );
                                 listener.onResponse(new MLCreateConnectorResponse(indexResponse.getId()));
-                            } catch (IOException e) {
+                            } catch (Exception e) {
                                 listener.onFailure(e);
                             }
                         }

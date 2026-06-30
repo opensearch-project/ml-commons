@@ -450,8 +450,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
             if (ut == null) {
                 try {
-                    UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
-                    updateListener.onResponse(updateResponse);
+                    updateListener.onResponse(ur.updateResponse());
                 } catch (Exception e) {
                     updateListener.onFailure(e);
                 }
@@ -503,8 +502,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
                     if (ut == null) {
                         try {
-                            UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
-                            updateListener.onResponse(updateResponse);
+                            updateListener.onResponse(ur.updateResponse());
                         } catch (Exception e) {
                             updateListener.onFailure(e);
                         }

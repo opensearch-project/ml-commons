@@ -95,7 +95,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                                 listener.onFailure(cause);
                             } else {
                                 try {
-                                    IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                    IndexResponse indexResponse = r.indexResponse();
                                     log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
                                     MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
                                     listener.onResponse(response);
