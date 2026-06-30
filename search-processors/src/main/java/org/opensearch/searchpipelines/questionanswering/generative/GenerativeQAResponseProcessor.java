@@ -162,22 +162,16 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         List<String> searchResults = getSearchResults(response, topN);
 
         // See if the prompt is being overridden at the request level.
-        String effectiveSystemPrompt = systemPrompt;
-        String effectiveUserInstructions = userInstructions;
-        if (params.getSystemPrompt() != null) {
-            effectiveSystemPrompt = params.getSystemPrompt();
-        }
-        if (params.getUserInstructions() != null) {
-            effectiveUserInstructions = params.getUserInstructions();
-        }
+        final String effectiveSystemPrompt = params.getSystemPrompt() != null ? params.getSystemPrompt() : systemPrompt;
+        final String effectiveUserInstructions = params.getUserInstructions() != null ? params.getUserInstructions() : userInstructions;
 
         final List<Interaction> chatHistory = new ArrayList<>();
         if (conversationId == null) {
             doChatCompletion(
                 LlmIOUtil
                     .createChatCompletionInput(
-                        systemPrompt,
-                        userInstructions,
+                        effectiveSystemPrompt,
+                        effectiveUserInstructions,
                         llmModel,
                         llmQuestion,
                         chatHistory,
@@ -200,8 +194,8 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                 doChatCompletion(
                     LlmIOUtil
                         .createChatCompletionInput(
-                            systemPrompt,
-                            userInstructions,
+                            effectiveSystemPrompt,
+                            effectiveUserInstructions,
                             llmModel,
                             llmQuestion,
                             chatHistory,

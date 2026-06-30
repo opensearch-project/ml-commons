@@ -101,7 +101,17 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Override
     public void onError(Throwable error) {
         log.error("Received error from remote service: {}", error.getMessage(), error);
-        RestStatus status = (statusCode == null) ? RestStatus.INTERNAL_SERVER_ERROR : RestStatus.fromCode(statusCode);
+        RestStatus status;
+        if (statusCode == null) {
+            if (error.getMessage() != null
+                && error.getMessage().contains("Acquire operation took longer than the configured maximum time")) {
+                status = RestStatus.TOO_MANY_REQUESTS;
+            } else {
+                status = RestStatus.INTERNAL_SERVER_ERROR;
+            }
+        } else {
+            status = RestStatus.fromCode(statusCode);
+        }
         String errorMessage = "Error communicating with remote model: " + error.getMessage();
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
     }
