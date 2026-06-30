@@ -17,6 +17,7 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
@@ -29,12 +30,13 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestRequestFilter;
 import org.opensearch.rest.action.RestToXContentListener;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLRegisterModelAction extends BaseRestHandler {
+public class RestMLRegisterModelAction extends BaseRestHandler implements RestRequestFilter {
     private static final String ML_REGISTER_MODEL_ACTION = "ml_register_model_action";
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -106,5 +108,10 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         }
         return new MLRegisterModelRequest(mlInput);
+    }
+
+    @Override
+    public Set<String> getFilteredFields() {
+        return Set.of("connector.credential", "*.Authorization");
     }
 }
