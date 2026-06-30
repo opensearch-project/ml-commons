@@ -27,6 +27,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STA
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_USER_DEFINED_ID_ENABLED;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -79,6 +80,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isAGUIEnabled;
 
+    private volatile Boolean isUserDefinedIdEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -105,6 +108,7 @@ public class MLFeatureEnabledSetting {
         maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
         isMcpHeaderPassthroughEnabled = ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.get(settings);
         isAGUIEnabled = ML_COMMONS_AG_UI_ENABLED.get(settings);
+        isUserDefinedIdEnabled = ML_COMMONS_USER_DEFINED_ID_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -147,6 +151,9 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED, it -> isMcpHeaderPassthroughEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AG_UI_ENABLED, it -> isAGUIEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_USER_DEFINED_ID_ENABLED, it -> isUserDefinedIdEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
             isStaticMetricCollectionEnabled = it;
             for (SettingsChangeListener listener : listeners) {
@@ -325,5 +332,14 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isAGUIEnabled() {
         return isAGUIEnabled;
+    }
+
+    /**
+     * Whether user-defined resource ids are enabled. If disabled, registration/creation requests that specify a
+     * custom agent id, model id, or connector id will be rejected.
+     * @return whether the user-defined id feature is enabled.
+     */
+    public boolean isUserDefinedIdEnabled() {
+        return isUserDefinedIdEnabled;
     }
 }

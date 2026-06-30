@@ -8,6 +8,7 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -27,6 +29,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
@@ -105,6 +108,10 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 Map<String, String> headers = action.getHeaders();
                 AbstractConnector.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
             }
+        }
+        if (mlCreateConnectorInput.getConnectorId() != null && !mlFeatureEnabledSetting.isUserDefinedIdEnabled()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
         }
         if (mlCreateConnectorInput.getProtocol() != null
             && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)

@@ -584,6 +584,12 @@ public final class MLCommonsSettings {
     public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
 
+    // Feature flag for user-defined resource id (agent id, model id, connector id) during registration/creation
+    public static final Setting<Boolean> ML_COMMONS_USER_DEFINED_ID_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "user_defined_id_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE =
+        "Specifying a custom id is not enabled. To enable, please update the setting " + ML_COMMONS_USER_DEFINED_ID_ENABLED.getKey();
+
     private static void validateRegexSafety(String regex) {
         // Reject nested quantifiers or backreferences
         if (regex.matches(".*\\([^)]*[*+?]\\)[*+?{].*") || regex.matches(".*\\\\[1-9].*")) {

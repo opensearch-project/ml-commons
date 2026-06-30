@@ -237,8 +237,23 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         assertEquals(CONNECTOR_ID, actualResponse.getConnectorId());
     }
 
+    public void test_execute_withCustomConnectorId_featureDisabled_fails() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(false);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+        input.setConnectorId("my-openai-connector");
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+    }
+
     public void test_execute_withCustomConnectorId_usesCustomDocId() throws InterruptedException {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(true);
         input.setAddAllBackendRoles(null);
         input.setBackendRoles(null);
         input.setConnectorId("my-openai-connector");
@@ -293,6 +308,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_withCustomConnectorId_alreadyExists_fails() throws InterruptedException {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(true);
         input.setAddAllBackendRoles(null);
         input.setBackendRoles(null);
         input.setConnectorId("my-openai-connector");

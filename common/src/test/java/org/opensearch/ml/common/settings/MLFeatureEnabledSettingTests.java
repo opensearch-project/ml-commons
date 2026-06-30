@@ -55,6 +55,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                     MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_USER_DEFINED_ID_ENABLED,
                     MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
                 )
         );
@@ -290,6 +291,41 @@ public class MLFeatureEnabledSettingTests {
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
 
         assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testUserDefinedIdDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default
+        assertFalse(setting.isUserDefinedIdEnabled());
+    }
+
+    @Test
+    public void testUserDefinedIdCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.user_defined_id_enabled", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertTrue(setting.isUserDefinedIdEnabled());
+    }
+
+    @Test
+    public void testUserDefinedIdDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.user_defined_id_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isUserDefinedIdEnabled());
+
+        // Update the setting dynamically to enable
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.user_defined_id_enabled", true).build());
+
+        assertTrue(setting.isUserDefinedIdEnabled());
+
+        // Update the setting dynamically to disable again
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.user_defined_id_enabled", false).build());
+
+        assertFalse(setting.isUserDefinedIdEnabled());
     }
 
     @Test

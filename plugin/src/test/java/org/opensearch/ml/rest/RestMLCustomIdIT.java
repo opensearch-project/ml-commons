@@ -29,6 +29,8 @@ public class RestMLCustomIdIT extends MLCommonsRestTestCase {
     public void setupCustomIdItSettings() throws IOException {
         // allow the placeholder connector endpoint so connector/model registration is not rejected by the trusted-endpoint check
         updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^.*$"));
+        // the user-defined id feature is disabled by default; enable it so custom ids are accepted
+        updateClusterSettings("plugins.ml_commons.user_defined_id_enabled", true);
     }
 
     private String connectorBody(String customId) {

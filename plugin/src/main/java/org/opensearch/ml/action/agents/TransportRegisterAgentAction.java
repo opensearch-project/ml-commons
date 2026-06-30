@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
 import java.time.Instant;
@@ -91,6 +92,11 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
+
+        if (mlAgent.getAgentId() != null && !mlFeatureEnabledSetting.isUserDefinedIdEnabled()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
 
         if (mlAgent.getMemory() != null
             && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(mlAgent.getMemory().getType())

@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -630,6 +632,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .llm(llmSpec)
             .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(true);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -661,6 +664,28 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void test_execute_registerAgent_withCustomAgentId_featureDisabled_fails() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .agentId("my-custom-agent")
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(false);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        verify(client, never()).index(any(), any());
+    }
+
+    @Test
     public void test_execute_registerAgent_withCustomAgentId_usesItAsDocId() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
@@ -672,6 +697,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(true);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -718,6 +744,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .llm(llmSpec)
             .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(true);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
