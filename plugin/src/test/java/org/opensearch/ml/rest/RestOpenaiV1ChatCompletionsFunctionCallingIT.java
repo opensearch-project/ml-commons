@@ -109,8 +109,15 @@ public class RestOpenaiV1ChatCompletionsFunctionCallingIT extends RestBaseAgentT
         // Execute agent with new API format (input field)
         String executeBody = "{\n" + "  \"input\": \"List all the indices in this cluster\"\n" + "}";
 
-        Response response = TestHelper
-            .makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, executeBody, null);
+        Response response;
+        try {
+            response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, executeBody, null);
+        } catch (org.opensearch.client.ResponseException e) {
+            // Skip test if external API is unreachable or times out (flaky on CI)
+            String msg = e.getMessage();
+            Assume.assumeFalse("Skipping: OpenAI API timed out on CI", msg.contains("timed out") || msg.contains("Timeout"));
+            throw e;
+        }
         assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
 
         Map<String, Object> responseMap = parseResponseToMap(response);
