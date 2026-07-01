@@ -1,6 +1,6 @@
 # OpenAI connector blueprint example for LLM judgment
 
-This blueprint integrates an OpenAI Chat Completions model for Search Relevance Workbench (SRW) LLM judgments. It adds a `post_process_function` that returns the model text in a neutral `response` field. SRW emits the OpenAI-shaped `messages` and `response_format` parameters on every call, so this blueprint works without provider-specific SRW code.
+This blueprint integrates an OpenAI Chat Completions model for Search Relevance Workbench (SRW) LLM judgments. It maps SRW's neutral `system_prompt` / `user_prompt` parameters into OpenAI's `messages` shape and adds a `post_process_function` that returns the model text in a neutral `response` field.
 
 ## Available models
 
@@ -14,7 +14,7 @@ Set the `model` parameter to any current OpenAI chat model:
 | GPT-4o | `gpt-4o` |
 | GPT-4o mini | `gpt-4o-mini` |
 
-OpenAI also releases newer GPT-5.x models (for example GPT-5.4 / GPT-5.5) regularly. For the authoritative, current list and exact IDs see [OpenAI models](https://platform.openai.com/docs/models). Models that do not support structured output can drop `response_format` from the `request_body`.
+OpenAI also releases newer GPT-5.x models (for example GPT-5.4 / GPT-5.5) regularly. For the authoritative, current list and exact IDs see [OpenAI models](https://platform.openai.com/docs/models).
 
 ## 1. Add connector endpoint to trusted URLs:
 Note: skip this step starting 2.19.0
@@ -59,7 +59,7 @@ POST /_plugins/_ml/connectors/_create
         "Content-Type": "application/json",
         "Authorization": "Bearer ${credential.openAI_key}"
       },
-      "request_body": "{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages}, \"response_format\": ${parameters.response_format} }",
+      "request_body": "{\"model\":\"${parameters.model}\",\"messages\":[{\"role\":\"system\",\"content\":\"${parameters.system_prompt}\"},{\"role\":\"user\",\"content\":\"${parameters.user_prompt}\"}]}",
       "post_process_function": "def text = params.choices[0].message.content; return '{\"name\":\"response\",\"dataAsMap\":{\"response\":\"' + escape(text) + '\"}}'"
     }
   ]
@@ -115,48 +115,14 @@ POST /_plugins/_ml/models/_register?deploy=true
 
 ## 5. Test model inference
 
-SRW emits `messages` and `response_format` (and the neutral `system_prompt` / `user_prompt`) on every call. Models that do not support `response_format` (for example `gpt-3.5-turbo`) can drop it from `request_body`.
+SRW emits the neutral `system_prompt` and `user_prompt`; this blueprint maps them into OpenAI's `messages` array.
 
 ```json
 POST /_plugins/_ml/models/<MODEL_ID>/_predict
 {
   "parameters": {
-    "messages": [
-      {
-        "role": "system",
-        "content": "You are a relevance rater. Reply with strict JSON only."
-      },
-      {
-        "role": "user",
-        "content": "Rate the relevance of {\"id\":\"001\",\"text\":\"banana smoothie\"} to query banana on a 0.0-1.0 scale."
-      }
-    ],
-    "response_format": {
-      "type": "json_schema",
-      "json_schema": {
-        "name": "rating",
-        "strict": true,
-        "schema": {
-          "type": "object",
-          "properties": {
-            "ratings": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": { "type": "string" },
-                  "rating_score": { "type": "number" }
-                },
-                "required": ["id", "rating_score"],
-                "additionalProperties": false
-              }
-            }
-          },
-          "required": ["ratings"],
-          "additionalProperties": false
-        }
-      }
-    }
+    "system_prompt": "You are a relevance rater. Reply with strict JSON only.",
+    "user_prompt": "Rate the relevance of {\"id\":\"001\",\"text\":\"banana smoothie\"} to query banana on a 0.0-1.0 scale. Return {\"ratings\":[{\"id\":\"001\",\"rating_score\":<num>}]}."
   }
 }
 ```

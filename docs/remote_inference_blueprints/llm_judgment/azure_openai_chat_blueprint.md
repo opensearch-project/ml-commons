@@ -1,6 +1,6 @@
 # Azure OpenAI connector blueprint example for LLM judgment
 
-This blueprint integrates an [Azure OpenAI Chat Completions](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions) deployment for Search Relevance Workbench (SRW) LLM judgments. It adds a `post_process_function` that returns the model text in a neutral `response` field. Azure exposes the same Chat Completions shape as OpenAI; only the endpoint, API version, and `api-key` header differ.
+This blueprint integrates an [Azure OpenAI Chat Completions](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions) deployment for Search Relevance Workbench (SRW) LLM judgments. It maps SRW's neutral `system_prompt` / `user_prompt` parameters into the Chat Completions `messages` shape and adds a `post_process_function` that returns the model text in a neutral `response` field. Azure exposes the same Chat Completions shape as OpenAI; only the endpoint, API version, and `api-key` header differ.
 
 ## Available models
 
@@ -59,7 +59,7 @@ POST /_plugins/_ml/connectors/_create
         "Content-Type": "application/json",
         "api-key": "${credential.openAI_key}"
       },
-      "request_body": "{ \"messages\": ${parameters.messages}, \"response_format\": ${parameters.response_format} }",
+      "request_body": "{\"messages\":[{\"role\":\"system\",\"content\":\"${parameters.system_prompt}\"},{\"role\":\"user\",\"content\":\"${parameters.user_prompt}\"}]}",
       "post_process_function": "def text = params.choices[0].message.content; return '{\"name\":\"response\",\"dataAsMap\":{\"response\":\"' + escape(text) + '\"}}'"
     }
   ]
@@ -115,48 +115,14 @@ POST /_plugins/_ml/models/_register?deploy=true
 
 ## 5. Test model inference
 
-`response_format` (structured output) is supported on recent deployments and API versions; drop it from `request_body` if your deployment does not support it.
+SRW emits the neutral `system_prompt` and `user_prompt`; this blueprint maps them into the Chat Completions `messages` array.
 
 ```json
 POST /_plugins/_ml/models/<MODEL_ID>/_predict
 {
   "parameters": {
-    "messages": [
-      {
-        "role": "system",
-        "content": "You are a relevance rater. Reply with strict JSON only."
-      },
-      {
-        "role": "user",
-        "content": "Rate the relevance of {\"id\":\"001\",\"text\":\"banana smoothie\"} to query banana on a 0.0-1.0 scale."
-      }
-    ],
-    "response_format": {
-      "type": "json_schema",
-      "json_schema": {
-        "name": "rating",
-        "strict": true,
-        "schema": {
-          "type": "object",
-          "properties": {
-            "ratings": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": { "type": "string" },
-                  "rating_score": { "type": "number" }
-                },
-                "required": ["id", "rating_score"],
-                "additionalProperties": false
-              }
-            }
-          },
-          "required": ["ratings"],
-          "additionalProperties": false
-        }
-      }
-    }
+    "system_prompt": "You are a relevance rater. Reply with strict JSON only.",
+    "user_prompt": "Rate the relevance of {\"id\":\"001\",\"text\":\"banana smoothie\"} to query banana on a 0.0-1.0 scale. Return {\"ratings\":[{\"id\":\"001\",\"rating_score\":<num>}]}."
   }
 }
 ```
