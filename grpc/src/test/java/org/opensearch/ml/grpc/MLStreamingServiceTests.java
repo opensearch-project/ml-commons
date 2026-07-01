@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.grpc;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -26,12 +27,13 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.grpc.converters.ProtoRequestConverter;
 import org.opensearch.ml.grpc.interfaces.MLClient;
@@ -136,11 +138,12 @@ public class MLStreamingServiceTests {
         protoConverterMock.when(() -> ProtoRequestConverter.toPredictRequest(any(), any())).thenReturn(mockRequest);
         when(mockModelManager.getOptionalModelFunctionName("test-model-id")).thenReturn(Optional.empty());
 
+        // client.execute() calls back with NOT_FOUND error
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(2);
+            ActionListener<?> listener = invocation.getArgument(2);
             listener.onFailure(new OpenSearchStatusException("Model not found", RestStatus.NOT_FOUND));
             return null;
-        }).when(mockModelManager).getModel(eq("test-model-id"), any(), any());
+        }).when(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
 
         service.predictModelStream(mock(MlPredictModelStreamRequest.class), responseObserver);
 
@@ -158,11 +161,12 @@ public class MLStreamingServiceTests {
         protoConverterMock.when(() -> ProtoRequestConverter.toPredictRequest(any(), any())).thenReturn(mockRequest);
         when(mockModelManager.getOptionalModelFunctionName("test-model-id")).thenReturn(Optional.empty());
 
+        // client.execute() calls back with generic error
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(2);
+            ActionListener<?> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Connection refused"));
             return null;
-        }).when(mockModelManager).getModel(eq("test-model-id"), any(), any());
+        }).when(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
 
         service.predictModelStream(mock(MlPredictModelStreamRequest.class), responseObserver);
 
@@ -180,20 +184,13 @@ public class MLStreamingServiceTests {
         protoConverterMock.when(() -> ProtoRequestConverter.toPredictRequest(any(), any())).thenReturn(mockRequest);
         when(mockModelManager.getOptionalModelFunctionName("test-model-id")).thenReturn(Optional.empty());
 
-        MLModel mockModel = mock(MLModel.class);
-        when(mockModel.getModelGroupId()).thenReturn("test-group-id");
-
+        // client.execute() calls back with FORBIDDEN (Security Plugin rejection)
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(2);
-            listener.onResponse(mockModel);
+            ActionListener<?> listener = invocation.getArgument(2);
+            listener.onFailure(new OpenSearchStatusException(
+                "User doesn't have privilege to perform this operation on this model", RestStatus.FORBIDDEN));
             return null;
-        }).when(mockModelManager).getModel(eq("test-model-id"), any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
-            listener.onResponse(false);
-            return null;
-        }).when(mockAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
 
         service.predictModelStream(mock(MlPredictModelStreamRequest.class), responseObserver);
 
@@ -211,24 +208,18 @@ public class MLStreamingServiceTests {
         protoConverterMock.when(() -> ProtoRequestConverter.toPredictRequest(any(), any())).thenReturn(mockRequest);
         when(mockModelManager.getOptionalModelFunctionName("test-model-id")).thenReturn(Optional.empty());
 
-        MLModel mockModel = mock(MLModel.class);
-        when(mockModel.getModelGroupId()).thenReturn("test-group-id");
-
+        // client.execute() succeeds (no error callback)
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(2);
-            listener.onResponse(mockModel);
+            ActionListener<?> listener = invocation.getArgument(2);
+            listener.onResponse(null);
             return null;
-        }).when(mockModelManager).getModel(eq("test-model-id"), any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
-            listener.onResponse(true);
-            return null;
-        }).when(mockAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
 
         service.predictModelStream(mock(MlPredictModelStreamRequest.class), responseObserver);
 
-        verify(mockPredictTaskRunner).checkCBAndExecute(eq(FunctionName.REMOTE), any(), any());
+        // Verify client.execute() was called with the correct action
+        verify(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
+        assertFalse("Should not send error", responseObserver.errorCalled);
     }
 
     @Test
@@ -241,20 +232,12 @@ public class MLStreamingServiceTests {
         protoConverterMock.when(() -> ProtoRequestConverter.toPredictRequest(any(), any())).thenReturn(mockRequest);
         when(mockModelManager.getOptionalModelFunctionName("test-model-id")).thenReturn(Optional.empty());
 
-        MLModel mockModel = mock(MLModel.class);
-        when(mockModel.getModelGroupId()).thenReturn("test-group-id");
-
+        // client.execute() calls back with a generic validation error
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(2);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mockModelManager).getModel(eq("test-model-id"), any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<?> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Validation error"));
             return null;
-        }).when(mockAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
 
         service.predictModelStream(mock(MlPredictModelStreamRequest.class), responseObserver);
 
@@ -272,24 +255,17 @@ public class MLStreamingServiceTests {
         protoConverterMock.when(() -> ProtoRequestConverter.toPredictRequest(any(), any())).thenReturn(mockRequest);
         when(mockModelManager.getOptionalModelFunctionName("test-model-id")).thenReturn(Optional.of(FunctionName.REMOTE));
 
-        MLModel mockModel = mock(MLModel.class);
-        when(mockModel.getModelGroupId()).thenReturn("test-group-id");
-
+        // client.execute() succeeds
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(2);
-            listener.onResponse(mockModel);
+            ActionListener<?> listener = invocation.getArgument(2);
+            listener.onResponse(null);
             return null;
-        }).when(mockModelManager).getModel(eq("test-model-id"), any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
-            listener.onResponse(true);
-            return null;
-        }).when(mockAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
 
         service.predictModelStream(mock(MlPredictModelStreamRequest.class), responseObserver);
 
-        verify(mockPredictTaskRunner).checkCBAndExecute(eq(FunctionName.REMOTE), any(), any());
+        verify(mockClient).execute(eq(MLPredictionStreamTaskAction.INSTANCE), any(), any());
+        assertFalse("Should not send error", responseObserver.errorCalled);
     }
 
     @Test
@@ -331,13 +307,22 @@ public class MLStreamingServiceTests {
     public void testExecuteAgentStream_success() {
         when(mockFeatureSettings.isAgentFrameworkEnabled()).thenReturn(true);
         when(mockFeatureSettings.isMultiTenancyEnabled()).thenReturn(false);
+        when(mockUserContextProvider.getUserContext()).thenReturn(null);
 
         MLExecuteTaskRequest mockRequest = mock(MLExecuteTaskRequest.class);
         protoConverterMock.when(() -> ProtoRequestConverter.toExecuteRequest(any(), any())).thenReturn(mockRequest);
 
+        // client.execute() succeeds
+        doAnswer(invocation -> {
+            ActionListener<?> listener = invocation.getArgument(2);
+            listener.onResponse(null);
+            return null;
+        }).when(mockClient).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+
         service.executeAgentStream(mock(MlExecuteAgentStreamRequest.class), responseObserver);
 
-        verify(mockExecuteTaskRunner).checkCBAndExecute(eq(FunctionName.AGENT), any(), any());
+        verify(mockClient).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        assertFalse("Should not send error", responseObserver.errorCalled);
     }
 
     @Test

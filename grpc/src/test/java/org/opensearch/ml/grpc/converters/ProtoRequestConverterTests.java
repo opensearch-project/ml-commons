@@ -103,6 +103,7 @@ public class ProtoRequestConverterTests {
         Parameters parameters = mock(Parameters.class);
 
         Descriptors.FieldDescriptor fieldDescriptor = mock(Descriptors.FieldDescriptor.class);
+        when(fieldDescriptor.getName()).thenReturn("inputs");
         when(fieldDescriptor.getJsonName()).thenReturn("inputs");
         when(fieldDescriptor.isRepeated()).thenReturn(false);
         when(fieldDescriptor.getType()).thenReturn(Descriptors.FieldDescriptor.Type.STRING);

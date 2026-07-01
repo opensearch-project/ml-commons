@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.plugin.grpc;
 
+import org.opensearch.action.ActionRequest;
+import org.opensearch.action.ActionType;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.ml.grpc.interfaces.MLClient;
 import org.opensearch.transport.client.Client;
 
@@ -24,6 +28,15 @@ public class ClientAdapter implements MLClient {
     @Override
     public ThreadContext getThreadContext() {
         return delegate.threadPool().getThreadContext();
+    }
+
+    @Override
+    public <Request extends ActionRequest, Response extends ActionResponse> void execute(
+        ActionType<Response> action,
+        Request request,
+        ActionListener<Response> listener
+    ) {
+        delegate.execute(action, request, listener);
     }
 
     /**

@@ -23,11 +23,11 @@ dependencies {
 
     // gRPC SPI for service registration
     compileOnly "org.opensearch.plugin:transport-grpc-spi:${opensearch_version}"
-    compileOnly "org.opensearch:protobufs:${versions.opensearchprotobufs}"
+    compileOnly "org.opensearch:protobufs:1.6.0"
 
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
-    testImplementation "org.opensearch:protobufs:${versions.opensearchprotobufs}"
+    testImplementation "org.opensearch:protobufs:1.6.0"
 }
 
 lombok {

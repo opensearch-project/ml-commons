@@ -8,13 +8,12 @@ package org.opensearch.ml.grpc;
 import java.util.Optional;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -113,7 +112,8 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
             User user = getUserFromContext();
             mlRequest.setUser(user);
 
-            loadModelValidateAndExecuteStreaming(modelId, tenantId, mlRequest, user, responseObserver);
+            log.info("gRPC PredictModelStream received: model={}", modelId);
+            executeStreamingPrediction(mlRequest, responseObserver);
         } catch (Exception e) {
             handleError(responseObserver, "predictModelStream", e);
         }
@@ -121,112 +121,6 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
 
     /**
      * Loads a model, validates access, and then executes streaming prediction.
-     */
-    private void loadModelValidateAndExecuteStreaming(
-        String modelId,
-        String tenantId,
-        MLPredictionTaskRequest mlRequest,
-        User user,
-        StreamObserver<PredictResponse> responseObserver
-    ) {
-        try {
-            ThreadContext.StoredContext context = client.getThreadContext().stashContext();
-            ActionListener<MLModel> modelListener = ActionListener.wrap(mlModel -> {
-                try {
-                    validateModelGroupAccessAndExecute(mlModel, mlRequest, user, tenantId, responseObserver);
-                } catch (Exception e) {
-                    handleError(responseObserver, "validating model access", e);
-                } finally {
-                    closeContextSafely(context);
-                }
-            }, e -> {
-                try {
-                    handleModelLoadError(responseObserver, modelId, e);
-                } finally {
-                    closeContextSafely(context);
-                }
-            });
-
-            String resolvedTenantId = mlFeatureEnabledSetting.isMultiTenancyEnabled() ? tenantId : null;
-            modelManager.getModel(modelId, resolvedTenantId, modelListener);
-        } catch (Exception e) {
-            handleError(responseObserver, "loading model", e);
-        }
-    }
-
-    /**
-     * Safely closes the stored context, logging any errors.
-     *
-     * @param context the stored context to close
-     */
-    private void closeContextSafely(ThreadContext.StoredContext context) {
-        try {
-            context.close();
-        } catch (Exception e) {
-            log.error("Failed to close thread context", e);
-        }
-    }
-
-    /**
-     * Handles errors during model loading with special handling for NOT_FOUND status.
-     *
-     * @param responseObserver the gRPC response observer
-     * @param modelId the model ID being loaded
-     * @param e the exception that occurred
-     */
-    private void handleModelLoadError(StreamObserver<PredictResponse> responseObserver, String modelId, Exception e) {
-        log.error("Failed to load model {}", modelId, e);
-        if (e instanceof OpenSearchStatusException && ((OpenSearchStatusException) e).status() == RestStatus.NOT_FOUND) {
-            responseObserver.onError(Status.NOT_FOUND.withDescription("Model not found: " + modelId).withCause(e).asRuntimeException());
-        } else {
-            handleError(responseObserver, "loading model", e);
-        }
-    }
-
-    /**
-     * Validates model group access and executes streaming prediction if authorized.
-     */
-    private void validateModelGroupAccessAndExecute(
-        MLModel mlModel,
-        MLPredictionTaskRequest mlRequest,
-        User user,
-        String tenantId,
-        StreamObserver<PredictResponse> responseObserver
-    ) {
-        try {
-            String modelGroupId = mlModel.getModelGroupId();
-            ActionListener<Boolean> accessListener = ActionListener.wrap(hasAccess -> {
-                if (!hasAccess) {
-                    responseObserver
-                        .onError(
-                            Status.PERMISSION_DENIED
-                                .withDescription("User doesn't have privilege to perform this operation on this model")
-                                .asRuntimeException()
-                        );
-                } else {
-                    // Access granted - execute streaming prediction
-                    executeStreamingPrediction(mlRequest, responseObserver);
-                }
-            }, e -> handleError(responseObserver, "validating model group access", e));
-
-            modelAccessControlHelper
-                .validateModelGroupAccess(
-                    user,
-                    mlFeatureEnabledSetting,
-                    tenantId,
-                    modelGroupId,
-                    MLPredictionStreamTaskAction.NAME,
-                    client,
-                    sdkClient,
-                    accessListener
-                );
-        } catch (Exception e) {
-            handleError(responseObserver, "validating model group access", e);
-        }
-    }
-
-    /**
-     * Executes streaming prediction using the task runner.
      */
     private void executeStreamingPrediction(MLPredictionTaskRequest mlRequest, StreamObserver<PredictResponse> responseObserver) {
         try {
@@ -236,8 +130,12 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
             // Set the request to use gRPC channel
             mlRequest.setStreamingChannel(adapter.getChannel());
 
-            // Execute prediction via task runner
-            predictTaskRunner.checkCBAndExecute(FunctionName.REMOTE, mlRequest, adapter);
+            client
+                .execute(
+                    MLPredictionStreamTaskAction.INSTANCE,
+                    mlRequest,
+                    ActionListener.wrap(response -> {}, e -> handleError(responseObserver, "executing streaming prediction", e))
+                );
         } catch (Exception e) {
             handleError(responseObserver, "executing streaming prediction", e);
         }
@@ -259,6 +157,7 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
             MLExecuteTaskRequest mlRequest = ProtoRequestConverter.toExecuteRequest(request, tenantId);
 
             // Execute agent streaming
+            log.info("gRPC ExecuteAgentStream received: agent={}", request.getAgentId());
             executeAgentStreamingTask(mlRequest, responseObserver);
         } catch (Exception e) {
             handleError(responseObserver, "executeAgentStream", e);
@@ -277,8 +176,12 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
             mlRequest.setDispatchTask(false);
             mlRequest.setStreamingChannel(adapter.getChannel());
 
-            // Execute agent task via task runner
-            executeTaskRunner.checkCBAndExecute(FunctionName.AGENT, mlRequest, adapter);
+            client
+                .execute(
+                    MLExecuteTaskAction.INSTANCE,
+                    mlRequest,
+                    ActionListener.wrap(response -> {}, e -> handleError(responseObserver, "executing agent streaming task", e))
+                );
         } catch (Exception e) {
             handleError(responseObserver, "executing agent streaming task", e);
         }
@@ -292,7 +195,9 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
      * @param e the exception that occurred
      */
     private void handleError(StreamObserver<PredictResponse> responseObserver, String operation, Exception e) {
-        log.error("Error in {}", operation, e);
+        User user = getUserFromContext();
+        String callerIdentity = user != null ? user.getName() : "unknown";
+        log.error("gRPC error in {}: user={}", operation, callerIdentity, e);
         Status status = GrpcStatusMapper.toGrpcStatus(e);
         responseObserver.onError(status.asRuntimeException());
     }

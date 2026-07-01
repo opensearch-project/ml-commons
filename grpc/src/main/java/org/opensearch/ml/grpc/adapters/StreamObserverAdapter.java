@@ -132,6 +132,7 @@ public class StreamObserverAdapter<ProtoResponse> extends
     public void completeGrpcStream() {
         if (completed.compareAndSet(false, true)) {
             responseObserver.onCompleted();
+            log.info("gRPC stream completed successfully");
         }
     }
 
