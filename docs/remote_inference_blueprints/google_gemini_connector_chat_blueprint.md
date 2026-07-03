@@ -21,6 +21,8 @@ PUT /_cluster/settings
 
 The Gemini API uses `contents` (not `messages`) with `role` and `parts`. `generationConfig` is optional and can be passed per-request if needed.
 
+> **Note:** The API key must be sent as the `x-goog-api-key` header rather than a `?key=` query parameter. `${credential.*}` substitution is only applied to headers, not to the action `url`, so a credential placeholder left in the URL will not be resolved at request time.
+
 ```json
 POST /_plugins/_ml/connectors/_create
 {
