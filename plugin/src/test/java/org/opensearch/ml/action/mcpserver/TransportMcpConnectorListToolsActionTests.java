@@ -13,7 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -110,7 +110,7 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         super.setUp();
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
             ActionListener<Boolean> accessListener = invocation.getArgument(5);
@@ -131,8 +131,8 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
     }
 
     @Test
-    public void testDoExecute_McpServerDisabled_CallsListenerOnFailure() {
-        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+    public void testDoExecute_McpConnectorDisabled_CallsListenerOnFailure() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
         TestableTransportMcpConnectorListToolsAction action = new TestableTransportMcpConnectorListToolsAction(
             transportService,
             actionFilters,
@@ -154,7 +154,7 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         verifyNoMoreInteractions(listener);
         Exception e = captor.getValue();
         assertTrue(e instanceof OpenSearchException);
-        assertEquals(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE, e.getMessage());
+        assertEquals(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, e.getMessage());
     }
 
     @Test
@@ -179,6 +179,7 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         assertEquals(1, response.getTools().size());
         McpToolInfo info = response.getTools().get(0);
         assertEquals("TestTool", info.getName());
+        assertEquals("test_tool", info.getType());
         assertEquals("Desc", info.getDescription());
         assertEquals(inputSchema, info.getInputSchema());
     }
@@ -186,25 +187,6 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
     @Test
     public void testDoExecute_EmptyTools_ReturnsEmptyList() {
         transportAction.setToolSpecsToReturn(Collections.emptyList());
-
-        MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest
-            .builder()
-            .connectorId("conn-1")
-            .tenantId("tenant-1")
-            .build();
-        ActionListener<MLMcpConnectorListToolsResponse> listener = mock(ActionListener.class);
-
-        transportAction.doExecute(task, request, listener);
-
-        ArgumentCaptor<MLMcpConnectorListToolsResponse> captor = ArgumentCaptor.forClass(MLMcpConnectorListToolsResponse.class);
-        verify(listener).onResponse(captor.capture());
-        assertNotNull(captor.getValue());
-        assertTrue(captor.getValue().getTools().isEmpty());
-    }
-
-    @Test
-    public void testDoExecute_NullTools_ReturnsEmptyList() {
-        transportAction.setToolSpecsToReturn(null);
 
         MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest
             .builder()
@@ -316,6 +298,7 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         assertEquals(1, response.getTools().size());
         McpToolInfo info = response.getTools().get(0);
         assertEquals("McpTool", info.getName());
+        assertEquals("mcp_tool", info.getType());
         assertEquals("MCP tool for tenant", info.getDescription());
         assertEquals(inputSchema, info.getInputSchema());
         assertEquals("tenant-abc", request.getTenantId());

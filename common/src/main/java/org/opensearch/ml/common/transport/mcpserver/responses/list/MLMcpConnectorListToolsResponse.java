@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.transport.mcpserver.responses.list;
 
+import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_FIELD;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -19,7 +21,6 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.agent.MLAgent;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -47,7 +48,7 @@ public class MLMcpConnectorListToolsResponse extends ActionResponse implements T
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.startArray(MLAgent.TOOLS_FIELD);
+        builder.startArray(MCP_TOOLS_FIELD);
         for (McpToolInfo tool : tools) {
             tool.toXContent(builder, params);
         }

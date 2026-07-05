@@ -70,10 +70,12 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -1955,6 +1957,62 @@ public class AgentUtilsTest extends MLStaticMockBase {
             AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
             verify(listener).onResponse(Collections.emptyList());
         }
+    }
+
+    @Test
+    public void testGetMCPToolSpecsFromConnectorWithPropagatingFailures_With_UnsupportedConnectorType_ReturnsBadRequest() throws Exception {
+        stubGetConnector();
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+            HttpConnector mockConnector = mock(HttpConnector.class);
+            when(mockConnector.getProtocol()).thenReturn("http");
+            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString(), isA(ActionListener.class));
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+            AtomicReference<Exception> failureRef = new AtomicReference<>();
+            AgentUtils
+                .getMCPToolSpecsFromConnectorWithPropagatingFailures(
+                    "c1",
+                    "tenant",
+                    sdkClient,
+                    client,
+                    encryptor,
+                    ActionListener.wrap(r -> Assert.fail("Expected to fail for unsupported connector type"), failureRef::set)
+                );
+
+            assertNotNull(failureRef.get());
+            assertTrue(failureRef.get() instanceof OpenSearchStatusException);
+            assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failureRef.get()).status());
+        }
+    }
+
+    @Test
+    public void testGetMCPToolSpecsFromConnectorWithPropagatingFailures_With_GetConnectorFailure() throws Exception {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("Failed to get connector"));
+                return stage;
+            });
+            return stage;
+        });
+
+        AtomicReference<Exception> failureRef = new AtomicReference<>();
+        AgentUtils
+            .getMCPToolSpecsFromConnectorWithPropagatingFailures(
+                "c1",
+                "tenant",
+                sdkClient,
+                client,
+                encryptor,
+                ActionListener.wrap(r -> Assert.fail("Expected to fail when connector lookup fails"), failureRef::set)
+            );
+
+        assertNotNull(failureRef.get());
+        assertTrue(failureRef.get().getMessage().contains("Failed to get connector"));
     }
 
     @Test

@@ -10,6 +10,7 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_FIELD;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -22,19 +23,26 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.agent.MLAgent;
 
 public class MLMcpConnectorListToolsResponseTest {
 
     private static final String TOOL_NAME = "tool1";
+    private static final String TOOL_TYPE = "McpStreamableHttpTool";
     private static final String TOOL_DESCRIPTION = "description";
-    private static final McpToolInfo tool = McpToolInfo.builder().name(TOOL_NAME).description(TOOL_DESCRIPTION).inputSchema(null).build();
+    private static final McpToolInfo tool = McpToolInfo
+        .builder()
+        .name(TOOL_NAME)
+        .type(TOOL_TYPE)
+        .description(TOOL_DESCRIPTION)
+        .inputSchema(null)
+        .build();
 
     @Test
     public void testBuilder() {
         MLMcpConnectorListToolsResponse response = MLMcpConnectorListToolsResponse.builder().tools(List.of(tool)).build();
         assertEquals(1, response.getTools().size());
         assertEquals(TOOL_NAME, response.getTools().get(0).getName());
+        assertEquals(TOOL_TYPE, response.getTools().get(0).getType());
         assertEquals(TOOL_DESCRIPTION, response.getTools().get(0).getDescription());
     }
 
@@ -70,8 +78,9 @@ public class MLMcpConnectorListToolsResponseTest {
         response.toXContent(builder, EMPTY_PARAMS);
         String json = builder.toString();
         assertTrue(json.trim().startsWith("{"));
-        assertTrue(json.contains("\"" + MLAgent.TOOLS_FIELD + "\":"));
+        assertTrue(json.contains("\"" + MCP_TOOLS_FIELD + "\":"));
         assertTrue(json.contains("\"name\":\"tool1\""));
+        assertTrue(json.contains("\"type\":\"" + TOOL_TYPE + "\""));
     }
 
     @Test

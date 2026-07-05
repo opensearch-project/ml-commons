@@ -864,7 +864,7 @@ public class AgentUtils {
         }
     }
 
-    public static void getMCPToolSpecsFromConnector(
+    private static void getMCPToolSpecsFromConnector(
         String connectorId,
         String tenantId,
         SdkClient sdkClient,
@@ -872,11 +872,49 @@ public class AgentUtils {
         Encryptor encryptor,
         ActionListener<List<MLToolSpec>> toolListener
     ) {
+        getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, toolListener, false);
+    }
+
+    /**
+     * Strict version of MCP tool listing for explicit user-facing APIs. This API will propagate the failures to the listener
+     *
+     * @param connectorId
+     * @param tenantId
+     * @param sdkClient
+     * @param client
+     * @param encryptor
+     * @param toolListener
+     */
+    public static void getMCPToolSpecsFromConnectorWithPropagatingFailures(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> toolListener
+    ) {
+        getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, toolListener, true);
+    }
+
+    private static void getMCPToolSpecsFromConnector(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> toolListener,
+        boolean isPropagatingFailures
+    ) {
         getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
             try {
                 if (!(connector instanceof McpConnector) && !(connector instanceof McpStreamableHttpConnector)) {
-                    log.error("Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector");
-                    toolListener.onResponse(Collections.emptyList());
+                    String errorMessage = "Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector";
+                    log.error(errorMessage);
+                    if (isPropagatingFailures) {
+                        toolListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.BAD_REQUEST));
+                    } else {
+                        toolListener.onResponse(Collections.emptyList());
+                    }
                     return;
                 }
                 ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
@@ -901,8 +939,6 @@ public class AgentUtils {
                         toolListener.onResponse(mcpToolSpecs);
                         return;
                     }
-                    log.error("Unsupported connector type for connector: " + connectorId);
-                    toolListener.onResponse(Collections.emptyList());
                 }, e -> {
                     log.error("Failed to decrypt credentials in connector", e);
                     toolListener.onFailure(e);
@@ -911,11 +947,23 @@ public class AgentUtils {
             } catch (Throwable t) {
                 // Throwable, not Exception: ServiceConfigurationError would otherwise stall the async chain.
                 log.error("Error retrieving MCP tool specs from connector: " + connectorId, t);
-                toolListener.onResponse(Collections.emptyList());
+                if (isPropagatingFailures) {
+                    if (t instanceof Exception) {
+                        toolListener.onFailure((Exception) t);
+                    } else {
+                        toolListener.onFailure(new RuntimeException("Error retrieving MCP tool specs from connector: " + connectorId, t));
+                    }
+                } else {
+                    toolListener.onResponse(Collections.emptyList());
+                }
             }
         }, e -> {
             log.error("Failed to get connector for MCP tool specs, connectorId=" + connectorId, e);
-            toolListener.onResponse(Collections.emptyList());
+            if (isPropagatingFailures) {
+                toolListener.onFailure(e);
+            } else {
+                toolListener.onResponse(Collections.emptyList());
+            }
         }));
 
     }
