@@ -41,21 +41,25 @@ import java.util.TreeSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.lucene.search.TotalHits;
+import org.junit.AssumptionViolatedException;
 import org.opensearch.Version;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Request;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.WarningsHandler;
 import org.opensearch.cluster.ClusterName;
@@ -201,8 +205,52 @@ public class TestHelper {
         if (entity != null) {
             request.setEntity(entity);
         }
-        return client.performRequest(request);
+        try {
+            return client.performRequest(request);
+        } catch (ResponseException e) {
+            skipIfRemoteServiceUnavailable(e);
+            throw e;
+        }
     }
+
+    /**
+     * Skips the test (assumption violation) when a 503/500 is attributable to remote-service
+     * unavailability (Bedrock/OpenAI/Cohere down or timing out) rather than an ml-commons bug.
+     * All other errors still fail normally.
+     */
+    private static void skipIfRemoteServiceUnavailable(ResponseException e) {
+        int status = e.getResponse().getStatusLine().getStatusCode();
+        if (status != 503 && status != 500) {
+            return;
+        }
+        String body;
+        try {
+            body = EntityUtils.toString(e.getResponse().getEntity());
+        } catch (Exception ignored) {
+            return;
+        }
+        if (body == null) {
+            return;
+        }
+        if (status == 503 && REMOTE_SERVICE_ERROR_PATTERN.matcher(body).find()) {
+            throw new AssumptionViolatedException("Remote service unavailable (503), skipping test: " + body);
+        }
+        if (status == 500 && REMOTE_TIMEOUT_ERROR_PATTERN.matcher(body).find()) {
+            throw new AssumptionViolatedException("Remote service timed out, skipping test: " + body);
+        }
+    }
+
+    // CommonValue.REMOTE_SERVICE_ERROR wrapper plus common upstream 503 phrasings.
+    private static final Pattern REMOTE_SERVICE_ERROR_PATTERN = Pattern
+        .compile("Error from remote service|Service Unavailable|ServiceUnavailable|model.{0,20}not ready", Pattern.CASE_INSENSITIVE);
+
+    // MLSdkAsyncHttpResponseHandler's connectivity wrapper — timeouts/resets only, so genuine
+    // request bugs surfacing as other remote 500s still fail.
+    private static final Pattern REMOTE_TIMEOUT_ERROR_PATTERN = Pattern
+        .compile(
+            "Error communicating with remote model.{0,40}(Read timed out|timed out|Connection reset|Connection refused)",
+            Pattern.CASE_INSENSITIVE
+        );
 
     public static HttpEntity toHttpEntity(ToXContentObject object) throws IOException {
         return new StringEntity(toJsonString(object), APPLICATION_JSON);
