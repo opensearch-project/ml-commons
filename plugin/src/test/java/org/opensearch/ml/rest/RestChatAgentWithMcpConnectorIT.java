@@ -77,16 +77,36 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
             );
         assertEquals(200, registerResponse.getStatusLine().getStatusCode());
 
-        // MCP per-node tool registration is fire-and-forget, so HTTP 200 doesn't guarantee
-        // the tool is visible yet. Poll /_list until ListIndexTool shows up; assertBusyWithFixedSleepTime
-        // retries every 500ms up to 15s and throws if the tool never appears.
+        // MCP per-node tool registration is fire-and-forget, so HTTP 200 doesn't guarantee the
+        // tool is servable yet. Note /_plugins/_ml/mcp/tools/_list reads the system index, NOT the
+        // per-node in-memory MCP server that actually answers tools/list — the two can lag apart
+        // (a background job syncs index -> memory every 10s). Poll the real MCP endpoint with a
+        // JSON-RPC tools/list call, which is exactly what the agent's MCP client will invoke; if
+        // the tool isn't servable, the agent sends Bedrock an empty toolConfig and gets a 400.
+        String toolsListRequest = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}";
         assertBusyWithFixedSleepTime(() -> {
-            Response listResponse = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/mcp/tools/_list", null, "", null);
+            String toolsListBody;
+            try {
+                Response listResponse = TestHelper
+                    .makeRequest(
+                        client(),
+                        "POST",
+                        "/_plugins/_ml/mcp",
+                        null,
+                        toolsListRequest,
+                        ImmutableList.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
+                    );
+                toolsListBody = TestHelper.httpEntityToString(listResponse.getEntity());
+            } catch (Exception e) {
+                // assertBusy only retries on AssertionError; surface transient failures (e.g. MCP
+                // server still initializing) as assertion failures so polling continues.
+                throw new AssertionError("MCP tools/list request failed: " + e.getMessage(), e);
+            }
             assertTrue(
-                "ListIndexTool did not become visible in /_plugins/_ml/mcp/tools/_list within 15s",
-                TestHelper.httpEntityToString(listResponse.getEntity()).contains("ListIndexTool")
+                "ListIndexTool did not become servable via MCP tools/list within 30s, got: " + toolsListBody,
+                toolsListBody.contains("ListIndexTool")
             );
-        }, TimeValue.timeValueSeconds(15), TimeValue.timeValueMillis(500));
+        }, TimeValue.timeValueSeconds(30), TimeValue.timeValueMillis(500));
 
         ingestIrisData(irisIndex);
         llmModelId = registerAndDeployBedrockModel();
