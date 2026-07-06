@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.model_group;
 
+import java.util.concurrent.TimeUnit;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -29,9 +31,16 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     private static String modelGroupId;
 
+    private static final long SEARCH_TIMEOUT_SECONDS = 30;
+
     @Override
     protected void setupSuiteScopeCluster() throws Exception {
         registerModelGroup();
+        // Explicit refresh ensures the indexed model group document is searchable.
+        // While PutDataObjectRequest defaults to RefreshPolicy.IMMEDIATE, issuing an
+        // explicit refresh eliminates any residual timing window on resource-constrained
+        // CI environments (e.g., single-node clusters with small thread pools on Windows).
+        client().admin().indices().prepareRefresh().get();
     }
 
     private void registerModelGroup() {
@@ -54,7 +63,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
@@ -66,7 +77,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.matchAllQuery());
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
@@ -78,7 +91,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().must(QueryBuilders.termQuery("name.keyword", "mock_model_group_name")));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
@@ -90,7 +105,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termQuery("name.keyword", "mock_model_group_name"));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
@@ -102,7 +119,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termsQuery("name.keyword", "mock_model_group_name", "test_model_group_name"));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
@@ -114,7 +133,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.rangeQuery("created_time").gte("now-1d"));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
@@ -126,7 +147,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.matchPhraseQuery("description", "desc"));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
@@ -138,7 +161,9 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.queryStringQuery("name: mock_model_group_*"));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
+        SearchResponse response = client()
+            .execute(MLModelGroupSearchAction.INSTANCE, mlSearchActionRequest)
+            .actionGet(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
