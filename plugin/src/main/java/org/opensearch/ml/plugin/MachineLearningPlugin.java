@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 import org.apache.lucene.analysis.Analyzer;
@@ -408,6 +409,7 @@ import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRemoveAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsUpdateAction;
 import org.opensearch.ml.rest.mcpserver.RestMcpServerAction;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
+import org.opensearch.ml.sdkclient.DelegatingAsyncSdkClient;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -438,6 +440,7 @@ import org.opensearch.plugins.SearchPlugin;
 import org.opensearch.plugins.SystemIndexPlugin;
 import org.opensearch.plugins.TelemetryAwarePlugin;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SdkClientDelegate;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
@@ -671,6 +674,12 @@ public class MachineLearningPlugin extends Plugin
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
 
+        // Use the dedicated SDK client thread pool for CompletionStage callbacks.
+        // This prevents deadlocks: LocalClusterIndicesClient completes futures on transport
+        // threads, and if callers block those threads, the system deadlocks. By wrapping the
+        // delegate, all downstream .whenComplete() callbacks execute on this safe pool instead.
+        Executor sdkClientExecutor = client.threadPool().executor(SDK_CLIENT_THREAD_POOL);
+
         SdkClient sdkClient = SdkClientFactory
             .createSdkClient(
                 client,
@@ -694,11 +703,19 @@ public class MachineLearningPlugin extends Plugin
                                 )
                         )
                     : Collections.emptyMap(),
-                // For node client / local cluster it won't use this thread pool
-                // but we haven't update the ddbclient to async for which we are keeping it like this
-                // todo: need to update this when ddbclient async is going to be implemented.
-                client.threadPool().executor(ThreadPool.Names.GENERIC)
+                sdkClientExecutor
             );
+
+        // Wrap the SdkClient's delegate to force a thread hop on completion.
+        // This ensures .whenComplete() callbacks at all call sites run on the
+        // SDK client pool, not on transport threads where they can deadlock.
+        SdkClientDelegate wrappedDelegate = new DelegatingAsyncSdkClient(sdkClient.getDelegate(), sdkClientExecutor);
+        sdkClient = new SdkClient(
+            wrappedDelegate,
+            sdkClientExecutor,
+            ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings),
+            ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings) ? REMOTE_METADATA_GLOBAL_TENANT_ID.get(settings) : null
+        );
 
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
