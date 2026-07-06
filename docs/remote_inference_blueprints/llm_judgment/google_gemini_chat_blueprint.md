@@ -40,7 +40,7 @@ POST /_plugins/_ml/connectors/_create
   "version": "1",
   "protocol": "http",
   "parameters": {
-    "model": "gemini-2.5-flash"
+    "model": "<MODEL_ID>"  // example: gemini-2.5-flash
   },
   "credential": {
     "gemini_key": "<PLEASE ADD YOUR GEMINI API KEY HERE>"

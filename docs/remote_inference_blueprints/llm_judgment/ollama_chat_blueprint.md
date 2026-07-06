@@ -58,7 +58,7 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "endpoint": "127.0.0.1:11434",
-    "model": "qwen3:4b"
+    "model": "<MODEL_ID>"  // example: qwen3:4b
   },
   "credential": {
     "openAI_key": "<YOUR API KEY HERE IF NEEDED>"

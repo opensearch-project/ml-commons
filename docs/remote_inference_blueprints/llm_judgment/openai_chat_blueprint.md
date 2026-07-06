@@ -41,7 +41,7 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "endpoint": "api.openai.com",
-    "model": "gpt-5-mini"
+    "model": "<MODEL_ID>"  // example: gpt-5-mini
   },
   "credential": {
     "openAI_key": "<PLEASE ADD YOUR OPENAI API KEY HERE>"

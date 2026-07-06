@@ -58,7 +58,7 @@ POST /_plugins/_ml/connectors/_create
         "service_name": "bedrock",
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 8000,
-        "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        "model": "<INFERENCE_PROFILE_ID>"  // example: us.anthropic.claude-haiku-4-5-20251001-v1:0
     },
     "client_config": {
         "max_retry_times": 3,
@@ -96,7 +96,7 @@ POST /_plugins/_ml/connectors/_create
         "service_name": "bedrock",
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 8000,
-        "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        "model": "<INFERENCE_PROFILE_ID>"  // example: us.anthropic.claude-haiku-4-5-20251001-v1:0
     },
     "client_config": {
         "max_retry_times": 3,

@@ -38,7 +38,7 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "endpoint": "api.deepseek.com",
-    "model": "deepseek-chat"
+    "model": "<MODEL_ID>"  // example: deepseek-chat
   },
   "credential": {
     "deepSeek_key": "<PLEASE ADD YOUR DEEPSEEK API KEY HERE>"
