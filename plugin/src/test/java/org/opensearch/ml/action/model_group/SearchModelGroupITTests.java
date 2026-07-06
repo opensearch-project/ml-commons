@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.model_group;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -50,7 +52,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_empty_body_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
@@ -61,7 +63,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_matchAll_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.matchAllQuery());
@@ -73,7 +75,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_bool_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().must(QueryBuilders.termQuery("name.keyword", "mock_model_group_name")));
@@ -85,7 +87,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_term_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termQuery("name.keyword", "mock_model_group_name"));
@@ -97,7 +99,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_terms_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termsQuery("name.keyword", "mock_model_group_name", "test_model_group_name"));
@@ -109,7 +111,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_range_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.rangeQuery("created_time").gte("now-1d"));
@@ -121,7 +123,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_matchPhrase_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.matchPhraseQuery("description", "desc"));
@@ -133,7 +135,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
 
     @Test
     public void test_queryString_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.queryStringQuery("name: mock_model_group_*"));
