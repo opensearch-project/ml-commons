@@ -118,6 +118,10 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
         String mcpServerUrl = host.getSchemeName() + "://" + host.getHostName() + ":" + host.getPort();
 
         // Step 1 – create the MCP streamable-http connector pointing at this cluster's own MCP server.
+        // The MCP tool call loops back into this same cluster over HTTP. Under CI load (40+ IT classes
+        // share one JVM), the default 30s read timeout is too tight and the loopback call intermittently
+        // times out — the LLM then reports a timeout instead of the index list and the assertion fails.
+        // A generous client_config timeout removes that flake source.
         String connectorBody = "{\n"
             + "  \"name\": \"Self MCP Connector\",\n"
             + "  \"description\": \"MCP streamable-http connector pointing back at the same cluster's MCP server\",\n"
@@ -128,6 +132,10 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
             + "\",\n"
             + "  \"parameters\": {\n"
             + "    \"endpoint\": \"/_plugins/_ml/mcp\"\n"
+            + "  },\n"
+            + "  \"client_config\": {\n"
+            + "    \"connection_timeout\": 120,\n"
+            + "    \"read_timeout\": 120\n"
             + "  },\n"
             + "  \"credential\": {}\n"
             + "}";
