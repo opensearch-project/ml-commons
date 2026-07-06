@@ -77,12 +77,9 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
             );
         assertEquals(200, registerResponse.getStatusLine().getStatusCode());
 
-        // MCP per-node tool registration is fire-and-forget, so HTTP 200 doesn't guarantee the
-        // tool is servable yet. Note /_plugins/_ml/mcp/tools/_list reads the system index, NOT the
-        // per-node in-memory MCP server that actually answers tools/list — the two can lag apart
-        // (a background job syncs index -> memory every 10s). Poll the real MCP endpoint with a
-        // JSON-RPC tools/list call, which is exactly what the agent's MCP client will invoke; if
-        // the tool isn't servable, the agent sends Bedrock an empty toolConfig and gets a 400.
+        // Registration is fire-and-forget and /_list reads the system index, not the per-node
+        // in-memory registry that serves tools/list (synced every 10s). Poll the MCP endpoint
+        // itself — the same call the agent's MCP client makes — until the tool is servable.
         String toolsListRequest = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}";
         assertBusyWithFixedSleepTime(() -> {
             String toolsListBody;
@@ -98,8 +95,7 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
                     );
                 toolsListBody = TestHelper.httpEntityToString(listResponse.getEntity());
             } catch (Exception e) {
-                // assertBusy only retries on AssertionError; surface transient failures (e.g. MCP
-                // server still initializing) as assertion failures so polling continues.
+                // assertBusy only retries on AssertionError
                 throw new AssertionError("MCP tools/list request failed: " + e.getMessage(), e);
             }
             assertTrue(
@@ -137,11 +133,9 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
         HttpHost host = getClusterHosts().get(0);
         String mcpServerUrl = host.getSchemeName() + "://" + host.getHostName() + ":" + host.getPort();
 
-        // Step 1 – create the MCP streamable-http connector pointing at this cluster's own MCP server.
-        // The MCP tool call loops back into this same cluster over HTTP. Under CI load (40+ IT classes
-        // share one JVM), the default 30s read timeout is too tight and the loopback call intermittently
-        // times out — the LLM then reports a timeout instead of the index list and the assertion fails.
-        // A generous client_config timeout removes that flake source.
+        // Step 1 – create the MCP streamable-http connector pointing at this cluster's own MCP
+        // server. Generous client_config timeouts because the default 30s intermittently trips
+        // on the loopback tool call under CI load.
         String connectorBody = "{\n"
             + "  \"name\": \"Self MCP Connector\",\n"
             + "  \"description\": \"MCP streamable-http connector pointing back at the same cluster's MCP server\",\n"
