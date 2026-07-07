@@ -52,7 +52,6 @@ import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.lucene.search.TotalHits;
-import org.junit.AssumptionViolatedException;
 import org.opensearch.Version;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -208,31 +207,26 @@ public class TestHelper {
         return performRequestWithRemoteRetry(client, request);
     }
 
-    // Retries transient remote-service 5xx blips (Bedrock/OpenAI/Cohere) so the test still runs and
-    // catches real regressions; only skips if the remote stays down for every attempt.
+    // Retries transient remote-service 5xx blips (Bedrock/OpenAI/Cohere) so a momentary outage
+    // doesn't fail CI. If the remote stays unavailable across every attempt, the error is re-thrown
+    // and the test fails normally, so a genuine regression is never masked.
     private static Response performRequestWithRemoteRetry(RestClient client, Request request) throws IOException {
-        ResponseException lastTransientError = null;
         for (int attempt = 0; attempt <= MAX_REMOTE_RETRIES; attempt++) {
             try {
                 return client.performRequest(request);
             } catch (ResponseException e) {
-                if (!isTransientRemoteServiceError(e)) {
+                if (!isTransientRemoteServiceError(e) || attempt == MAX_REMOTE_RETRIES) {
                     throw e;
                 }
-                lastTransientError = e;
-                if (attempt < MAX_REMOTE_RETRIES) {
-                    try {
-                        Thread.sleep(REMOTE_RETRY_BACKOFF_MS * (attempt + 1)); // linear backoff
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw e; // interrupted: stop retrying, surface the remote error
-                    }
+                try {
+                    Thread.sleep(REMOTE_RETRY_BACKOFF_MS * (attempt + 1)); // linear backoff
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e; // interrupted: stop retrying, surface the remote error
                 }
             }
         }
-        throw new AssumptionViolatedException(
-            "Remote service unavailable after " + (MAX_REMOTE_RETRIES + 1) + " attempts, skipping test: " + lastTransientError.getMessage()
-        );
+        throw new IllegalStateException("unreachable"); // loop always returns or throws
     }
 
     // True only for the two narrow remote-unavailability signatures (503 wrapper, 500 connectivity
