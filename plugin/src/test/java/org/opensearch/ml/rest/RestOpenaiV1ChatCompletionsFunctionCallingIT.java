@@ -120,6 +120,11 @@ public class RestOpenaiV1ChatCompletionsFunctionCallingIT extends RestBaseAgentT
             // Skip on internal errors from external API dependency (flaky on CI)
             Assume.assumeFalse("Skipping: server error during external API call", msg.contains("500 Internal Server Error"));
             throw e;
+        } catch (IOException e) {
+            // Skip on client-side transport failures (socket timeout, connection reset)
+            // These occur when the OpenSearch node takes too long proxying the OpenAI call
+            Assume.assumeFalse("Skipping: transport error during external API call - " + e.getMessage(), true);
+            throw e; // unreachable, but satisfies compiler
         }
         assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
 
