@@ -22,9 +22,14 @@ import lombok.extern.log4j.Log4j2;
  * while fixing common LLM output formatting issues.
  */
 @Log4j2
-public class ToolArgumentValidator {
+public final class ToolArgumentValidator {
 
     private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
+
+    // Private constructor to prevent instantiation
+    private ToolArgumentValidator() {
+        throw new UnsupportedOperationException("Utility class");
+    }
 
     /**
      * Validates and normalizes tool input against the provided schema.
@@ -35,7 +40,7 @@ public class ToolArgumentValidator {
      * @return normalized and validated input as Map
      * @throws IllegalArgumentException if input cannot be safely normalized
      */
-    public Map<String, Object> validateAndNormalize(String toolInput, String schema) {
+    public static Map<String, Object> validateAndNormalize(String toolInput, String schema) {
         if (toolInput == null || toolInput.trim().isEmpty()) {
             throw new IllegalArgumentException("Tool input cannot be null or empty");
         }
@@ -67,7 +72,7 @@ public class ToolArgumentValidator {
      * Normalizes a JsonObject by handling stringified JSON values.
      * This is the primary normalization: converting stringified JSON objects to actual objects.
      */
-    private Map<String, Object> normalizeJsonObject(JsonObject input) {
+    private static Map<String, Object> normalizeJsonObject(JsonObject input) {
         JsonObject normalized = new JsonObject();
 
         for (Map.Entry<String, JsonElement> entry : input.entrySet()) {
@@ -103,7 +108,7 @@ public class ToolArgumentValidator {
      * Applies conservative normalization to malformed JSON strings.
      * Only applies transformations that are very likely to preserve intent.
      */
-    private String applyConservativeNormalization(String input) {
+    private static String applyConservativeNormalization(String input) {
         String normalized = input.trim();
 
         // Only apply stringified JSON unwrapping - the safest transformation
@@ -116,7 +121,7 @@ public class ToolArgumentValidator {
      * Unwraps stringified JSON by removing outer quotes if the content is valid JSON.
      * Example: "{"key":"value"}" -> {"key":"value"}
      */
-    private String unwrapStringifiedJson(String input) {
+    private static String unwrapStringifiedJson(String input) {
         if (input.length() < 2) {
             return input;
         }
@@ -145,7 +150,7 @@ public class ToolArgumentValidator {
     /**
      * Checks if a string appears to be stringified JSON (starts with { or [).
      */
-    private boolean isStringifiedJson(String value) {
+    private static boolean isStringifiedJson(String value) {
         if (value == null || value.length() < 2) {
             return false;
         }
@@ -154,38 +159,4 @@ public class ToolArgumentValidator {
         return (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"));
     }
 
-    /**
-     * Validation result containing the outcome and any error details.
-     */
-    public static class ValidationResult {
-        private final boolean success;
-        private final Map<String, Object> normalizedInput;
-        private final String errorMessage;
-
-        private ValidationResult(boolean success, Map<String, Object> normalizedInput, String errorMessage) {
-            this.success = success;
-            this.normalizedInput = normalizedInput;
-            this.errorMessage = errorMessage;
-        }
-
-        public static ValidationResult success(Map<String, Object> normalizedInput) {
-            return new ValidationResult(true, normalizedInput, null);
-        }
-
-        public static ValidationResult failure(String errorMessage) {
-            return new ValidationResult(false, null, errorMessage);
-        }
-
-        public boolean isSuccess() {
-            return success;
-        }
-
-        public Map<String, Object> getNormalizedInput() {
-            return normalizedInput;
-        }
-
-        public String getErrorMessage() {
-            return errorMessage;
-        }
-    }
 }

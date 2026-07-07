@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -20,12 +19,10 @@ import lombok.SneakyThrows;
 
 public class ToolArgumentValidatorTests {
 
-    private ToolArgumentValidator validator;
     private String testSchema;
 
     @Before
     public void setup() {
-        validator = new ToolArgumentValidator();
         testSchema = """
             {"type":"object",\
             "properties":{\
@@ -42,7 +39,7 @@ public class ToolArgumentValidatorTests {
     public void testValidateAndNormalize_withValidJson() {
         String validInput = "{\"index\":\"test-index\",\"query\":{\"match_all\":{}}}";
 
-        Map<String, Object> result = validator.validateAndNormalize(validInput, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(validInput, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -54,7 +51,7 @@ public class ToolArgumentValidatorTests {
     public void testValidateAndNormalize_withComplexQuery() {
         String complexInput = "{\"index\":\"test-index\",\"query\":{\"bool\":{\"must\":[{\"match\":{\"title\":\"test\"}}]}}}";
 
-        Map<String, Object> result = validator.validateAndNormalize(complexInput, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(complexInput, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -70,7 +67,7 @@ public class ToolArgumentValidatorTests {
         // Common LLM output pattern: query field is stringified JSON
         String stringifiedInput = "{\"index\":\"test-index\",\"query\":\"{\\\"match_all\\\":{}}\"}";
 
-        Map<String, Object> result = validator.validateAndNormalize(stringifiedInput, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(stringifiedInput, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -86,7 +83,7 @@ public class ToolArgumentValidatorTests {
         String complexStringified =
             "{\"index\":\"test-index\",\"query\":\"{\\\"bool\\\":{\\\"must\\\":[{\\\"match\\\":{\\\"title\\\":\\\"test\\\"}}]}}\"}";
 
-        Map<String, Object> result = validator.validateAndNormalize(complexStringified, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(complexStringified, testSchema);
 
         assertNotNull("Result should not be null", result);
         Map<String, Object> query = (Map<String, Object>) result.get("query");
@@ -102,7 +99,7 @@ public class ToolArgumentValidatorTests {
         // Multiple levels of stringification
         String nestedStringified = "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"match_all\\\":{}},\\\"size\\\":10}\"}";
 
-        Map<String, Object> result = validator.validateAndNormalize(nestedStringified, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(nestedStringified, testSchema);
 
         assertNotNull("Result should not be null", result);
         Map<String, Object> query = (Map<String, Object>) result.get("query");
@@ -119,7 +116,7 @@ public class ToolArgumentValidatorTests {
         // Entire JSON wrapped in quotes (common LLM mistake)
         String wrappedInput = "\"{\\\"index\\\":\\\"test-index\\\",\\\"query\\\":{\\\"match_all\\\":{}}}\"";
 
-        Map<String, Object> result = validator.validateAndNormalize(wrappedInput, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(wrappedInput, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -133,7 +130,7 @@ public class ToolArgumentValidatorTests {
         String escapedInput = "{\\\"index\\\":\\\"test-index\\\",\\\"query\\\":{\\\"match_all\\\":{}}}";
 
         try {
-            validator.validateAndNormalize(escapedInput, testSchema);
+            ToolArgumentValidator.validateAndNormalize(escapedInput, testSchema);
             fail("Should throw IllegalArgumentException for invalid JSON with unescaped backslashes");
         } catch (IllegalArgumentException e) {
             assertTrue("Should mention malformed JSON", e.getMessage().contains("malformed"));
@@ -146,7 +143,7 @@ public class ToolArgumentValidatorTests {
         // String values that aren't JSON should remain as strings
         String inputWithString = "{\"index\":\"test-index\",\"description\":\"This is just a string\",\"query\":{\"match_all\":{}}}";
 
-        Map<String, Object> result = validator.validateAndNormalize(inputWithString, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(inputWithString, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -160,7 +157,7 @@ public class ToolArgumentValidatorTests {
     @SneakyThrows
     public void testValidateAndNormalize_withNullInput() {
         try {
-            validator.validateAndNormalize(null, testSchema);
+            ToolArgumentValidator.validateAndNormalize(null, testSchema);
             fail("Should throw IllegalArgumentException for null input");
         } catch (IllegalArgumentException e) {
             assertTrue("Should mention null input", e.getMessage().contains("null or empty"));
@@ -171,7 +168,7 @@ public class ToolArgumentValidatorTests {
     @SneakyThrows
     public void testValidateAndNormalize_withEmptyInput() {
         try {
-            validator.validateAndNormalize("", testSchema);
+            ToolArgumentValidator.validateAndNormalize("", testSchema);
             fail("Should throw IllegalArgumentException for empty input");
         } catch (IllegalArgumentException e) {
             assertTrue("Should mention null or empty", e.getMessage().contains("null or empty"));
@@ -184,7 +181,7 @@ public class ToolArgumentValidatorTests {
         String invalidInput = "this is not json at all {{{";
 
         try {
-            validator.validateAndNormalize(invalidInput, testSchema);
+            ToolArgumentValidator.validateAndNormalize(invalidInput, testSchema);
             fail("Should throw IllegalArgumentException for invalid JSON");
         } catch (IllegalArgumentException e) {
             assertTrue("Should mention malformed JSON", e.getMessage().contains("malformed"));
@@ -198,7 +195,7 @@ public class ToolArgumentValidatorTests {
         String partiallyValid = "{\"index\":\"test-index\",\"query\":\"not-json-but-looks-like{it\"}";
 
         // This should actually succeed because it's valid JSON, just with a string query value
-        Map<String, Object> result = validator.validateAndNormalize(partiallyValid, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(partiallyValid, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -212,7 +209,7 @@ public class ToolArgumentValidatorTests {
     public void testValidateAndNormalize_withNumberValues() {
         String inputWithNumbers = "{\"index\":\"test-index\",\"query\":{\"range\":{\"age\":{\"gte\":18}}},\"size\":10}";
 
-        Map<String, Object> result = validator.validateAndNormalize(inputWithNumbers, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(inputWithNumbers, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -229,7 +226,7 @@ public class ToolArgumentValidatorTests {
     public void testValidateAndNormalize_withBooleanValues() {
         String inputWithBooleans = "{\"index\":\"test-index\",\"query\":{\"match_all\":{}},\"explain\":true}";
 
-        Map<String, Object> result = validator.validateAndNormalize(inputWithBooleans, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(inputWithBooleans, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
@@ -241,14 +238,14 @@ public class ToolArgumentValidatorTests {
     public void testValidateAndNormalize_withArrayValues() {
         String inputWithArrays = "{\"index\":\"test-index\",\"query\":{\"terms\":{\"status\":[\"published\",\"draft\"]}}}";
 
-        Map<String, Object> result = validator.validateAndNormalize(inputWithArrays, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(inputWithArrays, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
 
         Map<String, Object> query = (Map<String, Object>) result.get("query");
         Map<String, Object> terms = (Map<String, Object>) query.get("terms");
-        assertTrue("Status should be an array", terms.get("status") instanceof java.util.List);
+        assertTrue("Status should be an array", terms.get("status") instanceof List);
     }
 
     // ========== Real-World LLM Patterns ==========
@@ -259,7 +256,7 @@ public class ToolArgumentValidatorTests {
         // Actual pattern from OpenAI function calling that was failing
         String openAIPattern = "{\"index\":\"opensearch-release\",\"query\":\"{\\\"query\\\":{\\\"match_all\\\":{}}}\"}";
 
-        Map<String, Object> result = validator.validateAndNormalize(openAIPattern, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(openAIPattern, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("opensearch-release", result.get("index"));
@@ -278,7 +275,7 @@ public class ToolArgumentValidatorTests {
         String bedrockPattern =
             "{\"index\":\"logs-2024\",\"query\":\"{\\\"bool\\\":{\\\"filter\\\":[{\\\"range\\\":{\\\"@timestamp\\\":{\\\"gte\\\":\\\"2024-01-01\\\"}}}]}}\"}";
 
-        Map<String, Object> result = validator.validateAndNormalize(bedrockPattern, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(bedrockPattern, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("logs-2024", result.get("index"));
@@ -297,7 +294,7 @@ public class ToolArgumentValidatorTests {
     public void testValidateAndNormalize_doesNotModifyValidInput() {
         String validInput = "{\"index\":\"test-index\",\"query\":{\"match_all\":{}}}";
 
-        Map<String, Object> result = validator.validateAndNormalize(validInput, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(validInput, testSchema);
 
         // Should parse successfully without any normalization
         assertNotNull("Result should not be null", result);
@@ -312,7 +309,7 @@ public class ToolArgumentValidatorTests {
         String dangerousInput = "{\"index\":\"test-index\",\"query\":\"value\"";
 
         try {
-            validator.validateAndNormalize(dangerousInput, testSchema);
+            ToolArgumentValidator.validateAndNormalize(dangerousInput, testSchema);
             fail("Should fail on malformed JSON input");
         } catch (IllegalArgumentException e) {
             assertTrue(
@@ -336,32 +333,11 @@ public class ToolArgumentValidatorTests {
 
         String largeInput = "{\"index\":\"test-index\",\"query\":\"" + largeQuery.toString().replace("\"", "\\\"") + "\"}";
 
-        Map<String, Object> result = validator.validateAndNormalize(largeInput, testSchema);
+        Map<String, Object> result = ToolArgumentValidator.validateAndNormalize(largeInput, testSchema);
 
         assertNotNull("Result should not be null", result);
         assertEquals("test-index", result.get("index"));
         assertTrue("Query should be normalized to Map", result.get("query") instanceof Map);
     }
 
-    // ========== ValidationResult Tests ==========
-
-    @Test
-    public void testValidationResult_success() {
-        Map<String, Object> testData = Map.of("key", "value");
-        ToolArgumentValidator.ValidationResult result = ToolArgumentValidator.ValidationResult.success(testData);
-
-        assertTrue("Should be successful", result.isSuccess());
-        assertEquals(testData, result.getNormalizedInput());
-        assertEquals(null, result.getErrorMessage());
-    }
-
-    @Test
-    public void testValidationResult_failure() {
-        String errorMsg = "Test error message";
-        ToolArgumentValidator.ValidationResult result = ToolArgumentValidator.ValidationResult.failure(errorMsg);
-
-        assertFalse("Should not be successful", result.isSuccess());
-        assertEquals(null, result.getNormalizedInput());
-        assertEquals(errorMsg, result.getErrorMessage());
-    }
 }

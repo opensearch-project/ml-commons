@@ -8,7 +8,12 @@ package org.opensearch.ml.engine.function_calling;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Test;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 
 public class FunctionCallingCapabilityTests {
 
@@ -17,19 +22,16 @@ public class FunctionCallingCapabilityTests {
         // Test the default implementation
         FunctionCalling defaultImpl = new FunctionCalling() {
             @Override
-            public void configure(java.util.Map<String, String> params) {}
+            public void configure(Map<String, String> params) {}
 
             @Override
-            public java.util.List<java.util.Map<String, String>> handle(
-                org.opensearch.ml.common.output.model.ModelTensorOutput modelTensorOutput,
-                java.util.Map<String, String> parameters
-            ) {
-                return java.util.Collections.emptyList();
+            public List<Map<String, String>> handle(ModelTensorOutput modelTensorOutput, Map<String, String> parameters) {
+                return Collections.emptyList();
             }
 
             @Override
-            public java.util.List<LLMMessage> supply(java.util.List<java.util.Map<String, Object>> toolResults) {
-                return java.util.Collections.emptyList();
+            public List<LLMMessage> supply(List<Map<String, Object>> toolResults) {
+                return Collections.emptyList();
             }
         };
 

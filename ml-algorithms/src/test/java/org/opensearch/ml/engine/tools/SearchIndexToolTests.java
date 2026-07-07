@@ -902,7 +902,7 @@ public class SearchIndexToolTests {
         assertSame("Should return same singleton instance", instance1, instance2);
 
         // Reset the singleton using reflection to test the synchronized block
-        java.lang.reflect.Field instanceField = SearchIndexTool.Factory.class.getDeclaredField("INSTANCE");
+        Field instanceField = SearchIndexTool.Factory.class.getDeclaredField("INSTANCE");
         instanceField.setAccessible(true);
         instanceField.set(null, null);
 

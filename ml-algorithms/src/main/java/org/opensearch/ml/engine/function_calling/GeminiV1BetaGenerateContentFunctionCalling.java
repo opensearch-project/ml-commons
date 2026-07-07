@@ -216,8 +216,4 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
         }
     }
 
-    @Override
-    public boolean supportsStrictSchema() {
-        return false;
-    }
 }

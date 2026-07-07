@@ -921,10 +921,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 MLToolSpec toolSpec = toolSpecMap.get(action);
                 if (toolSpec != null && toolSpec.getParameters() != null && toolSpec.getParameters().containsKey("input_schema")) {
                     String schema = toolSpec.getParameters().get("input_schema");
-                    ToolArgumentValidator validator = new ToolArgumentValidator();
 
                     // Validate and normalize the action input
-                    Map<String, Object> validatedInput = validator.validateAndNormalize(actionInput, schema);
+                    Map<String, Object> validatedInput = ToolArgumentValidator.validateAndNormalize(actionInput, schema);
 
                     // Update toolParams with validated input
                     toolParams.put("input", StringUtils.toJson(validatedInput));
