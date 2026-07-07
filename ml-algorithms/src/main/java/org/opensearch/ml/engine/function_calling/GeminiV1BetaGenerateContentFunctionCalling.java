@@ -215,5 +215,4 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
             return null;
         }
     }
-
 }
