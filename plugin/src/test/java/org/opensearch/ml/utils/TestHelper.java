@@ -205,51 +205,73 @@ public class TestHelper {
         if (entity != null) {
             request.setEntity(entity);
         }
-        try {
-            return client.performRequest(request);
-        } catch (ResponseException e) {
-            skipIfRemoteServiceUnavailable(e);
-            throw e;
-        }
+        return performRequestWithRemoteRetry(client, request);
     }
 
-    /**
-     * Skips the test (assumption violation) when a 503/500 is attributable to remote-service
-     * unavailability (Bedrock/OpenAI/Cohere down or timing out) rather than an ml-commons bug.
-     * All other errors still fail normally.
-     */
-    private static void skipIfRemoteServiceUnavailable(ResponseException e) {
+    // Retries transient remote-service 5xx blips (Bedrock/OpenAI/Cohere) so the test still runs and
+    // catches real regressions; only skips if the remote stays down for every attempt.
+    private static Response performRequestWithRemoteRetry(RestClient client, Request request) throws IOException {
+        ResponseException lastTransientError = null;
+        for (int attempt = 0; attempt <= MAX_REMOTE_RETRIES; attempt++) {
+            try {
+                return client.performRequest(request);
+            } catch (ResponseException e) {
+                if (!isTransientRemoteServiceError(e)) {
+                    throw e;
+                }
+                lastTransientError = e;
+                if (attempt < MAX_REMOTE_RETRIES) {
+                    try {
+                        Thread.sleep(REMOTE_RETRY_BACKOFF_MS * (attempt + 1)); // linear backoff
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw e; // interrupted: stop retrying, surface the remote error
+                    }
+                }
+            }
+        }
+        throw new AssumptionViolatedException(
+            "Remote service unavailable after " + (MAX_REMOTE_RETRIES + 1) + " attempts, skipping test: " + lastTransientError.getMessage()
+        );
+    }
+
+    // True only for the two narrow remote-unavailability signatures (503 wrapper, 500 connectivity
+    // timeout/reset); everything else fails normally.
+    private static boolean isTransientRemoteServiceError(ResponseException e) {
         int status = e.getResponse().getStatusLine().getStatusCode();
         if (status != 503 && status != 500) {
-            return;
+            return false;
         }
         String body;
         try {
             body = EntityUtils.toString(e.getResponse().getEntity());
         } catch (Exception ignored) {
-            return;
+            return false;
         }
         if (body == null) {
-            return;
+            return false;
         }
         if (status == 503 && REMOTE_SERVICE_ERROR_PATTERN.matcher(body).find()) {
-            throw new AssumptionViolatedException("Remote service unavailable (503), skipping test: " + body);
+            return true;
         }
-        if (status == 500 && REMOTE_TIMEOUT_ERROR_PATTERN.matcher(body).find()) {
-            throw new AssumptionViolatedException("Remote service timed out, skipping test: " + body);
-        }
+        return status == 500 && REMOTE_TIMEOUT_ERROR_PATTERN.matcher(body).find();
     }
+
+    private static final int MAX_REMOTE_RETRIES = 3;
+    private static final long REMOTE_RETRY_BACKOFF_MS = 3000;
 
     // CommonValue.REMOTE_SERVICE_ERROR wrapper plus common upstream 503 phrasings.
     private static final Pattern REMOTE_SERVICE_ERROR_PATTERN = Pattern
-        .compile("Error from remote service|Service Unavailable|ServiceUnavailable|model.{0,20}not ready", Pattern.CASE_INSENSITIVE);
+        .compile(
+            "Error from remote service|Service Unavailable|ServiceUnavailable|model.{0,20}not ready",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+        );
 
-    // MLSdkAsyncHttpResponseHandler's connectivity wrapper — timeouts/resets only, so genuine
-    // request bugs surfacing as other remote 500s still fail.
+    // MLSdkAsyncHttpResponseHandler connectivity wrapper — timeouts/resets only.
     private static final Pattern REMOTE_TIMEOUT_ERROR_PATTERN = Pattern
         .compile(
             "Error communicating with remote model.{0,40}(Read timed out|timed out|Connection reset|Connection refused)",
-            Pattern.CASE_INSENSITIVE
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
         );
 
     public static HttpEntity toHttpEntity(ToXContentObject object) throws IOException {
