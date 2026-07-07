@@ -7,9 +7,6 @@ package org.opensearch.ml.plugin.grpc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.same;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -38,18 +35,6 @@ public class ModelManagerAdapterTests extends OpenSearchTestCase {
         super.setUp();
         MockitoAnnotations.openMocks(this);
         adapter = new ModelManagerAdapter(mockDelegate);
-    }
-
-    public void testGetModel_delegatesWithModelIdAndTenantId() {
-        adapter.getModel("model-1", "tenant-1", mockListener);
-
-        verify(mockDelegate).getModel(eq("model-1"), eq("tenant-1"), same(mockListener));
-    }
-
-    public void testGetModel_withNullTenantId() {
-        adapter.getModel("model-1", null, mockListener);
-
-        verify(mockDelegate).getModel(eq("model-1"), eq(null), same(mockListener));
     }
 
     public void testGetOptionalModelFunctionName_returnsPresent() {

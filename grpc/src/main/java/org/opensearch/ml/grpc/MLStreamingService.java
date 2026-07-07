@@ -20,9 +20,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.grpc.adapters.StreamObserverAdapter;
 import org.opensearch.ml.grpc.converters.ProtoRequestConverter;
 import org.opensearch.ml.grpc.interfaces.MLClient;
-import org.opensearch.ml.grpc.interfaces.MLModelAccessControlHelper;
 import org.opensearch.ml.grpc.interfaces.MLModelManager;
-import org.opensearch.ml.grpc.interfaces.MLTaskRunner;
 import org.opensearch.ml.grpc.interfaces.MLUserContextProvider;
 import org.opensearch.protobufs.MlExecuteAgentStreamRequest;
 import org.opensearch.protobufs.MlPredictModelStreamRequest;
@@ -44,43 +42,27 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
 
     // Use interfaces to avoid circular dependency with plugin module
     private final MLModelManager modelManager;
-    private final MLTaskRunner predictTaskRunner;
-    private final MLTaskRunner executeTaskRunner;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final MLModelAccessControlHelper modelAccessControlHelper;
     private final MLClient client;
-    private final Object sdkClient;
     private final MLUserContextProvider userContextProvider;
 
     /**
      * Creates a new ML streaming service.
      *
      * @param modelManager manager for model access and validation
-     * @param predictTaskRunner task runner for executing predictions
-     * @param executeTaskRunner task runner for executing agent tasks
      * @param mlFeatureEnabledSetting feature flags for ML capabilities
-     * @param modelAccessControlHelper helper for validating model access control
      * @param client OpenSearch client for validation
-     * @param sdkClient SDK client for multi-tenant operations
      * @param userContextProvider provider for extracting user from security context
      */
     public MLStreamingService(
         MLModelManager modelManager,
-        MLTaskRunner predictTaskRunner,
-        MLTaskRunner executeTaskRunner,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLModelAccessControlHelper modelAccessControlHelper,
         MLClient client,
-        Object sdkClient,
         MLUserContextProvider userContextProvider
     ) {
         this.modelManager = modelManager;
-        this.predictTaskRunner = predictTaskRunner;
-        this.executeTaskRunner = executeTaskRunner;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;
-        this.sdkClient = sdkClient;
         this.userContextProvider = userContextProvider;
     }
 

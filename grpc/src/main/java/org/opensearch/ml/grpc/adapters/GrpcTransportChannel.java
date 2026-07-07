@@ -61,7 +61,7 @@ public class GrpcTransportChannel implements TransportChannel {
 
     @Override
     public void sendResponse(TransportResponse response) {
-        log.warn("GrpcTransportChannel.sendResponse() called - not implemented for streaming");
+        throw new UnsupportedOperationException("GrpcTransportChannel does not support non-streaming sendResponse");
     }
 
     @Override

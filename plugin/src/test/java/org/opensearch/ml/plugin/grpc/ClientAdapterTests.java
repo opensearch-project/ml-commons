@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.plugin.grpc;
 
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -42,13 +41,6 @@ public class ClientAdapterTests extends OpenSearchTestCase {
         when(mockClient.threadPool()).thenReturn(mockThreadPool);
         when(mockThreadPool.getThreadContext()).thenReturn(threadContext);
         adapter = new ClientAdapter(mockClient);
-    }
-
-    public void testGetThreadContext() {
-        ThreadContext result = adapter.getThreadContext();
-
-        assertNotNull(result);
-        assertSame(threadContext, result);
     }
 
     public void testGetDelegate() {

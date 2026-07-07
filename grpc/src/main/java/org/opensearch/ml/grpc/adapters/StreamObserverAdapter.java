@@ -67,18 +67,17 @@ public class StreamObserverAdapter<ProtoResponse> extends
      */
     @Override
     public void onFailure(Exception e) {
+        if (!completed.compareAndSet(false, true)) {
+            log.warn("onFailure called after stream already completed, ignoring: {}", e.getMessage());
+            return;
+        }
         try {
             Status status = GrpcStatusMapper.toGrpcStatus(e);
             responseObserver.onError(status.asRuntimeException());
         } catch (Exception ex) {
-            log.error("Error handling failure", ex);
-            // Ensure stream is completed even if error handling fails
-            try {
-                responseObserver.onError(Status.INTERNAL.withDescription("Internal error").withCause(e).asRuntimeException());
-            } catch (Exception finalEx) {
-                log.error("Failed to send error to client", finalEx);
-            }
+            log.error("Failed to send error to client", ex);
         }
+        channel.markCompleted();
     }
 
     /**

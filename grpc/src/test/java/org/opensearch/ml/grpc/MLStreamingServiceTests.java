@@ -22,8 +22,6 @@ import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.common.settings.Settings;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
@@ -37,9 +35,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskActio
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.grpc.converters.ProtoRequestConverter;
 import org.opensearch.ml.grpc.interfaces.MLClient;
-import org.opensearch.ml.grpc.interfaces.MLModelAccessControlHelper;
 import org.opensearch.ml.grpc.interfaces.MLModelManager;
-import org.opensearch.ml.grpc.interfaces.MLTaskRunner;
 import org.opensearch.ml.grpc.interfaces.MLUserContextProvider;
 import org.opensearch.protobufs.MlExecuteAgentStreamRequest;
 import org.opensearch.protobufs.MlPredictModelStreamRequest;
@@ -55,12 +51,8 @@ import io.grpc.stub.StreamObserver;
 public class MLStreamingServiceTests {
 
     private MLModelManager mockModelManager;
-    private MLTaskRunner mockPredictTaskRunner;
-    private MLTaskRunner mockExecuteTaskRunner;
     private MLFeatureEnabledSetting mockFeatureSettings;
-    private MLModelAccessControlHelper mockAccessControlHelper;
     private MLClient mockClient;
-    private Object mockSdkClient;
     private MLUserContextProvider mockUserContextProvider;
     private MLStreamingService service;
     private MockStreamObserver responseObserver;
@@ -70,28 +62,12 @@ public class MLStreamingServiceTests {
     @Before
     public void setUp() {
         mockModelManager = mock(MLModelManager.class);
-        mockPredictTaskRunner = mock(MLTaskRunner.class);
-        mockExecuteTaskRunner = mock(MLTaskRunner.class);
         mockFeatureSettings = mock(MLFeatureEnabledSetting.class);
-        mockAccessControlHelper = mock(MLModelAccessControlHelper.class);
         mockClient = mock(MLClient.class);
-        mockSdkClient = new Object();
         mockUserContextProvider = mock(MLUserContextProvider.class);
         responseObserver = new MockStreamObserver();
 
-        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
-        when(mockClient.getThreadContext()).thenReturn(threadContext);
-
-        service = new MLStreamingService(
-            mockModelManager,
-            mockPredictTaskRunner,
-            mockExecuteTaskRunner,
-            mockFeatureSettings,
-            mockAccessControlHelper,
-            mockClient,
-            mockSdkClient,
-            mockUserContextProvider
-        );
+        service = new MLStreamingService(mockModelManager, mockFeatureSettings, mockClient, mockUserContextProvider);
 
         protoConverterMock = Mockito.mockStatic(ProtoRequestConverter.class);
     }

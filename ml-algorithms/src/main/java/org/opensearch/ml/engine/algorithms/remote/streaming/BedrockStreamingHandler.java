@@ -187,6 +187,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 if (actualError instanceof AwsServiceException awsError) {
                     int statusCode = awsError.statusCode();
                     RestStatus restStatus = RestStatus.fromCode(statusCode);
+                    if (restStatus == null) {
+                        restStatus = RestStatus.INTERNAL_SERVER_ERROR;
+                    }
                     log.error("AWS error with status code: {}, mapped to RestStatus: {}", statusCode, restStatus);
                     listener
                         .onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + actualError.getMessage(), restStatus, actualError));

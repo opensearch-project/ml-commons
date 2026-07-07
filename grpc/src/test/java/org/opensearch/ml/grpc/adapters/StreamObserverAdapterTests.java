@@ -170,11 +170,11 @@ public class StreamObserverAdapterTests {
         adapter.completeGrpcStream();
         mockObserver.reset();
 
-        // onFailure still sends error even after completion
-        // (this is expected gRPC behavior - the observer handles it)
+        // onFailure after the stream is already completed must be ignored to honor gRPC's terminate-once contract,
+        // rather than calling onError() on an already-closed stream.
         adapter.onFailure(new RuntimeException("error"));
 
-        assertTrue("Should still send error", mockObserver.errorCalled);
+        assertFalse("Should not send error after stream already completed", mockObserver.errorCalled);
     }
 
     private MLTaskResponse createResponse(String content, boolean isLast) {

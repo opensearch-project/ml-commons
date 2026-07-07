@@ -49,7 +49,7 @@ public class GrpcStatusMapper {
             case MLResourceNotFoundException e -> Status.NOT_FOUND;
             case MLLimitExceededException e -> Status.RESOURCE_EXHAUSTED;
             case MLValidationException e -> Status.INVALID_ARGUMENT;
-            case OpenSearchException e -> STATUS_MAP.getOrDefault(e.status(), Status.INTERNAL);
+            case OpenSearchException e -> e.status() == null ? Status.INTERNAL : STATUS_MAP.getOrDefault(e.status(), Status.INTERNAL);
             case IOException e -> Status.UNAVAILABLE;
             case IllegalArgumentException e -> Status.INVALID_ARGUMENT;
             default -> Status.INTERNAL;

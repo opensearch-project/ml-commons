@@ -143,6 +143,24 @@ public class GrpcStatusMapperTests {
     }
 
     @Test
+    public void testOpenSearchExceptionWithNullStatusMapsToInternal() {
+        OpenSearchStatusException exception = new OpenSearchStatusException("Error from remote service", null);
+        Status status = GrpcStatusMapper.toGrpcStatus(exception);
+
+        assertNotNull(status);
+        assertEquals(Status.Code.INTERNAL, status.getCode());
+    }
+
+    @Test
+    public void testOpenSearchExceptionWithUnmappedStatusMapsToInternal() {
+        OpenSearchStatusException exception = new OpenSearchStatusException("Conflict", RestStatus.CONFLICT);
+        Status status = GrpcStatusMapper.toGrpcStatus(exception);
+
+        assertNotNull(status);
+        assertEquals(Status.Code.INTERNAL, status.getCode());
+    }
+
+    @Test
     public void testStatusIncludesDescription() {
         MLResourceNotFoundException exception = new MLResourceNotFoundException("Model xyz not found");
         Status status = GrpcStatusMapper.toGrpcStatus(exception);

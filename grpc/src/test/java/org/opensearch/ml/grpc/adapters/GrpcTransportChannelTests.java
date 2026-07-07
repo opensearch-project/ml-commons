@@ -77,15 +77,12 @@ public class GrpcTransportChannelTests {
         assertFalse("Should not send error when already completed", mockObserver.errorCalled);
     }
 
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void testSendResponseTransportResponse() {
         TransportResponse mockResponse = mock(TransportResponse.class);
 
+        // Non-streaming sendResponse is unsupported and must fail fast rather than silently hang the client.
         channel.sendResponse(mockResponse);
-
-        assertFalse("Should not call onNext", mockObserver.nextCalled);
-        assertFalse("Should not call onError", mockObserver.errorCalled);
-        assertFalse("Should not call onCompleted", mockObserver.completedCalled);
     }
 
     @Test

@@ -7,9 +7,7 @@ package org.opensearch.ml.plugin.grpc;
 
 import java.util.Optional;
 
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.grpc.interfaces.MLModelManager;
 
 /**
@@ -22,11 +20,6 @@ public class ModelManagerAdapter implements MLModelManager {
 
     public ModelManagerAdapter(org.opensearch.ml.model.MLModelManager delegate) {
         this.delegate = delegate;
-    }
-
-    @Override
-    public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {
-        delegate.getModel(modelId, tenantId, listener);
     }
 
     @Override
