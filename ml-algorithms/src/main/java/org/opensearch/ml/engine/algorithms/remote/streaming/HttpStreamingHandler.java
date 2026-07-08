@@ -6,9 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
@@ -21,7 +19,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.ml.common.agui.BaseEvent;
-import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.TextMessageContentEvent;
 import org.opensearch.ml.common.agui.TextMessageEndEvent;
 import org.opensearch.ml.common.agui.TextMessageStartEvent;
@@ -238,31 +235,46 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         private void handleDoneEvent() {
             if (!agentExecutionInProgress) {
-                if (isAGUIAgent && !isStreamClosed.get()) {
-                    String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
-                    boolean textMessageStarted = (isAGUIAgent && parameters != null)
-                        && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+                onStreamComplete();
+            }
+        }
 
-                    if (textMessageStarted) {
-                        // End any remaining text message
-                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
-                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
-                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
-                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {} at stream end", messageId);
-                    }
+        /**
+         * Finalization — called when the LLM stream ends (finish_reason="stop" or [DONE]).
+         * Uses CAS to ensure this runs at most once (both events may fire for the same stream).
+         * Tool calls are handled separately by completeToolCall().
+         *
+         * Three outcomes (matching BedrockStreamingHandler.onStreamComplete):
+         * 1. AGUI agent end_turn  — end text message, notify agent runner
+         * 2. Conv agent end_turn  — notify agent runner with accumulated content
+         * 3. Predict (no agent)   — close stream directly
+         *
+         * For agent paths, the agent runner handles memory save, token usage, and stream closure.
+         * RUN_FINISHED is emitted by RestMLExecuteStreamAction on is_last=true from the agent runner.
+         */
+        private void onStreamComplete() {
+            if (!isStreamClosed.compareAndSet(false, true)) {
+                return;
+            }
 
-                    // Send RUN_FINISHED event
-                    String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-                    String runId = parameters.get(AGUI_PARAM_RUN_ID);
-                    BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                    sendAGUIEvent(runFinishedEvent, false, streamActionListener);
-                    log.debug("AG-UI: Sent RUN_FINISHED event at [DONE] - threadId={}, runId={}", threadId, runId);
-
-                    // Trigger agentListener callback to save assistant structured message
-                    streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
+            if (isAGUIAgent) {
+                // End any open text message
+                String messageId = parameters != null ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+                boolean textMessageStarted = parameters != null && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+                if (textMessageStarted) {
+                    parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                    BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                    sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                    log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
                 }
-
-                sendCompletionResponse(isStreamClosed, streamActionListener);
+                // Notify agent runner with final answer
+                streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
+            } else if (streamActionListener.hasAgentListener()) {
+                // Conv agent: notify agent runner with accumulated content
+                streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
+            } else {
+                // Predict (no agent): close stream directly
+                sendContentResponse("", true, streamActionListener);
             }
         }
 
@@ -274,28 +286,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
             if ("stop".equals(finishReason)) {
                 agentExecutionInProgress = false;
-
-                if (isAGUIAgent) {
-                    if (textMessageStarted) {
-                        // End the current text message
-                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
-                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
-                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
-                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
-                    }
-
-                    // Send RUN_FINISHED event
-                    String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
-                    String runId = parameters.get(AGUI_PARAM_RUN_ID);
-                    BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
-                    sendAGUIEvent(runFinishedEvent, false, streamActionListener);
-                    log.debug("AG-UI: Sent RUN_FINISHED event - threadId={}, runId={}", threadId, runId);
-
-                    // Trigger agentListener callback to save assistant structured message
-                    streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
-                }
-
-                sendCompletionResponse(isStreamClosed, streamActionListener);
+                onStreamComplete();
                 return;
             }
 
@@ -310,9 +301,10 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                     firstTokenReceived.set(true);
                 }
 
-                if (isAGUIAgent) {
-                    accumulatedContent.append(content);
+                // Accumulate content for all paths — needed for createFinalAnswerResponse (conv agent)
+                accumulatedContent.append(content);
 
+                if (isAGUIAgent) {
                     // Start text message if not already started
                     if (!textMessageStarted) {
                         messageId = "msg_" + System.nanoTime();
