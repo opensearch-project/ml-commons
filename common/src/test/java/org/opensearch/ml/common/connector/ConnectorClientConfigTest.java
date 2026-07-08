@@ -1,6 +1,8 @@
 package org.opensearch.ml.common.connector;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 
 import org.junit.Assert;
@@ -174,6 +176,7 @@ public class ConnectorClientConfigTest {
         Assert.assertNull(config.getRetryTimeoutSeconds());
         Assert.assertNull(config.getMaxRetryTimes());
         Assert.assertNull(config.getRetryBackoffPolicy());
+        Assert.assertNull(config.getRetryableStatusCodes());
     }
 
     @Test
@@ -188,5 +191,181 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(0), config.getMaxRetryTimes());
         Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
         Assert.assertEquals(Boolean.FALSE, config.getSkipSslVerification());
+        Assert.assertNull(config.getRetryableStatusCodes());
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_withRetryableStatusCodes() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .maxConnections(10)
+            .connectionTimeout(5000)
+            .readTimeout(3000)
+            .retryBackoffMillis(123)
+            .retryTimeoutSeconds(456)
+            .maxRetryTimes(789)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .retryableStatusCodes(Arrays.asList(429, 503))
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        config.writeTo(output);
+        ConnectorClientConfig readConfig = new ConnectorClientConfig(output.bytes().streamInput());
+
+        Assert.assertEquals(config, readConfig);
+        Assert.assertEquals(Arrays.asList(429, 503), readConfig.getRetryableStatusCodes());
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_nullRetryableStatusCodes() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .maxConnections(10)
+            .connectionTimeout(5000)
+            .readTimeout(3000)
+            .retryBackoffMillis(123)
+            .retryTimeoutSeconds(456)
+            .maxRetryTimes(789)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .retryableStatusCodes(null)
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        config.writeTo(output);
+        ConnectorClientConfig readConfig = new ConnectorClientConfig(output.bytes().streamInput());
+
+        Assert.assertEquals(config, readConfig);
+        Assert.assertNull(readConfig.getRetryableStatusCodes());
+    }
+
+    @Test
+    public void toXContent_withRetryableStatusCodes() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .maxConnections(10)
+            .connectionTimeout(5000)
+            .readTimeout(3000)
+            .retryBackoffMillis(123)
+            .retryTimeoutSeconds(456)
+            .maxRetryTimes(789)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .retryableStatusCodes(Arrays.asList(429, 503))
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        config.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        String expectedJson = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,"
+            + "\"retry_backoff_policy\":\"constant\",\"retryable_status_codes\":[429,503]}";
+        Assert.assertEquals(expectedJson, content);
+    }
+
+    @Test
+    public void parse_withRetryableStatusCodes() throws IOException {
+        String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,"
+            + "\"retry_backoff_policy\":\"constant\",\"retryable_status_codes\":[429,503]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+
+        ConnectorClientConfig config = ConnectorClientConfig.parse(parser);
+
+        Assert.assertEquals(Arrays.asList(429, 503), config.getRetryableStatusCodes());
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_atV2_15_0_excludesRetryableStatusCodes() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .maxConnections(10)
+            .retryBackoffMillis(500)
+            .retryTimeoutSeconds(30)
+            .maxRetryTimes(3)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .retryableStatusCodes(Arrays.asList(429, 503))
+            .build();
+
+        // write with old version (without retryableStatusCodes)
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(Version.V_2_15_0);
+        config.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(Version.V_2_15_0);
+        ConnectorClientConfig readConfig = ConnectorClientConfig.fromStream(input);
+
+        Assert.assertEquals(Integer.valueOf(10), readConfig.getMaxConnections());
+        Assert.assertEquals(Integer.valueOf(500), readConfig.getRetryBackoffMillis());
+        Assert.assertEquals(Integer.valueOf(3), readConfig.getMaxRetryTimes());
+        // get null when reading V_2_15_0 data without retryableStatusCodes
+        Assert.assertNull(readConfig.getRetryableStatusCodes());
+    }
+
+    @Test
+    public void constructor_withValidStatusCodes_returnsImmutableList() {
+        ArrayList<Integer> mutableList = new ArrayList<>(Arrays.asList(429, 503));
+        ConnectorClientConfig config = ConnectorClientConfig.builder().maxRetryTimes(3).retryableStatusCodes(mutableList).build();
+
+        mutableList.add(500);
+        Assert.assertEquals(Arrays.asList(429, 503), config.getRetryableStatusCodes());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructor_retryableStatusCodes_withoutMaxRetryTimes_throwsException() {
+        ConnectorClientConfig.builder().retryableStatusCodes(Arrays.asList(429, 503)).build();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructor_retryableStatusCodes_withZeroMaxRetryTimes_throwsException() {
+        ConnectorClientConfig.builder().retryableStatusCodes(Arrays.asList(429, 503)).maxRetryTimes(0).build();
+    }
+
+    @Test
+    public void constructor_retryableStatusCodes_withUnlimitedRetry_succeeds() {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .retryableStatusCodes(Arrays.asList(429, 503))
+            .maxRetryTimes(-1)
+            .build();
+        Assert.assertEquals(Arrays.asList(429, 503), config.getRetryableStatusCodes());
+        Assert.assertEquals(Integer.valueOf(-1), config.getMaxRetryTimes());
+    }
+
+    @Test
+    public void constructor_nullRetryableStatusCodes_withZeroMaxRetryTimes_succeeds() {
+        ConnectorClientConfig config = ConnectorClientConfig.builder().retryableStatusCodes(null).maxRetryTimes(0).build();
+        Assert.assertNull(config.getRetryableStatusCodes());
+    }
+
+    @Test
+    public void constructor_emptyRetryableStatusCodes_withZeroMaxRetryTimes_succeeds() {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .retryableStatusCodes(new ArrayList<>())
+            .maxRetryTimes(0)
+            .build();
+        Assert.assertTrue(config.getRetryableStatusCodes().isEmpty());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void parse_retryableStatusCodes_withDefaultMaxRetryTimes_throwsException() throws IOException {
+        String jsonStr = "{\"retryable_status_codes\":[429,503]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        ConnectorClientConfig.parse(parser);
     }
 }

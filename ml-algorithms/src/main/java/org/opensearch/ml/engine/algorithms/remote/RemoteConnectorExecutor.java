@@ -419,7 +419,8 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
         public boolean shouldRetry(Exception e) {
             Throwable cause = ExceptionsHelper.unwrapCause(e);
             Integer maxRetryTimes = args.connectionExecutor.getConnectorClientConfig().getMaxRetryTimes();
-            boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException;
+            boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException
+                || cause instanceof RemoteConnectorRetryableException;
             if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
                 shouldRetry = false;
             }

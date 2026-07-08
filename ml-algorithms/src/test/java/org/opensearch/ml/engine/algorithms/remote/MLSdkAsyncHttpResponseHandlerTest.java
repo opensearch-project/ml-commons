@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -31,6 +33,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -462,5 +465,198 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             "The embedding should be a non-empty List containing Float values.",
             exceptionCaptor.getValue().getMessage()
         );
+    }
+
+    @Test
+    public void test_onHeaders_retryableStatusCode_429() {
+        Connector retryConnector = buildConnectorWithRetryableStatusCodes(Arrays.asList(429, 500, 503));
+        MLSdkAsyncHttpResponseHandler handler = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(0),
+            actionListener,
+            parameters,
+            retryConnector,
+            scriptService,
+            null,
+            action
+        );
+        SdkHttpFullResponse response = mock(SdkHttpFullResponse.class);
+        when(response.statusCode()).thenReturn(429);
+        handler.onHeaders(response);
+
+        String body = "{\"error\":\"rate limit\"}";
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(body.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        handler.onStream(stream);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof RemoteConnectorRetryableException);
+        assertTrue(captor.getValue().getMessage().contains("retryable status code: 429"));
+    }
+
+    @Test
+    public void test_onHeaders_nonRetryableStatusCode_400() {
+        Connector retryConnector = buildConnectorWithRetryableStatusCodes(Arrays.asList(429, 500, 503));
+        MLSdkAsyncHttpResponseHandler handler = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(0),
+            actionListener,
+            parameters,
+            retryConnector,
+            scriptService,
+            null,
+            action
+        );
+        SdkHttpFullResponse response = mock(SdkHttpFullResponse.class);
+        when(response.statusCode()).thenReturn(400);
+        handler.onHeaders(response);
+
+        String body = "{\"error\":\"bad request\"}";
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(body.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        handler.onStream(stream);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertFalse(captor.getValue() instanceof RemoteConnectorRetryableException);
+        assertTrue(captor.getValue().getMessage().contains(REMOTE_SERVICE_ERROR));
+    }
+
+    @Test
+    public void test_onHeaders_retryableStatusCode_awsHeaderTakesPrecedence() {
+        Connector retryConnector = buildConnectorWithRetryableStatusCodes(Arrays.asList(429, 500, 503));
+        MLSdkAsyncHttpResponseHandler handler = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(0),
+            actionListener,
+            parameters,
+            retryConnector,
+            scriptService,
+            null,
+            action
+        );
+        SdkHttpFullResponse response = mock(SdkHttpFullResponse.class);
+        when(response.statusCode()).thenReturn(429);
+        when(response.headers()).thenReturn(Map.of(AMZ_ERROR_HEADER, Arrays.asList("ThrottlingException:request throttled!")));
+        handler.onHeaders(response);
+
+        String body = "{\"error\":\"throttled\"}";
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(body.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        handler.onStream(stream);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof RemoteConnectorThrottlingException);
+        assertTrue(captor.getValue().getMessage().contains("remote server throttling"));
+    }
+
+    @Test
+    public void test_onHeaders_retryableStatusCode_nullConfig() {
+        // connector without ConnectorClientConfig -> retryableStatusCodes is null -> skip retryable check
+        MLSdkAsyncHttpResponseHandler handler = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(0),
+            actionListener,
+            parameters,
+            connector,
+            scriptService,
+            null,
+            action
+        );
+        SdkHttpFullResponse response = mock(SdkHttpFullResponse.class);
+        when(response.statusCode()).thenReturn(429);
+        handler.onHeaders(response);
+
+        String body = "{\"error\":\"rate limit\"}";
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(body.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        handler.onStream(stream);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertFalse(captor.getValue() instanceof RemoteConnectorRetryableException);
+        assertTrue(captor.getValue().getMessage().contains("rate limit"));
+    }
+
+    @Test
+    public void test_onHeaders_retryableStatusCode_nonStandardCode() {
+        Connector retryConnector = buildConnectorWithRetryableStatusCodes(Arrays.asList(520));
+        MLSdkAsyncHttpResponseHandler handler = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(0),
+            actionListener,
+            parameters,
+            retryConnector,
+            scriptService,
+            null,
+            action
+        );
+        SdkHttpFullResponse response = mock(SdkHttpFullResponse.class);
+        when(response.statusCode()).thenReturn(520);
+        handler.onHeaders(response);
+
+        String body = "{\"error\":\"unknown error\"}";
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(body.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        handler.onStream(stream);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof RemoteConnectorRetryableException);
+        assertTrue(captor.getValue().getMessage().contains("retryable status code: 520"));
+        assertEquals(org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
+    }
+
+    private Connector buildConnectorWithRetryableStatusCodes(List<Integer> retryableStatusCodes) {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        ConnectorClientConfig clientConfig = ConnectorClientConfig.builder().maxRetryTimes(3).retryableStatusCodes(retryableStatusCodes).build();
+        return HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(clientConfig)
+            .build();
     }
 }
