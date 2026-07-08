@@ -538,8 +538,9 @@ public class AgenticConversationMemory
             MLAddMemoriesRequest request = MLAddMemoriesRequest.builder().mlAddMemoryInput(input).build();
 
             int index = i;
+            int messageIndex = index + 1;
             client.execute(MLAddMemoriesAction.INSTANCE, request, ActionListener.wrap(response -> {
-                log.debug("Saved structured message {} of {} to session {}", index + 1, messages.size(), conversationId);
+                log.debug("Saved structured message {} of {} to session {}", messageIndex, messages.size(), conversationId);
                 if (remaining.decrementAndGet() == 0) {
                     if (hasError.get()) {
                         listener.onFailure(new RuntimeException("One or more structured messages failed to save"));
@@ -549,7 +550,7 @@ public class AgenticConversationMemory
                     }
                 }
             }, e -> {
-                log.error("Failed to save structured message {} of {} to session {}", index + 1, messages.size(), conversationId, e);
+                log.error("Failed to save structured message {} of {} to session {}", messageIndex, messages.size(), conversationId, e);
                 hasError.set(true);
                 if (remaining.decrementAndGet() == 0) {
                     listener.onFailure(e);

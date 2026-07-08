@@ -254,7 +254,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                 mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
         } catch (Exception e) {
-            log.error("Failed to predict " + mlPredictionTaskRequest.toString(), e);
+            log.error("Failed to predict {}", mlPredictionTaskRequest.toString(), e);
             listener.onFailure(e);
         }
     }

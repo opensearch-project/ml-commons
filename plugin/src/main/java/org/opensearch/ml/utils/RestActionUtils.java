@@ -225,7 +225,7 @@ public class RestActionUtils {
      */
     public static User getUserContext(Client client) {
         String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-        logger.debug("Current user is " + userStr);
+        logger.debug("Current user is {}", userStr);
         return User.parse(userStr);
     }
 

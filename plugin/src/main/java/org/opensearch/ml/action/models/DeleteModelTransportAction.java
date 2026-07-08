@@ -408,7 +408,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 actionListener.onResponse(true);
                 return;
             }
-            log.error("Failed to delete ML Model: " + modelId, e);
+            log.error("Failed to delete ML Model: {}", modelId, e);
             actionListener.onFailure(e);
 
         }));
@@ -454,7 +454,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                     );
             }
         }, e -> {
-            log.error("Failed to delete ML Model: " + modelId, e);
+            log.error("Failed to delete ML Model: {}", modelId, e);
             actionListener.onFailure(e);
 
         }));

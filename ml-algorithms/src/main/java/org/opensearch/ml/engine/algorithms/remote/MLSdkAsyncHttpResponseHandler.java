@@ -84,7 +84,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Override
     public void onHeaders(SdkHttpResponse response) {
         SdkHttpFullResponse sdkResponse = (SdkHttpFullResponse) response;
-        log.debug("received response headers: " + sdkResponse.headers());
+        log.debug("received response headers: {}", sdkResponse.headers());
         this.statusCode = sdkResponse.statusCode();
         if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
             log.error("Received error from remote service with status code {}, response headers: {}", statusCode, sdkResponse.headers());

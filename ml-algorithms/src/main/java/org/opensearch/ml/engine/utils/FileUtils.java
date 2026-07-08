@@ -118,7 +118,7 @@ public class FileUtils {
                     write(fileContent, mergedFile, true);
                 }
             } catch (IOException e) {
-                log.error("Failed to merge file from " + f.getAbsolutePath() + " to " + mergedFile.getAbsolutePath(), e);
+                log.error("Failed to merge file from {} to {}", f.getAbsolutePath(), mergedFile.getAbsolutePath(), e);
                 failed = true;
             } finally {
                 org.apache.commons.io.FileUtils.deleteQuietly(f);

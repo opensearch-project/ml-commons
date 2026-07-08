@@ -180,7 +180,7 @@ public class MLEngineClassLoader {
             if (cause instanceof MLException) {
                 throw (MLException) cause;
             } else {
-                logger.error("Failed to init instance for type " + type, e);
+                logger.error("Failed to init instance for type {}", type, e);
                 return null;
             }
         }

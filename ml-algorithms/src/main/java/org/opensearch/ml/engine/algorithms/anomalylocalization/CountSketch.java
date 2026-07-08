@@ -41,7 +41,7 @@ public class CountSketch implements Counter {
         Random random = new Random();
         this.hashes = random.ints(this.numHashes).toArray();
         this.signHashes = random.ints(this.numHashes).toArray();
-        log.info("count sketch size " + this.numHashes + " * " + this.numBuckets + " = " + this.numHashes * this.numBuckets);
+        log.info("count sketch size {} * {} = {}", this.numHashes, this.numBuckets, this.numHashes * this.numBuckets);
     }
 
     @Override

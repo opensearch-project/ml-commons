@@ -189,7 +189,7 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
                         try {
                             timestamp = dateFormat.parse(value.stringValue()).getTime();
                         } catch (ParseException e) {
-                            log.error("Failed to parse timestamp " + value.stringValue(), e);
+                            log.error("Failed to parse timestamp {}", value.stringValue(), e);
                             throw new MLValidationException("Failed to parse timestamp " + value.stringValue());
                         }
                     } else {

@@ -211,10 +211,10 @@ public class MetricsCorrelation extends DLModelExecute {
             if (modelId != null) {
                 MLModelState modelState = getModel(modelId).getModelState();
                 if (modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED) {
-                    log.info("Model deployed: " + modelState);
+                    log.info("Model deployed: {}", modelState);
                     return true;
                 } else if (modelState == MLModelState.UNDEPLOYED || modelState == MLModelState.DEPLOY_FAILED) {
-                    log.info("Model not deployed: " + modelState);
+                    log.info("Model not deployed: {}", modelState);
                     deployModel(
                         modelId,
                         ActionListener
@@ -345,7 +345,7 @@ public class MetricsCorrelation extends DLModelExecute {
             sum += timeInMillis;
             timeInMillis = Math.min(AWAIT_BUSY_THRESHOLD, timeInMillis * 2);
 
-            log.info("Waiting... Time elapsed: " + sum + "ms");
+            log.info("Waiting... Time elapsed: {}ms", sum);
         }
         timeInMillis = maxTimeInMillis - sum;
         try {

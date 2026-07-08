@@ -597,7 +597,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             } catch (S3Exception e) {
                 log.error("Failed to update task status for task: {}. S3 Exception: {}", taskId, e.awsErrorDetails().errorMessage());
             } catch (Exception e) {
-                log.error("Failed to update task status for task: " + taskId, e);
+                log.error("Failed to update task status for task: {}", taskId, e);
             }
         }
     }

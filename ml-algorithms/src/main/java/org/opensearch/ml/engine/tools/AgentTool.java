@@ -86,7 +86,7 @@ public class AgentTool implements Tool {
                 ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
                 listener.onResponse((T) outputParser.parse(output));
             }, e -> {
-                log.error("Failed to run agent " + agentId, e);
+                log.error("Failed to run agent {}", agentId, e);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {

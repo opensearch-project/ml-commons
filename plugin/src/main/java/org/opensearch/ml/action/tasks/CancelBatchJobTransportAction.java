@@ -233,7 +233,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                                 }
                             }
                         }, e -> {
-                            log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
+                            log.error("Failed to validate Access for Model Group {}", model.getModelGroupId(), e);
                             actionListener.onFailure(e);
                         })
                     );

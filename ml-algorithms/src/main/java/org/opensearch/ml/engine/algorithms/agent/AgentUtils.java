@@ -844,17 +844,17 @@ public class AgentUtils {
                         warnUnusedToolDescriptionOverrides(connectorId, toolDescriptionOverrides, mcpToolspecs, filteredTools);
                         finalToolSpecs.addAll(filteredTools);
                     } catch (Throwable t) {
-                        log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);
+                        log.error("Error post-processing MCP tool specs for connector: {}", connectorId, t);
                     } finally {
                         completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
                     }
                 }, e -> {
-                    log.error("Error processing connector: " + connectorId, e);
+                    log.error("Error processing connector: {}", connectorId, e);
                     completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
                 }));
             } catch (Throwable t) {
                 // Catch synchronous throws (including Errors) so one bad connector can't strand the counter.
-                log.error("Synchronous failure initiating MCP tool spec lookup for connector: " + connectorId, t);
+                log.error("Synchronous failure initiating MCP tool spec lookup for connector: {}", connectorId, t);
                 completeIfLast(remainingConnectors, finalToolSpecs, finalListener);
             }
         }
@@ -978,7 +978,7 @@ public class AgentUtils {
         getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
             try {
                 if (!(connector instanceof McpConnector) && !(connector instanceof McpStreamableHttpConnector)) {
-                    log.error("Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector");
+                    log.error("Connector with ID {} is not of type McpConnector or McpStreamableHttpConnector", connectorId);
                     toolListener.onResponse(Collections.emptyList());
                     return;
                 }
@@ -1004,7 +1004,7 @@ public class AgentUtils {
                         toolListener.onResponse(mcpToolSpecs);
                         return;
                     }
-                    log.error("Unsupported connector type for connector: " + connectorId);
+                    log.error("Unsupported connector type for connector: {}", connectorId);
                     toolListener.onResponse(Collections.emptyList());
                 }, e -> {
                     log.error("Failed to decrypt credentials in connector", e);
@@ -1013,11 +1013,11 @@ public class AgentUtils {
                 connector.decrypt("", encryptor::decrypt, tenantId, decryptSuccessfulListener);
             } catch (Throwable t) {
                 // Throwable, not Exception: ServiceConfigurationError would otherwise stall the async chain.
-                log.error("Error retrieving MCP tool specs from connector: " + connectorId, t);
+                log.error("Error retrieving MCP tool specs from connector: {}", connectorId, t);
                 toolListener.onResponse(Collections.emptyList());
             }
         }, e -> {
-            log.error("Failed to get connector for MCP tool specs, connectorId=" + connectorId, e);
+            log.error("Failed to get connector for MCP tool specs, connectorId={}", connectorId, e);
             toolListener.onResponse(Collections.emptyList());
         }));
 

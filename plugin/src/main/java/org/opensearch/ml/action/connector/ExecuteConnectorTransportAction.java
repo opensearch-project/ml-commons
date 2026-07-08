@@ -123,7 +123,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                     connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
                 }
             }, e -> {
-                log.error("Failed to get connector " + connectorId, e);
+                log.error("Failed to get connector {}", connectorId, e);
                 actionListener.onFailure(e);
             });
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {

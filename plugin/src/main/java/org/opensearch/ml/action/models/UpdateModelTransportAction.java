@@ -648,7 +648,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             );
                     }
                 }, e -> {
-                    log.error("Failed to update ML model cache for model: " + modelId, e);
+                    log.error("Failed to update ML model cache for model: {}", modelId, e);
                     wrappedListener.onFailure(e);
                 }));
             } else if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
@@ -661,11 +661,11 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     );
                 wrappedListener.onResponse(updateResponse);
             } else {
-                log.error("Failed to update ML model: " + modelId);
+                log.error("Failed to update ML model: {}", modelId);
                 wrappedListener.onFailure(new RuntimeException("Failed to update ML model: " + modelId));
             }
         }, exception -> {
-            log.error("Failed to update ML model: " + modelId, exception);
+            log.error("Failed to update ML model: {}", modelId, exception);
             wrappedListener.onFailure(exception);
         });
     }
@@ -684,11 +684,11 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     );
                 wrappedListener.onResponse(updateResponse);
             } else {
-                log.error("Failed to update ML model: " + modelId);
+                log.error("Failed to update ML model: {}", modelId);
                 wrappedListener.onFailure(new RuntimeException("Failed to update ML model: " + modelId));
             }
         }, exception -> {
-            log.error("Failed to update ML model: " + modelId, exception);
+            log.error("Failed to update ML model: {}", modelId, exception);
             wrappedListener.onFailure(exception);
         });
     }

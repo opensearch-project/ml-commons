@@ -1270,7 +1270,7 @@ public class MLModelManager {
                     if (BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
                         getController(modelId, ActionListener.wrap(controller -> {
                             setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
-                            log.info("Successfully redeployed model controller for model " + modelId);
+                            log.info("Successfully redeployed model controller for model {}", modelId);
                             log.info("Trying to deploy remote model with model controller configured.");
                             deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, wrappedListener);
                         }, e -> {
@@ -1421,14 +1421,14 @@ public class MLModelManager {
                     if (BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
                         getController(modelId, ActionListener.wrap(controller -> {
                             setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
-                            log.info("Successfully redeployed model controller for model " + modelId);
+                            log.info("Successfully redeployed model controller for model {}", modelId);
                             log.info("Trying to deploy remote model with model controller configured.");
                             deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, wrappedListener);
                         }, e -> {
                             log
                                 .error(
-                                    "Trying to deploy remote model with exceptions in re-deploying its model controller. Model ID: "
-                                        + modelId,
+                                    "Trying to deploy remote model with exceptions in re-deploying its model controller. Model ID: {}",
+                                    modelId,
                                     e
                                 );
                             deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, wrappedListener);
@@ -1490,11 +1490,11 @@ public class MLModelManager {
                         }
                     }
                 }, e -> {
-                    log.error("Failed to retrieve model " + modelId, e);
+                    log.error("Failed to retrieve model {}", modelId, e);
                     handleDeployModelException(modelId, functionName, wrappedListener, e);
                 }));
             }, e -> {
-                log.error("Failed to deploy model " + modelId, e);
+                log.error("Failed to deploy model {}", modelId, e);
                 handleDeployModelException(modelId, functionName, wrappedListener, e);
             })));
         } catch (Exception e) {
@@ -1750,7 +1750,7 @@ public class MLModelManager {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     MLController controller = MLController.parse(parser);
                     setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
-                    log.info("Successfully redeployed model controller for model " + modelId);
+                    log.info("Successfully redeployed model controller for model {}", modelId);
                     listener.onResponse("Successfully redeployed model controller for model " + modelId);
                 } catch (Exception e) {
                     log.error("Failed to parse ml task{}", r.getId(), e);
@@ -1765,10 +1765,7 @@ public class MLModelManager {
                             + modelId
                             + " is expected not having an enabled model controller. Please use the create controller api to create one if this is unexpected."
                     );
-                log
-                    .debug(
-                        "No controller is deployed because the model " + modelId + " is expected not having an enabled model controller."
-                    );
+                log.debug("No controller is deployed because the model {} is expected not having an enabled model controller.", modelId);
             } else {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
             }
@@ -1785,9 +1782,8 @@ public class MLModelManager {
                         );
                     log
                         .debug(
-                            "No controller is deployed because the model "
-                                + modelId
-                                + " is expected not having an enabled model controller."
+                            "No controller is deployed because the model {} is expected not having an enabled model controller.",
+                            modelId
                         );
                 } else {
                     listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));

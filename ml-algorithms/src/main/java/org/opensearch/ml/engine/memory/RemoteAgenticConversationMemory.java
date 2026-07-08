@@ -312,7 +312,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             // Step 5: Execute the update with retry on failure
             executeConnectorAction("update_memory", updateRequest, ActionListener.wrap(response -> {
-                log.info("UPDATE memory succeeded! MessageId: {}, Attempt: {}", messageId, attemptNumber + 1);
+                int attempt = attemptNumber + 1;
+                log.info("UPDATE memory succeeded! MessageId: {}, Attempt: {}", messageId, attempt);
                 try {
                     UpdateResponse updateResponse = parseUpdateResponse(response);
                     updateListener.onResponse(updateResponse);
@@ -412,7 +413,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                     updateListener.onFailure(scheduleException);
                 }
             } else {
-                log.error("GET operation failed and is NOT retryable. MessageId: {}, TotalAttempts: {}", messageId, attemptNumber + 1, e);
+                int totalAttempts = attemptNumber + 1;
+                log.error("GET operation failed and is NOT retryable. MessageId: {}, TotalAttempts: {}", messageId, totalAttempts, e);
                 updateListener.onFailure(e);
             }
         }));
@@ -666,8 +668,9 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             requestBody.put("infer", false);
 
             int index = i;
+            int messageIndex = index + 1;
             executeConnectorAction("add_memory", requestBody, ActionListener.wrap(response -> {
-                log.debug("Saved structured message {} of {} to remote session {}", index + 1, messages.size(), conversationId);
+                log.debug("Saved structured message {} of {} to remote session {}", messageIndex, messages.size(), conversationId);
                 if (remaining.decrementAndGet() == 0) {
                     if (hasError.get()) {
                         listener.onFailure(new RuntimeException("One or more structured messages failed to save"));
@@ -677,7 +680,14 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                     }
                 }
             }, e -> {
-                log.error("Failed to save structured message {} of {} to remote session {}", index + 1, messages.size(), conversationId, e);
+                log
+                    .error(
+                        "Failed to save structured message {} of {} to remote session {}",
+                        messageIndex,
+                        messages.size(),
+                        conversationId,
+                        e
+                    );
                 hasError.set(true);
                 if (remaining.decrementAndGet() == 0) {
                     listener.onFailure(e);
@@ -941,7 +951,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             return MLAddMemoriesResponse.builder().workingMemoryId(workingMemoryId).sessionId(sessionId).results(results).build();
         } catch (Exception e) {
-            log.error("Failed to parse add memory response: " + jsonResponse, e);
+            log.error("Failed to parse add memory response: {}", jsonResponse, e);
             // Return a minimal response with null values
             return MLAddMemoriesResponse.builder().build();
         }
@@ -960,7 +970,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             return MLGetMemoryResponse.builder().workingMemory(workingMemory).build();
         } catch (Exception e) {
-            log.error("Failed to parse get memory response: " + jsonResponse, e);
+            log.error("Failed to parse get memory response: {}", jsonResponse, e);
             return MLGetMemoryResponse.builder().build();
         }
     }
@@ -970,7 +980,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             SearchResponse searchResponse = parseSearchResponse(response);
             return convertSearchHitsToMessages(searchResponse);
         } catch (Exception e) {
-            log.error("Failed to parse search response: " + response, e);
+            log.error("Failed to parse search response: {}", response, e);
             return new ArrayList<>();
         }
     }
@@ -988,7 +998,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                         messages.add(interaction);
                     }
                 } catch (Exception e) {
-                    log.warn("Failed to parse hit: " + hit.getId(), e);
+                    log.warn("Failed to parse hit: {}", hit.getId(), e);
                 }
             }
         }
@@ -1087,7 +1097,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             SearchResponse searchResponse = parseSearchResponse(response);
             return convertSearchHitsToTraces(searchResponse);
         } catch (Exception e) {
-            log.error("Failed to parse trace response: " + response, e);
+            log.error("Failed to parse trace response: {}", response, e);
             return new ArrayList<>();
         }
     }
@@ -1105,7 +1115,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                         traces.add(trace);
                     }
                 } catch (Exception e) {
-                    log.warn("Failed to parse trace hit: " + hit.getId(), e);
+                    log.warn("Failed to parse trace hit: {}", hit.getId(), e);
                 }
             }
         }

@@ -160,7 +160,7 @@ public class MLMemoryManager {
             }, e -> { actionListener.onFailure(e); });
             conversationMetaIndex.checkAccess(conversationId, accessListener);
         } catch (Exception e) {
-            log.error("Failed to get final interactions for conversation " + conversationId, e);
+            log.error("Failed to get final interactions for conversation {}", conversationId, e);
             actionListener.onFailure(e);
         }
     }
