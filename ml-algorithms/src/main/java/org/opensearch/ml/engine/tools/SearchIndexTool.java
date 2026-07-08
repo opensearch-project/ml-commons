@@ -223,9 +223,26 @@ public class SearchIndexTool implements Tool {
                         if (queryElement != null) {
                             query = normalizeQueryParameter(queryElement);
                         }
+                    } else if (jsonObject != null) {
+                        log.debug("Input JSON is valid but missing required fields 'index' and/or 'query': {}", input);
                     }
                 } catch (JsonSyntaxException e) {
-                    log.error("Invalid input JSON (length: {}): {}", input != null ? input.length() : 0, e.getMessage());
+                    log
+                        .error(
+                            "Invalid input JSON format (length: {}): {}. Input: {}",
+                            input != null ? input.length() : 0,
+                            e.getMessage(),
+                            input != null && input.length() <= 200 ? input : (input != null ? input.substring(0, 200) + "..." : "null")
+                        );
+                    // For malformed JSON input, fail early with a clear error message
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Invalid JSON format in input parameter. Expected valid JSON with 'index' and 'query' fields. Error: "
+                                    + e.getMessage()
+                            )
+                        );
+                    return;
                 }
             }
 
@@ -246,10 +263,29 @@ public class SearchIndexTool implements Tool {
             }
 
             if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
+                String missingParams = "";
+                if (StringUtils.isEmpty(index) && StringUtils.isEmpty(query)) {
+                    missingParams = "both 'index' and 'query'";
+                } else if (StringUtils.isEmpty(index)) {
+                    missingParams = "'index'";
+                } else {
+                    missingParams = "'query'";
+                }
+
+                log
+                    .error(
+                        "SearchIndexTool validation failed: missing required parameter(s): {}. "
+                            + "Received parameters - index: '{}', query: '{}'",
+                        missingParams,
+                        index != null ? index : "null",
+                        query != null && query.length() <= 100 ? query : (query != null ? query.substring(0, 100) + "..." : "null")
+                    );
+
                 listener
                     .onFailure(
                         new IllegalArgumentException(
-                            "SearchIndexTool's two parameters: index and query are required and should be in valid format"
+                            "SearchIndexTool's two parameters: index and query are required and should be in valid format. Missing: "
+                                + missingParams
                         )
                     );
                 return;

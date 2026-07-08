@@ -21,6 +21,7 @@ import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -218,9 +219,9 @@ public class SearchIndexToolTests {
         mockedSearchIndexTool.run(parameters, listener);
         ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argument.capture());
-        assertEquals(
-            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
-            argument.getValue().getMessage()
+        assertTrue(
+            "Should contain JSON format error message",
+            argument.getValue().getMessage().contains("Invalid JSON format in input parameter")
         );
     }
 
@@ -286,10 +287,7 @@ public class SearchIndexToolTests {
         mockedSearchIndexTool.run(parameters, listener);
         ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argument.capture());
-        assertEquals(
-            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
-            argument.getValue().getMessage()
-        );
+        assertTrue("Should mention missing query parameter", argument.getValue().getMessage().contains("Missing: 'query'"));
         Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
         Mockito.verify(client, Mockito.never()).search(any(), any());
     }
@@ -303,10 +301,7 @@ public class SearchIndexToolTests {
         mockedSearchIndexTool.run(parameters, listener);
         ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argument.capture());
-        assertEquals(
-            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
-            argument.getValue().getMessage()
-        );
+        assertTrue("Should mention missing index parameter", argument.getValue().getMessage().contains("Missing: 'index'"));
         Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
         Mockito.verify(client, Mockito.never()).search(any(), any());
     }
@@ -779,7 +774,7 @@ public class SearchIndexToolTests {
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertTrue("Should be IllegalArgumentException", exceptionCaptor.getValue() instanceof IllegalArgumentException);
-        assertTrue("Should mention required parameters", exceptionCaptor.getValue().getMessage().contains("required"));
+        assertTrue("Should mention JSON format error", exceptionCaptor.getValue().getMessage().contains("Invalid JSON format"));
     }
 
     @Test
