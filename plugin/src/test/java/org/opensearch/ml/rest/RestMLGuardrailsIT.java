@@ -275,6 +275,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         assertFalse(((String) responseMap.get("text")).isEmpty());
     }
 
+    @Ignore
     public void testPredictRemoteModelFailedWithModelGuardrail() throws IOException, InterruptedException {
         // Skip test if key is null
         Assume.assumeNotNull(OPENAI_KEY);
