@@ -76,21 +76,12 @@ opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
     classname 'org.opensearch.ml.plugin.MachineLearningPlugin'
-    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true', 'transport-grpc']
+    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true', 'transport-grpc;optional=true']
 }
 
 configurations {
     zipArchive
     opensearchPlugin
-}
-
-configurations {
-    runtimeClasspath {
-        exclude group: 'com.google.guava', module: 'guava'
-    }
-    bundlePlugin {
-        exclude group: 'com.google.guava', module: 'guava'
-    }
 }
 
 dependencies {
