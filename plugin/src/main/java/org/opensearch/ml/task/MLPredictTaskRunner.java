@@ -44,6 +44,9 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.batch.BatchInferenceExecutor;
+import org.opensearch.ml.batch.BatchableInputRegistry;
+import org.opensearch.ml.batch.SizeBasedBatchSplitter;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -57,6 +60,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -105,6 +109,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final MLModelManager mlModelManager;
     private final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
+    private final BatchInferenceExecutor batchInferenceExecutor;
     private volatile boolean autoDeploymentEnabled;
 
     public static final String BUCKET_FIELD = "bucket";
@@ -134,6 +139,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
+        this.batchInferenceExecutor = new BatchInferenceExecutor(
+            new BatchableInputRegistry(),
+            new SizeBasedBatchSplitter(),
+            threadPool,
+            REMOTE_PREDICT_THREAD_POOL
+        );
         autoDeploymentEnabled = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
             .getClusterSettings()
@@ -413,6 +424,15 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return functionName == FunctionName.REMOTE ? REMOTE_PREDICT_THREAD_POOL : PREDICT_THREAD_POOL;
     }
 
+    // Batch inference config lives on the cached model; null means the request is not batched.
+    private BatchInferenceConfig getBatchInferenceConfig(String modelId) {
+        if (modelId == null) {
+            return null;
+        }
+        MLModel cachedModel = mlModelManager.getModelInfo(modelId);
+        return cachedModel == null ? null : cachedModel.getBatchInferenceConfig();
+    }
+
     private void predict(
         String modelId,
         String tenantId,
@@ -586,7 +606,34 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName));
-                        predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
+                        // If the model defines batch inference limits and the request exceeds them, split it into
+                        // size-bounded sub-batches, run each against the model, and merge the results in input order.
+                        // Output validation and task completion still run once, on the merged response. Requests that
+                        // are not configured for batching, or already fit within the limits, take the single-call path.
+                        BatchInferenceConfig batchInferenceConfig = getBatchInferenceConfig(modelId);
+                        boolean applyBatching = !mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)
+                            && batchInferenceExecutor.shouldBatch(mlInput, batchInferenceConfig);
+                        if (applyBatching) {
+                            final Predictable batchPredictor = predictor;
+                            batchInferenceExecutor
+                                .execute(
+                                    mlInput,
+                                    batchInferenceConfig,
+                                    (subInput, subListener) -> batchPredictor
+                                        .asyncPredict(
+                                            subInput,
+                                            ActionListener.wrap(resp -> subListener.onResponse(resp.getOutput()), subListener::onFailure),
+                                            channel
+                                        ),
+                                    ActionListener
+                                        .wrap(
+                                            merged -> trackPredictDurationListener.onResponse(new MLTaskResponse(merged)),
+                                            trackPredictDurationListener::onFailure
+                                        )
+                                );
+                        } else {
+                            predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
+                        }
                     } else {
                         // long startTime = System.nanoTime();
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without

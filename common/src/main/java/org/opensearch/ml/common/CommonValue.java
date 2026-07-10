@@ -110,6 +110,7 @@ public class CommonValue {
     public static final Version VERSION_3_4_0 = Version.fromString("3.4.0");
     public static final Version VERSION_3_5_0 = Version.fromString("3.5.0");
     public static final Version VERSION_3_7_0 = Version.fromString("3.7.0");
+    public static final Version VERSION_3_8_0 = Version.fromString("3.8.0");
 
     // Connector Constants
     public static final String NAME_FIELD = "name";
