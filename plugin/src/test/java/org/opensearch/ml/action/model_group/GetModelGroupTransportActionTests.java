@@ -123,6 +123,16 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
+    @Override
+    public void tearDown() throws Exception {
+        // Clear the JVM-global singleton so mock state can't leak into later suites (issue #4639).
+        try {
+            ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+        } finally {
+            super.tearDown();
+        }
+    }
+
     public void test_Success() throws IOException {
         GetResponse getResponse = prepareMLModelGroup();
         doAnswer(invocation -> {
