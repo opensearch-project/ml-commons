@@ -1890,8 +1890,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testFactory_CreateWithInvalidTemplateBodyJson() {
-        String searchTemplatesJson =
-            "[{\"template_id\":\"t1\",\"template_description\":\"desc1\",\"template_body\":\"not valid json\"}]";
+        String searchTemplatesJson = "[{\"template_id\":\"t1\",\"template_description\":\"desc1\",\"template_body\":\"not valid json\"}]";
 
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ID_FIELD, "test-model-id");

@@ -428,11 +428,9 @@ public class QueryPlanningTool implements WithModelTool {
         if (searchTemplates == null || templateId == null) {
             return null;
         }
-        List<Map<String, String>> templates = gson.fromJson(
-            gson.fromJson(searchTemplates, String.class),
-            new TypeToken<List<Map<String, String>>>() {
-            }.getType()
-        );
+        List<Map<String, String>> templates = gson
+            .fromJson(gson.fromJson(searchTemplates, String.class), new TypeToken<List<Map<String, String>>>() {
+            }.getType());
         for (Map<String, String> template : templates) {
             if (templateId.equals(template.get(TEMPLATE_ID_FIELD))) {
                 String body = template.get(TEMPLATE_BODY_FIELD);
