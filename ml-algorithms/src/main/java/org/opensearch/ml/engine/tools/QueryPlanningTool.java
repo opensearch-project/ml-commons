@@ -82,6 +82,7 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String QUESTION_FIELD = "question";
     private static final String TEMPLATE_ID_FIELD = "template_id";
     private static final String TEMPLATE_DESCRIPTION_FIELD = "template_description";
+    private static final String TEMPLATE_BODY_FIELD = "template_body";
     public static final String INDEX_NAME_FIELD = "index_name";
     private static final int MAX_TRUNCATE_CHARS = 250;
     private static final String TRUNC_PREFIX = "[truncated]";
@@ -213,14 +214,22 @@ public class QueryPlanningTool implements WithModelTool {
                     if (templateId == null || templateId.isBlank() || templateId.equals("null")) {
                         executeQueryPlanning(parameters, listener);
                     } else {
-                        // Retrieve search template by ID
-                        GetStoredScriptRequest getStoredScriptRequest = new GetStoredScriptRequest(templateId);
-                        client.admin().cluster().getStoredScript(getStoredScriptRequest, ActionListener.wrap(getStoredScriptResponse -> {
-                            if (getStoredScriptResponse.getSource() != null) {
-                                parameters.put(TEMPLATE_FIELD, gson.toJson(getStoredScriptResponse.getSource().getSource()));
-                            }
+                        String inlineBody = findInlineTemplateBody(templateId);
+                        if (inlineBody != null) {
+                            parameters.put(TEMPLATE_FIELD, gson.toJson(inlineBody));
                             executeQueryPlanning(parameters, listener);
-                        }, e -> { listener.onFailure(e); }));
+                        } else {
+                            GetStoredScriptRequest getStoredScriptRequest = new GetStoredScriptRequest(templateId);
+                            client
+                                .admin()
+                                .cluster()
+                                .getStoredScript(getStoredScriptRequest, ActionListener.wrap(getStoredScriptResponse -> {
+                                    if (getStoredScriptResponse.getSource() != null) {
+                                        parameters.put(TEMPLATE_FIELD, gson.toJson(getStoredScriptResponse.getSource().getSource()));
+                                    }
+                                    executeQueryPlanning(parameters, listener);
+                                }, e -> { listener.onFailure(e); }));
+                        }
                     }
                 } catch (Exception e) {
                     IllegalArgumentException parsingException = new IllegalArgumentException(
@@ -415,6 +424,27 @@ public class QueryPlanningTool implements WithModelTool {
         }
     }
 
+    private String findInlineTemplateBody(String templateId) {
+        if (searchTemplates == null || templateId == null) {
+            return null;
+        }
+        List<Map<String, String>> templates = gson.fromJson(
+            gson.fromJson(searchTemplates, String.class),
+            new TypeToken<List<Map<String, String>>>() {
+            }.getType()
+        );
+        for (Map<String, String> template : templates) {
+            if (templateId.equals(template.get(TEMPLATE_ID_FIELD))) {
+                String body = template.get(TEMPLATE_BODY_FIELD);
+                if (body != null && !body.isBlank()) {
+                    return body;
+                }
+                return null;
+            }
+        }
+        return null;
+    }
+
     @Override
     public String getType() {
         return TYPE;
@@ -549,6 +579,19 @@ public class QueryPlanningTool implements WithModelTool {
             String templateDescription = template.get(TEMPLATE_DESCRIPTION_FIELD);
             if (templateDescription == null || templateDescription.isBlank()) {
                 throw new IllegalArgumentException("search_templates field entries must have a template_description");
+            }
+
+            // Validate templateBody if present — must be parseable JSON
+            String templateBody = template.get(TEMPLATE_BODY_FIELD);
+            if (templateBody != null && !templateBody.isBlank()) {
+                try {
+                    gson.fromJson(templateBody, Object.class);
+                } catch (Exception e) {
+                    throw new IllegalArgumentException(
+                        "search_templates field entry template_body must be valid JSON for template_id: " + templateId,
+                        e
+                    );
+                }
             }
         }
 
