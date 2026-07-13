@@ -6,7 +6,7 @@
 | **Reviewers** | Nathalie, Mingshi (mentor) |
 | **SDM** | Yaliang |
 | **Status** | In Progress |
-| **Last Updated** | 2026-07-10 |
+| **Last Updated** | 2026-07-13 |
 | **RFC** | opensearch-project/ml-commons #4859 |
 
 ---
@@ -196,6 +196,11 @@ public class RetentionRule implements ToXContentObject, Writeable {
     private final Integer retentionDays;  // nullable — null means disabled
     private final Integer maxCount;       // nullable — null means disabled
 
+    // Transient parse-time metadata for field-level merge (NOT serialized via Writeable,
+    // NOT included in equals/hashCode). Only meaningful on the node that parsed the JSON request.
+    private final transient boolean retentionDaysExplicitlySet;  // true when field present in JSON (even if null)
+    private final transient boolean maxCountExplicitlySet;       // true when field present in JSON (even if null)
+
     // Both null is valid — means "no deletion for this type" (entry persisted but job skips it)
     // retentionDays is rejected (validation error) for HISTORY type
     // MemoryType.WORKING ("working") is NOT a valid key (deleted only via session cascade)
@@ -203,6 +208,8 @@ public class RetentionRule implements ToXContentObject, Writeable {
     // Zero is rejected (validation error) — use null to disable
 }
 ```
+
+**Note on transient flags:** The `retentionDaysExplicitlySet` and `maxCountExplicitlySet` flags are NOT serialized via `writeTo()` (StreamInput constructor hardcodes both to `false`). This means field-level merge only works correctly when the merge runs on the same node that parsed the original JSON request. Since `TransportUpdateMemoryContainerAction` performs the merge in its `doExecute()` (before any transport serialization), this is always the case in practice.
 
 Container-level storage:
 
@@ -291,7 +298,9 @@ Working memory has no entry in `retention_policy` — it is deleted exclusively 
 
 #### 6.2.1 The "default" Keyword
 
-Users can pass the string `"default"` at any level of the retention policy to reset that level to the current cluster default values:
+> **⚠️ Implementation Status: NOT YET IMPLEMENTED.** This section documents the planned design for the `"default"` keyword. The parser does not currently accept `"default"` as a value — it will return a validation error. Implementation is deferred to a future iteration (see §11 Second Iteration). The design is documented here for completeness and to guide the future implementation.
+
+Users will be able to pass the string `"default"` at any level of the retention policy to reset that level to the current cluster default values:
 
 | Input | Effect |
 |-------|--------|
@@ -356,10 +365,10 @@ Types not included in the update request are left unchanged. The PUT response **
 |-------|---------|
 | `retention_policy` absent from container (never set) | Defaults will be auto-applied (at creation or via backfill) |
 | `"retention_policy": null` | Explicit opt-out — no retention, backfill will not override |
-| `"retention_policy": "default"` | Reset to cluster defaults |
+| `"retention_policy": "default"` | Reset to cluster defaults *(not yet implemented — see §6.2.1)* |
 | `retention_policy` explicitly provided with values | Policy is applied as specified |
 | Field set to a positive integer | Use that value |
-| Field set to `"default"` | Resolve to cluster default value |
+| Field set to `"default"` | Resolve to cluster default value *(not yet implemented — see §6.2.1)* |
 | Field set to `null` | Remove/disable that specific constraint |
 | Field set to `0`, negative, or non-integer (other than `null`/`"default"`) | Validation error |
 
@@ -953,14 +962,16 @@ This correctly matches documents where `pinned` is `false`, `null`, or absent.
 
 ### 6.8 Evaluation Field Rationale
 
-#### Why `last_updated_time` for Sessions and Long-Term Memory
+#### Why `last_updated_time` for `retention_days` on Sessions and Long-Term Memory
 
-The retention job evaluates sessions and long-term memory against `last_updated_time`, not `created_time`. This means a memory's clock resets whenever it is explicitly updated via the API.
+The retention job evaluates `retention_days` for sessions and long-term memory against `last_updated_time`, not `created_time`. This means a memory's time-based retention clock resets whenever it is explicitly updated (content changes only — see §6.10).
 
-**Rationale:**
+**Note:** `max_count` eviction uses `created_time` for ALL types (see Decision #23 below). Only `retention_days` uses `last_updated_time`.
+
+**Rationale for `last_updated_time` on `retention_days`:**
 - A session created 90 days ago but actively updated yesterday is still "alive" — deleting it based on creation date would destroy active conversations
 - Long-term memories that get refined over time (e.g., "user prefers dark mode" updated to "user prefers dark mode with high contrast") should not expire based on when they were first created
-- `last_updated_time` captures the most recent human or agent interaction with the document, which is the best proxy for "relevance" in a FIFO system
+- `last_updated_time` captures the most recent human or agent interaction with the document, which is the best proxy for "active use"
 
 **Note:** `last_updated_time` on sessions is now automatically bumped when working memory is added (see §6.11), and only bumped by content-field updates — not organizational changes like tagging or pinning (see §6.10).
 
@@ -1042,8 +1053,11 @@ Working memory in sessionless containers has no update lifecycle. Messages are w
 
 3. COMPUTE excess = count - max_count
 
-4. SEARCH for the oldest `excess` documents (sorted ASC by evaluation field)
-   - All types (sessions, long-term, history): sort by created_time ASC
+4. SEARCH for the oldest `excess` documents by created_time
+   - Long-term and history: sort by created_time ASC, size = excess (direct collection)
+   - Sessions: sort by created_time DESC, skip the newest maxCount, collect the rest
+     (equivalent outcome — identifies the same oldest documents — but avoids needing
+      the total count as a separate query since it walks from newest first)
    - Fetch only _id (no source needed)
 
 5. DELETE those document IDs via BulkRequest (batched 1000 per request)
@@ -1128,11 +1142,11 @@ But it would require:
 
 `TransportUpdateMemoryAction` only bumps `last_updated_time` when **content** changes. Organizational/metadata-only changes do NOT extend retention lifetime:
 
-| Memory Type | Fields that bump `last_updated_time` | Fields that do NOT bump |
+| Memory Type | Fields that bump `last_updated_time` | Fields that do NOT bump (accepted but non-content) |
 |-------------|--------------------------------------|------------------------|
-| **Sessions** | `summary` | `tags`, `pinned`, `metadata`, `additional_info`, `agents` |
-| **Long-term** | `memory` (the core memory field) | `tags`, `pinned`, `metadata`, `additional_info`, `agents` |
-| **Working** | `messages`, `binary_data`, `structured_data`, `structured_data_blob` | `tags`, `pinned`, `metadata`, `additional_info`, `agents` |
+| **Sessions** | `summary` | `pinned`, `metadata`, `additional_info`, `agents` |
+| **Long-term** | `memory` (the core memory field) | `tags`, `pinned` |
+| **Working** | `messages`, `binary_data`, `structured_data`, `structured_data_blob` | `metadata`, `tags` (note: `pinned` is rejected with 400 for working memory) |
 
 **Rationale:** Prevents organizational changes (tagging, pinning, adding metadata) from artificially extending a memory's retention lifetime. Only changes that indicate the memory is actively being used for its primary purpose (content storage) should reset the retention clock.
 
@@ -1143,9 +1157,11 @@ But it would require:
 `TransportAddMemoriesAction` now bumps the parent session's `last_updated_time` when adding working memory to an **existing** session. This means active conversations extend their session's retention lifetime.
 
 **Behavior:**
-- When working memory is added to a session that already exists, the session document's `last_updated_time` is updated to `Instant.now()`
+- When working memory is added to a session that already exists, the session document's `last_updated_time` is updated to `Instant.now().toEpochMilli()`
 - Uses `retryOnConflict(3)` to handle concurrent message writes to the same session
 - Does NOT bump for newly-created sessions (they already have a fresh timestamp from creation)
+- Does NOT bump for `disableSession=true` containers (no meaningful session to update)
+- The bump is **best-effort and asynchronous** — it fires after the add-memory response is already returned to the client. A failed bump is logged at DEBUG level and never fails the add-memory request. This avoids add-memory latency impact while still providing session liveness tracking for retention.
 
 **Rationale:** This addresses the known limitation from the original design where a session's `last_updated_time` was only set at creation and not refreshed by conversation activity. Active conversations now naturally extend their session's lifetime, preventing premature eviction of sessions that are still in use.
 
@@ -1158,7 +1174,7 @@ But it would require:
 
 | Issue | Fix | Impact |
 |-------|-----|--------|
-| Session `created_time` used `Instant.now().getEpochSecond()` (epoch seconds) | Changed to `Instant.now().toEpochMilli()` (epoch milliseconds) | The retention job uses `System.currentTimeMillis()` for comparison, which returns milliseconds. Using epoch seconds would make sessions appear to have been created in January 1970 when compared against millisecond timestamps, causing immediate eviction. All timestamps must use consistent millisecond precision. |
+| Session `created_time` and `last_updated_time` used `Instant.now().getEpochSecond()` (epoch seconds) | Changed to `Instant.now().toEpochMilli()` (epoch milliseconds) for both fields | The retention job uses `System.currentTimeMillis()` for comparison, which returns milliseconds. Using epoch seconds would make sessions appear to have been created in January 1970 when compared against millisecond timestamps, causing immediate eviction. All timestamps must use consistent millisecond precision. |
 
 ---
 
@@ -1349,6 +1365,7 @@ Features explicitly deferred from v1 to reduce scope. They build on v1 infrastru
 | Separate retention_policy permission | Dedicated permission for changing retention settings | Security hardening; prevents accidental policy weakening |
 | Pinned count visibility | Include `pinned_count` per type in GET container response | Ops visibility into unbounded growth from pin abuse |
 | `max_pinned_per_container` setting | Cluster setting that rejects new pin requests (returns 400) or logs warnings when pinned count per container per type exceeds a threshold | Prevents silent unbounded growth from pin abuse. WARN log in v1 provides visibility; this setting would add enforcement. |
+| `"default"` keyword in retention_policy | Allow `"default"` string at any level to reset to current cluster defaults (see §6.2.1 for full design) | Parser and resolution logic needed; design is complete but implementation is deferred |
 
 ## 12. Future Work (Beyond v2)
 
