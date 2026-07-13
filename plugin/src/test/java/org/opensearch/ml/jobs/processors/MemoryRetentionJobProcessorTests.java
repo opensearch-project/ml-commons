@@ -1371,6 +1371,430 @@ public class MemoryRetentionJobProcessorTests {
         assertTrue("At least one delete_by_query should have been called for long-term retention_days", deleteByQueryCount.get() >= 1);
     }
 
+    // --- Phase 7: Orphan Sweep Tests ---
+
+    @Test
+    public void testOrphanDetectedAndDeleted() {
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-orphan", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger orphanPhaseSearchCount = new AtomicInteger(0);
+        boolean[] inOrphanPhase = { false };
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else if (count == 1) {
+                    inOrphanPhase[0] = true;
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                String targetIndex = request.indices()[0];
+
+                if (!inOrphanPhase[0]) {
+                    if (request.source() != null && request.source().size() == 0) {
+                        SearchResponse countResp = mock(SearchResponse.class);
+                        SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                        when(countResp.getHits()).thenReturn(countHits);
+                        listener.onResponse(countResp);
+                    } else {
+                        listener.onResponse(emptySearchResponse());
+                    }
+                } else {
+                    orphanPhaseSearchCount.incrementAndGet();
+                    if (targetIndex.contains("working")) {
+                        SearchHit hit1 = new SearchHit(0, "working-1", null, null);
+                        hit1.sourceRef(new BytesArray("{\"namespace\":{\"session_id\":\"session-exists\"}}"));
+                        hit1.sortValues(new Object[] { "working-1" }, new DocValueFormat[] { DocValueFormat.RAW });
+
+                        SearchHit hit2 = new SearchHit(1, "working-2", null, null);
+                        hit2.sourceRef(new BytesArray("{\"namespace\":{\"session_id\":\"session-gone\"}}"));
+                        hit2.sortValues(new Object[] { "working-2" }, new DocValueFormat[] { DocValueFormat.RAW });
+
+                        SearchHits workingHits = new SearchHits(
+                            new SearchHit[] { hit1, hit2 },
+                            new TotalHits(2, TotalHits.Relation.EQUAL_TO),
+                            Float.NaN
+                        );
+                        SearchResponse workingResponse = mock(SearchResponse.class);
+                        when(workingResponse.getHits()).thenReturn(workingHits);
+                        listener.onResponse(workingResponse);
+                    } else if (targetIndex.contains("sessions")) {
+                        SearchHit existsHit = new SearchHit(0, "session-exists", null, null);
+                        SearchHits sessionHits = new SearchHits(
+                            new SearchHit[] { existsHit },
+                            new TotalHits(1, TotalHits.Relation.EQUAL_TO),
+                            Float.NaN
+                        );
+                        SearchResponse sessionResponse = mock(SearchResponse.class);
+                        when(sessionResponse.getHits()).thenReturn(sessionHits);
+                        listener.onResponse(sessionResponse);
+                    } else {
+                        listener.onResponse(emptySearchResponse());
+                    }
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse orphanDeleteResponse = mock(BulkByScrollResponse.class);
+        when(orphanDeleteResponse.getDeleted()).thenReturn(3L);
+
+        AtomicInteger dbqCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            dbqCount.incrementAndGet();
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(orphanDeleteResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Orphan sweep should have searched working memory", orphanPhaseSearchCount.get() >= 1);
+        assertTrue("Delete-by-query should fire for orphans and null sessions", dbqCount.get() >= 2);
+    }
+
+    @Test
+    public void testNullSessionIdDeletedAfterGracePeriod() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-null-session", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0 || count == 1) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                if (request.source() != null && request.source().size() == 0) {
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse nullDeleteResponse = mock(BulkByScrollResponse.class);
+        when(nullDeleteResponse.getDeleted()).thenReturn(5L);
+
+        AtomicInteger deleteByQueryCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            deleteByQueryCount.incrementAndGet();
+            DeleteByQueryRequest dbq = invocation.getArgument(1);
+            String queryString = dbq.getSearchRequest().source().query().toString();
+            assertTrue("Null session delete should use created_time range", queryString.contains("created_time"));
+
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(nullDeleteResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Null session delete_by_query should fire", deleteByQueryCount.get() >= 1);
+    }
+
+    @Test
+    public void testNullSessionIdWithinGracePeriodNotDeleted() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-grace", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0 || count == 1) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                if (request.source() != null && request.source().size() == 0) {
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse graceResponse = mock(BulkByScrollResponse.class);
+        when(graceResponse.getDeleted()).thenReturn(0L);
+
+        doAnswer(invocation -> {
+            DeleteByQueryRequest dbq = invocation.getArgument(1);
+            String queryString = dbq.getSearchRequest().source().query().toString();
+            assertTrue("Null session delete should use created_time range for grace period", queryString.contains("created_time"));
+            assertTrue("Should filter docs without session_id", queryString.contains("session_id"));
+
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(graceResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, atLeastOnce()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testNoOrphansFound() {
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-no-orphans", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger deleteByQueryCount = new AtomicInteger(0);
+        boolean[] inOrphanPhase = { false };
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else if (count == 1) {
+                    inOrphanPhase[0] = true;
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                String targetIndex = request.indices()[0];
+
+                if (!inOrphanPhase[0]) {
+                    if (request.source() != null && request.source().size() == 0) {
+                        SearchResponse countResp = mock(SearchResponse.class);
+                        SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                        when(countResp.getHits()).thenReturn(countHits);
+                        listener.onResponse(countResp);
+                    } else {
+                        listener.onResponse(emptySearchResponse());
+                    }
+                } else {
+                    if (targetIndex.contains("working")) {
+                        SearchHit hit1 = new SearchHit(0, "w-1", null, null);
+                        hit1.sourceRef(new BytesArray("{\"namespace\":{\"session_id\":\"s-1\"}}"));
+                        hit1.sortValues(new Object[] { "w-1" }, new DocValueFormat[] { DocValueFormat.RAW });
+
+                        SearchHit hit2 = new SearchHit(1, "w-2", null, null);
+                        hit2.sourceRef(new BytesArray("{\"namespace\":{\"session_id\":\"s-2\"}}"));
+                        hit2.sortValues(new Object[] { "w-2" }, new DocValueFormat[] { DocValueFormat.RAW });
+
+                        SearchHits workingHits = new SearchHits(
+                            new SearchHit[] { hit1, hit2 },
+                            new TotalHits(2, TotalHits.Relation.EQUAL_TO),
+                            Float.NaN
+                        );
+                        SearchResponse workingResponse = mock(SearchResponse.class);
+                        when(workingResponse.getHits()).thenReturn(workingHits);
+                        listener.onResponse(workingResponse);
+                    } else if (targetIndex.contains("sessions")) {
+                        SearchHit exist1 = new SearchHit(0, "s-1", null, null);
+                        SearchHit exist2 = new SearchHit(1, "s-2", null, null);
+                        SearchHits sessionHits = new SearchHits(
+                            new SearchHit[] { exist1, exist2 },
+                            new TotalHits(2, TotalHits.Relation.EQUAL_TO),
+                            Float.NaN
+                        );
+                        SearchResponse sessionResponse = mock(SearchResponse.class);
+                        when(sessionResponse.getHits()).thenReturn(sessionHits);
+                        listener.onResponse(sessionResponse);
+                    } else {
+                        listener.onResponse(emptySearchResponse());
+                    }
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse nullResponse = mock(BulkByScrollResponse.class);
+        when(nullResponse.getDeleted()).thenReturn(0L);
+
+        doAnswer(invocation -> {
+            deleteByQueryCount.incrementAndGet();
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(nullResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Only null session cleanup DBQ should fire (no orphans)", deleteByQueryCount.get() == 1);
+    }
+
+    @Test
+    public void testSessionsIndexMissing() {
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"disable_session\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"retention_days\":7}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-no-sessions-idx", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger orphanDbqCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse ttlResponse = mock(BulkByScrollResponse.class);
+        when(ttlResponse.getDeleted()).thenReturn(0L);
+
+        doAnswer(invocation -> {
+            orphanDbqCount.incrementAndGet();
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(ttlResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Only Phase 6 TTL DBQ should fire, not orphan sweep", orphanDbqCount.get() == 1);
+    }
+
+    @Test
+    public void testDisableSessionTrueContainerSkippedInOrphanSweep() {
+        String sourceJsonSessionEnabled = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        String sourceJsonSessionDisabled = "{\"configuration\":{\"index_prefix\":\"other-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"disable_session\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"retention_days\":7}}}}";
+
+        SearchHit hit1 = new SearchHit(0, "container-with-session", null, null);
+        hit1.sourceRef(new BytesArray(sourceJsonSessionEnabled));
+        hit1.sortValues(new Object[] { "container-with-session" }, new DocValueFormat[] { DocValueFormat.RAW });
+
+        SearchHit hit2 = new SearchHit(1, "container-no-session", null, null);
+        hit2.sourceRef(new BytesArray(sourceJsonSessionDisabled));
+        hit2.sortValues(new Object[] { "container-no-session" }, new DocValueFormat[] { DocValueFormat.RAW });
+
+        SearchResponse retentionContainerResponse = mock(SearchResponse.class);
+        SearchHits retentionContainerHits = new SearchHits(
+            new SearchHit[] { hit1, hit2 },
+            new TotalHits(2, TotalHits.Relation.EQUAL_TO),
+            Float.NaN
+        );
+        when(retentionContainerResponse.getHits()).thenReturn(retentionContainerHits);
+
+        SearchResponse orphanContainerResponse = createContainerSearchResponseFromJson("container-with-session", sourceJsonSessionEnabled);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(retentionContainerResponse);
+                } else if (count == 1) {
+                    listener.onResponse(orphanContainerResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                if (request.source() != null && request.source().size() == 0) {
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse dbqResponse = mock(BulkByScrollResponse.class);
+        when(dbqResponse.getDeleted()).thenReturn(0L);
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(dbqResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Both retention and orphan sweep container searches should fire", containerSearchCount.get() >= 2);
+    }
+
     // --- Helper methods ---
 
     private SearchResponse createContainerSearchResponseFromJson(String containerId, String sourceJson) {
