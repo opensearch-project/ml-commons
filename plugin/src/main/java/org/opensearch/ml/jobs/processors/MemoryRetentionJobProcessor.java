@@ -15,6 +15,10 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RETENTION_POLICY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS;
@@ -24,6 +28,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUL
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +39,7 @@ import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.IndicesOptions;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.unit.TimeValue;
@@ -121,12 +127,8 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         SearchRequest request = new SearchRequest(ML_MEMORY_CONTAINER_INDEX);
         request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
 
-        BoolQueryBuilder query = QueryBuilders
-            .boolQuery()
-            .must(QueryBuilders.existsQuery(MEMORY_STORAGE_CONFIG_FIELD + "." + RETENTION_POLICY_FIELD));
-
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
-            .query(query)
+            .query(QueryBuilders.matchAllQuery())
             .size(CONTAINER_PAGE_SIZE)
             .sort("_id", SortOrder.ASC)
             .fetchSource(true);
@@ -205,30 +207,97 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             parser.nextToken();
             MemoryConfiguration config = MemoryConfiguration.parse(parser);
 
-            executeSessionRetention(
-                config,
-                containerId,
-                ActionListener
-                    .wrap(
-                        v -> executeLongTermRetention(
-                            config,
-                            containerId,
-                            ActionListener
-                                .wrap(
-                                    v2 -> executeHistoryRetention(
-                                        config,
-                                        containerId,
-                                        ActionListener
-                                            .wrap(v3 -> executeWorkingMemoryTTL(config, containerId, listener), listener::onFailure)
-                                    ),
-                                    listener::onFailure
-                                )
-                        ),
-                        listener::onFailure
-                    )
-            );
+            Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
+            if (retentionPolicy == null || retentionPolicy.isEmpty()) {
+                if (config.isRetentionPolicyExplicitlyNull()) {
+                    log.debug("Container [{}] explicitly opted out of retention, skipping", containerId);
+                    listener.onResponse(null);
+                    return;
+                }
+                applyDefaultRetentionPolicy(config, containerId, ActionListener.wrap(v -> {
+                    executeRetentionPipeline(config, containerId, listener);
+                }, listener::onFailure));
+            } else {
+                executeRetentionPipeline(config, containerId, listener);
+            }
         } catch (Exception e) {
             log.error("Error parsing configuration for container [{}]", containerId, e);
+            listener.onResponse(null);
+        }
+    }
+
+    private void executeRetentionPipeline(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
+        executeSessionRetention(
+            config,
+            containerId,
+            ActionListener
+                .wrap(
+                    v -> executeLongTermRetention(
+                        config,
+                        containerId,
+                        ActionListener
+                            .wrap(
+                                v2 -> executeHistoryRetention(
+                                    config,
+                                    containerId,
+                                    ActionListener
+                                        .wrap(v3 -> executeWorkingMemoryTTL(config, containerId, listener), listener::onFailure)
+                                ),
+                                listener::onFailure
+                            )
+                    ),
+                    listener::onFailure
+                )
+        );
+    }
+
+    private void applyDefaultRetentionPolicy(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
+        int sessionRetentionDays = ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS.get(clusterService.getSettings());
+        int sessionMaxCount = ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT.get(clusterService.getSettings());
+        int longTermMaxCount = ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT.get(clusterService.getSettings());
+        int historyMaxCount = ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT.get(clusterService.getSettings());
+
+        Map<MemoryType, RetentionRule> defaultPolicy = new EnumMap<>(MemoryType.class);
+        defaultPolicy.put(MemoryType.SESSIONS, new RetentionRule(sessionRetentionDays, sessionMaxCount));
+        defaultPolicy.put(MemoryType.LONG_TERM, new RetentionRule(null, longTermMaxCount));
+        defaultPolicy.put(MemoryType.HISTORY, new RetentionRule(null, historyMaxCount));
+
+        config.setRetentionPolicy(defaultPolicy);
+
+        log.info(
+            "[MemoryRetentionJob] container={} auto-applying default retention policy: sessions={}/{}d, long-term={}, history={}",
+            containerId,
+            sessionMaxCount,
+            sessionRetentionDays,
+            longTermMaxCount,
+            historyMaxCount
+        );
+
+        try {
+            XContentBuilder policyBuilder = XContentFactory.jsonBuilder().startObject();
+            policyBuilder.startObject(RETENTION_POLICY_FIELD);
+            for (Map.Entry<MemoryType, RetentionRule> entry : defaultPolicy.entrySet()) {
+                policyBuilder.field(entry.getKey().getValue());
+                entry.getValue().toXContent(policyBuilder, null);
+            }
+            policyBuilder.endObject();
+            policyBuilder.endObject();
+
+            UpdateRequest updateRequest = new UpdateRequest(ML_MEMORY_CONTAINER_INDEX, containerId)
+                .doc(Map.of(MEMORY_STORAGE_CONFIG_FIELD, XContentHelper.convertToMap(BytesReference.bytes(policyBuilder), false, XContentType.JSON).v2()))
+                .retryOnConflict(3);
+
+            try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+                client.update(updateRequest, ActionListener.wrap(response -> {
+                    log.debug("Successfully persisted default retention policy on container [{}]", containerId);
+                    listener.onResponse(null);
+                }, e -> {
+                    log.warn("Failed to persist default retention policy on container [{}], proceeding with in-memory defaults", containerId, e);
+                    listener.onResponse(null);
+                }));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build default retention policy for container [{}], proceeding with in-memory defaults", containerId, e);
             listener.onResponse(null);
         }
     }
