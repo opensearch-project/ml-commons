@@ -30,8 +30,26 @@ public class RetentionRule implements ToXContentObject, Writeable {
     private final Integer retentionDays;
     private final Integer maxCount;
 
+    /**
+     * Transient parse-time metadata: true when retention_days was explicitly present in the
+     * parsed JSON (even if value was null, meaning "remove it"). Not serialized.
+     */
+    @EqualsAndHashCode.Exclude
+    private final transient boolean retentionDaysExplicitlySet;
+
+    /**
+     * Transient parse-time metadata: true when max_count was explicitly present in the
+     * parsed JSON (even if value was null, meaning "remove it"). Not serialized.
+     */
+    @EqualsAndHashCode.Exclude
+    private final transient boolean maxCountExplicitlySet;
+
     @Builder
     public RetentionRule(Integer retentionDays, Integer maxCount) {
+        this(retentionDays, maxCount, false, false);
+    }
+
+    public RetentionRule(Integer retentionDays, Integer maxCount, boolean retentionDaysExplicitlySet, boolean maxCountExplicitlySet) {
         if (retentionDays != null && retentionDays <= 0) {
             throw new IllegalArgumentException("retention_days must be a positive integer or null");
         }
@@ -40,11 +58,15 @@ public class RetentionRule implements ToXContentObject, Writeable {
         }
         this.retentionDays = retentionDays;
         this.maxCount = maxCount;
+        this.retentionDaysExplicitlySet = retentionDaysExplicitlySet;
+        this.maxCountExplicitlySet = maxCountExplicitlySet;
     }
 
     public RetentionRule(StreamInput in) throws IOException {
         this.retentionDays = in.readOptionalInt();
         this.maxCount = in.readOptionalInt();
+        this.retentionDaysExplicitlySet = false;
+        this.maxCountExplicitlySet = false;
     }
 
     @Override
@@ -69,6 +91,8 @@ public class RetentionRule implements ToXContentObject, Writeable {
     public static RetentionRule parse(XContentParser parser) throws IOException {
         Integer retentionDays = null;
         Integer maxCount = null;
+        boolean retentionDaysExplicitlySet = false;
+        boolean maxCountExplicitlySet = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -77,6 +101,7 @@ public class RetentionRule implements ToXContentObject, Writeable {
 
             switch (fieldName) {
                 case RETENTION_DAYS_FIELD:
+                    retentionDaysExplicitlySet = true;
                     if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
                         retentionDays = null;
                     } else {
@@ -84,6 +109,7 @@ public class RetentionRule implements ToXContentObject, Writeable {
                     }
                     break;
                 case MAX_COUNT_FIELD:
+                    maxCountExplicitlySet = true;
                     if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
                         maxCount = null;
                     } else {
@@ -96,6 +122,6 @@ public class RetentionRule implements ToXContentObject, Writeable {
             }
         }
 
-        return new RetentionRule(retentionDays, maxCount);
+        return new RetentionRule(retentionDays, maxCount, retentionDaysExplicitlySet, maxCountExplicitlySet);
     }
 }

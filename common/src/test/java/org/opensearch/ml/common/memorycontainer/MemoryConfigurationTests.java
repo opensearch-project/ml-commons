@@ -1274,23 +1274,24 @@ public class MemoryConfigurationTests {
     }
 
     @Test
-    public void testUpdate_RetentionPolicy_TypeLevelReplacement() {
+    public void testUpdate_RetentionPolicy_FieldLevelMerge() {
         Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
         existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
         existingPolicy.put(MemoryType.LONG_TERM, new RetentionRule(90, 500));
 
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
 
-        // Update sessions with only max_count — full replacement at type level
+        // Update sessions with only max_count — field-level merge preserves existing retention_days
+        // Use 4-arg constructor to simulate JSON parse: max_count explicitly set, retention_days absent
         Map<MemoryType, RetentionRule> updatePolicy = new java.util.EnumMap<>(MemoryType.class);
-        updatePolicy.put(MemoryType.SESSIONS, new RetentionRule(null, 200));
+        updatePolicy.put(MemoryType.SESSIONS, new RetentionRule(null, 200, false, true));
 
         MemoryConfiguration updateContent = MemoryConfiguration.builder().retentionPolicy(updatePolicy).build();
         config.update(updateContent);
 
-        // Sessions: fully replaced — retentionDays is now null (not preserved)
+        // Sessions: field-level merge — retention_days preserved (not explicitly set in update), max_count updated
         RetentionRule sessionsRule = config.getRetentionPolicy().get(MemoryType.SESSIONS);
-        assertNull(sessionsRule.getRetentionDays());
+        assertEquals(Integer.valueOf(30), sessionsRule.getRetentionDays());
         assertEquals(Integer.valueOf(200), sessionsRule.getMaxCount());
 
         // Long-term: untouched (type not in update)

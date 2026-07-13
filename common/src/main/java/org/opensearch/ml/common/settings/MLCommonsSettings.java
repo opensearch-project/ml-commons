@@ -596,6 +596,14 @@ public final class MLCommonsSettings {
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
 
     // Memory retention job settings
+    public static final Setting<Boolean> ML_COMMONS_MEMORY_RETENTION_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.retention_enabled",
+            true,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
     public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_interval_hours",
@@ -625,6 +633,46 @@ public final class MLCommonsSettings {
             30,
             1,
             365,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_session_retention_days",
+            90,
+            1,
+            3650,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_session_max_count",
+            5000,
+            1,
+            1000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_long_term_max_count",
+            2000,
+            1,
+            1000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_history_max_count",
+            100000,
+            1,
+            10000000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

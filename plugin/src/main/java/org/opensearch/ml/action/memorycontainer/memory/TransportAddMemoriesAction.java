@@ -31,6 +31,7 @@ import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -189,15 +190,15 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     NAMESPACE_FIELD,
                                     input.getNamespace(),
                                     CREATED_TIME_FIELD,
-                                    now.getEpochSecond(),
+                                    now.toEpochMilli(),
                                     LAST_UPDATED_TIME_FIELD,
-                                    now.getEpochSecond()
+                                    now.toEpochMilli()
                                 )
                         );
                     indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                         input.getNamespace().put(SESSION_ID_FIELD, r.getId());
-                        processAndIndexMemory(input, container, user, actionListener);
+                        processAndIndexMemory(input, container, user, actionListener, true);
                     }, e -> {
                         log.error("Failed to index session data", e);
                         actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
@@ -219,7 +220,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
                 memoryProcessingService.summarizeMessages(tenantId, container.getConfiguration(), messages, summaryListener);
             } else {
-                processAndIndexMemory(input, container, user, actionListener);
+                processAndIndexMemory(input, container, user, actionListener, false);
             }
         } catch (Exception e) {
             log.error("Failed to create session", e);
@@ -231,7 +232,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         MLAddMemoriesInput input,
         MLMemoryContainer container,
         User user,
-        ActionListener<MLAddMemoriesResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener,
+        boolean newlyCreatedSession
     ) {
         try {
             boolean infer = input.isInfer();
@@ -256,6 +258,21 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     .workingMemoryId(r.getId())
                     .build();
                 actionListener.onResponse(response);
+
+                // Bump last_updated_time on existing sessions
+                if (!newlyCreatedSession && !memoryConfig.isDisableSession()) {
+                    String sessionId = input.getSessionId();
+                    String sessionIndex = memoryConfig.getSessionIndexName();
+                    if (sessionId != null && sessionIndex != null) {
+                        UpdateRequest updateRequest = new UpdateRequest(sessionIndex, sessionId)
+                            .doc(Map.of(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli()))
+                            .retryOnConflict(3);
+                        client.update(updateRequest, ActionListener.wrap(
+                            resp -> log.debug("Bumped session {} last_updated_time", sessionId),
+                            e -> log.debug("Failed to bump session {} last_updated_time", sessionId, e)
+                        ));
+                    }
+                }
 
                 if (infer) {
                     threadPool.executor(AGENTIC_MEMORY_THREAD_POOL).execute(() -> {
