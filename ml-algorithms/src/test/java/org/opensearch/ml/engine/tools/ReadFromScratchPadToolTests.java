@@ -218,6 +218,21 @@ public class ReadFromScratchPadToolTests {
     }
 
     @Test
+    public void testRun_SecurityException() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY, "[\"confidential data\"]");
+
+        SecurityException securityException = new SecurityException("no permissions for [indices:data/read/get] and User [name=test_user]");
+        listener.onFailure(securityException);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof SecurityException);
+        assertTrue(exception.getMessage().contains("no permissions"));
+    }
+
+    @Test
     public void testFactory() {
         ReadFromScratchPadTool.Factory factory = ReadFromScratchPadTool.Factory.getInstance();
         ReadFromScratchPadTool.Factory factory2 = ReadFromScratchPadTool.Factory.getInstance();
