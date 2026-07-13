@@ -267,10 +267,15 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         UpdateRequest updateRequest = new UpdateRequest(sessionIndex, sessionId)
                             .doc(Map.of(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli()))
                             .retryOnConflict(3);
-                        client.update(updateRequest, ActionListener.wrap(
-                            resp -> log.debug("Bumped session {} last_updated_time", sessionId),
-                            e -> log.debug("Failed to bump session {} last_updated_time", sessionId, e)
-                        ));
+                        client
+                            .update(
+                                updateRequest,
+                                ActionListener
+                                    .wrap(
+                                        resp -> log.debug("Bumped session {} last_updated_time", sessionId),
+                                        e -> log.debug("Failed to bump session {} last_updated_time", sessionId, e)
+                                    )
+                            );
                     }
                 }
 

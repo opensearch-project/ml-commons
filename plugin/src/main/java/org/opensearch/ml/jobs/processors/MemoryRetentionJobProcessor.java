@@ -7,12 +7,15 @@ package org.opensearch.ml.jobs.processors;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_SESSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STORAGE_CONFIG_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RETENTION_POLICY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS;
@@ -68,6 +71,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     private static final int CONTAINER_PAGE_SIZE = 100;
     private static final int DELETE_BY_QUERY_BATCH_SIZE = 500;
     private static final int BULK_DELETE_BATCH_SIZE = 1000;
+    private static final int ORPHAN_SESSION_ID_CAP = 50_000;
+    private static final int ORPHAN_SESSION_BATCH_SIZE = 1000;
+    private static final int ORPHAN_ENUMERATION_PAGE_SIZE = 1000;
 
     private static MemoryRetentionJobProcessor instance;
 
@@ -159,7 +165,6 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 resolveContainersWithPolicies(nextPageSortValues);
             } else {
                 executeOrphanSweep();
-                onJobComplete();
             }
             return;
         }
@@ -841,7 +846,328 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     }
 
     private void executeOrphanSweep() {
-        log.debug("Orphan sweep not yet implemented");
+        resolveOrphanSweepContainers(null);
+    }
+
+    private void resolveOrphanSweepContainers(Object[] searchAfterValues) {
+        SearchRequest request = new SearchRequest(ML_MEMORY_CONTAINER_INDEX);
+        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.existsQuery(MEMORY_STORAGE_CONFIG_FIELD + "." + RETENTION_POLICY_FIELD))
+            .mustNot(QueryBuilders.termQuery(MEMORY_STORAGE_CONFIG_FIELD + "." + DISABLE_SESSION_FIELD, true));
+
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+            .query(query)
+            .size(CONTAINER_PAGE_SIZE)
+            .sort("_id", SortOrder.ASC)
+            .fetchSource(true);
+
+        if (searchAfterValues != null) {
+            sourceBuilder.searchAfter(searchAfterValues);
+        }
+
+        request.source(sourceBuilder);
+
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client.search(request, ActionListener.wrap(response -> {
+                SearchHits hits = response.getHits();
+                SearchHit[] hitArray = hits.getHits();
+
+                if (hitArray.length == 0) {
+                    onJobComplete();
+                    return;
+                }
+
+                Object[] nextPageSort = hitArray.length == CONTAINER_PAGE_SIZE ? hitArray[hitArray.length - 1].getSortValues() : null;
+                processOrphanSweepContainerChain(hitArray, 0, nextPageSort);
+            }, e -> {
+                log.error("Failed to search containers for orphan sweep", e);
+                onJobComplete();
+            }));
+        }
+    }
+
+    private void processOrphanSweepContainerChain(SearchHit[] hits, int index, Object[] nextPageSortValues) {
+        if (index >= hits.length) {
+            if (nextPageSortValues != null) {
+                resolveOrphanSweepContainers(nextPageSortValues);
+            } else {
+                onJobComplete();
+            }
+            return;
+        }
+
+        SearchHit hit = hits[index];
+        String containerId = hit.getId();
+
+        try {
+            Map<String, Object> source = hit.getSourceAsMap();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> configMap = (Map<String, Object>) source.get(MEMORY_STORAGE_CONFIG_FIELD);
+
+            if (configMap == null) {
+                processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+                return;
+            }
+
+            XContentBuilder xContentBuilder = XContentFactory.jsonBuilder().map(configMap);
+            BytesReference bytes = BytesReference.bytes(xContentBuilder);
+            XContentParser parser = XContentHelper
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, bytes, XContentType.JSON);
+            parser.nextToken();
+            MemoryConfiguration config = MemoryConfiguration.parse(parser);
+
+            String workingIndex = config.getIndexName(MemoryType.WORKING);
+            String sessionsIndex = config.getIndexName(MemoryType.SESSIONS);
+
+            if (workingIndex == null || sessionsIndex == null) {
+                processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+                return;
+            }
+
+            sweepOrphansForContainer(
+                config,
+                containerId,
+                workingIndex,
+                sessionsIndex,
+                ActionListener.wrap(v -> processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues), e -> {
+                    log.error("[MemoryRetentionJob] Orphan sweep failed for container [{}]", containerId, e);
+                    processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+                })
+            );
+        } catch (Exception e) {
+            log.error("[MemoryRetentionJob] Error parsing config for orphan sweep container [{}]", containerId, e);
+            processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+        }
+    }
+
+    private void sweepOrphansForContainer(
+        MemoryConfiguration config,
+        String containerId,
+        String workingIndex,
+        String sessionsIndex,
+        ActionListener<Void> listener
+    ) {
+        Set<String> sessionIds = new HashSet<>();
+        enumerateSessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, null, ActionListener.wrap(collectedIds -> {
+            ActionListener<Long> afterOrphans = ActionListener.wrap(orphansDeleted -> {
+                deleteNullSessionWorkingMemory(containerId, workingIndex, ActionListener.wrap(nullDeleted -> {
+                    log
+                        .info(
+                            "[MemoryRetentionJob] container={} orphans_deleted={} null_session_deleted={}",
+                            containerId,
+                            orphansDeleted,
+                            nullDeleted
+                        );
+                    listener.onResponse(null);
+                }, listener::onFailure));
+            }, listener::onFailure);
+
+            if (collectedIds.isEmpty()) {
+                afterOrphans.onResponse(0L);
+            } else {
+                checkAndDeleteOrphans(containerId, workingIndex, sessionsIndex, collectedIds, afterOrphans);
+            }
+        }, listener::onFailure));
+    }
+
+    private void enumerateSessionIdsFromWorkingMemory(
+        String workingIndex,
+        String containerId,
+        Set<String> sessionIds,
+        Object[] searchAfterValues,
+        ActionListener<Set<String>> listener
+    ) {
+        SearchRequest request = new SearchRequest(workingIndex);
+        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+            .query(query)
+            .size(ORPHAN_ENUMERATION_PAGE_SIZE)
+            .sort("_id", SortOrder.ASC)
+            .fetchSource(new String[] { NAMESPACE_FIELD }, null);
+
+        if (searchAfterValues != null) {
+            sourceBuilder.searchAfter(searchAfterValues);
+        }
+
+        request.source(sourceBuilder);
+
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client.search(request, ActionListener.wrap(response -> {
+                SearchHit[] hits = response.getHits().getHits();
+
+                for (SearchHit hit : hits) {
+                    Map<String, Object> source = hit.getSourceAsMap();
+                    if (source != null) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> namespace = (Map<String, Object>) source.get(NAMESPACE_FIELD);
+                        if (namespace != null) {
+                            String sessionId = (String) namespace.get(SESSION_ID_FIELD);
+                            if (sessionId != null) {
+                                sessionIds.add(sessionId);
+                            }
+                        }
+                    }
+
+                    if (sessionIds.size() >= ORPHAN_SESSION_ID_CAP) {
+                        log
+                            .warn(
+                                "[MemoryRetentionJob] container={} session_id cap ({}) reached during orphan enumeration."
+                                    + " Remaining orphans will be caught on next run.",
+                                containerId,
+                                ORPHAN_SESSION_ID_CAP
+                            );
+                        listener.onResponse(sessionIds);
+                        return;
+                    }
+                }
+
+                if (hits.length == ORPHAN_ENUMERATION_PAGE_SIZE) {
+                    Object[] nextSearchAfter = hits[hits.length - 1].getSortValues();
+                    enumerateSessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, nextSearchAfter, listener);
+                } else {
+                    listener.onResponse(sessionIds);
+                }
+            }, listener::onFailure));
+        }
+    }
+
+    private void checkAndDeleteOrphans(
+        String containerId,
+        String workingIndex,
+        String sessionsIndex,
+        Set<String> sessionIds,
+        ActionListener<Long> listener
+    ) {
+        List<List<String>> batches = partition(new ArrayList<>(sessionIds), ORPHAN_SESSION_BATCH_SIZE);
+        Set<String> allOrphanIds = new HashSet<>();
+        checkOrphanBatch(containerId, sessionsIndex, batches, 0, allOrphanIds, ActionListener.wrap(orphanIds -> {
+            if (orphanIds.isEmpty()) {
+                listener.onResponse(0L);
+                return;
+            }
+            deleteOrphanedWorkingMemory(containerId, workingIndex, orphanIds, listener);
+        }, listener::onFailure));
+    }
+
+    private void checkOrphanBatch(
+        String containerId,
+        String sessionsIndex,
+        List<List<String>> batches,
+        int batchIndex,
+        Set<String> allOrphanIds,
+        ActionListener<Set<String>> listener
+    ) {
+        if (batchIndex >= batches.size()) {
+            listener.onResponse(allOrphanIds);
+            return;
+        }
+
+        List<String> batch = batches.get(batchIndex);
+
+        SearchRequest request = new SearchRequest(sessionsIndex);
+        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termsQuery("_id", batch))
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder().query(query).size(batch.size()).fetchSource(false);
+
+        request.source(sourceBuilder);
+
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client.search(request, ActionListener.wrap(response -> {
+                Set<String> existingIds = new HashSet<>();
+                for (SearchHit hit : response.getHits().getHits()) {
+                    existingIds.add(hit.getId());
+                }
+
+                for (String sessionId : batch) {
+                    if (!existingIds.contains(sessionId)) {
+                        allOrphanIds.add(sessionId);
+                    }
+                }
+
+                checkOrphanBatch(containerId, sessionsIndex, batches, batchIndex + 1, allOrphanIds, listener);
+            }, listener::onFailure));
+        }
+    }
+
+    private void deleteOrphanedWorkingMemory(
+        String containerId,
+        String workingIndex,
+        Set<String> orphanSessionIds,
+        ActionListener<Long> listener
+    ) {
+        List<List<String>> batches = partition(new ArrayList<>(orphanSessionIds), DELETE_BY_QUERY_BATCH_SIZE);
+        deleteOrphanBatch(containerId, workingIndex, batches, 0, 0L, listener);
+    }
+
+    private void deleteOrphanBatch(
+        String containerId,
+        String workingIndex,
+        List<List<String>> batches,
+        int batchIndex,
+        long totalDeleted,
+        ActionListener<Long> listener
+    ) {
+        if (batchIndex >= batches.size()) {
+            listener.onResponse(totalDeleted);
+            return;
+        }
+
+        List<String> batch = batches.get(batchIndex);
+
+        DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
+        dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+        dbq
+            .setQuery(
+                QueryBuilders
+                    .boolQuery()
+                    .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+                    .must(QueryBuilders.termsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD, batch))
+            );
+        dbq.setRefresh(true);
+
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client.execute(DeleteByQueryAction.INSTANCE, dbq, ActionListener.wrap((BulkByScrollResponse bulkResponse) -> {
+                long deleted = bulkResponse.getDeleted();
+                deleteOrphanBatch(containerId, workingIndex, batches, batchIndex + 1, totalDeleted + deleted, listener);
+            }, listener::onFailure));
+        }
+    }
+
+    private void deleteNullSessionWorkingMemory(String containerId, String workingIndex, ActionListener<Long> listener) {
+        int orphanTtlDays = ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS.get(clusterService.getSettings());
+        long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(orphanTtlDays);
+
+        DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
+        dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+        dbq
+            .setQuery(
+                QueryBuilders
+                    .boolQuery()
+                    .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+                    .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
+                    .must(QueryBuilders.rangeQuery(CREATED_TIME_FIELD).lt(cutoffMillis))
+            );
+        dbq.setRefresh(true);
+
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client.execute(DeleteByQueryAction.INSTANCE, dbq, ActionListener.wrap((BulkByScrollResponse response) -> {
+                listener.onResponse(response.getDeleted());
+            }, listener::onFailure));
+        }
     }
 
     private void onJobComplete() {
