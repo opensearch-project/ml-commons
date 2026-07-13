@@ -38,10 +38,11 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://generativelanguage.googleapis.com/v1beta/models/${parameters.model}:generateContent?key=${credential.gemini_key}",
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/${parameters.model}:generateContent",
       "supports_structured_output": true,
       "headers": {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-goog-api-key": "${credential.gemini_key}"
       },
       "request_body": "{ \"contents\": ${parameters.contents} }"
     }
