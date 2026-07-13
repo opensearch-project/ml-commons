@@ -152,6 +152,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(clusterService.getSettings()).thenReturn(settings);
 
         // Setup admin client chain
         when(client.admin()).thenReturn(adminClient);
@@ -228,7 +229,8 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             mlIndicesHandler,
             connectorAccessControlHelper,
             mlFeatureEnabledSetting,
-            mlModelManager
+            mlModelManager,
+            clusterService
         );
     }
 
