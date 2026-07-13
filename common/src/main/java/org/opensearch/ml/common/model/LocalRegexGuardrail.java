@@ -232,9 +232,7 @@ public class LocalRegexGuardrail extends Guardrail {
                 if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                     passedStopWordCheck.set(true);
                 }
-            }, e -> {
-                log.error("Failed to search stop words index {}, rejecting input as a safety measure", indexName, e);
-            }), latch);
+            }, e -> { log.error("Failed to search stop words index {}, rejecting input as a safety measure", indexName, e); }), latch);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .searchDataObjectAsync(searchDataObjectRequest)

@@ -138,8 +138,11 @@ public class ModelGuardrail extends Guardrail {
         try {
             boolean completed = latch.await(ML_GUARDRAIL_TIMEOUT_IN_SECONDS, SECONDS);
             if (!completed) {
-                log.error("[ModelGuardrail] Validation timed out after {} seconds, rejecting input as a safety measure.",
-                    ML_GUARDRAIL_TIMEOUT_IN_SECONDS);
+                log
+                    .error(
+                        "[ModelGuardrail] Validation timed out after {} seconds, rejecting input as a safety measure.",
+                        ML_GUARDRAIL_TIMEOUT_IN_SECONDS
+                    );
             }
         } catch (InterruptedException e) {
             log.error("[ModelGuardrail] Validation was interrupted, rejecting input as a safety measure.", e);
