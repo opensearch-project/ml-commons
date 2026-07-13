@@ -10,6 +10,7 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | Charlie Yang         | [model-collapse](https://github.com/model-collapse) | Amazon    |
 | Dhrubo Saha          | [dhrubo-os](https://github.com/dhrubo-os)           | Amazon    |
 | Jing Zhang           | [jngz-es](https://github.com/jngz-es)               | Amazon    |
+| Jiaping Zeng         | [jiapingzeng](https://github.com/jiapingzeng)       | Amazon    |
 | Junshen Wu           | [wujunshen](https://github.com/wujunshen)           | Amazon    |
 | Sicheng Song         | [b4sjoo](https://github.com/b4sjoo)                 | Amazon    |
 | Mingshi Liu          | [mingshl](https://github.com/mingshl)               | Amazon    |
