@@ -19,7 +19,7 @@ public class MLMcpConnectorListToolsActionTest {
 
     @Test
     public void testName() {
-        assertEquals("cluster:admin/opensearch/ml/connectors/tools/list", MLMcpConnectorListToolsAction.NAME);
+        assertEquals("cluster:admin/opensearch/ml/connectors/tools", MLMcpConnectorListToolsAction.NAME);
     }
 
 }

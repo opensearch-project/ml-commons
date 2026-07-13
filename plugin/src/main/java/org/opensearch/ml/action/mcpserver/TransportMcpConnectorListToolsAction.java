@@ -8,6 +8,7 @@ package org.opensearch.ml.action.mcpserver;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMCPToolSpecsFromConnectorWithPropagatingFailures;
 
 import java.util.List;
@@ -88,11 +89,15 @@ public class TransportMcpConnectorListToolsAction extends HandledTransportAction
                     return;
                 }
                 fetchToolSpecsFromConnector(connectorId, tenantId, ActionListener.wrap(toolSpecs -> {
-                    if (toolSpecs.isEmpty()) {
-                        log.debug("No tools defined for connector: {}", connectorId);
+                    try {
+                        if (toolSpecs.isEmpty()) {
+                            log.debug("No tools defined for connector: {}", connectorId);
+                        }
+                        List<McpToolInfo> toolInfos = toolSpecs.stream().map(this::toMcpToolInfo).toList();
+                        listener.onResponse(MLMcpConnectorListToolsResponse.builder().tools(toolInfos).build());
+                    } finally {
+                        cleanUpResource(toolSpecs);
                     }
-                    List<McpToolInfo> toolInfos = toolSpecs.stream().map(this::toMcpToolInfo).toList();
-                    listener.onResponse(MLMcpConnectorListToolsResponse.builder().tools(toolInfos).build());
                 }, e -> {
                     log.error("Failed to list tools for MCP connector: {}", connectorId, e);
                     listener.onFailure(e);

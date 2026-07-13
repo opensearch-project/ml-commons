@@ -45,7 +45,7 @@ public class RestMLMcpConnectorListToolsAction extends BaseRestHandler {
             .of(
                 new Route(
                     RestRequest.Method.GET,
-                    String.format(Locale.ROOT, "%s/connectors/{%s}/tools/list", ML_BASE_URI, PARAMETER_CONNECTOR_ID)
+                    String.format(Locale.ROOT, "%s/connectors/{%s}/tools", ML_BASE_URI, PARAMETER_CONNECTOR_ID)
                 )
             );
     }

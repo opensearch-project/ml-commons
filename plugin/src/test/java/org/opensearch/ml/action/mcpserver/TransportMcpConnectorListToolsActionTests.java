@@ -9,9 +9,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 
@@ -42,6 +44,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
+
+import io.modelcontextprotocol.client.McpSyncClient;
 
 public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCase {
 
@@ -164,7 +168,9 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
             + ",\"description\":\"The language for the SDK to search for.\",\"detail\":{\"type\":\"string\","
             + "\"description\":\"The amount of detail to return.\"}},\"required\":[\"query\",\"language\"]";
         Map<String, String> attributes = Collections.singletonMap("input_schema", inputSchema);
+        McpSyncClient mcpSyncClient = mock(McpSyncClient.class);
         MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").description("Desc").attributes(attributes).build();
+        toolSpec.addRuntimeResource(MCP_SYNC_CLIENT, mcpSyncClient);
         transportAction.setToolSpecsToReturn(List.of(toolSpec));
 
         MLMcpConnectorListToolsRequest request = MLMcpConnectorListToolsRequest.builder().connectorId("conn-1").build();
@@ -182,6 +188,7 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         assertEquals("test_tool", info.getType());
         assertEquals("Desc", info.getDescription());
         assertEquals(inputSchema, info.getInputSchema());
+        verify(mcpSyncClient, times(1)).closeGracefully();
     }
 
     @Test

@@ -85,7 +85,7 @@ public class RestMLMcpConnectorListToolsActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.GET, route.getMethod());
-        assertEquals("/_plugins/_ml/connectors/{connector_id}/tools/list", route.getPath());
+        assertEquals("/_plugins/_ml/connectors/{connector_id}/tools", route.getPath());
     }
 
     @Test

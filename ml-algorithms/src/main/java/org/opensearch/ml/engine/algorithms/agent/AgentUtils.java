@@ -123,6 +123,7 @@ import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 
+import io.modelcontextprotocol.client.McpSyncClient;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -1359,6 +1360,24 @@ public class AgentUtils {
             } else if (tool instanceof McpStreamableHttpTool) {
                 // TODO: make this more general, avoid checking specific tool type
                 ((McpStreamableHttpTool) tool).getMcpSyncClient().closeGracefully();
+            }
+        }
+    }
+
+    /**
+     * Closes MCP sync clients held in {@link MLToolSpec} runtime resources.
+     * @param toolSpecs
+     */
+    public static void cleanUpResource(List<MLToolSpec> toolSpecs) {
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
+            return;
+        }
+        for (MLToolSpec toolSpec : toolSpecs) {
+            if (toolSpec != null && toolSpec.getRuntimeResources() != null) {
+                Object client = toolSpec.getRuntimeResources().get(MCP_SYNC_CLIENT);
+                if (client instanceof McpSyncClient mcpSyncClient) {
+                    mcpSyncClient.closeGracefully();
+                }
             }
         }
     }

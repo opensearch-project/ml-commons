@@ -11,7 +11,7 @@ import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpConnecto
 public class MLMcpConnectorListToolsAction extends ActionType<MLMcpConnectorListToolsResponse> {
 
     public static final MLMcpConnectorListToolsAction INSTANCE = new MLMcpConnectorListToolsAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/connectors/tools/list";
+    public static final String NAME = "cluster:admin/opensearch/ml/connectors/tools";
 
     private MLMcpConnectorListToolsAction() {
         super(NAME, MLMcpConnectorListToolsResponse::new);

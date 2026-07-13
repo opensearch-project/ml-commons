@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
@@ -119,6 +120,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.JsonSyntaxException;
+
+import io.modelcontextprotocol.client.McpSyncClient;
 
 public class AgentUtilsTest extends MLStaticMockBase {
 
@@ -3225,6 +3228,17 @@ public class AgentUtilsTest extends MLStaticMockBase {
             return null;
         }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+    }
+
+    @Test
+    public void testCleanUpResource_closesSharedMcpSyncClientFromToolSpecs() {
+        McpSyncClient mcpSyncClient = mock(McpSyncClient.class);
+        MLToolSpec spec1 = MLToolSpec.builder().type("mcp_tool").name("tool1").build();
+        spec1.addRuntimeResource(MCP_SYNC_CLIENT, mcpSyncClient);
+
+        AgentUtils.cleanUpResource(List.of(spec1));
+
+        verify(mcpSyncClient, times(1)).closeGracefully();
     }
 
     @Test
