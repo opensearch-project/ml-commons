@@ -52,6 +52,7 @@ import lombok.extern.log4j.Log4j2;
 public class LocalRegexGuardrail extends Guardrail {
     public static final String STOP_WORDS_FIELD = "stop_words";
     public static final String REGEX_FIELD = "regex";
+    public static final long STOP_WORDS_SEARCH_TIMEOUT_IN_SECONDS = 5;
 
     private List<StopWords> stopWords;
     private String[] regex;
@@ -245,7 +246,7 @@ public class LocalRegexGuardrail extends Guardrail {
         }
 
         try {
-            if (!latch.await(5, SECONDS)) {
+            if (!latch.await(STOP_WORDS_SEARCH_TIMEOUT_IN_SECONDS, SECONDS)) {
                 log.error("[validateStopWords] Timed out waiting for stop words index search, rejecting input as a safety measure.");
             }
         } catch (InterruptedException e) {
