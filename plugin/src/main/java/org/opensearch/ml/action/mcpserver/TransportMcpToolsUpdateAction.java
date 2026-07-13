@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.search.SearchResponse;
@@ -45,11 +44,11 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
+import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodesResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
@@ -167,19 +166,14 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
             ActionListener<MLMcpToolsUpdateNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<BulkResponse> updateResultListener = ActionListener.wrap(bulkResponse -> {
                 if (!bulkResponse.hasFailures()) {
-                    // documents indexing successfully, merge existing tools and new tools to form a fullTools, when a node doesn't have any
-                    // tool registered,
-                    // update full tools, this way any node at any time it only have either non or all tools in it.
-                    // This also addressed an edge case that a node doesn't have any tool registered and received a update tool request,
-                    // it'll be registered
-                    // with new tools only, when SSE connection request comes, it tries to load all tools, and then it'll have tool already
-                    // exist in MCP server issue.
-                    updateMcpToolsOnNodes(
-                        new StringBuilder(),
-                        mergeDocFields(updateNodesRequest, searchedMcpToolWrappers, bulkResponse),
-                        updateNodesRequest.getMcpTools().stream().map(McpToolUpdateInput::getName).collect(Collectors.toUnmodifiableSet()),
-                        restoreListener
-                    );
+                    restoreListener
+                        .onResponse(
+                            new MLMcpToolsUpdateNodesResponse(
+                                clusterService.getClusterName(),
+                                List.of(new MLMcpToolsUpdateNodeResponse(clusterService.localNode(), true)),
+                                List.of()
+                            )
+                        );
                 } else {
                     AtomicReference<Set<String>> updateSucceedTools = new AtomicReference<>();
                     updateSucceedTools.set(new HashSet<>());
@@ -212,16 +206,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     StringBuilder responseErrorBuilder = new StringBuilder(
                         String.format(Locale.ROOT, "Failed to update %d tool(s) in system index", updateFailedTools.get().size())
                     );
-                    if (!updateSucceedTools.get().isEmpty()) {
-                        updateMcpToolsOnNodes(
-                            responseErrorBuilder,
-                            mergeDocFields(updateNodesRequest, searchedMcpToolWrappers, bulkResponse),
-                            updateSucceedTools.get(),
-                            restoreListener
-                        );
-                    } else {
-                        restoreListener.onFailure(new OpenSearchException(responseErrorBuilder.toString()));
-                    }
+                    restoreListener.onFailure(new OpenSearchException(responseErrorBuilder.toString()));
                 }
             }, e -> {
                 log.error("Failed to update mcp tools in system index because exception: {}", e.getMessage());
@@ -251,91 +236,6 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
             client.bulk(bulkRequest, updateResultListener);
         } catch (Exception e) {
             log.error("Failed to update mcp tools", e);
-            listener.onFailure(e);
-        }
-    }
-
-    private MLMcpToolsUpdateNodesRequest mergeDocFields(
-        MLMcpToolsUpdateNodesRequest updateNodesRequest,
-        List<SearchedMcpToolWrapper> updateMcpToolWrappers,
-        BulkResponse bulkResponse
-    ) {
-        Map<String, McpToolRegisterInput> mcpToolsMap = updateMcpToolWrappers
-            .stream()
-            .collect(Collectors.toMap(x -> x.getMcpTool().getName(), SearchedMcpToolWrapper::getMcpTool));
-        Map<String, Long> versions = Arrays
-            .stream(bulkResponse.getItems())
-            .filter(x -> !x.isFailed())
-            .collect(Collectors.toMap(BulkItemResponse::getId, x -> x.getResponse().getVersion()));
-        updateNodesRequest.getMcpTools().forEach(x -> {
-            McpToolRegisterInput registerMcpTool = mcpToolsMap.get(x.getName());
-            x.setType(registerMcpTool.getType());
-            if (x.getAttributes() == null) {
-                x.setAttributes(registerMcpTool.getAttributes());
-            }
-            if (x.getParameters() == null) {
-                x.setParameters(registerMcpTool.getParameters());
-            }
-            if (x.getDescription() == null) {
-                x.setDescription(registerMcpTool.getDescription());
-            }
-            x.setVersion(versions.get(x.getName()));
-        });
-        return updateNodesRequest;
-    }
-
-    private void updateMcpToolsOnNodes(
-        StringBuilder errMsgBuilder,
-        MLMcpToolsUpdateNodesRequest toolsUpdateNodesRequest,
-        Set<String> indexSucceedTools,
-        ActionListener<MLMcpToolsUpdateNodesResponse> listener
-    ) {
-        StringBuilder respErrMsgBuilder = new StringBuilder(errMsgBuilder.toString());
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLMcpToolsUpdateNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
-            ActionListener<MLMcpToolsUpdateNodesResponse> addToMemoryResultListener = ActionListener.wrap(r -> {
-                if (r.failures() != null && !r.failures().isEmpty()) {
-                    r.failures().forEach(x -> {
-                        errMsgBuilder
-                            .append(
-                                String
-                                    .format(
-                                        Locale.ROOT,
-                                        "Tools: %s are updated successfully but failed to update to mcp server memory with error: %s",
-                                        indexSucceedTools,
-                                        x.getRootCause().getMessage()
-                                    )
-                            );
-                        errMsgBuilder.append("\n");
-                    });
-                    errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1);
-                    log.error(errMsgBuilder.toString());
-                    respErrMsgBuilder.append("Tools are updated successfully, but failed to update to mcp server memory");
-                    restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
-                } else {
-                    if (errMsgBuilder.isEmpty()) {
-                        restoreListener.onResponse(r);
-                    } else {
-                        restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
-                    }
-                }
-            }, e -> {
-                errMsgBuilder
-                    .append(
-                        String
-                            .format(
-                                Locale.ROOT,
-                                "Tools are updated successfully but failed to update to mcp server memory with error: %s",
-                                e.getMessage()
-                            )
-                    );
-                log.error(errMsgBuilder.toString(), e);
-                respErrMsgBuilder.append("Tools are updated successfully, but failed to update to mcp server memory");
-                restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
-            });
-            client.execute(MLMcpToolsUpdateOnNodesAction.INSTANCE, toolsUpdateNodesRequest, addToMemoryResultListener);
-        } catch (Exception e) {
-            log.error("Failed to update mcp tools on nodes", e);
             listener.onFailure(e);
         }
     }
