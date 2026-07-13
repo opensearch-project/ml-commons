@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RETENTION_POLICY_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
@@ -98,6 +99,11 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     public void run() {
         if (ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())) {
             log.warn("Memory retention job skipped: multi-tenancy is enabled and native client lacks tenant routing");
+            return;
+        }
+
+        if (!ML_COMMONS_MEMORY_RETENTION_ENABLED.get(clusterService.getSettings())) {
+            log.info("Memory retention job disabled via cluster setting plugins.ml_commons.memory.retention_enabled=false");
             return;
         }
 
@@ -351,6 +357,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         int maxCount,
         ActionListener<Set<String>> listener
     ) {
+        // Check if pinned count alone exceeds max_count (fire-and-forget warning)
+        checkPinnedExceedsMaxCount(sessionIndex, containerId, "sessions", maxCount);
+
         // Walk sessions sorted by last_updated_time DESC (newest first).
         // Skip the first maxCount sessions; collect the rest as expired.
         Set<String> expiredIds = new HashSet<>();
@@ -377,7 +386,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
             .query(query)
             .size(CONTAINER_PAGE_SIZE)
-            .sort(LAST_UPDATED_TIME_FIELD, SortOrder.DESC)
+            .sort(CREATED_TIME_FIELD, SortOrder.DESC)
             .sort("_id", SortOrder.ASC)
             .fetchSource(false);
 
@@ -566,6 +575,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     }
 
     private void executeLongTermMaxCount(String longTermIndex, String containerId, int maxCount, ActionListener<Long> listener) {
+        // Check if pinned count alone exceeds max_count (fire-and-forget warning)
+        checkPinnedExceedsMaxCount(longTermIndex, containerId, "long_term", maxCount);
+
         // Step 1: count non-pinned long-term docs
         SearchRequest countRequest = new SearchRequest(longTermIndex);
         countRequest.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
@@ -587,8 +599,8 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 }
 
                 int excess = (int) (totalCount - maxCount);
-                // Step 2: search for oldest excess docs by last_updated_time ASC
-                collectOldestDocIds(longTermIndex, containerId, LAST_UPDATED_TIME_FIELD, excess, ActionListener.wrap(idsToDelete -> {
+                // Step 2: search for oldest excess docs by created_time ASC
+                collectOldestDocIds(longTermIndex, containerId, CREATED_TIME_FIELD, excess, ActionListener.wrap(idsToDelete -> {
                     if (idsToDelete.isEmpty()) {
                         listener.onResponse(0L);
                         return;
@@ -722,6 +734,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
         int maxCount = rule.getMaxCount();
 
+        // Check if pinned count alone exceeds max_count (fire-and-forget warning)
+        checkPinnedExceedsMaxCount(historyIndex, containerId, "history", maxCount);
+
         // Step 1: count non-pinned history docs
         SearchRequest countRequest = new SearchRequest(historyIndex);
         countRequest.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
@@ -792,6 +807,36 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 log.info("[MemoryRetentionJob] container={} working_memory_ttl_deleted={}", containerId, response.getDeleted());
                 listener.onResponse(null);
             }, listener::onFailure));
+        }
+    }
+
+    private void checkPinnedExceedsMaxCount(String index, String containerId, String memoryType, int maxCount) {
+        SearchRequest pinnedCountRequest = new SearchRequest(index);
+        pinnedCountRequest.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+
+        BoolQueryBuilder pinnedQuery = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+            .must(QueryBuilders.termQuery(PINNED_FIELD, true));
+
+        SearchSourceBuilder pinnedSource = new SearchSourceBuilder().query(pinnedQuery).size(0).trackTotalHits(true);
+        pinnedCountRequest.source(pinnedSource);
+
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client.search(pinnedCountRequest, ActionListener.wrap(pinnedResponse -> {
+                long pinnedCount = pinnedResponse.getHits().getTotalHits().value();
+                if (pinnedCount > maxCount) {
+                    log
+                        .warn(
+                            "[MemoryRetentionJob] container={} type={} pinned_count={} exceeds max_count={}."
+                                + " Container will grow unbounded until pins are removed.",
+                            containerId,
+                            memoryType,
+                            pinnedCount,
+                            maxCount
+                        );
+                }
+            }, e -> { log.debug("Failed to check pinned count for container [{}] type [{}]", containerId, memoryType, e); }));
         }
     }
 

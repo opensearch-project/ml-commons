@@ -184,8 +184,34 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                     break;
             }
         }
-        updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        if (shouldBumpLastUpdatedTime(memoryType, updateContent)) {
+            updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        }
         return updateFields;
+    }
+
+    /**
+     * Determines whether last_updated_time should be bumped based on the memory type
+     * and the fields being updated. Only content field changes trigger a timestamp bump.
+     * Non-content fields (tags, pinned, metadata, additional_info, agents) do not.
+     */
+    private boolean shouldBumpLastUpdatedTime(MemoryType memoryType, Map<String, Object> updateContent) {
+        if (memoryType == null) {
+            return false;
+        }
+        switch (memoryType) {
+            case SESSIONS:
+                return updateContent.containsKey(SUMMARY_FIELD);
+            case LONG_TERM:
+                return updateContent.containsKey(MEMORY_FIELD);
+            case WORKING:
+                return updateContent.containsKey(MESSAGES_FIELD)
+                    || updateContent.containsKey(BINARY_DATA_FIELD)
+                    || updateContent.containsKey(STRUCTURED_DATA_FIELD)
+                    || updateContent.containsKey(STRUCTURED_DATA_BLOB_FIELD);
+            default:
+                return false;
+        }
     }
 
     public Map<String, Object> constructSessionMemUpdateFields(Map<String, Object> updateFields, Map<String, Object> updateContent) {

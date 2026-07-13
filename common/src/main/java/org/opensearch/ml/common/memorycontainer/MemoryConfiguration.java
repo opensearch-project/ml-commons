@@ -641,7 +641,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             // Only update dimension for TEXT_EMBEDDING if provided
             this.dimension = updateContent.getDimension();
         }
-        // Merge retention policy
+        // Merge retention policy with field-level semantics within each type
         if (updateContent.isRetentionPolicyExplicitlyNull()) {
             this.retentionPolicy = null;
         } else if (updateContent.getRetentionPolicy() != null) {
@@ -650,7 +650,21 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 this.retentionPolicy = new EnumMap<>(MemoryType.class);
             }
             for (Map.Entry<MemoryType, RetentionRule> entry : updateContent.getRetentionPolicy().entrySet()) {
-                this.retentionPolicy.put(entry.getKey(), entry.getValue());
+                MemoryType type = entry.getKey();
+                RetentionRule incoming = entry.getValue();
+                RetentionRule existing = this.retentionPolicy.get(type);
+
+                if (existing == null) {
+                    // No existing rule for this type: use incoming as-is
+                    this.retentionPolicy.put(type, incoming);
+                } else {
+                    // Field-level merge: only override fields that were explicitly set in the request
+                    Integer mergedDays = incoming.isRetentionDaysExplicitlySet()
+                        ? incoming.getRetentionDays()
+                        : existing.getRetentionDays();
+                    Integer mergedCount = incoming.isMaxCountExplicitlySet() ? incoming.getMaxCount() : existing.getMaxCount();
+                    this.retentionPolicy.put(type, new RetentionRule(mergedDays, mergedCount));
+                }
             }
         }
         // Note: indexPrefix and other structural fields are intentionally not updated
