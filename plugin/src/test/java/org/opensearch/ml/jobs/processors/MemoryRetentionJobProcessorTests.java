@@ -117,6 +117,21 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
+    public void testRunSkipsWhenRetentionDisabled() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", false)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+
+        processor.run();
+
+        // Should not search for containers when retention is disabled
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
     public void testRunExecutesWhenMultiTenancyDisabled() {
         // Return empty containers
         doAnswer(invocation -> {
@@ -256,6 +271,12 @@ public class MemoryRetentionJobProcessorTests {
             } else {
                 int searchNum = sessionSearchCount.getAndIncrement();
                 if (searchNum == 0) {
+                    // Pinned count check (fire-and-forget): return 0 pinned docs
+                    SearchResponse pinnedResp = mock(SearchResponse.class);
+                    SearchHits pinnedHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(pinnedResp.getHits()).thenReturn(pinnedHits);
+                    listener.onResponse(pinnedResp);
+                } else if (searchNum == 1) {
                     // Count-based identification: returns 10 sessions sorted by last_updated_time DESC
                     // First 5 are kept, last 5 are expired
                     SearchHit[] hits = new SearchHit[10];
@@ -784,6 +805,12 @@ public class MemoryRetentionJobProcessorTests {
             } else {
                 int searchNum = nonContainerSearchCount.getAndIncrement();
                 if (searchNum == 0) {
+                    // Pinned count check (fire-and-forget): return 0 pinned docs
+                    SearchResponse pinnedResp = mock(SearchResponse.class);
+                    SearchHits pinnedHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(pinnedResp.getHits()).thenReturn(pinnedHits);
+                    listener.onResponse(pinnedResp);
+                } else if (searchNum == 1) {
                     // Count query: return totalHits=150
                     SearchResponse countResp = mock(SearchResponse.class);
                     SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(150, TotalHits.Relation.EQUAL_TO), Float.NaN);
@@ -933,6 +960,12 @@ public class MemoryRetentionJobProcessorTests {
             } else {
                 int searchNum = nonContainerSearchCount.getAndIncrement();
                 if (searchNum == 0) {
+                    // Pinned count check (fire-and-forget): return 0 pinned docs
+                    SearchResponse pinnedResp = mock(SearchResponse.class);
+                    SearchHits pinnedHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(pinnedResp.getHits()).thenReturn(pinnedHits);
+                    listener.onResponse(pinnedResp);
+                } else if (searchNum == 1) {
                     // Count query for max_count: return 120
                     SearchResponse countResp = mock(SearchResponse.class);
                     SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(120, TotalHits.Relation.EQUAL_TO), Float.NaN);
@@ -984,6 +1017,61 @@ public class MemoryRetentionJobProcessorTests {
         verify(client, atLeastOnce()).bulk(any(BulkRequest.class), isA(ActionListener.class));
     }
 
+    // --- Pinned Exceeds max_count Warning Tests ---
+
+    @Test
+    public void testPinnedExceedsMaxCountWarningFires() {
+        // Container with long-term max_count=10, pinned count returns 15 -> verify warning fires (no exception)
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"llm_id\":\"test-llm\","
+            + "\"strategies\":[{\"type\":\"semantic\"}],"
+            + "\"retention_policy\":{\"long-term\":{\"max_count\":10}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-pin-warn", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger nonContainerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                int searchNum = nonContainerSearchCount.getAndIncrement();
+                if (searchNum == 0) {
+                    // Pinned count check: return 15 pinned docs (exceeds max_count=10)
+                    SearchResponse pinnedResp = mock(SearchResponse.class);
+                    SearchHits pinnedHits = new SearchHits(new SearchHit[0], new TotalHits(15, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(pinnedResp.getHits()).thenReturn(pinnedHits);
+                    listener.onResponse(pinnedResp);
+                } else if (searchNum == 1) {
+                    // Count query for max_count: return 5 non-pinned (under limit, no eviction)
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // Pinned count check and normal count query both fired (at least 2 non-container searches)
+        assertTrue("Pinned count check and count query should both fire", nonContainerSearchCount.get() >= 2);
+        // No bulk delete since non-pinned count (5) is under max_count (10)
+        verify(client, never()).bulk(any(BulkRequest.class), isA(ActionListener.class));
+    }
+
     // --- Phase 5: History Retention Tests ---
 
     @Test
@@ -1013,6 +1101,12 @@ public class MemoryRetentionJobProcessorTests {
             } else {
                 int searchNum = nonContainerSearchCount.getAndIncrement();
                 if (searchNum == 0) {
+                    // Pinned count check (fire-and-forget): return 0 pinned docs
+                    SearchResponse pinnedResp = mock(SearchResponse.class);
+                    SearchHits pinnedHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(pinnedResp.getHits()).thenReturn(pinnedHits);
+                    listener.onResponse(pinnedResp);
+                } else if (searchNum == 1) {
                     // Count query: return totalHits=600
                     SearchResponse countResp = mock(SearchResponse.class);
                     SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(600, TotalHits.Relation.EQUAL_TO), Float.NaN);
@@ -1083,6 +1177,12 @@ public class MemoryRetentionJobProcessorTests {
             } else {
                 int searchNum = nonContainerSearchCount.getAndIncrement();
                 if (searchNum == 0) {
+                    // Pinned count check (fire-and-forget): return 0 pinned docs
+                    SearchResponse pinnedResp = mock(SearchResponse.class);
+                    SearchHits pinnedHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(pinnedResp.getHits()).thenReturn(pinnedHits);
+                    listener.onResponse(pinnedResp);
+                } else if (searchNum == 1) {
                     // Count query: return 15 docs (exceeds max_count=10)
                     SearchResponse countResp = mock(SearchResponse.class);
                     SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(15, TotalHits.Relation.EQUAL_TO), Float.NaN);
