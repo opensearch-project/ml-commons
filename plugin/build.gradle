@@ -195,6 +195,12 @@ loggerUsageCheck.enabled = false
 
 def _numNodes = findProperty('numNodes') as Integer ?: 1
 
+def usingRemoteCluster = System.properties.containsKey('tests.rest.cluster') || System.properties.containsKey('tests.cluster')
+def usingMultiNode = _numNodes > 1
+// Only apply jacoco integTest coverage when running a local single-node cluster
+if (!usingRemoteCluster && !usingMultiNode) {
+    apply from: '../build-tools/coverage.gradle'
+}
 
 test {
     include '**/*Tests.class'
