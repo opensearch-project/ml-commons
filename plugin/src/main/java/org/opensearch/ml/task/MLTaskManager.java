@@ -28,6 +28,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -41,6 +43,7 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
@@ -591,6 +594,7 @@ public class MLTaskManager implements SettingsChangeListener {
                 .index(CommonValue.ML_JOBS_INDEX)
                 .id(MLJobType.MEMORY_RETENTION.name())
                 .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .opType(DocWriteRequest.OpType.CREATE)
                 .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
             indexJob(indexRequest, MLJobType.MEMORY_RETENTION, () -> {
@@ -655,7 +659,17 @@ public class MLTaskManager implements SettingsChangeListener {
                         if (successCallback != null) {
                             successCallback.run();
                         }
-                    }, e -> log.error("Failed to index {} job", jobType.name(), e)), context::restore));
+                    }, e -> {
+                        if (ExceptionsHelper.unwrapCause(e) instanceof VersionConflictEngineException) {
+                            // The job document already exists (created by this or another node); treat as success
+                            log.debug("{} job already exists, skipping creation", jobType.name());
+                            if (successCallback != null) {
+                                successCallback.run();
+                            }
+                        } else {
+                            log.error("Failed to index {} job", jobType.name(), e);
+                        }
+                    }), context::restore));
                 }
             }
         }, e -> log.error("Failed to initialize ML jobs index", e)));

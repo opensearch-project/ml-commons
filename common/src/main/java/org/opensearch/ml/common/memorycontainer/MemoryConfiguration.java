@@ -8,7 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_HISTORY_FIELD;
@@ -82,7 +82,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private boolean useSystemIndex;
     private String tenantId;
     private Map<MemoryType, RetentionRule> retentionPolicy;
-    private transient boolean retentionPolicyExplicitlyNull = false;
+    /**
+     * True when the user explicitly set "retention_policy": null (opt-out of retention).
+     * Persisted as an explicit null field in toXContent() so the opt-out round-trips through
+     * the container index and survives partial-update merges; distinct from field absence.
+     */
+    private boolean retentionPolicyExplicitlyNull = false;
 
     @Builder
     public MemoryConfiguration(
@@ -175,7 +180,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.disableSession = input.readBoolean();
         this.useSystemIndex = input.readBoolean();
         this.tenantId = input.readOptionalString();
-        if (input.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (input.getVersion().onOrAfter(VERSION_3_8_0)) {
             if (input.readBoolean()) {
                 int size = input.readVInt();
                 this.retentionPolicy = new EnumMap<>(MemoryType.class);
@@ -185,6 +190,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                     this.retentionPolicy.put(key, value);
                 }
             }
+        }
+        if (input.getVersion().onOrAfter(VERSION_3_8_0)) {
+            this.retentionPolicyExplicitlyNull = input.readBoolean();
         }
     }
 
@@ -218,7 +226,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         out.writeBoolean(disableSession);
         out.writeBoolean(useSystemIndex);
         out.writeOptionalString(tenantId);
-        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
             if (retentionPolicy != null && !retentionPolicy.isEmpty()) {
                 out.writeBoolean(true);
                 out.writeVInt(retentionPolicy.size());
@@ -229,6 +237,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
+        }
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
+            out.writeBoolean(retentionPolicyExplicitlyNull);
         }
     }
 
@@ -287,6 +298,11 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 entry.getValue().toXContent(builder, params);
             }
             builder.endObject();
+        } else if (retentionPolicyExplicitlyNull) {
+            // Persist the explicit opt-out as "retention_policy": null so it (a) round-trips
+            // through the container index (parse() maps VALUE_NULL back to this flag) and
+            // (b) removes any previously stored policy during partial-update merges.
+            builder.nullField(RETENTION_POLICY_FIELD);
         }
         builder.endObject();
         return builder;
@@ -644,7 +660,13 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         // Merge retention policy with field-level semantics within each type
         if (updateContent.isRetentionPolicyExplicitlyNull()) {
             this.retentionPolicy = null;
+            // Propagate the opt-out so toXContent() persists "retention_policy": null,
+            // which removes the stored policy during the partial-update merge and lets
+            // the retention job distinguish opt-out from "never configured"
+            this.retentionPolicyExplicitlyNull = true;
         } else if (updateContent.getRetentionPolicy() != null) {
+            // Providing a concrete policy opts back in
+            this.retentionPolicyExplicitlyNull = false;
             validateRetentionPolicy(updateContent.getRetentionPolicy());
             if (this.retentionPolicy == null) {
                 this.retentionPolicy = new EnumMap<>(MemoryType.class);

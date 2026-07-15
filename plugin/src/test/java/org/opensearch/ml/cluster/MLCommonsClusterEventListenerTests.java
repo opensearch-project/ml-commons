@@ -130,7 +130,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
         listener.clusterChanged(event);
 
-        verify(mlTaskManager).indexMemoryRetentionJob(24);
+        verify(mlTaskManager).indexMemoryRetentionJob(2); // DEMO: interval is 2 minutes for local testing
     }
 
     public void testClusterChanged_MemoryRetentionJobNotStarted_WhenMultiTenancyEnabled() {
