@@ -82,7 +82,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private boolean useSystemIndex;
     private String tenantId;
     private Map<MemoryType, RetentionRule> retentionPolicy;
-    private transient boolean retentionPolicyExplicitlyNull = false;
+    /**
+     * True when the user explicitly set "retention_policy": null (opt-out of retention).
+     * Persisted as an explicit null field in toXContent() so the opt-out round-trips through
+     * the container index and survives partial-update merges; distinct from field absence.
+     */
+    private boolean retentionPolicyExplicitlyNull = false;
 
     @Builder
     public MemoryConfiguration(
@@ -187,6 +192,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             }
             this.retentionPolicyExplicitlyNull = input.readBoolean();
         }
+        if (input.getVersion().onOrAfter(VERSION_3_8_0)) {
+            this.retentionPolicyExplicitlyNull = input.readBoolean();
+        }
     }
 
     @Override
@@ -230,6 +238,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
+            out.writeBoolean(retentionPolicyExplicitlyNull);
+        }
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
             out.writeBoolean(retentionPolicyExplicitlyNull);
         }
     }

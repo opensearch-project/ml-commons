@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,11 +34,16 @@ import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -46,6 +52,7 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.search.DocValueFormat;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -79,9 +86,40 @@ public class MemoryRetentionJobProcessorTests {
         Settings settings = Settings
             .builder()
             .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
             .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .put("plugins.ml_commons.memory.default_session_retention_days", -1)
+            .put("plugins.ml_commons.memory.default_session_max_count", -1)
+            .put("plugins.ml_commons.memory.default_long_term_max_count", -1)
+            .put("plugins.ml_commons.memory.default_history_max_count", -1)
+            .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
+            .put("plugins.ml_commons.memory.working_memory_ttl_days", 30)
             .build();
         when(clusterService.getSettings()).thenReturn(settings);
+
+        java.util.Set<Setting<?>> clusterSettingsSet = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        ClusterSettings clusterSettings = new ClusterSettings(settings, clusterSettingsSet);
+        lenient().when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+
+        // Default cluster state: all memory indices exist (orphan sweep runs)
+        ClusterState clusterState = mock(ClusterState.class);
+        Metadata metadata = mock(Metadata.class);
+        lenient().when(clusterService.state()).thenReturn(clusterState);
+        lenient().when(clusterState.metadata()).thenReturn(metadata);
+        lenient().when(metadata.hasIndex(anyString())).thenReturn(true);
 
         // Use real ThreadContext (it's a final class and cannot be mocked)
         threadContext = new ThreadContext(Settings.EMPTY);
@@ -109,6 +147,21 @@ public class MemoryRetentionJobProcessorTests {
     public void testRunSkipsWhenMultiTenancyEnabled() {
         Settings settings = Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build();
         when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
 
         processor.run();
 
@@ -124,6 +177,21 @@ public class MemoryRetentionJobProcessorTests {
             .put("plugins.ml_commons.memory.retention_enabled", false)
             .build();
         when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
 
         processor.run();
 
@@ -148,7 +216,23 @@ public class MemoryRetentionJobProcessorTests {
 
     @Test
     public void testRunExecutesWithDefaultSettings() {
-        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        Settings defaultSettings = Settings.EMPTY;
+        when(clusterService.getSettings()).thenReturn(defaultSettings);
+        java.util.Set<Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(defaultSettings, s));
 
         // Return empty containers
         doAnswer(invocation -> {
@@ -202,10 +286,11 @@ public class MemoryRetentionJobProcessorTests {
                     listener.onResponse(emptySearchResponse());
                 }
             } else {
-                // Session search returns 3 expired sessions
-                SearchHit hit1 = new SearchHit(0, "expired-session-1", null, null);
-                SearchHit hit2 = new SearchHit(1, "expired-session-2", null, null);
-                SearchHit hit3 = new SearchHit(2, "expired-session-3", null, null);
+                // Session search returns 3 expired sessions with old last_updated_time
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                SearchHit hit1 = createHitWithSource("expired-session-1", Map.of("last_updated_time", oldTimestamp));
+                SearchHit hit2 = createHitWithSource("expired-session-2", Map.of("last_updated_time", oldTimestamp));
+                SearchHit hit3 = createHitWithSource("expired-session-3", Map.of("last_updated_time", oldTimestamp));
                 SearchHits sessionHits = new SearchHits(
                     new SearchHit[] { hit1, hit2, hit3 },
                     new TotalHits(3, TotalHits.Relation.EQUAL_TO),
@@ -230,6 +315,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete for sessions (Phase 3)
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -311,6 +398,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete for sessions
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -348,9 +437,10 @@ public class MemoryRetentionJobProcessorTests {
                     listener.onResponse(emptySearchResponse());
                 }
             } else {
-                // Session search returns expired sessions
-                SearchHit hit1 = new SearchHit(0, "session-1", null, null);
-                SearchHit hit2 = new SearchHit(1, "session-2", null, null);
+                // Session search returns expired sessions with old timestamps
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                SearchHit hit1 = createHitWithSource("session-1", Map.of("last_updated_time", oldTimestamp));
+                SearchHit hit2 = createHitWithSource("session-2", Map.of("last_updated_time", oldTimestamp));
                 SearchHits sessionHits = new SearchHits(
                     new SearchHit[] { hit1, hit2 },
                     new TotalHits(2, TotalHits.Relation.EQUAL_TO),
@@ -381,6 +471,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete for sessions (Phase 3)
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             bulkDeleteOrder.set(orderCounter.getAndIncrement());
@@ -468,13 +560,14 @@ public class MemoryRetentionJobProcessorTests {
                 }
             } else {
                 // Return 600 expired sessions across 6 full pages of 100, then an empty page
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
                 int pageNum = sessionPageCount.getAndIncrement();
                 if (pageNum < 6) {
                     // Full page of 100 hits (triggers pagination)
                     SearchHit[] hits = new SearchHit[100];
                     for (int i = 0; i < 100; i++) {
                         int globalIdx = pageNum * 100 + i;
-                        hits[i] = new SearchHit(globalIdx, "session-" + globalIdx, null, null);
+                        hits[i] = createHitWithSource("session-" + globalIdx, Map.of("last_updated_time", oldTimestamp));
                         hits[i].sortValues(new Object[] { "session-" + globalIdx }, new DocValueFormat[] { DocValueFormat.RAW });
                     }
                     SearchHits sessionHits = new SearchHits(hits, new TotalHits(600, TotalHits.Relation.EQUAL_TO), Float.NaN);
@@ -504,6 +597,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -681,8 +776,12 @@ public class MemoryRetentionJobProcessorTests {
                 listener.onResponse(containerSearchResponse);
             } else {
                 sessionSearchCount.incrementAndGet();
-                // Return 1 expired session for each container
-                SearchHit expiredHit = new SearchHit(0, "expired-session-" + sessionSearchCount.get(), null, null);
+                // Return 1 expired session for each container with old timestamp
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(60);
+                SearchHit expiredHit = createHitWithSource(
+                    "expired-session-" + sessionSearchCount.get(),
+                    Map.of("last_updated_time", oldTimestamp)
+                );
                 SearchHits sessionHits = new SearchHits(
                     new SearchHit[] { expiredHit },
                     new TotalHits(1, TotalHits.Relation.EQUAL_TO),
@@ -707,6 +806,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -838,6 +939,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -1003,6 +1106,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete for max_count
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -1137,6 +1242,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -1215,6 +1322,8 @@ public class MemoryRetentionJobProcessorTests {
 
         // Mock bulk delete
         BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
@@ -1681,6 +1790,146 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
+    public void testOrphanSweepSkippedWhenSessionsIndexDoesNotExist() {
+        // Sessions index does not exist in cluster state: sweep must be skipped entirely,
+        // otherwise all working memory would be classified as orphaned and deleted.
+        lenient().when(clusterService.state().metadata().hasIndex(anyString())).thenAnswer(invocation -> {
+            String indexName = invocation.getArgument(0);
+            return !indexName.contains("sessions");
+        });
+
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-idx-missing", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger workingMemorySearchCount = new AtomicInteger(0);
+        boolean[] inOrphanPhase = { false };
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else if (count == 1) {
+                    inOrphanPhase[0] = true;
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                if (inOrphanPhase[0] && request.indices()[0].contains("working")) {
+                    workingMemorySearchCount.incrementAndGet();
+                }
+                if (request.source() != null && request.source().size() == 0) {
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        AtomicInteger orphanDbqCount = new AtomicInteger(0);
+
+        BulkByScrollResponse dbqResponse = mock(BulkByScrollResponse.class);
+        lenient().when(dbqResponse.getDeleted()).thenReturn(0L);
+
+        doAnswer(invocation -> {
+            if (inOrphanPhase[0]) {
+                orphanDbqCount.incrementAndGet();
+            }
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(dbqResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Orphan sweep must not enumerate working memory when sessions index is missing", workingMemorySearchCount.get() == 0);
+        assertTrue("Orphan sweep must not delete anything when sessions index is missing", orphanDbqCount.get() == 0);
+    }
+
+    @Test
+    public void testOrphanSweepSkippedWhenWorkingMemoryIndexDoesNotExist() {
+        // Working memory index does not exist: nothing to sweep, skip.
+        lenient().when(clusterService.state().metadata().hasIndex(anyString())).thenAnswer(invocation -> {
+            String indexName = invocation.getArgument(0);
+            return !indexName.contains("working");
+        });
+
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-wm-missing", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger workingMemorySearchCount = new AtomicInteger(0);
+        boolean[] inOrphanPhase = { false };
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else if (count == 1) {
+                    inOrphanPhase[0] = true;
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                if (inOrphanPhase[0] && request.indices()[0].contains("working")) {
+                    workingMemorySearchCount.incrementAndGet();
+                }
+                if (request.source() != null && request.source().size() == 0) {
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse dbqResponse = mock(BulkByScrollResponse.class);
+        lenient().when(dbqResponse.getDeleted()).thenReturn(0L);
+
+        AtomicInteger orphanDbqCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            if (inOrphanPhase[0]) {
+                orphanDbqCount.incrementAndGet();
+            }
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(dbqResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue(
+            "Orphan sweep must not enumerate working memory when working memory index is missing",
+            workingMemorySearchCount.get() == 0
+        );
+        assertTrue("Orphan sweep must not delete anything when working memory index is missing", orphanDbqCount.get() == 0);
+    }
+
+    @Test
     public void testSessionsIndexMissing() {
         String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
             + "\"use_system_index\":true,"
@@ -1867,5 +2116,26 @@ public class MemoryRetentionJobProcessorTests {
         SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
         when(response.getHits()).thenReturn(hits);
         return response;
+    }
+
+    private SearchHit createHitWithSource(String id, Map<String, Object> sourceMap) {
+        SearchHit hit = new SearchHit(id.hashCode(), id, null, null);
+        StringBuilder json = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<String, Object> entry : sourceMap.entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":");
+            Object val = entry.getValue();
+            if (val instanceof String) {
+                json.append("\"").append(val).append("\"");
+            } else {
+                json.append(val);
+            }
+            first = false;
+        }
+        json.append("}");
+        hit.sourceRef(new BytesArray(json.toString()));
+        return hit;
     }
 }

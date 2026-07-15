@@ -1472,4 +1472,112 @@ public class MemoryConfigurationTests {
         assertNotNull(config.getRetentionPolicy());
         assertEquals(1, config.getRetentionPolicy().size());
     }
+
+    @Test
+    public void testRetentionPolicyExplicitNull_RoundTripsThroughXContent() throws Exception {
+        // Parse a config with explicit "retention_policy": null (opt-out)
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":null}";
+        org.opensearch.core.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration config = MemoryConfiguration.parse(parser);
+        assertTrue(config.isRetentionPolicyExplicitlyNull());
+
+        // Serialize: the opt-out marker must be written as an explicit null field
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.common.xcontent.XContentFactory.jsonBuilder();
+        config.toXContent(builder, org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS);
+        String serialized = builder.toString();
+        assertTrue("expected explicit null marker in: " + serialized, serialized.contains("\"retention_policy\":null"));
+
+        // Parse back (simulates reading the container document from the index)
+        org.opensearch.core.xcontent.XContentParser reparser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                serialized
+            );
+        reparser.nextToken();
+        MemoryConfiguration roundTripped = MemoryConfiguration.parse(reparser);
+
+        // Opt-out must survive the round trip so the retention job skips backfill
+        assertTrue(roundTripped.isRetentionPolicyExplicitlyNull());
+        assertNull(roundTripped.getRetentionPolicy());
+    }
+
+    @Test
+    public void testToXContent_NoRetentionPolicy_OmitsField() throws Exception {
+        // "Never had a policy" must remain field-absence (no null marker)
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.common.xcontent.XContentFactory.jsonBuilder();
+        config.toXContent(builder, org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS);
+        String serialized = builder.toString();
+        assertFalse("retention_policy should be absent in: " + serialized, serialized.contains("retention_policy"));
+    }
+
+    @Test
+    public void testUpdate_ExplicitNull_PropagatesOptOutFlagForPersistence() throws Exception {
+        // Existing stored config with a policy
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        // PUT with "retention_policy": null
+        String json = "{\"retention_policy\":null}";
+        org.opensearch.core.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration updateContent = MemoryConfiguration.parse(parser);
+
+        config.update(updateContent);
+
+        // Merged config must carry the opt-out so serialization writes the null marker,
+        // which removes the old policy during the partial-update doc merge
+        assertNull(config.getRetentionPolicy());
+        assertTrue(config.isRetentionPolicyExplicitlyNull());
+
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.common.xcontent.XContentFactory.jsonBuilder();
+        config.toXContent(builder, org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"retention_policy\":null"));
+    }
+
+    @Test
+    public void testUpdate_NewPolicyClearsOptOutFlag() throws Exception {
+        // Config previously opted out
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
+        config.setRetentionPolicyExplicitlyNull(true);
+
+        // PUT with a concrete policy opts back in
+        Map<MemoryType, RetentionRule> newPolicy = new java.util.EnumMap<>(MemoryType.class);
+        newPolicy.put(MemoryType.SESSIONS, new RetentionRule(7, 50));
+        MemoryConfiguration updateContent = MemoryConfiguration.builder().retentionPolicy(newPolicy).build();
+
+        config.update(updateContent);
+
+        assertFalse(config.isRetentionPolicyExplicitlyNull());
+        assertNotNull(config.getRetentionPolicy());
+    }
+
+    @Test
+    public void testRetentionPolicyExplicitNull_RoundTripsThroughStream() throws Exception {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
+        config.setRetentionPolicyExplicitlyNull(true);
+
+        org.opensearch.common.io.stream.BytesStreamOutput out = new org.opensearch.common.io.stream.BytesStreamOutput();
+        config.writeTo(out);
+        MemoryConfiguration deserialized = new MemoryConfiguration(out.bytes().streamInput());
+
+        assertTrue(deserialized.isRetentionPolicyExplicitlyNull());
+        assertNull(deserialized.getRetentionPolicy());
+    }
 }
