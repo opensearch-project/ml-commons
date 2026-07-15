@@ -200,4 +200,23 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         return type.getValue().toLowerCase() + "_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
+    /**
+     * Create a strategy with sensible defaults from a preset type.
+     * Used when user passes strategies as a simple string array: ["SEMANTIC", "USER_PREFERENCE"]
+     */
+    public static MemoryStrategy fromPreset(MemoryStrategyType type) {
+        List<String> namespace;
+        switch (type) {
+            case SUMMARY:
+                namespace = List.of("user_id", "session_id");
+                break;
+            case SEMANTIC:
+            case USER_PREFERENCE:
+            default:
+                namespace = List.of("user_id");
+                break;
+        }
+        return MemoryStrategy.builder().type(type).namespace(namespace).enabled(true).build();
+    }
+
 }
