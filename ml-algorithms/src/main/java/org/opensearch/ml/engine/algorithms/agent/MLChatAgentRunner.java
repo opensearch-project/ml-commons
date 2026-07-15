@@ -104,6 +104,7 @@ import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.ToolArgumentValidator;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
@@ -914,6 +915,36 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         HookRegistry hookRegistry
     ) {
+        // Apply framework-level schema validation if provider doesn't support strict schema
+        if (functionCalling != null && !functionCalling.supportsStrictSchema()) {
+            try {
+                MLToolSpec toolSpec = toolSpecMap.get(action);
+                if (toolSpec != null && toolSpec.getParameters() != null && toolSpec.getParameters().containsKey("input_schema")) {
+                    String schema = toolSpec.getParameters().get("input_schema");
+
+                    // Validate and normalize the action input
+                    Map<String, Object> validatedInput = ToolArgumentValidator.validateAndNormalize(actionInput, schema);
+
+                    // Update toolParams with validated input
+                    toolParams.put("input", StringUtils.toJson(validatedInput));
+                    log.debug("Applied framework-level validation for tool: {}", action);
+                }
+            } catch (Exception e) {
+                log.warn("Framework validation failed for tool {}: {}", action, e.getMessage());
+                nextStepListener
+                    .onResponse(
+                        String
+                            .format(
+                                Locale.ROOT,
+                                "Tool %s failed validation: %s. Please retry with valid input format.",
+                                action,
+                                e.getMessage()
+                            )
+                    );
+                return;
+            }
+        }
+
         if (tools.get(action).validate(toolParams)) {
             try {
                 String finalAction = action;
@@ -1685,23 +1716,27 @@ public class MLChatAgentRunner implements MLAgentRunner {
         getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
             // Add MCP tools to backend tools
             backendToolSpecs.addAll(mcpTools);
-
-            // Create backend tools map
-            Map<String, Tool> backendToolsMap = new HashMap<>();
-            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-            createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
-
-            // Create unified tool list for function calling (frontend + backend)
-            processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
+            buildAndProcessUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolSpecs);
         }, e -> {
             // Even if MCP tools fail, continue with base backend tools
-
-            Map<String, Tool> backendToolsMap = new HashMap<>();
-            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-            createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
-
-            processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
+            log.warn("Failed to load MCP tools, continuing with backend tools only", e);
+            buildAndProcessUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolSpecs);
         }));
+    }
+
+    private void buildAndProcessUnifiedTools(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        FunctionCalling functionCalling,
+        List<Map<String, Object>> frontendTools,
+        List<MLToolSpec> backendToolSpecs
+    ) {
+        Map<String, Tool> backendToolsMap = new HashMap<>();
+        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+        createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
+        processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
     }
 
     /**

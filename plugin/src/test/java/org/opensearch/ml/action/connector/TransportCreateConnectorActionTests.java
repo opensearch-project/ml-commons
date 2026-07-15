@@ -5,9 +5,11 @@
 package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
@@ -20,7 +22,9 @@ import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -708,5 +712,65 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         action.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
+    public void testCreateConnector_DangerousIpBlocked() {
+        List<String> dangerousUrls = Arrays.asList("http://127.0.0.1:9200", "http://169.254.169.254:9200", "http://[::1]:9200");
+
+        for (String url : dangerousUrls) {
+            MLCreateConnectorInput input = createConnectorInputWithUrl(url);
+            MLCreateConnectorRequest request = new MLCreateConnectorRequest(input);
+
+            ActionListener<MLCreateConnectorResponse> listener = mock(ActionListener.class);
+            action.doExecute(null, request, listener);
+
+            ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+            verify(listener).onFailure(captor.capture());
+
+            String errorMsg = captor.getValue().getMessage().toLowerCase();
+            assertTrue(
+                "Expected security validation error for URL: " + url + ", but got: " + errorMsg,
+                errorMsg.contains("not matching the trusted connector")
+                    || errorMsg.contains("restricted ip")
+                    || errorMsg.contains("private ip")
+            );
+        }
+    }
+
+    public void testCreateConnector_PrivateIpWithTrustedEndpoint() {
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(true);
+
+        MLCreateConnectorInput input = createConnectorInputWithUrl("http://10.0.0.1:9200");
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(input);
+
+        ActionListener<MLCreateConnectorResponse> listener = mock(ActionListener.class);
+        action.doExecute(null, request, listener);
+
+        verify(listener, never()).onFailure(argThat(e ->
+                e.getMessage().toLowerCase().contains("restricted ip")
+        ));
+    }
+
+    private MLCreateConnectorInput createConnectorInputWithUrl(String url) {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url(url)
+            .requestBody("{\"input\": \"test\"}")
+            .build();
+
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        return MLCreateConnectorInput
+            .builder()
+            .name("test_connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(action))
+            .credential(credential)
+            .build();
     }
 }

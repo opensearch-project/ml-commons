@@ -9,6 +9,7 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
@@ -56,8 +57,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -120,6 +123,7 @@ import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 
+import io.modelcontextprotocol.client.McpSyncClient;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -155,6 +159,9 @@ public class AgentUtils {
     private static final String DESCRIPTION = "description";
     private static final Pattern ADDITIONAL_PROPERTIES_PATTERN = Pattern
         .compile(",\\s*\"additionalProperties\"\\s*:\\s*(?:false|true)", Pattern.CASE_INSENSITIVE);
+
+    private static final Set<String> MCP_SYSTEM_RUNTIME_RESOURCE_KEYS = Set.of(MCP_SYNC_CLIENT);
+
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
@@ -168,6 +175,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String TOOL_DESCRIPTIONS_FIELD = "tool_descriptions";
     public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
     public static final String AGENT_TYPE_PARAM = "agent_type";
 
@@ -786,6 +794,91 @@ public class AgentUtils {
         return toolSpecs;
     }
 
+    public static void resolveFlowToolSpecsWithMcpValidation(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        Client client,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> listener
+    ) {
+        List<MLToolSpec> configuredToolSpecs = getMlToolSpecs(mlAgent, params);
+        if (configuredToolSpecs == null || configuredToolSpecs.isEmpty()) {
+            listener.onResponse(Collections.emptyList());
+            return;
+        }
+        boolean hasMcpTool = configuredToolSpecs
+            .stream()
+            .anyMatch(toolSpec -> McpSseTool.TYPE.equals(toolSpec.getType()) || McpStreamableHttpTool.TYPE.equals(toolSpec.getType()));
+        if (!hasMcpTool) {
+            listener.onResponse(configuredToolSpecs);
+            return;
+        }
+        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpToolSpecs -> {
+            // If several connectors expose a tool with the same name, it picks the first one from the
+            // configured mcp connectors.
+            Map<String, MLToolSpec> mcpToolSpecMap = mcpToolSpecs
+                .stream()
+                .filter(spec -> spec.getName() != null)
+                .collect(Collectors.toMap(MLToolSpec::getName, spec -> spec, (firstSpec, ignoredDuplicate) -> firstSpec));
+            List<MLToolSpec> resolvedSpecs = new ArrayList<>();
+            for (MLToolSpec configuredSpec : configuredToolSpecs) {
+                if (!McpSseTool.TYPE.equals(configuredSpec.getType()) && !McpStreamableHttpTool.TYPE.equals(configuredSpec.getType())) {
+                    resolvedSpecs.add(configuredSpec);
+                } else {
+                    String configuredToolName = getToolName(configuredSpec);
+                    MLToolSpec mcpSpec = mcpToolSpecMap.get(configuredToolName);
+                    if (mcpSpec == null) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "MCP tool ["
+                                        + configuredToolName
+                                        + "] configured in agent is not available in the MCP connector(s). "
+                                        + "Check connector configuration or MCP server logs."
+                                )
+                            );
+                        return;
+                    }
+                    // Layer agent configuration on top of the connector-fetched MCP tool definition:
+                    // - description: configured value wins when non-empty, else remote
+                    // - attributes, runtime_resources: merged with configured values winning on key collision;
+                    // connector-injected runtime keys (e.g. mcp_sync_client) cannot be overridden in agent JSON
+                    Map<String, Object> mergedRuntimeResources = new HashMap<>();
+                    if (mcpSpec.getRuntimeResources() != null) {
+                        mergedRuntimeResources.putAll(mcpSpec.getRuntimeResources());
+                    }
+                    if (configuredSpec.getRuntimeResources() != null) {
+                        for (Map.Entry<String, Object> entry : configuredSpec.getRuntimeResources().entrySet()) {
+                            if (!MCP_SYSTEM_RUNTIME_RESOURCE_KEYS.contains(entry.getKey())) {
+                                mergedRuntimeResources.put(entry.getKey(), entry.getValue());
+                            }
+                        }
+                    }
+                    Map<String, String> mergedAttributes = new HashMap<>();
+                    if (mcpSpec.getAttributes() != null) {
+                        mergedAttributes.putAll(mcpSpec.getAttributes());
+                    }
+                    if (configuredSpec.getAttributes() != null) {
+                        mergedAttributes.putAll(configuredSpec.getAttributes());
+                    }
+                    MLToolSpec resolved = configuredSpec
+                        .toBuilder()
+                        .description(
+                            Strings.isNullOrEmpty(configuredSpec.getDescription())
+                                ? mcpSpec.getDescription()
+                                : configuredSpec.getDescription()
+                        )
+                        .attributes(mergedAttributes)
+                        .runtimeResources(mergedRuntimeResources.isEmpty() ? null : mergedRuntimeResources)
+                        .build();
+                    resolvedSpecs.add(resolved);
+                }
+            }
+            listener.onResponse(resolvedSpecs);
+        }, listener::onFailure));
+    }
+
     public static void getMcpToolSpecs(
         MLAgent mlAgent,
         Client client,
@@ -809,44 +902,202 @@ public class AgentUtils {
         // Use AtomicInteger to track completion of all async operations
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
         List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
+        boolean isLogWarnEnabled = log.isWarnEnabled();
+        Map<String, List<String>> toolNameToConnectorIds = isLogWarnEnabled ? new ConcurrentHashMap<>() : null;
 
         // We make multiple Async calls in for loop, which happen in parallel
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
             List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
+            Map<String, String> toolDescriptionOverrides = toStringMap(mcpConnectorConfig.get(TOOL_DESCRIPTIONS_FIELD));
 
-            getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
-                List<MLToolSpec> filteredTools;
-                if (toolFilters == null || toolFilters.isEmpty()) {
-                    filteredTools = mcpToolspecs;
-                } else {
-                    filteredTools = new ArrayList<>();
-                    List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
+            try {
+                getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
+                    try {
+                        List<MLToolSpec> filteredTools;
+                        if (toolFilters == null || toolFilters.isEmpty()) {
+                            filteredTools = mcpToolspecs
+                                .stream()
+                                .filter(Objects::nonNull)
+                                .map(toolSpec -> applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides))
+                                .collect(Collectors.toList());
+                        } else {
+                            filteredTools = new ArrayList<>();
+                            List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
 
-                    for (MLToolSpec toolSpec : mcpToolspecs) {
-                        for (Pattern pattern : compiledPatterns) {
-                            if (pattern.matcher(toolSpec.getName()).matches()) {
-                                filteredTools.add(toolSpec);
-                                break;
+                            for (MLToolSpec toolSpec : mcpToolspecs) {
+                                if (toolSpec != null && toolSpec.getName() != null) {
+                                    for (Pattern pattern : compiledPatterns) {
+                                        if (pattern.matcher(toolSpec.getName()).matches()) {
+                                            filteredTools.add(applyToolDescriptionOverride(toolSpec, toolDescriptionOverrides));
+                                            break;
+                                        }
+                                    }
+                                }
                             }
+                        }
+                        warnUnusedToolDescriptionOverrides(connectorId, toolDescriptionOverrides, mcpToolspecs, filteredTools);
+                        if (isLogWarnEnabled) {
+                            recordMcpToolNamesForConnector(toolNameToConnectorIds, connectorId, filteredTools);
+                        }
+                        finalToolSpecs.addAll(filteredTools);
+                    } catch (Throwable t) {
+                        log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);
+                    } finally {
+                        completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
+                    }
+                }, e -> {
+                    log.error("Error processing connector: " + connectorId, e);
+                    completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
+                }));
+            } catch (Throwable t) {
+                // Catch synchronous throws (including Errors) so one bad connector can't strand the counter.
+                log.error("Synchronous failure initiating MCP tool spec lookup for connector: " + connectorId, t);
+                completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
+            }
+        }
+    }
+
+    private static void recordMcpToolNamesForConnector(
+        Map<String, List<String>> toolNameToConnectorIds,
+        String connectorId,
+        List<MLToolSpec> connectorTools
+    ) {
+        for (MLToolSpec toolSpec : connectorTools) {
+            if (toolSpec.getName() != null) {
+                toolNameToConnectorIds
+                    .computeIfAbsent(toolSpec.getName(), arg -> Collections.synchronizedList(new ArrayList<>()))
+                    .add(connectorId);
+            }
+        }
+    }
+
+    // Guarantees the final listener fires exactly once; every code path decrements via try/finally.
+    private static void completeIfLast(
+        AtomicInteger remainingConnectors,
+        Map<String, List<String>> toolNameToConnectorIds,
+        List<MLToolSpec> finalToolSpecs,
+        ActionListener<List<MLToolSpec>> finalListener
+    ) {
+        if (remainingConnectors.decrementAndGet() == 0) {
+            if (toolNameToConnectorIds != null) {
+                warnOnDuplicateMcpToolNames(toolNameToConnectorIds);
+            }
+            finalListener.onResponse(finalToolSpecs);
+        }
+    }
+
+    private static void warnOnDuplicateMcpToolNames(Map<String, List<String>> toolNameToConnectorIds) {
+        if (!log.isWarnEnabled()) {
+            return;
+        }
+        for (Map.Entry<String, List<String>> entry : toolNameToConnectorIds.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                log
+                    .warn(
+                        "MCP tool name [{}] is exposed by multiple connectors {}. "
+                            + "Only one definition will be used; disambiguate via tool_filters or rename the tool on one connector.",
+                        entry.getKey(),
+                        entry.getValue()
+                    );
+            }
+        }
+    }
+
+    /**
+     * Warns when {@code tool_descriptions} contains keys that do not match any tool returned for the connector.
+     */
+    private static void warnUnusedToolDescriptionOverrides(
+        String connectorId,
+        Map<String, String> toolDescriptionOverrides,
+        List<MLToolSpec> connectorTools,
+        List<MLToolSpec> filteredTools
+    ) {
+        if (!log.isWarnEnabled()) {
+            return;
+        }
+        if (toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty()) {
+            return;
+        }
+        Set<String> filteredToolNames = toolNamesFromSpecs(filteredTools);
+        Set<String> connectorToolNames = toolNamesFromSpecs(connectorTools);
+        Set<String> overrideToolNames = toolDescriptionOverrides.keySet();
+        for (String overrideToolName : overrideToolNames) {
+            if (!filteredToolNames.contains(overrideToolName)) {
+                if (connectorToolNames.contains(overrideToolName)) {
+                    log
+                        .warn(
+                            "MCP connector [{}]: tool_descriptions override for [{}] ignored: tool was filtered out by tool_filters",
+                            connectorId,
+                            overrideToolName
+                        );
+                } else {
+                    log
+                        .warn(
+                            "MCP connector [{}]: tool_descriptions override for [{}] does not match any tool from this connector; override is ignored",
+                            connectorId,
+                            overrideToolName
+                        );
+                }
+            }
+        }
+    }
+
+    private static Set<String> toolNamesFromSpecs(List<MLToolSpec> toolSpecs) {
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return toolSpecs.stream().filter(Objects::nonNull).map(MLToolSpec::getName).filter(Objects::nonNull).collect(Collectors.toSet());
+    }
+
+    private static Map<String, String> toStringMap(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> merged = new HashMap<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    Object key = entry.getKey();
+                    Object value = entry.getValue();
+                    if (key != null && value != null) {
+                        String keyStr = key.toString();
+                        if (value instanceof String) {
+                            String valueStr = (String) value;
+                            String previousValue = merged.put(keyStr, valueStr);
+                            if (previousValue != null) {
+                                log
+                                    .warn(
+                                        "Duplicate tool_descriptions entry for [{}]: previous value [{}] overridden by [{}]",
+                                        keyStr,
+                                        previousValue,
+                                        valueStr
+                                    );
+                            }
+                        } else {
+                            log
+                                .warn(
+                                    "Tool description override for tool [{}] is non-string type [{}]; override is ignored",
+                                    keyStr,
+                                    value.getClass().getName()
+                                );
                         }
                     }
                 }
-
-                finalToolSpecs.addAll(filteredTools);
-
-                // If this is the last connector, send the final response
-                if (remainingConnectors.decrementAndGet() == 0) {
-                    finalListener.onResponse(finalToolSpecs);
-                }
-            }, e -> {
-                log.error("Error processing connector: " + connectorId, e);
-                // Even on error, we need to check if this is the last connector
-                if (remainingConnectors.decrementAndGet() == 0) {
-                    finalListener.onResponse(finalToolSpecs);
-                }
-            }));
+            }
         }
+        return merged;
+    }
+
+    private static MLToolSpec applyToolDescriptionOverride(MLToolSpec toolSpec, Map<String, String> toolDescriptionOverrides) {
+        if (toolDescriptionOverrides == null || toolDescriptionOverrides.isEmpty() || toolSpec.getName() == null) {
+            return toolSpec;
+        }
+        String overrideDescription = toolDescriptionOverrides.get(toolSpec.getName());
+        if (Strings.isNullOrEmpty(overrideDescription)) {
+            return toolSpec;
+        }
+        return toolSpec.toBuilder().description(overrideDescription).build();
     }
 
     private static void getMCPToolSpecsFromConnector(
@@ -857,11 +1108,49 @@ public class AgentUtils {
         Encryptor encryptor,
         ActionListener<List<MLToolSpec>> toolListener
     ) {
+        getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, toolListener, false);
+    }
+
+    /**
+     * Strict version of MCP tool listing for explicit user-facing APIs. This API will propagate the failures to the listener
+     *
+     * @param connectorId
+     * @param tenantId
+     * @param sdkClient
+     * @param client
+     * @param encryptor
+     * @param toolListener
+     */
+    public static void getMCPToolSpecsFromConnectorWithPropagatingFailures(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> toolListener
+    ) {
+        getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, toolListener, true);
+    }
+
+    private static void getMCPToolSpecsFromConnector(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> toolListener,
+        boolean isPropagatingFailures
+    ) {
         getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
             try {
                 if (!(connector instanceof McpConnector) && !(connector instanceof McpStreamableHttpConnector)) {
-                    log.error("Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector");
-                    toolListener.onResponse(Collections.emptyList());
+                    String errorMessage = "Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector";
+                    log.error(errorMessage);
+                    if (isPropagatingFailures) {
+                        toolListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.BAD_REQUEST));
+                    } else {
+                        toolListener.onResponse(Collections.emptyList());
+                    }
                     return;
                 }
                 ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
@@ -886,20 +1175,31 @@ public class AgentUtils {
                         toolListener.onResponse(mcpToolSpecs);
                         return;
                     }
-                    log.error("Unsupported connector type for connector: " + connectorId);
-                    toolListener.onResponse(Collections.emptyList());
                 }, e -> {
                     log.error("Failed to decrypt credentials in connector", e);
                     toolListener.onFailure(e);
                 });
                 connector.decrypt("", encryptor::decrypt, tenantId, decryptSuccessfulListener);
-            } catch (Exception e) {
-                log.error("Failed to get tools from connector: " + connectorId, e);
-                toolListener.onResponse(Collections.emptyList());
+            } catch (Throwable t) {
+                // Throwable, not Exception: ServiceConfigurationError would otherwise stall the async chain.
+                log.error("Error retrieving MCP tool specs from connector: " + connectorId, t);
+                if (isPropagatingFailures) {
+                    if (t instanceof Exception) {
+                        toolListener.onFailure((Exception) t);
+                    } else {
+                        toolListener.onFailure(new RuntimeException("Error retrieving MCP tool specs from connector: " + connectorId, t));
+                    }
+                } else {
+                    toolListener.onResponse(Collections.emptyList());
+                }
             }
         }, e -> {
-            log.error("Failed to get the MCP Connector: " + connectorId, e);
-            toolListener.onResponse(Collections.emptyList());
+            log.error("Failed to get connector for MCP tool specs, connectorId=" + connectorId, e);
+            if (isPropagatingFailures) {
+                toolListener.onFailure(e);
+            } else {
+                toolListener.onResponse(Collections.emptyList());
+            }
         }));
 
     }
@@ -1060,6 +1360,24 @@ public class AgentUtils {
             } else if (tool instanceof McpStreamableHttpTool) {
                 // TODO: make this more general, avoid checking specific tool type
                 ((McpStreamableHttpTool) tool).getMcpSyncClient().closeGracefully();
+            }
+        }
+    }
+
+    /**
+     * Closes MCP sync clients held in {@link MLToolSpec} runtime resources.
+     * @param toolSpecs
+     */
+    public static void cleanUpResource(List<MLToolSpec> toolSpecs) {
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
+            return;
+        }
+        for (MLToolSpec toolSpec : toolSpecs) {
+            if (toolSpec != null && toolSpec.getRuntimeResources() != null) {
+                Object client = toolSpec.getRuntimeResources().get(MCP_SYNC_CLIENT);
+                if (client instanceof McpSyncClient mcpSyncClient) {
+                    mcpSyncClient.closeGracefully();
+                }
             }
         }
     }

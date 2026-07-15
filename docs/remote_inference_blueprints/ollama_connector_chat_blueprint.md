@@ -2,6 +2,8 @@
 
 This is an AI connector blueprint for Ollama or any other local/self-hosted LLM as long as it is OpenAI compatible (Ollama, llama.cpp, vLLM, etc)
 
+> **Note:** `supports_structured_output: true` enables JSON schema enforcement for agentic memory fact extraction. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
+
 ## 1. Add connector endpoint to trusted URLs
 
 Adjust the Regex to your local IP. The following example allows all URLs.
@@ -23,7 +25,8 @@ PUT /_cluster/settings
 PUT /_cluster/settings
 {
     "persistent": {
-      "plugins.ml_commons.connector.private_ip_enabled": true
+      "plugins.ml_commons.connector.private_ip_enabled": true,
+      "plugins.ml_commons.trusted_connector_private_endpoints_regex": ["^http://127\\.0\\.0\\.1:11434/.*$"]
     }
 }
 ```
@@ -50,7 +53,8 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://${parameters.endpoint}/v1/chat/completions",
+      "url": "http://${parameters.endpoint}/v1/chat/completions",
+      "supports_structured_output": true,
       "headers": {
         "Authorization": "Bearer ${credential.openAI_key}"
       },

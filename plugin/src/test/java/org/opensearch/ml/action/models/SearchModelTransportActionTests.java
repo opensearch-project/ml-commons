@@ -175,6 +175,15 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
+    @Override
+    public void tearDown() throws Exception {
+        try {
+            ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+        } finally {
+            super.tearDown();
+        }
+    }
+
     public void test_DoExecute_admin() {
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(true);
         doAnswer(invocation -> {
