@@ -11,7 +11,6 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 
 import java.time.Instant;
 import java.util.EnumMap;
@@ -162,29 +161,37 @@ public class TransportCreateMemoryContainerAction extends
             }
         }
 
-        // Auto-apply default retention policy when retention is enabled and user did not provide one
+        // Auto-apply admin-configured default retention policy when user did not provide one
         if (configuration != null && !configuration.isRetentionPolicyExplicitlyNull()) {
             Map<MemoryType, RetentionRule> existingPolicy = configuration.getRetentionPolicy();
-            if ((existingPolicy == null || existingPolicy.isEmpty())
-                && ML_COMMONS_MEMORY_RETENTION_ENABLED.get(clusterService.getSettings())) {
-                Map<MemoryType, RetentionRule> defaultPolicy = new EnumMap<>(MemoryType.class);
-                defaultPolicy.put(
-                    MemoryType.SESSIONS,
-                    new RetentionRule(
-                        ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS.get(clusterService.getSettings()),
-                        ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT.get(clusterService.getSettings())
-                    )
-                );
-                defaultPolicy.put(
-                    MemoryType.LONG_TERM,
-                    new RetentionRule(null, ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT.get(clusterService.getSettings()))
-                );
-                defaultPolicy.put(
-                    MemoryType.HISTORY,
-                    new RetentionRule(null, ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT.get(clusterService.getSettings()))
-                );
-                configuration.setRetentionPolicy(defaultPolicy);
-                log.info("Auto-applied default retention policy to new container '{}'", input.getName());
+            if (existingPolicy == null || existingPolicy.isEmpty()) {
+                int sessionRetentionDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS);
+                int sessionMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT);
+                int longTermMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT);
+                int historyMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT);
+
+                boolean anyConfigured = sessionRetentionDays > 0 || sessionMaxCount > 0 || longTermMaxCount > 0 || historyMaxCount > 0;
+                if (anyConfigured) {
+                    Map<MemoryType, RetentionRule> defaultPolicy = new EnumMap<>(MemoryType.class);
+                    if (sessionRetentionDays > 0 || sessionMaxCount > 0) {
+                        defaultPolicy
+                            .put(
+                                MemoryType.SESSIONS,
+                                new RetentionRule(
+                                    sessionRetentionDays > 0 ? sessionRetentionDays : null,
+                                    sessionMaxCount > 0 ? sessionMaxCount : null
+                                )
+                            );
+                    }
+                    if (longTermMaxCount > 0) {
+                        defaultPolicy.put(MemoryType.LONG_TERM, new RetentionRule(null, longTermMaxCount));
+                    }
+                    if (historyMaxCount > 0) {
+                        defaultPolicy.put(MemoryType.HISTORY, new RetentionRule(null, historyMaxCount));
+                    }
+                    configuration.setRetentionPolicy(defaultPolicy);
+                    log.info("Auto-applied default retention policy to new container '{}'", input.getName());
+                }
             }
         }
 

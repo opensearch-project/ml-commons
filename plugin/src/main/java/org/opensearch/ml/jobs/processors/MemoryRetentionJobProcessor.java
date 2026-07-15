@@ -6,6 +6,7 @@
 package org.opensearch.ml.jobs.processors;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_SESSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
@@ -15,6 +16,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RETENTION_POLICY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_ID_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT;
@@ -26,21 +28,25 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.IndicesOptions;
-import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -53,6 +59,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.reindex.BulkByScrollResponse;
@@ -61,6 +68,8 @@ import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.memorycontainer.RetentionRule;
+import org.opensearch.script.Script;
+import org.opensearch.script.ScriptType;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -81,7 +90,21 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     private static final int ORPHAN_SESSION_BATCH_SIZE = 1000;
     private static final int ORPHAN_ENUMERATION_PAGE_SIZE = 1000;
 
-    private static MemoryRetentionJobProcessor instance;
+    /**
+     * Threshold for detecting legacy epoch-SECOND timestamps. Documents written before
+     * TransportCreateMemorySessionAction switched to toEpochMilli() stored created_time /
+     * last_updated_time as epoch seconds (e.g. 1752400000), which compared against
+     * System.currentTimeMillis() looks like January 1970 and would be evicted immediately.
+     *
+     * Any value below 10 billion is assumed to be epoch seconds:
+     * - 10 billion SECONDS is ~year 2286, so no real epoch-second timestamp exceeds it for centuries.
+     * - 10 billion MILLIS is ~1970-04-26, so no real epoch-millis timestamp for actual data is this small.
+     */
+    private static final long EPOCH_SECOND_DETECTION_THRESHOLD = 10_000_000_000L;
+
+    private static volatile MemoryRetentionJobProcessor instance;
+
+    private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
     public static MemoryRetentionJobProcessor getInstance(ClusterService clusterService, Client client, ThreadPool threadPool) {
         if (instance != null) {
@@ -109,18 +132,28 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
     @Override
     public void run() {
-        if (ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())) {
+        if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
             log.warn("Memory retention job skipped: multi-tenancy is enabled and native client lacks tenant routing");
             return;
         }
 
-        if (!ML_COMMONS_MEMORY_RETENTION_ENABLED.get(clusterService.getSettings())) {
+        if (!clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_ENABLED)) {
             log.info("Memory retention job disabled via cluster setting plugins.ml_commons.memory.retention_enabled=false");
             return;
         }
 
-        log.info("Memory retention job started");
-        resolveContainersWithPolicies(null);
+        if (!isRunning.compareAndSet(false, true)) {
+            log.warn("Memory retention job already in progress, skipping this invocation");
+            return;
+        }
+
+        try {
+            log.info("Memory retention job started");
+            resolveContainersWithPolicies(null);
+        } catch (Exception e) {
+            log.error("Unexpected error starting memory retention job", e);
+            isRunning.set(false);
+        }
     }
 
     private void resolveContainersWithPolicies(Object[] searchAfterValues) {
@@ -178,13 +211,18 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     }
 
     private void scheduleNext(SearchHit[] hits, int nextIndex, Object[] nextPageSortValues) {
-        int throttleSeconds = ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS.get(clusterService.getSettings());
-        threadPool
-            .schedule(
-                () -> processContainerChain(hits, nextIndex, nextPageSortValues),
-                TimeValue.timeValueSeconds(throttleSeconds),
-                ThreadPool.Names.GENERIC
-            );
+        int throttleSeconds = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS);
+        try {
+            threadPool
+                .schedule(
+                    () -> processContainerChain(hits, nextIndex, nextPageSortValues),
+                    TimeValue.timeValueSeconds(throttleSeconds),
+                    ThreadPool.Names.GENERIC
+                );
+        } catch (Exception e) {
+            log.error("Failed to schedule next container processing", e);
+            isRunning.set(false);
+        }
     }
 
     private void processContainer(SearchHit hit, ActionListener<Void> listener) {
@@ -202,10 +240,14 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
             XContentBuilder xContentBuilder = XContentFactory.jsonBuilder().map(configMap);
             BytesReference bytes = BytesReference.bytes(xContentBuilder);
-            XContentParser parser = XContentHelper
-                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, bytes, XContentType.JSON);
-            parser.nextToken();
-            MemoryConfiguration config = MemoryConfiguration.parse(parser);
+            MemoryConfiguration config;
+            try (
+                XContentParser parser = XContentHelper
+                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, bytes, XContentType.JSON)
+            ) {
+                parser.nextToken();
+                config = MemoryConfiguration.parse(parser);
+            }
 
             Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
             if (retentionPolicy == null || retentionPolicy.isEmpty()) {
@@ -214,8 +256,12 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     listener.onResponse(null);
                     return;
                 }
-                applyDefaultRetentionPolicy(config, containerId, ActionListener.wrap(v -> {
-                    executeRetentionPipeline(config, containerId, listener);
+                applyDefaultRetentionPolicy(config, containerId, ActionListener.wrap(persisted -> {
+                    if (persisted) {
+                        executeRetentionPipeline(config, containerId, listener);
+                    } else {
+                        listener.onResponse(null);
+                    }
                 }, listener::onFailure));
             } else {
                 executeRetentionPipeline(config, containerId, listener);
@@ -240,8 +286,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                                 v2 -> executeHistoryRetention(
                                     config,
                                     containerId,
-                                    ActionListener
-                                        .wrap(v3 -> executeWorkingMemoryTTL(config, containerId, listener), listener::onFailure)
+                                    ActionListener.wrap(v3 -> executeWorkingMemoryTTL(config, containerId, listener), listener::onFailure)
                                 ),
                                 listener::onFailure
                             )
@@ -251,54 +296,112 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         );
     }
 
-    private void applyDefaultRetentionPolicy(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
-        int sessionRetentionDays = ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS.get(clusterService.getSettings());
-        int sessionMaxCount = ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT.get(clusterService.getSettings());
-        int longTermMaxCount = ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT.get(clusterService.getSettings());
-        int historyMaxCount = ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT.get(clusterService.getSettings());
+    /**
+     * Backfills the cluster-default retention policy onto a container that has none, using a
+     * conditional ("if-absent") script update so a concurrently user-set policy or opt-out is
+     * never clobbered. Responds {@code true} only if the default policy was actually persisted;
+     * {@code false} means this container must be skipped for this run (no admin default retention
+     * settings are configured, a concurrent user write won, or the persist failed) so deletions
+     * never happen under a policy the user cannot see. Only settings explicitly configured by the
+     * admin (value &gt; 0; the settings default to -1, an unset sentinel) contribute to the policy.
+     */
+    private void applyDefaultRetentionPolicy(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
+        int sessionRetentionDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS);
+        int sessionMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT);
+        int longTermMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT);
+        int historyMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT);
+
+        boolean anyConfigured = sessionRetentionDays > 0 || sessionMaxCount > 0 || longTermMaxCount > 0 || historyMaxCount > 0;
+        if (!anyConfigured) {
+            log
+                .debug(
+                    "Container [{}] has no retention policy and no admin default retention settings are configured; skipping",
+                    containerId
+                );
+            listener.onResponse(false);
+            return;
+        }
 
         Map<MemoryType, RetentionRule> defaultPolicy = new EnumMap<>(MemoryType.class);
-        defaultPolicy.put(MemoryType.SESSIONS, new RetentionRule(sessionRetentionDays, sessionMaxCount));
-        defaultPolicy.put(MemoryType.LONG_TERM, new RetentionRule(null, longTermMaxCount));
-        defaultPolicy.put(MemoryType.HISTORY, new RetentionRule(null, historyMaxCount));
+        if (sessionRetentionDays > 0 || sessionMaxCount > 0) {
+            defaultPolicy
+                .put(
+                    MemoryType.SESSIONS,
+                    new RetentionRule(sessionRetentionDays > 0 ? sessionRetentionDays : null, sessionMaxCount > 0 ? sessionMaxCount : null)
+                );
+        }
+        if (longTermMaxCount > 0) {
+            defaultPolicy.put(MemoryType.LONG_TERM, new RetentionRule(null, longTermMaxCount));
+        }
+        if (historyMaxCount > 0) {
+            defaultPolicy.put(MemoryType.HISTORY, new RetentionRule(null, historyMaxCount));
+        }
 
         config.setRetentionPolicy(defaultPolicy);
 
-        log.info(
-            "[MemoryRetentionJob] container={} auto-applying default retention policy: sessions={}/{}d, long-term={}, history={}",
-            containerId,
-            sessionMaxCount,
-            sessionRetentionDays,
-            longTermMaxCount,
-            historyMaxCount
-        );
+        log
+            .info(
+                "[MemoryRetentionJob] container={} auto-applying default retention policy: sessions={}/{}d, long-term={}, history={}",
+                containerId,
+                sessionMaxCount,
+                sessionRetentionDays,
+                longTermMaxCount,
+                historyMaxCount
+            );
 
         try {
             XContentBuilder policyBuilder = XContentFactory.jsonBuilder().startObject();
-            policyBuilder.startObject(RETENTION_POLICY_FIELD);
             for (Map.Entry<MemoryType, RetentionRule> entry : defaultPolicy.entrySet()) {
                 policyBuilder.field(entry.getKey().getValue());
                 entry.getValue().toXContent(policyBuilder, null);
             }
             policyBuilder.endObject();
-            policyBuilder.endObject();
+            Map<String, Object> policyMap = XContentHelper.convertToMap(BytesReference.bytes(policyBuilder), false, XContentType.JSON).v2();
+
+            // Conditional write: only backfill if the container still has no retention_policy key.
+            // A present key (even with a null value, i.e. an explicit opt-out) means a user write
+            // happened concurrently and takes precedence, so the update becomes a noop.
+            String scriptSource = "Map cfg = (Map) ctx._source.get(params.configField);"
+                + " if (cfg == null || cfg.containsKey(params.policyField)) { ctx.op = 'noop'; }"
+                + " else { cfg.put(params.policyField, params.policy); }";
+            Map<String, Object> scriptParams = Map
+                .of("configField", MEMORY_STORAGE_CONFIG_FIELD, "policyField", RETENTION_POLICY_FIELD, "policy", policyMap);
 
             UpdateRequest updateRequest = new UpdateRequest(ML_MEMORY_CONTAINER_INDEX, containerId)
-                .doc(Map.of(MEMORY_STORAGE_CONFIG_FIELD, XContentHelper.convertToMap(BytesReference.bytes(policyBuilder), false, XContentType.JSON).v2()))
+                .script(new Script(ScriptType.INLINE, "painless", scriptSource, scriptParams))
                 .retryOnConflict(3);
 
             try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
                 client.update(updateRequest, ActionListener.wrap(response -> {
+                    if (response.getResult() == DocWriteResponse.Result.NOOP) {
+                        log.debug("Container [{}] retention policy was set concurrently by a user; skipping default backfill", containerId);
+                        listener.onResponse(false);
+                        return;
+                    }
                     log.debug("Successfully persisted default retention policy on container [{}]", containerId);
-                    listener.onResponse(null);
+                    listener.onResponse(true);
                 }, e -> {
-                    log.warn("Failed to persist default retention policy on container [{}], proceeding with in-memory defaults", containerId, e);
-                    listener.onResponse(null);
+                    if (ExceptionsHelper.unwrapCause(e) instanceof VersionConflictEngineException) {
+                        log
+                            .debug(
+                                "Conflict persisting default retention policy on container [{}]; user's policy takes precedence",
+                                containerId,
+                                e
+                            );
+                    } else {
+                        log
+                            .warn(
+                                "Failed to persist default retention policy on container [{}], skipping retention for this run",
+                                containerId,
+                                e
+                            );
+                    }
+                    listener.onResponse(false);
                 }));
             }
         } catch (Exception e) {
-            log.warn("Failed to build default retention policy for container [{}], proceeding with in-memory defaults", containerId, e);
-            listener.onResponse(null);
+            log.warn("Failed to build default retention policy for container [{}], skipping retention for this run", containerId, e);
+            listener.onResponse(false);
         }
     }
 
@@ -387,6 +490,10 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         SearchRequest request = new SearchRequest(sessionIndex);
         request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
 
+        // NOTE: legacy sessions written before the epoch-millis fix stored last_updated_time as epoch
+        // SECONDS, which always satisfies lt(cutoffMillis) and would make every pre-upgrade session look
+        // expired. The query therefore only pre-filters candidates; each hit's timestamp is fetched and
+        // re-verified client-side via normalizeTimestamp() before the session is marked expired.
         BoolQueryBuilder query = QueryBuilders
             .boolQuery()
             .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
@@ -397,31 +504,134 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             .query(query)
             .size(CONTAINER_PAGE_SIZE)
             .sort("_id", SortOrder.ASC)
-            .fetchSource(false);
+            .fetchSource(new String[] { LAST_UPDATED_TIME_FIELD }, null);
 
         request.source(sourceBuilder);
 
         Set<String> expiredIds = new HashSet<>();
-        searchAllPages(request, expiredIds, listener);
+        searchAllPages(request, containerId, cutoffMillis, new AtomicBoolean(false), expiredIds, listener);
     }
 
-    private void searchAllPages(SearchRequest request, Set<String> accumulator, ActionListener<Set<String>> listener) {
+    private void searchAllPages(
+        SearchRequest request,
+        String containerId,
+        long cutoffMillis,
+        AtomicBoolean epochSecondWarned,
+        Set<String> accumulator,
+        ActionListener<Set<String>> listener
+    ) {
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
             client.search(request, ActionListener.wrap(response -> {
                 SearchHit[] hits = response.getHits().getHits();
                 for (SearchHit hit : hits) {
-                    accumulator.add(hit.getId());
+                    if (isSessionExpired(hit, containerId, cutoffMillis, epochSecondWarned)) {
+                        accumulator.add(hit.getId());
+                    }
                 }
 
                 if (hits.length == CONTAINER_PAGE_SIZE) {
                     Object[] sortValues = hits[hits.length - 1].getSortValues();
                     request.source().searchAfter(sortValues);
-                    searchAllPages(request, accumulator, listener);
+                    searchAllPages(request, containerId, cutoffMillis, epochSecondWarned, accumulator, listener);
                 } else {
                     listener.onResponse(accumulator);
                 }
             }, listener::onFailure));
         }
+    }
+
+    /**
+     * Re-verifies a session hit against the retention cutoff using a normalized (epoch-millis)
+     * timestamp. Legacy documents that stored last_updated_time in epoch seconds match the range
+     * query unconditionally, so this client-side check is what prevents pre-upgrade sessions from
+     * being mass-evicted. If the timestamp cannot be read from the hit source, the session is
+     * SKIPPED (not deleted) to avoid data loss from unparseable metadata.
+     */
+    private boolean isSessionExpired(SearchHit hit, String containerId, long cutoffMillis, AtomicBoolean epochSecondWarned) {
+        Long lastUpdated = extractTimestamp(hit, LAST_UPDATED_TIME_FIELD);
+        if (lastUpdated == null) {
+            log
+                .warn(
+                    "[MemoryRetentionJob] container={} session={} has unparseable/missing last_updated_time; skipping",
+                    containerId,
+                    hit.getId()
+                );
+            return false;
+        }
+
+        long normalized = normalizeTimestamp(lastUpdated);
+        if (normalized != lastUpdated && epochSecondWarned.compareAndSet(false, true)) {
+            log
+                .warn(
+                    "[MemoryRetentionJob] container={} detected epoch-second timestamp on session {},"
+                        + " converting to millis for comparison. Consider running timestamp migration.",
+                    containerId,
+                    hit.getId()
+                );
+        }
+        return normalized < cutoffMillis;
+    }
+
+    /**
+     * Extracts a timestamp field from a hit's source, tolerating the numeric types the source map
+     * may deserialize to (Integer, Long, Double) as well as numeric strings. Returns {@code null}
+     * when the source or field is unavailable.
+     */
+    private static Long extractTimestamp(SearchHit hit, String field) {
+        Map<String, Object> source = hit.getSourceAsMap();
+        if (source == null) {
+            return null;
+        }
+        Object value = source.get(field);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Long.parseLong((String) value);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Normalizes a stored timestamp to epoch milliseconds. Legacy documents (written before
+     * TransportCreateMemorySessionAction switched to toEpochMilli()) stored timestamps in epoch
+     * SECONDS; comparing those against System.currentTimeMillis() makes them look like January 1970
+     * and would evict all pre-upgrade data on the first job run. Any value below
+     * {@link #EPOCH_SECOND_DETECTION_THRESHOLD} is assumed to be epoch seconds and converted.
+     *
+     * @param timestamp a stored created_time / last_updated_time value (epoch seconds or millis)
+     * @return the timestamp in epoch milliseconds
+     */
+    private static long normalizeTimestamp(long timestamp) {
+        if (timestamp > 0 && timestamp < EPOCH_SECOND_DETECTION_THRESHOLD) {
+            return timestamp * 1000;
+        }
+        return timestamp;
+    }
+
+    /**
+     * Builds an "expired before cutoff" query that applies the {@link #normalizeTimestamp(long)}
+     * heuristic at the query level, for delete-by-query paths where per-document client-side
+     * normalization is not possible. A document is expired when either:
+     * <ul>
+     *   <li>epoch-millis scale ({@code >= EPOCH_SECOND_DETECTION_THRESHOLD}) and {@code < cutoffMillis}, or</li>
+     *   <li>legacy epoch-seconds scale ({@code < EPOCH_SECOND_DETECTION_THRESHOLD}) and
+     *       {@code value * 1000 < cutoffMillis}, i.e. {@code value < cutoffMillis / 1000}.</li>
+     * </ul>
+     * A plain {@code lt(cutoffMillis)} range would match every legacy epoch-second document and
+     * mass-delete pre-upgrade data.
+     */
+    private static BoolQueryBuilder buildEpochAwareCutoffQuery(String timeField, long cutoffMillis) {
+        long secondsScaleCutoff = Math.min(cutoffMillis / 1000, EPOCH_SECOND_DETECTION_THRESHOLD);
+        return QueryBuilders
+            .boolQuery()
+            .should(QueryBuilders.rangeQuery(timeField).gte(EPOCH_SECOND_DETECTION_THRESHOLD).lt(cutoffMillis))
+            .should(QueryBuilders.rangeQuery(timeField).lt(secondsScaleCutoff))
+            .minimumShouldMatch(1);
     }
 
     private void identifyCountBasedExpiredSessions(
@@ -434,8 +644,8 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         // Check if pinned count alone exceeds max_count (fire-and-forget warning)
         checkPinnedExceedsMaxCount(sessionIndex, containerId, "sessions", maxCount);
 
-        // Walk sessions sorted by last_updated_time DESC (newest first).
-        // Skip the first maxCount sessions; collect the rest as expired.
+        // Walk sessions sorted by created_time DESC (newest first). max_count is a cap on total
+        // sessions by creation order; retention_days handles activity-based eviction separately.
         Set<String> expiredIds = new HashSet<>();
         identifyCountBasedPage(containerId, sessionIndex, maxCount, expiredIds, 0, null, listener);
     }
@@ -575,15 +785,17 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
 
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
-            client
-                .bulk(
-                    bulkRequest,
-                    ActionListener
-                        .wrap(
-                            bulkResponse -> deleteSessionBatch(config, sessionIndex, batches, batchIndex + 1, listener),
-                            listener::onFailure
-                        )
-                );
+            client.bulk(bulkRequest, ActionListener.wrap(bulkResponse -> {
+                if (bulkResponse.hasFailures()) {
+                    String failureMsg = bulkResponse.buildFailureMessage();
+                    log
+                        .warn(
+                            "[MemoryRetentionJob] Partial session delete failures: {}",
+                            failureMsg.length() > 500 ? failureMsg.substring(0, 500) + "..." : failureMsg
+                        );
+                }
+                deleteSessionBatch(config, sessionIndex, batches, batchIndex + 1, listener);
+            }, listener::onFailure));
         }
     }
 
@@ -631,12 +843,14 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(longTermIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+        // Epoch-aware cutoff: legacy docs store last_updated_time in epoch seconds and would all
+        // match a plain lt(cutoffMillis) range. See normalizeTimestamp().
         dbq
             .setQuery(
                 QueryBuilders
                     .boolQuery()
                     .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
-                    .must(QueryBuilders.rangeQuery(LAST_UPDATED_TIME_FIELD).lt(cutoffMillis))
+                    .must(buildEpochAwareCutoffQuery(LAST_UPDATED_TIME_FIELD, cutoffMillis))
                     .mustNot(QueryBuilders.termQuery(PINNED_FIELD, true))
             );
         dbq.setRefresh(true);
@@ -769,21 +983,18 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
 
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
-            client
-                .bulk(
-                    bulkRequest,
-                    ActionListener
-                        .wrap(
-                            bulkResponse -> deleteDocumentsBatchRecursive(
-                                index,
-                                batches,
-                                batchIndex + 1,
-                                totalDeleted + batch.size(),
-                                listener
-                            ),
-                            listener::onFailure
-                        )
-                );
+            client.bulk(bulkRequest, ActionListener.wrap(bulkResponse -> {
+                long batchDeleted = Arrays.stream(bulkResponse.getItems()).filter(i -> !i.isFailed()).count();
+                if (bulkResponse.hasFailures()) {
+                    String failureMsg = bulkResponse.buildFailureMessage();
+                    log
+                        .warn(
+                            "[MemoryRetentionJob] Partial bulk delete failures: {}",
+                            failureMsg.length() > 500 ? failureMsg.substring(0, 500) + "..." : failureMsg
+                        );
+                }
+                deleteDocumentsBatchRecursive(index, batches, batchIndex + 1, totalDeleted + batchDeleted, listener);
+            }, listener::onFailure));
         }
     }
 
@@ -862,17 +1073,19 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             return;
         }
 
-        int ttlDays = ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS.get(clusterService.getSettings());
+        int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
         long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(ttlDays);
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+        // Epoch-aware cutoff: legacy docs store created_time in epoch seconds and would all match
+        // a plain lt(cutoffMillis) range. See normalizeTimestamp().
         dbq
             .setQuery(
                 QueryBuilders
                     .boolQuery()
                     .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
-                    .must(QueryBuilders.rangeQuery(CREATED_TIME_FIELD).lt(cutoffMillis))
+                    .must(buildEpochAwareCutoffQuery(CREATED_TIME_FIELD, cutoffMillis))
             );
         dbq.setRefresh(true);
 
@@ -983,15 +1196,44 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
             XContentBuilder xContentBuilder = XContentFactory.jsonBuilder().map(configMap);
             BytesReference bytes = BytesReference.bytes(xContentBuilder);
-            XContentParser parser = XContentHelper
-                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, bytes, XContentType.JSON);
-            parser.nextToken();
-            MemoryConfiguration config = MemoryConfiguration.parse(parser);
+            MemoryConfiguration config;
+            try (
+                XContentParser parser = XContentHelper
+                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, bytes, XContentType.JSON)
+            ) {
+                parser.nextToken();
+                config = MemoryConfiguration.parse(parser);
+            }
 
             String workingIndex = config.getIndexName(MemoryType.WORKING);
             String sessionsIndex = config.getIndexName(MemoryType.SESSIONS);
 
             if (workingIndex == null || sessionsIndex == null) {
+                processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+                return;
+            }
+
+            // Safety check: if the working memory index doesn't exist there is nothing to sweep,
+            // and if the sessions index doesn't exist the sweep would classify ALL working memory
+            // as orphaned and delete it. Skip the sweep in either case.
+            if (!clusterService.state().metadata().hasIndex(workingIndex)) {
+                log
+                    .debug(
+                        "[MemoryRetentionJob] Skipping orphan sweep for container={}: working memory index {} does not exist",
+                        containerId,
+                        workingIndex
+                    );
+                processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+                return;
+            }
+
+            if (!clusterService.state().metadata().hasIndex(sessionsIndex)) {
+                log
+                    .debug(
+                        "[MemoryRetentionJob] Skipping orphan sweep for container={}: sessions index {} does not exist",
+                        containerId,
+                        sessionsIndex
+                    );
                 processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
                 return;
             }
@@ -1022,10 +1264,10 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         Set<String> sessionIds = new HashSet<>();
         enumerateSessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, null, ActionListener.wrap(collectedIds -> {
             ActionListener<Long> afterOrphans = ActionListener.wrap(orphansDeleted -> {
-                deleteNullSessionWorkingMemory(containerId, workingIndex, ActionListener.wrap(nullDeleted -> {
+                deleteEmptyNamespaceWorkingMemory(containerId, workingIndex, ActionListener.wrap(nullDeleted -> {
                     log
                         .info(
-                            "[MemoryRetentionJob] container={} orphans_deleted={} null_session_deleted={}",
+                            "[MemoryRetentionJob] container={} orphans_deleted={} empty_namespace_deleted={}",
                             containerId,
                             orphansDeleted,
                             nullDeleted
@@ -1153,9 +1395,24 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder().query(query).size(batch.size()).fetchSource(false);
 
         request.source(sourceBuilder);
+        request.allowPartialSearchResults(false);
 
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
             client.search(request, ActionListener.wrap(response -> {
+                if (response.getFailedShards() > 0 || response.isTimedOut()) {
+                    listener
+                        .onFailure(
+                            new IllegalStateException(
+                                "Orphan check for container ["
+                                    + containerId
+                                    + "] had "
+                                    + response.getFailedShards()
+                                    + " failed shards or timed out; skipping to avoid incorrect deletions"
+                            )
+                        );
+                    return;
+                }
+
                 Set<String> existingIds = new HashSet<>();
                 for (SearchHit hit : response.getHits().getHits()) {
                     existingIds.add(hit.getId());
@@ -1216,19 +1473,23 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
     }
 
-    private void deleteNullSessionWorkingMemory(String containerId, String workingIndex, ActionListener<Long> listener) {
-        int orphanTtlDays = ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS.get(clusterService.getSettings());
+    private void deleteEmptyNamespaceWorkingMemory(String containerId, String workingIndex, ActionListener<Long> listener) {
+        int orphanTtlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS);
         long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(orphanTtlDays);
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+        // Epoch-aware cutoff: legacy docs store created_time in epoch seconds and would all match
+        // a plain lt(cutoffMillis) range. See normalizeTimestamp().
         dbq
             .setQuery(
                 QueryBuilders
                     .boolQuery()
                     .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
                     .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
-                    .must(QueryBuilders.rangeQuery(CREATED_TIME_FIELD).lt(cutoffMillis))
+                    .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + USER_ID_FIELD))
+                    .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + AGENT_ID_FIELD))
+                    .must(buildEpochAwareCutoffQuery(CREATED_TIME_FIELD, cutoffMillis))
             );
         dbq.setRefresh(true);
 
@@ -1240,6 +1501,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     }
 
     private void onJobComplete() {
+        isRunning.set(false);
         log.info("Memory retention job completed");
     }
 

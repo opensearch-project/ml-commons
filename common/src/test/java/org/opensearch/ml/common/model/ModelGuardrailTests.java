@@ -20,7 +20,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchModule;
