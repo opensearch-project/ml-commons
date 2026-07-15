@@ -223,7 +223,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         String clientBusinessPrompt = params.get(SYSTEM_PROMPT_FIELD);
 
-        if (clientBusinessPrompt != null && !clientBusinessPrompt.isEmpty()) { // Replace the whole prompt if client specifies system prompt template
+        if (clientBusinessPrompt != null && !clientBusinessPrompt.isEmpty()) { // Replace the whole prompt if client specifies system prompt
+                                                                               // template
             params.put(SYSTEM_PROMPT_FIELD, clientBusinessPrompt);
         } else { // Using the default system prompt template if client does not specify.
             params.put(SYSTEM_PROMPT_FIELD, DEFAULT_PLANNER_SYSTEM_PROMPT);
@@ -233,20 +234,24 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String importantRulesExpand = params.get(IMPORTANT_RULES_EXPAND);
         String plannerSystemPromptPrefix = params.get(PLANNER_SYSTEM_PROMPT_PREFIX);
 
-        // Append / mutate the system prompt through these 3 parameters: plannerSystemPromptPrefix, resultExpandOverride and importantRulesExpand
+        // Append / mutate the system prompt through these 3 parameters: plannerSystemPromptPrefix, resultExpandOverride and
+        // importantRulesExpand
         boolean hasPlannerSystemPromptPrefix = plannerSystemPromptPrefix != null && !plannerSystemPromptPrefix.isEmpty();
         boolean hasResultExpandOverride = resultExpandOverride != null && !resultExpandOverride.isEmpty();
         boolean hasImportantRulesExpand = importantRulesExpand != null && !importantRulesExpand.isEmpty();
         long providedCount = (hasPlannerSystemPromptPrefix ? 1 : 0) + (hasResultExpandOverride ? 1 : 0) + (hasImportantRulesExpand ? 1 : 0);
         if (providedCount > 0 && providedCount < 3) {
-            log.warn(
-                "Partial prompt customization params provided (missing: {}{}{}). All 3 params [planner_system_prompt_prefix, result_expand_and_override, important_rules_expand] must be set together. Using defaults for missing params.",
-                hasPlannerSystemPromptPrefix ? "" : "planner_system_prompt_prefix ",
-                hasResultExpandOverride ? "" : "result_expand_and_override ",
-                hasImportantRulesExpand ? "" : "important_rules_expand"
-            );
+            log
+                .warn(
+                    "Partial prompt customization params provided (missing: {}{}{}). All 3 params [planner_system_prompt_prefix, result_expand_and_override, important_rules_expand] must be set together. Using defaults for missing params.",
+                    hasPlannerSystemPromptPrefix ? "" : "planner_system_prompt_prefix ",
+                    hasResultExpandOverride ? "" : "result_expand_and_override ",
+                    hasImportantRulesExpand ? "" : "important_rules_expand"
+                );
             StringBuilder stringBuilder = new StringBuilder();
-            stringBuilder.append(hasPlannerSystemPromptPrefix ? plannerSystemPromptPrefix : DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX).append("\n");
+            stringBuilder
+                .append(hasPlannerSystemPromptPrefix ? plannerSystemPromptPrefix : DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX)
+                .append("\n");
             stringBuilder.append(getCorePlanningInstructions()).append("\n");
             stringBuilder.append(getPlanExecuteReflectResponseFormat(resultExpandOverride, importantRulesExpand));
             String finalPlannerPrompt = stringBuilder.toString();
@@ -342,10 +347,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         allParams.putAll(mlAgent.getParameters());
         allParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         log.debug("MLPlanExecuteAndReflectAgentRunner called with allParams: {}", allParams);
-
-        boolean injectDate = Boolean.parseBoolean(allParams.getOrDefault(INJECT_DATETIME_FIELD, "false"));
-        String dateFormat = allParams.get(DATETIME_FORMAT_FIELD);
-        String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
 
         setupPromptParameters(allParams);
 

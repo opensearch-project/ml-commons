@@ -65,7 +65,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.MLTaskUtils;
 import org.opensearch.ml.engine.MLStaticMockBase;
-import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
