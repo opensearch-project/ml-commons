@@ -41,6 +41,7 @@ jobs:
   Build-ml-linux:
     needs: [Get-Require-Approval, Get-CI-Image-Tag, spotless]
     strategy:
+      fail-fast: false
       matrix:
         java: [21, 25]
 
@@ -107,6 +108,7 @@ jobs:
   Test-ml-linux-docker:
     needs: [Get-Require-Approval, Build-ml-linux, spotless]
     strategy:
+      fail-fast: false
       matrix:
         java: [21, 25]
 
@@ -203,6 +205,7 @@ jobs:
 
   Build-ml-windows:
     strategy:
+      fail-fast: false
       matrix:
         java: [21, 25]
     name: Build and Test MLCommons Plugin on Windows

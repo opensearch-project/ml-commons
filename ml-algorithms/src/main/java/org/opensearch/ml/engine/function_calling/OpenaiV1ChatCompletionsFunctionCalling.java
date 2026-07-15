@@ -164,4 +164,9 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
             return null;
         }
     }
+
+    @Override
+    public boolean supportsStrictSchema() {
+        return true; // OpenAI supports strict schema enforcement via "strict": true
+    }
 }
