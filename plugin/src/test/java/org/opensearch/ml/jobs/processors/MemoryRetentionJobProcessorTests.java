@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -56,6 +57,8 @@ import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.search.DocValueFormat;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.Aggregations;
+import org.opensearch.search.aggregations.bucket.composite.CompositeAggregation;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -364,18 +367,23 @@ public class MemoryRetentionJobProcessorTests {
                     when(pinnedResp.getHits()).thenReturn(pinnedHits);
                     listener.onResponse(pinnedResp);
                 } else if (searchNum == 1) {
-                    // Count-based identification: returns 10 sessions sorted by last_updated_time DESC
-                    // First 5 are kept, last 5 are expired
-                    SearchHit[] hits = new SearchHit[10];
-                    for (int i = 0; i < 10; i++) {
+                    // Count query: return totalHits=10 (exceeds max_count=5)
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(10, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else if (searchNum == 2) {
+                    // Search for oldest 5 excess sessions by created_time ASC
+                    SearchHit[] hits = new SearchHit[5];
+                    for (int i = 0; i < 5; i++) {
                         hits[i] = new SearchHit(i, "session-" + i, null, null);
                         hits[i]
                             .sortValues(
-                                new Object[] { (long) (10 - i), "session-" + i },
+                                new Object[] { (long) i, "session-" + i },
                                 new DocValueFormat[] { DocValueFormat.RAW, DocValueFormat.RAW }
                             );
                     }
-                    SearchHits sessionHits = new SearchHits(hits, new TotalHits(10, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    SearchHits sessionHits = new SearchHits(hits, new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
                     SearchResponse sessionResponse = mock(SearchResponse.class);
                     when(sessionResponse.getHits()).thenReturn(sessionHits);
                     listener.onResponse(sessionResponse);
@@ -412,6 +420,57 @@ public class MemoryRetentionJobProcessorTests {
         // Verify cascade delete + bulk delete both called
         verify(client, atLeastOnce()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
         verify(client, atLeastOnce()).bulk(any(BulkRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testSessionMaxCountShortCircuitsWhenUnderLimit() {
+        // max_count=5, only 3 non-pinned sessions -> count query short-circuits: no ID search, no deletes
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            "container-count-under",
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", null, 5)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger sessionSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                int searchNum = sessionSearchCount.getAndIncrement();
+                if (searchNum == 0) {
+                    // Pinned count check (fire-and-forget): return 0 pinned docs
+                    SearchResponse pinnedResp = mock(SearchResponse.class);
+                    SearchHits pinnedHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(pinnedResp.getHits()).thenReturn(pinnedHits);
+                    listener.onResponse(pinnedResp);
+                } else {
+                    // Count query: return totalHits=3 (under max_count=5)
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(3, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // Only the pinned check and the count query should have hit the session index
+        assertTrue("Only pinned check + count query should fire when under max_count", sessionSearchCount.get() == 2);
+        // No deletions since totalCount (3) <= max_count (5)
+        verify(client, never()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+        verify(client, never()).bulk(any(BulkRequest.class), isA(ActionListener.class));
     }
 
     @Test
@@ -696,6 +755,108 @@ public class MemoryRetentionJobProcessorTests {
 
         // Verify that we searched at least twice (once for each container's sessions)
         assertTrue("Both containers should be processed, second container search made", sessionSearchCount.get() >= 2);
+        // Neither container deleted anything (first failed, second had no expired data) -> no throttle
+        verify(threadPool, never()).schedule(any(Runnable.class), any(TimeValue.class), anyString());
+    }
+
+    @Test
+    public void testNoOpContainerSkipsThrottle() {
+        // Container with a policy but no expired data -> no deletions -> no inter-container throttle
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            "container-noop",
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", 7, null)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                // No expired sessions found
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // Job still advances to the next step (orphan sweep container search) without any throttle
+        assertTrue("Job should proceed past the no-op container", containerSearchCount.get() >= 2);
+        verify(threadPool, never()).schedule(any(Runnable.class), any(TimeValue.class), anyString());
+    }
+
+    @Test
+    public void testContainerWithDeletionsSchedulesThrottle() {
+        // Container with expired sessions -> deletions occur -> throttle scheduled before next container
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            "container-throttled",
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", 7, null)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                SearchHit expiredHit = createHitWithSource("expired-session-1", Map.of("last_updated_time", oldTimestamp));
+                SearchHits sessionHits = new SearchHits(
+                    new SearchHit[] { expiredHit },
+                    new TotalHits(1, TotalHits.Relation.EQUAL_TO),
+                    Float.NaN
+                );
+                SearchResponse sessionResponse = mock(SearchResponse.class);
+                when(sessionResponse.getHits()).thenReturn(sessionHits);
+                listener.onResponse(sessionResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // Mock cascade delete for working memory
+        BulkByScrollResponse cascadeResponse = mock(BulkByScrollResponse.class);
+        when(cascadeResponse.getDeleted()).thenReturn(2L);
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(cascadeResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        // Mock bulk delete for sessions
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(BulkRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // Throttle (retention_job_throttle_seconds=1) is scheduled after the container with deletions
+        verify(threadPool, atLeastOnce()).schedule(any(Runnable.class), eq(TimeValue.timeValueSeconds(1)), anyString());
     }
 
     @Test
@@ -1576,6 +1737,167 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
+    public void testOrphanEnumerationUsesCompositeAggregation() {
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-agg", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        AtomicInteger compositeAggSearchCount = new AtomicInteger(0);
+        boolean[] inOrphanPhase = { false };
+
+        CompositeAggregation.Bucket bucket = mock(CompositeAggregation.Bucket.class);
+        when(bucket.getKey()).thenReturn(Map.of("session_id", "session-gone"));
+        CompositeAggregation composite = mock(CompositeAggregation.class);
+        when(composite.getName()).thenReturn("session_ids");
+        doReturn(java.util.List.of(bucket)).when(composite).getBuckets();
+        when(composite.afterKey()).thenReturn(null);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else if (count == 1) {
+                    inOrphanPhase[0] = true;
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                String targetIndex = request.indices()[0];
+
+                if (!inOrphanPhase[0]) {
+                    if (request.source() != null && request.source().size() == 0) {
+                        SearchResponse countResp = mock(SearchResponse.class);
+                        SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                        when(countResp.getHits()).thenReturn(countHits);
+                        listener.onResponse(countResp);
+                    } else {
+                        listener.onResponse(emptySearchResponse());
+                    }
+                } else if (targetIndex.contains("working") && request.source() != null && request.source().aggregations() != null) {
+                    compositeAggSearchCount.incrementAndGet();
+                    SearchResponse aggResponse = mock(SearchResponse.class);
+                    when(aggResponse.getAggregations()).thenReturn(new Aggregations(java.util.List.of(composite)));
+                    listener.onResponse(aggResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse orphanDeleteResponse = mock(BulkByScrollResponse.class);
+        when(orphanDeleteResponse.getDeleted()).thenReturn(1L);
+
+        AtomicInteger dbqCount = new AtomicInteger(0);
+        java.util.List<String> dbqQueries = new java.util.ArrayList<>();
+
+        doAnswer(invocation -> {
+            dbqCount.incrementAndGet();
+            DeleteByQueryRequest dbq = invocation.getArgument(1);
+            dbqQueries.add(dbq.getSearchRequest().source().query().toString());
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(orphanDeleteResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Orphan enumeration should use a composite aggregation search", compositeAggSearchCount.get() >= 1);
+        assertTrue("Orphan delete and empty-namespace DBQ should fire", dbqCount.get() >= 2);
+        assertTrue(
+            "Orphan DBQ should match the aggregated session id on the top-level session_id field",
+            dbqQueries.stream().anyMatch(q -> q.contains("session-gone") && q.contains("\"session_id\""))
+        );
+    }
+
+    @Test
+    public void testOrphanEnumerationStartsAtRandomKeyAndWrapsAround() {
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-random-start", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        boolean[] inOrphanPhase = { false };
+        java.util.List<String> compositeAggSources = new java.util.ArrayList<>();
+
+        CompositeAggregation.Bucket bucket = mock(CompositeAggregation.Bucket.class);
+        when(bucket.getKey()).thenReturn(Map.of("session_id", "session-gone"));
+        CompositeAggregation composite = mock(CompositeAggregation.class);
+        when(composite.getName()).thenReturn("session_ids");
+        doReturn(java.util.List.of(bucket)).when(composite).getBuckets();
+        when(composite.afterKey()).thenReturn(null);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else if (count == 1) {
+                    inOrphanPhase[0] = true;
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                String targetIndex = request.indices()[0];
+
+                if (!inOrphanPhase[0]) {
+                    if (request.source() != null && request.source().size() == 0) {
+                        SearchResponse countResp = mock(SearchResponse.class);
+                        SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                        when(countResp.getHits()).thenReturn(countHits);
+                        listener.onResponse(countResp);
+                    } else {
+                        listener.onResponse(emptySearchResponse());
+                    }
+                } else if (targetIndex.contains("working") && request.source() != null && request.source().aggregations() != null) {
+                    compositeAggSources.add(request.source().toString());
+                    SearchResponse aggResponse = mock(SearchResponse.class);
+                    when(aggResponse.getAggregations()).thenReturn(new Aggregations(java.util.List.of(composite)));
+                    listener.onResponse(aggResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse orphanDeleteResponse = mock(BulkByScrollResponse.class);
+        when(orphanDeleteResponse.getDeleted()).thenReturn(1L);
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(orphanDeleteResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Orphan enumeration should issue at least the initial composite search", compositeAggSources.size() >= 1);
+        assertTrue(
+            "First composite search must start from a randomized after key so cap truncation covers a different slice each run",
+            compositeAggSources.get(0).contains("\"after\"")
+        );
+        assertTrue(
+            "Enumeration must wrap around to the start of the keyspace after exhausting the first slice",
+            compositeAggSources.size() >= 2 && !compositeAggSources.get(compositeAggSources.size() - 1).contains("\"after\"")
+        );
+    }
+
+    @Test
     public void testNullSessionIdDeletedAfterGracePeriod() {
         Settings settings = Settings
             .builder()
@@ -2042,6 +2364,435 @@ public class MemoryRetentionJobProcessorTests {
         processor.run();
 
         assertTrue("Both retention and orphan sweep container searches should fire", containerSearchCount.get() >= 2);
+    }
+
+    @Test
+    public void testApplyDefaultRetentionPolicy_IssuesUpdateWhenDefaultsConfigured() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .put("plugins.ml_commons.memory.default_session_retention_days", 30)
+            .put("plugins.ml_commons.memory.default_session_max_count", 100)
+            .put("plugins.ml_commons.memory.default_long_term_max_count", 500)
+            .put("plugins.ml_commons.memory.default_history_max_count", -1)
+            .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
+            .put("plugins.ml_commons.memory.working_memory_ttl_days", 30)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<org.opensearch.common.settings.Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
+
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\",\"use_system_index\":true}}";
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-no-policy", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicBoolean updateCalled = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            updateCalled.set(true);
+            org.opensearch.action.update.UpdateRequest req = invocation.getArgument(0);
+            assertTrue("Update should use a script", req.script() != null);
+            assertTrue("Script should contain noop logic", req.script().getIdOrCode().contains("noop"));
+            ActionListener<org.opensearch.action.update.UpdateResponse> listener = invocation.getArgument(1);
+            org.opensearch.action.update.UpdateResponse resp = mock(org.opensearch.action.update.UpdateResponse.class);
+            when(resp.getResult()).thenReturn(org.opensearch.action.DocWriteResponse.Result.UPDATED);
+            listener.onResponse(resp);
+            return null;
+        }).when(client).update(any(org.opensearch.action.update.UpdateRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("client.update should be called to backfill default policy", updateCalled.get());
+    }
+
+    @Test
+    public void testApplyDefaultRetentionPolicy_NoopSkipsContainer() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .put("plugins.ml_commons.memory.default_session_retention_days", 30)
+            .put("plugins.ml_commons.memory.default_session_max_count", -1)
+            .put("plugins.ml_commons.memory.default_long_term_max_count", -1)
+            .put("plugins.ml_commons.memory.default_history_max_count", -1)
+            .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
+            .put("plugins.ml_commons.memory.working_memory_ttl_days", 30)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<org.opensearch.common.settings.Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
+
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\",\"use_system_index\":true}}";
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-no-policy-noop", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.update.UpdateResponse> listener = invocation.getArgument(1);
+            org.opensearch.action.update.UpdateResponse resp = mock(org.opensearch.action.update.UpdateResponse.class);
+            when(resp.getResult()).thenReturn(org.opensearch.action.DocWriteResponse.Result.NOOP);
+            listener.onResponse(resp);
+            return null;
+        }).when(client).update(any(org.opensearch.action.update.UpdateRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, never()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+        verify(client, never()).bulk(any(BulkRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testApplyDefaultRetentionPolicy_AllDefaultsMinusOne_NoUpdate() {
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\",\"use_system_index\":true}}";
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-all-minus-one", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, never()).update(any(org.opensearch.action.update.UpdateRequest.class), isA(ActionListener.class));
+        verify(client, never()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testEpochSecondNormalization_NewerTimestampNotDeleted() {
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            "container-epoch",
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", 7, null)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        java.util.List<String> deletedIds = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+        long nowMillis = System.currentTimeMillis();
+        long cutoffMillis = nowMillis - java.util.concurrent.TimeUnit.DAYS.toMillis(7);
+        long epochSecNewSession = (nowMillis - java.util.concurrent.TimeUnit.DAYS.toMillis(3)) / 1000;
+        long epochMillisOldSession = cutoffMillis - 10_000;
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                SearchHit hitNew = createHitWithSource("session-epoch-new", Map.of("last_updated_time", epochSecNewSession));
+                SearchHit hitOld = createHitWithSource("session-epoch-old", Map.of("last_updated_time", epochMillisOldSession));
+                SearchHit hitMissing = createHitWithSource("session-missing-ts", Map.of("other_field", "value"));
+                SearchHits sessionHits = new SearchHits(
+                    new SearchHit[] { hitNew, hitOld, hitMissing },
+                    new TotalHits(3, TotalHits.Relation.EQUAL_TO),
+                    Float.NaN
+                );
+                SearchResponse sessionResponse = mock(SearchResponse.class);
+                when(sessionResponse.getHits()).thenReturn(sessionHits);
+                listener.onResponse(sessionResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse cascadeResponse = mock(BulkByScrollResponse.class);
+        when(cascadeResponse.getDeleted()).thenReturn(1L);
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(cascadeResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            BulkRequest bulkReq = invocation.getArgument(0);
+            bulkReq.requests().forEach(r -> deletedIds.add(((org.opensearch.action.delete.DeleteRequest) r).id()));
+            BulkResponse bulkResponse = mock(BulkResponse.class);
+            lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+            lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(BulkRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("Epoch-second session newer than cutoff should NOT be deleted", !deletedIds.contains("session-epoch-new"));
+        assertTrue("Epoch-millis session older than cutoff SHOULD be deleted", deletedIds.contains("session-epoch-old"));
+        assertTrue("Session with missing timestamp should NOT be deleted", !deletedIds.contains("session-missing-ts"));
+    }
+
+    @Test
+    public void testBuildEpochAwareCutoffQuery_Structure() {
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"disable_session\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"retention_days\":7}}}}";
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-dbq-cutoff", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicReference<String> capturedQuery = new java.util.concurrent.atomic.AtomicReference<>();
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            DeleteByQueryRequest dbq = invocation.getArgument(1);
+            capturedQuery.set(dbq.getSearchRequest().source().query().toString());
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse resp = mock(BulkByScrollResponse.class);
+            when(resp.getDeleted()).thenReturn(0L);
+            listener.onResponse(resp);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        String query = capturedQuery.get();
+        assertTrue("Query must contain gte threshold clause", query != null && query.contains("10000000000"));
+        assertTrue("Query must contain minimum_should_match=1", query.contains("minimum_should_match") && query.contains("1"));
+        assertTrue("Query must have two should clauses for epoch-aware cutoff", query.contains("should"));
+    }
+
+    @Test
+    public void testDebugLogsSessionDeletionIds() {
+        org.apache.logging.log4j.core.LoggerContext context =
+            (org.apache.logging.log4j.core.LoggerContext) org.apache.logging.log4j.LogManager.getContext(false);
+        org.apache.logging.log4j.core.config.LoggerConfig loggerConfig = context
+            .getConfiguration()
+            .getLoggerConfig(MemoryRetentionJobProcessor.class.getName());
+        org.apache.logging.log4j.Level originalLevel = loggerConfig.getLevel();
+        loggerConfig.setLevel(org.apache.logging.log4j.Level.DEBUG);
+        context.updateLoggers();
+
+        java.util.List<String> capturedMessages = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        org.apache.logging.log4j.core.appender.AbstractAppender appender = new org.apache.logging.log4j.core.appender.AbstractAppender(
+            "test-debug-appender",
+            null,
+            org.apache.logging.log4j.core.layout.PatternLayout.createDefaultLayout(),
+            false
+        ) {
+            @Override
+            public void append(org.apache.logging.log4j.core.LogEvent event) {
+                capturedMessages.add(event.getLevel() + ": " + event.getMessage().getFormattedMessage());
+            }
+        };
+        appender.start();
+        loggerConfig.addAppender(appender, org.apache.logging.log4j.Level.DEBUG, null);
+        context.updateLoggers();
+
+        try {
+            SearchResponse containerSearchResponse = createContainerSearchResponse(
+                "container-debug",
+                "test-prefix",
+                true,
+                createRetentionPolicyMap("sessions", 7, null)
+            );
+
+            AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+            doAnswer(invocation -> {
+                SearchRequest request = invocation.getArgument(0);
+                ActionListener<SearchResponse> listener = invocation.getArgument(1);
+                if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                    if (containerSearchCount.getAndIncrement() == 0) {
+                        listener.onResponse(containerSearchResponse);
+                    } else {
+                        listener.onResponse(emptySearchResponse());
+                    }
+                } else {
+                    long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                    SearchHit hit1 = createHitWithSource("debug-session-1", Map.of("last_updated_time", oldTimestamp));
+                    SearchHit hit2 = createHitWithSource("debug-session-2", Map.of("last_updated_time", oldTimestamp));
+                    SearchHits sessionHits = new SearchHits(
+                        new SearchHit[] { hit1, hit2 },
+                        new TotalHits(2, TotalHits.Relation.EQUAL_TO),
+                        Float.NaN
+                    );
+                    SearchResponse sessionResponse = mock(SearchResponse.class);
+                    when(sessionResponse.getHits()).thenReturn(sessionHits);
+                    listener.onResponse(sessionResponse);
+                }
+                return null;
+            }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+            BulkByScrollResponse cascadeResponse = mock(BulkByScrollResponse.class);
+            when(cascadeResponse.getDeleted()).thenReturn(2L);
+            doAnswer(invocation -> {
+                ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+                listener.onResponse(cascadeResponse);
+                return null;
+            }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+            BulkResponse bulkResponse = mock(BulkResponse.class);
+            when(bulkResponse.hasFailures()).thenReturn(false);
+            when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+            doAnswer(invocation -> {
+                ActionListener<BulkResponse> listener = invocation.getArgument(1);
+                listener.onResponse(bulkResponse);
+                return null;
+            }).when(client).bulk(any(BulkRequest.class), isA(ActionListener.class));
+
+            processor.run();
+
+            boolean foundDebugIds = capturedMessages
+                .stream()
+                .anyMatch(m -> m.startsWith("DEBUG:") && m.contains("deleting session ids=") && m.contains("debug-session-1"));
+            assertTrue("DEBUG log should contain session IDs being deleted", foundDebugIds);
+
+            boolean foundInfoAggregate = capturedMessages.stream().anyMatch(m -> m.startsWith("INFO:") && m.contains("sessions_expired=2"));
+            assertTrue("INFO aggregate log should be unchanged", foundInfoAggregate);
+        } finally {
+            loggerConfig.removeAppender(appender.getName());
+            appender.stop();
+            loggerConfig.setLevel(originalLevel);
+            context.updateLoggers();
+        }
+    }
+
+    @Test
+    public void testRetentionPolicyNullOptOut_SkipsEverything() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .put("plugins.ml_commons.memory.default_session_retention_days", 30)
+            .put("plugins.ml_commons.memory.default_session_max_count", 100)
+            .put("plugins.ml_commons.memory.default_long_term_max_count", 500)
+            .put("plugins.ml_commons.memory.default_history_max_count", 200)
+            .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
+            .put("plugins.ml_commons.memory.working_memory_ttl_days", 30)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<org.opensearch.common.settings.Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
+
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\",\"use_system_index\":true,\"retention_policy\":null}}";
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-opt-out", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, never()).update(any(org.opensearch.action.update.UpdateRequest.class), isA(ActionListener.class));
+        verify(client, never()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+        verify(client, never()).bulk(any(BulkRequest.class), isA(ActionListener.class));
     }
 
     // --- Helper methods ---

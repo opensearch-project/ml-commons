@@ -738,14 +738,38 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructUpdateFields_UnknownType() {
-        // Test unknown memory type returns empty map
         Map<String, Object> updateContent = new HashMap<>();
         updateContent.put("field", "value");
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
         Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, null, new HashMap<>());
 
-        assertEquals(1, result.size()); // only last_updated_time is added for unknown types
+        assertEquals(0, result.size());
+        assertNull(result.get("last_updated_time"));
+    }
+
+    @Test
+    public void testNonContentUpdateDoesNotBumpLastUpdatedTime_Session() {
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("pinned", true);
+        updateContent.put("tags", Map.of("tag1", "value1"));
+        updateContent.put("metadata", Map.of("key", "val"));
+        updateContent.put("additional_info", Map.of("extra", "data"));
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, MemoryType.SESSIONS, new HashMap<>());
+
+        assertNull(result.get("last_updated_time"));
+    }
+
+    @Test
+    public void testContentUpdateDoesBumpLastUpdatedTime_Session() {
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("summary", "New summary");
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, MemoryType.SESSIONS, new HashMap<>());
+
         assertNotNull(result.get("last_updated_time"));
     }
 

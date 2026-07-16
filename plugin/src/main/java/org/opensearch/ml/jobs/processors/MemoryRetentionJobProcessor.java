@@ -33,6 +33,7 @@ import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -72,6 +73,9 @@ import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.bucket.composite.CompositeAggregation;
+import org.opensearch.search.aggregations.bucket.composite.CompositeAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.composite.TermsValuesSourceBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.threadpool.ThreadPool;
@@ -89,6 +93,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     private static final int ORPHAN_SESSION_ID_CAP = 50_000;
     private static final int ORPHAN_SESSION_BATCH_SIZE = 1000;
     private static final int ORPHAN_ENUMERATION_PAGE_SIZE = 1000;
+    private static final String SESSION_IDS_AGG_NAME = "session_ids";
+    private static final String ORPHAN_KEYSPACE_ALPHABET = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+    private static final int ORPHAN_START_KEY_LENGTH = 4;
 
     /**
      * Threshold for detecting legacy epoch-SECOND timestamps. Documents written before
@@ -204,9 +211,15 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             return;
         }
 
-        processContainer(hits[index], ActionListener.wrap(v -> scheduleNext(hits, index + 1, nextPageSortValues), e -> {
+        processContainer(hits[index], ActionListener.wrap(hadDeletions -> {
+            if (hadDeletions) {
+                scheduleNext(hits, index + 1, nextPageSortValues);
+            } else {
+                processContainerChain(hits, index + 1, nextPageSortValues);
+            }
+        }, e -> {
             log.error("Failed processing container [{}]", hits[index].getId(), e);
-            scheduleNext(hits, index + 1, nextPageSortValues);
+            processContainerChain(hits, index + 1, nextPageSortValues);
         }));
     }
 
@@ -225,7 +238,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
     }
 
-    private void processContainer(SearchHit hit, ActionListener<Void> listener) {
+    private void processContainer(SearchHit hit, ActionListener<Boolean> listener) {
         String containerId = hit.getId();
         try {
             Map<String, Object> source = hit.getSourceAsMap();
@@ -234,7 +247,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
             if (configMap == null) {
                 log.warn("Container [{}] has no configuration field, skipping", containerId);
-                listener.onResponse(null);
+                listener.onResponse(false);
                 return;
             }
 
@@ -253,14 +266,14 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             if (retentionPolicy == null || retentionPolicy.isEmpty()) {
                 if (config.isRetentionPolicyExplicitlyNull()) {
                     log.debug("Container [{}] explicitly opted out of retention, skipping", containerId);
-                    listener.onResponse(null);
+                    listener.onResponse(false);
                     return;
                 }
                 applyDefaultRetentionPolicy(config, containerId, ActionListener.wrap(persisted -> {
                     if (persisted) {
                         executeRetentionPipeline(config, containerId, listener);
                     } else {
-                        listener.onResponse(null);
+                        listener.onResponse(false);
                     }
                 }, listener::onFailure));
             } else {
@@ -268,25 +281,40 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             }
         } catch (Exception e) {
             log.error("Error parsing configuration for container [{}]", containerId, e);
-            listener.onResponse(null);
+            listener.onResponse(false);
         }
     }
 
-    private void executeRetentionPipeline(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
+    private void executeRetentionPipeline(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
         executeSessionRetention(
             config,
             containerId,
             ActionListener
                 .wrap(
-                    v -> executeLongTermRetention(
+                    sessionsDeleted -> executeLongTermRetention(
                         config,
                         containerId,
                         ActionListener
                             .wrap(
-                                v2 -> executeHistoryRetention(
+                                longTermDeleted -> executeHistoryRetention(
                                     config,
                                     containerId,
-                                    ActionListener.wrap(v3 -> executeWorkingMemoryTTL(config, containerId, listener), listener::onFailure)
+                                    ActionListener
+                                        .wrap(
+                                            historyDeleted -> executeWorkingMemoryTTL(
+                                                config,
+                                                containerId,
+                                                ActionListener
+                                                    .wrap(
+                                                        workingDeleted -> listener
+                                                            .onResponse(
+                                                                sessionsDeleted || longTermDeleted || historyDeleted || workingDeleted
+                                                            ),
+                                                        listener::onFailure
+                                                    )
+                                            ),
+                                            listener::onFailure
+                                        )
                                 ),
                                 listener::onFailure
                             )
@@ -405,30 +433,30 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
     }
 
-    private void executeSessionRetention(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
+    private void executeSessionRetention(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
         String sessionIndex = config.getIndexName(MemoryType.SESSIONS);
         if (sessionIndex == null) {
             log.debug("Session index is null for container [{}], skipping session retention", containerId);
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
         if (retentionPolicy == null || !retentionPolicy.containsKey(MemoryType.SESSIONS)) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         RetentionRule sessionRule = retentionPolicy.get(MemoryType.SESSIONS);
         if (sessionRule == null) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         identifyExpiredSessions(config, containerId, sessionIndex, sessionRule, ActionListener.wrap(expiredSessionIds -> {
             if (expiredSessionIds.isEmpty()) {
                 log.info("[MemoryRetentionJob] container={} sessions_expired=0", containerId);
-                listener.onResponse(null);
+                listener.onResponse(false);
                 return;
             }
 
@@ -439,7 +467,15 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 containerId,
                 expiredSessionIds,
                 ActionListener
-                    .wrap(deletedCount -> deleteSessionDocuments(config, sessionIndex, expiredSessionIds, listener), listener::onFailure)
+                    .wrap(
+                        deletedCount -> deleteSessionDocuments(
+                            config,
+                            sessionIndex,
+                            expiredSessionIds,
+                            ActionListener.wrap(v -> listener.onResponse(true), listener::onFailure)
+                        ),
+                        listener::onFailure
+                    )
             );
         }, listener::onFailure));
     }
@@ -634,6 +670,20 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             .minimumShouldMatch(1);
     }
 
+    /**
+     * Matches working-memory documents belonging to any of the given session IDs. Prefers the
+     * top-level {@code session_id} keyword field but also matches on the legacy
+     * {@code namespace.session_id} flat_object subpath for pre-upgrade documents that lack the
+     * top-level field.
+     */
+    private static BoolQueryBuilder buildSessionIdMatchQuery(List<String> sessionIds) {
+        return QueryBuilders
+            .boolQuery()
+            .should(QueryBuilders.termsQuery(SESSION_ID_FIELD, sessionIds))
+            .should(QueryBuilders.termsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD, sessionIds))
+            .minimumShouldMatch(1);
+    }
+
     private void identifyCountBasedExpiredSessions(
         MemoryConfiguration config,
         String containerId,
@@ -644,60 +694,29 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         // Check if pinned count alone exceeds max_count (fire-and-forget warning)
         checkPinnedExceedsMaxCount(sessionIndex, containerId, "sessions", maxCount);
 
-        // Walk sessions sorted by created_time DESC (newest first). max_count is a cap on total
-        // sessions by creation order; retention_days handles activity-based eviction separately.
-        Set<String> expiredIds = new HashSet<>();
-        identifyCountBasedPage(containerId, sessionIndex, maxCount, expiredIds, 0, null, listener);
-    }
+        // Step 1: count non-pinned sessions
+        SearchRequest countRequest = new SearchRequest(sessionIndex);
+        countRequest.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
 
-    private void identifyCountBasedPage(
-        String containerId,
-        String sessionIndex,
-        int maxCount,
-        Set<String> expiredIds,
-        int seenSoFar,
-        Object[] searchAfter,
-        ActionListener<Set<String>> listener
-    ) {
-        SearchRequest request = new SearchRequest(sessionIndex);
-        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
-
-        BoolQueryBuilder query = QueryBuilders
+        BoolQueryBuilder countQuery = QueryBuilders
             .boolQuery()
             .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
             .mustNot(QueryBuilders.termQuery(PINNED_FIELD, true));
 
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
-            .query(query)
-            .size(CONTAINER_PAGE_SIZE)
-            .sort(CREATED_TIME_FIELD, SortOrder.DESC)
-            .sort("_id", SortOrder.ASC)
-            .fetchSource(false);
-
-        if (searchAfter != null) {
-            sourceBuilder.searchAfter(searchAfter);
-        }
-
-        request.source(sourceBuilder);
+        SearchSourceBuilder countSource = new SearchSourceBuilder().query(countQuery).size(0).trackTotalHits(true);
+        countRequest.source(countSource);
 
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
-            client.search(request, ActionListener.wrap(response -> {
-                SearchHit[] hits = response.getHits().getHits();
-                int currentSeen = seenSoFar;
-
-                for (SearchHit hit : hits) {
-                    currentSeen++;
-                    if (currentSeen > maxCount) {
-                        expiredIds.add(hit.getId());
-                    }
+            client.search(countRequest, ActionListener.wrap(countResponse -> {
+                long totalCount = countResponse.getHits().getTotalHits().value();
+                if (totalCount <= maxCount) {
+                    listener.onResponse(new HashSet<>());
+                    return;
                 }
 
-                if (hits.length == CONTAINER_PAGE_SIZE) {
-                    Object[] nextSearchAfter = hits[hits.length - 1].getSortValues();
-                    identifyCountBasedPage(containerId, sessionIndex, maxCount, expiredIds, currentSeen, nextSearchAfter, listener);
-                } else {
-                    listener.onResponse(expiredIds);
-                }
+                int excess = (int) (totalCount - maxCount);
+                // Step 2: search for oldest excess sessions by created_time ASC
+                collectOldestDocIds(sessionIndex, containerId, CREATED_TIME_FIELD, excess, listener);
             }, listener::onFailure));
         }
     }
@@ -734,6 +753,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
 
         List<String> batch = batches.get(batchIndex);
+        if (log.isDebugEnabled()) {
+            log.debug("[MemoryRetentionJob] container={} cascade deleting working memory for session ids={}", containerId, batch);
+        }
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingMemoryIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
@@ -742,7 +764,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 QueryBuilders
                     .boolQuery()
                     .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
-                    .must(QueryBuilders.termsQuery(NAMESPACE_FIELD + ".session_id", batch))
+                    .must(buildSessionIdMatchQuery(batch))
             );
         dbq.setRefresh(true);
 
@@ -777,6 +799,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
 
         List<String> batch = batches.get(batchIndex);
+        if (log.isDebugEnabled()) {
+            log.debug("[MemoryRetentionJob] index={} deleting session ids={}", sessionIndex, batch);
+        }
         BulkRequest bulkRequest = new BulkRequest();
         bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -799,22 +824,22 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
     }
 
-    private void executeLongTermRetention(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
+    private void executeLongTermRetention(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
         String longTermIndex = config.getIndexName(MemoryType.LONG_TERM);
         if (longTermIndex == null) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
         if (retentionPolicy == null || !retentionPolicy.containsKey(MemoryType.LONG_TERM)) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         RetentionRule rule = retentionPolicy.get(MemoryType.LONG_TERM);
         if (rule == null) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
@@ -823,11 +848,12 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 executeLongTermMaxCount(longTermIndex, containerId, rule.getMaxCount(), ActionListener.wrap(countDeleted -> {
                     long total = (timeDeleted != null ? timeDeleted : 0L) + countDeleted;
                     log.info("[MemoryRetentionJob] container={} long_term_deleted={}", containerId, total);
-                    listener.onResponse(null);
+                    listener.onResponse(total > 0);
                 }, listener::onFailure));
             } else {
-                log.info("[MemoryRetentionJob] container={} long_term_deleted={}", containerId, timeDeleted != null ? timeDeleted : 0L);
-                listener.onResponse(null);
+                long total = timeDeleted != null ? timeDeleted : 0L;
+                log.info("[MemoryRetentionJob] container={} long_term_deleted={}", containerId, total);
+                listener.onResponse(total > 0);
             }
         }, listener::onFailure);
 
@@ -840,6 +866,13 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
     private void executeLongTermRetentionDays(String longTermIndex, String containerId, int retentionDays, ActionListener<Long> listener) {
         long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(retentionDays);
+        log
+            .debug(
+                "[MemoryRetentionJob] container={} long_term retention_days DBQ index={} cutoffMillis={}",
+                containerId,
+                longTermIndex,
+                cutoffMillis
+            );
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(longTermIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
@@ -975,6 +1008,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
 
         List<String> batch = batches.get(batchIndex);
+        if (log.isDebugEnabled()) {
+            log.debug("[MemoryRetentionJob] index={} deleting doc ids={}", index, batch);
+        }
         BulkRequest bulkRequest = new BulkRequest();
         bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -998,22 +1034,22 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
     }
 
-    private void executeHistoryRetention(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
+    private void executeHistoryRetention(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
         String historyIndex = config.getIndexName(MemoryType.HISTORY);
         if (historyIndex == null) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
         if (retentionPolicy == null || !retentionPolicy.containsKey(MemoryType.HISTORY)) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         RetentionRule rule = retentionPolicy.get(MemoryType.HISTORY);
         if (rule == null || rule.getMaxCount() == null) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
@@ -1039,7 +1075,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 long totalCount = countResponse.getHits().getTotalHits().value();
                 if (totalCount <= maxCount) {
                     log.info("[MemoryRetentionJob] container={} history_deleted=0", containerId);
-                    listener.onResponse(null);
+                    listener.onResponse(false);
                     return;
                 }
 
@@ -1048,33 +1084,40 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 collectOldestDocIds(historyIndex, containerId, CREATED_TIME_FIELD, excess, ActionListener.wrap(idsToDelete -> {
                     if (idsToDelete.isEmpty()) {
                         log.info("[MemoryRetentionJob] container={} history_deleted=0", containerId);
-                        listener.onResponse(null);
+                        listener.onResponse(false);
                         return;
                     }
                     // Step 3: bulk delete those IDs
                     deleteDocumentsBatch(historyIndex, new ArrayList<>(idsToDelete), ActionListener.wrap(deleted -> {
                         log.info("[MemoryRetentionJob] container={} history_deleted={}", containerId, deleted);
-                        listener.onResponse(null);
+                        listener.onResponse(deleted > 0);
                     }, listener::onFailure));
                 }, listener::onFailure));
             }, listener::onFailure));
         }
     }
 
-    private void executeWorkingMemoryTTL(MemoryConfiguration config, String containerId, ActionListener<Void> listener) {
+    private void executeWorkingMemoryTTL(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
         if (!config.isDisableSession()) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         String workingIndex = config.getIndexName(MemoryType.WORKING);
         if (workingIndex == null) {
-            listener.onResponse(null);
+            listener.onResponse(false);
             return;
         }
 
         int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
         long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(ttlDays);
+        log
+            .debug(
+                "[MemoryRetentionJob] container={} working_memory TTL DBQ index={} cutoffMillis={}",
+                containerId,
+                workingIndex,
+                cutoffMillis
+            );
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
@@ -1092,7 +1135,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
             client.execute(DeleteByQueryAction.INSTANCE, dbq, ActionListener.wrap((BulkByScrollResponse response) -> {
                 log.info("[MemoryRetentionJob] container={} working_memory_ttl_deleted={}", containerId, response.getDeleted());
-                listener.onResponse(null);
+                listener.onResponse(response.getDeleted() > 0);
             }, listener::onFailure));
         }
     }
@@ -1262,33 +1305,80 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         ActionListener<Void> listener
     ) {
         Set<String> sessionIds = new HashSet<>();
-        enumerateSessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, null, ActionListener.wrap(collectedIds -> {
-            ActionListener<Long> afterOrphans = ActionListener.wrap(orphansDeleted -> {
-                deleteEmptyNamespaceWorkingMemory(containerId, workingIndex, ActionListener.wrap(nullDeleted -> {
-                    log
-                        .info(
-                            "[MemoryRetentionJob] container={} orphans_deleted={} empty_namespace_deleted={}",
-                            containerId,
-                            orphansDeleted,
-                            nullDeleted
-                        );
-                    listener.onResponse(null);
-                }, listener::onFailure));
-            }, listener::onFailure);
+        String startKey = randomEnumerationStartKey();
+        enumerateSessionIdsFromWorkingMemory(
+            workingIndex,
+            containerId,
+            sessionIds,
+            Map.of(SESSION_ID_FIELD, startKey),
+            startKey,
+            false,
+            ActionListener
+                .wrap(
+                    aggregatedIds -> enumerateLegacySessionIdsFromWorkingMemory(
+                        workingIndex,
+                        containerId,
+                        aggregatedIds,
+                        new Object[] { startKey },
+                        startKey,
+                        false,
+                        ActionListener.wrap(collectedIds -> {
+                            ActionListener<Long> afterOrphans = ActionListener.wrap(orphansDeleted -> {
+                                deleteEmptyNamespaceWorkingMemory(containerId, workingIndex, ActionListener.wrap(nullDeleted -> {
+                                    log
+                                        .info(
+                                            "[MemoryRetentionJob] container={} orphans_deleted={} empty_namespace_deleted={}",
+                                            containerId,
+                                            orphansDeleted,
+                                            nullDeleted
+                                        );
+                                    listener.onResponse(null);
+                                }, listener::onFailure));
+                            }, listener::onFailure);
 
-            if (collectedIds.isEmpty()) {
-                afterOrphans.onResponse(0L);
-            } else {
-                checkAndDeleteOrphans(containerId, workingIndex, sessionsIndex, collectedIds, afterOrphans);
-            }
-        }, listener::onFailure));
+                            if (collectedIds.isEmpty()) {
+                                afterOrphans.onResponse(0L);
+                            } else {
+                                checkAndDeleteOrphans(containerId, workingIndex, sessionsIndex, collectedIds, afterOrphans);
+                            }
+                        }, listener::onFailure)
+                    ),
+                    listener::onFailure
+                )
+        );
     }
 
+    /**
+     * Generates a random keyspace position to start orphan enumeration from. Enumeration begins at
+     * this key, wraps around to the start of the keyspace once exhausted, and stops when it reaches
+     * the start key again. A single run still achieves full coverage when under the cap, but when
+     * ORPHAN_SESSION_ID_CAP truncates enumeration, each run truncates a different keyspace slice so
+     * all regions are probabilistically covered across runs.
+     */
+    private String randomEnumerationStartKey() {
+        Random random = new Random();
+        StringBuilder key = new StringBuilder(ORPHAN_START_KEY_LENGTH);
+        for (int i = 0; i < ORPHAN_START_KEY_LENGTH; i++) {
+            key.append(ORPHAN_KEYSPACE_ALPHABET.charAt(random.nextInt(ORPHAN_KEYSPACE_ALPHABET.length())));
+        }
+        return key.toString();
+    }
+
+    /**
+     * Enumerates distinct session IDs from working memory via a paged composite aggregation on the
+     * top-level {@code session_id} keyword field. Cost is proportional to the number of unique
+     * sessions rather than total documents. Pre-upgrade documents lack the top-level field (the
+     * {@code namespace} field is flat_object and cannot be aggregated) and are picked up separately
+     * by {@link #enumerateLegacySessionIdsFromWorkingMemory}. Enumeration starts at a per-run random
+     * key and wraps around so the ORPHAN_SESSION_ID_CAP truncates a different slice each run.
+     */
     private void enumerateSessionIdsFromWorkingMemory(
         String workingIndex,
         String containerId,
         Set<String> sessionIds,
-        Object[] searchAfterValues,
+        Map<String, Object> afterKey,
+        String startKey,
+        boolean wrapped,
         ActionListener<Set<String>> listener
     ) {
         SearchRequest request = new SearchRequest(workingIndex);
@@ -1296,7 +1386,95 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
         BoolQueryBuilder query = QueryBuilders
             .boolQuery()
+            .must(QueryBuilders.existsQuery(SESSION_ID_FIELD))
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+
+        CompositeAggregationBuilder aggregation = new CompositeAggregationBuilder(
+            SESSION_IDS_AGG_NAME,
+            List.of(new TermsValuesSourceBuilder(SESSION_ID_FIELD).field(SESSION_ID_FIELD))
+        ).size(ORPHAN_SESSION_BATCH_SIZE);
+
+        if (afterKey != null) {
+            aggregation.aggregateAfter(afterKey);
+        }
+
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder().query(query).size(0).aggregation(aggregation);
+        request.source(sourceBuilder);
+
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client.search(request, ActionListener.wrap(response -> {
+                CompositeAggregation composite = response.getAggregations() != null
+                    ? response.getAggregations().get(SESSION_IDS_AGG_NAME)
+                    : null;
+                if (composite == null) {
+                    listener.onResponse(sessionIds);
+                    return;
+                }
+
+                for (CompositeAggregation.Bucket bucket : composite.getBuckets()) {
+                    Object sessionId = bucket.getKey().get(SESSION_ID_FIELD);
+                    if (sessionId != null) {
+                        if (wrapped && sessionId.toString().compareTo(startKey) > 0) {
+                            listener.onResponse(sessionIds);
+                            return;
+                        }
+                        sessionIds.add(sessionId.toString());
+                    }
+
+                    if (sessionIds.size() >= ORPHAN_SESSION_ID_CAP) {
+                        log
+                            .warn(
+                                "[MemoryRetentionJob] container={} session_id cap ({}) reached during orphan enumeration."
+                                    + " Remaining orphans will be covered in future runs.",
+                                containerId,
+                                ORPHAN_SESSION_ID_CAP
+                            );
+                        listener.onResponse(sessionIds);
+                        return;
+                    }
+                }
+
+                Map<String, Object> nextAfterKey = composite.afterKey();
+                if (composite.getBuckets().size() == ORPHAN_SESSION_BATCH_SIZE && nextAfterKey != null) {
+                    enumerateSessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, nextAfterKey, startKey, wrapped, listener);
+                } else if (!wrapped) {
+                    enumerateSessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, null, startKey, true, listener);
+                } else {
+                    listener.onResponse(sessionIds);
+                }
+            }, listener::onFailure));
+        }
+    }
+
+    /**
+     * Backward-compatibility enumeration for pre-upgrade working-memory documents that were indexed
+     * before the top-level {@code session_id} field existed. Scans only documents that have
+     * {@code namespace.session_id} but lack the top-level field, so its cost shrinks to zero as
+     * legacy documents are cleaned up. Like the aggregation path, scanning starts at the per-run
+     * random key in {@code _id} order and wraps around so cap truncation covers a different slice
+     * each run.
+     */
+    private void enumerateLegacySessionIdsFromWorkingMemory(
+        String workingIndex,
+        String containerId,
+        Set<String> sessionIds,
+        Object[] searchAfterValues,
+        String startKey,
+        boolean wrapped,
+        ActionListener<Set<String>> listener
+    ) {
+        if (sessionIds.size() >= ORPHAN_SESSION_ID_CAP) {
+            listener.onResponse(sessionIds);
+            return;
+        }
+
+        SearchRequest request = new SearchRequest(workingIndex);
+        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
             .must(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
+            .mustNot(QueryBuilders.existsQuery(SESSION_ID_FIELD))
             .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
@@ -1316,6 +1494,11 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 SearchHit[] hits = response.getHits().getHits();
 
                 for (SearchHit hit : hits) {
+                    if (wrapped && hit.getId().compareTo(startKey) > 0) {
+                        listener.onResponse(sessionIds);
+                        return;
+                    }
+
                     Map<String, Object> source = hit.getSourceAsMap();
                     if (source != null) {
                         @SuppressWarnings("unchecked")
@@ -1332,7 +1515,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                         log
                             .warn(
                                 "[MemoryRetentionJob] container={} session_id cap ({}) reached during orphan enumeration."
-                                    + " Remaining orphans will be caught on next run.",
+                                    + " Remaining orphans will be covered in future runs.",
                                 containerId,
                                 ORPHAN_SESSION_ID_CAP
                             );
@@ -1343,7 +1526,17 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
                 if (hits.length == ORPHAN_ENUMERATION_PAGE_SIZE) {
                     Object[] nextSearchAfter = hits[hits.length - 1].getSortValues();
-                    enumerateSessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, nextSearchAfter, listener);
+                    enumerateLegacySessionIdsFromWorkingMemory(
+                        workingIndex,
+                        containerId,
+                        sessionIds,
+                        nextSearchAfter,
+                        startKey,
+                        wrapped,
+                        listener
+                    );
+                } else if (!wrapped) {
+                    enumerateLegacySessionIdsFromWorkingMemory(workingIndex, containerId, sessionIds, null, startKey, true, listener);
                 } else {
                     listener.onResponse(sessionIds);
                 }
@@ -1453,6 +1646,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
 
         List<String> batch = batches.get(batchIndex);
+        if (log.isDebugEnabled()) {
+            log.debug("[MemoryRetentionJob] container={} deleting orphaned working memory for session ids={}", containerId, batch);
+        }
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
@@ -1461,7 +1657,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 QueryBuilders
                     .boolQuery()
                     .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
-                    .must(QueryBuilders.termsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD, batch))
+                    .must(buildSessionIdMatchQuery(batch))
             );
         dbq.setRefresh(true);
 
@@ -1476,6 +1672,13 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     private void deleteEmptyNamespaceWorkingMemory(String containerId, String workingIndex, ActionListener<Long> listener) {
         int orphanTtlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS);
         long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(orphanTtlDays);
+        log
+            .debug(
+                "[MemoryRetentionJob] container={} empty_namespace DBQ index={} cutoffMillis={}",
+                containerId,
+                workingIndex,
+                cutoffMillis
+            );
 
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
@@ -1486,6 +1689,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 QueryBuilders
                     .boolQuery()
                     .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+                    .mustNot(QueryBuilders.existsQuery(SESSION_ID_FIELD))
                     .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
                     .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + USER_ID_FIELD))
                     .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + AGENT_ID_FIELD))

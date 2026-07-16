@@ -685,7 +685,13 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                         ? incoming.getRetentionDays()
                         : existing.getRetentionDays();
                     Integer mergedCount = incoming.isMaxCountExplicitlySet() ? incoming.getMaxCount() : existing.getMaxCount();
-                    this.retentionPolicy.put(type, new RetentionRule(mergedDays, mergedCount));
+                    // Carry the explicit-set flags through the merge so toXContent() emits
+                    // explicit nulls for cleared fields and the partial-update doc merge
+                    // removes them from storage
+                    boolean mergedDaysExplicitlySet = incoming.isRetentionDaysExplicitlySet() || existing.isRetentionDaysExplicitlySet();
+                    boolean mergedCountExplicitlySet = incoming.isMaxCountExplicitlySet() || existing.isMaxCountExplicitlySet();
+                    this.retentionPolicy
+                        .put(type, new RetentionRule(mergedDays, mergedCount, mergedDaysExplicitlySet, mergedCountExplicitlySet));
                 }
             }
         }
