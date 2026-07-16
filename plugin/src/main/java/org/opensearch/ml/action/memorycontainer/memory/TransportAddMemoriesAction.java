@@ -34,8 +34,11 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -306,7 +309,16 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             // Add memory content from input object
             mlAddMemoriesInput.toXContent(builder, ToXContent.EMPTY_PARAMS, true);
 
-            indexRequest.source(builder);
+            // Denormalize session_id to a top-level keyword field (namespace is flat_object and
+            // cannot be aggregated) so the retention job can enumerate sessions efficiently
+            String sessionId = mlAddMemoriesInput.getSessionId();
+            if (sessionId != null) {
+                Map<String, Object> source = XContentHelper.convertToMap(BytesReference.bytes(builder), false, XContentType.JSON).v2();
+                source.put(SESSION_ID_FIELD, sessionId);
+                indexRequest.source(source);
+            } else {
+                indexRequest.source(builder);
+            }
             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             return indexRequest;
         } catch (IOException e) {

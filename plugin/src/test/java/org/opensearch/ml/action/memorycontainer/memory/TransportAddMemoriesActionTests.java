@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -308,6 +310,112 @@ public class TransportAddMemoriesActionTests {
         // Verify the full flow
         verify(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
         verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_WorkingMemoryIndexedWithTopLevelSessionId() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
+
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("session_id", "session-123");
+
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(Arrays.asList(message))
+            .namespace(namespace)
+            .build();
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("working-mem-123");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), requestCaptor.capture(), any());
+
+        Map<String, Object> source = requestCaptor.getValue().sourceAsMap();
+        assertEquals("session-123", source.get("session_id"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> indexedNamespace = (Map<String, Object>) source.get("namespace");
+        assertEquals("session-123", indexedNamespace.get("session_id"));
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_WorkingMemoryIndexedWithoutSessionIdOmitsTopLevelField() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
+
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("agent_id", "agent-1");
+
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(Arrays.asList(message))
+            .namespace(namespace)
+            .build();
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.isDisableSession()).thenReturn(true);
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("working-mem-123");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), requestCaptor.capture(), any());
+
+        Map<String, Object> source = requestCaptor.getValue().sourceAsMap();
+        assertFalse(source.containsKey("session_id"));
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
     }
 
@@ -1587,5 +1695,185 @@ public class TransportAddMemoriesActionTests {
         verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
             && ((OpenSearchStatusException)exception).status() == RestStatus.BAD_REQUEST
             && exception.getMessage().contains("LLM predict result cannot be extracted")));
+    }
+
+    @Test
+    public void testSessionLastUpdatedTimeBump_ExistingSession() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
+
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("session_id", "session-existing");
+
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(Arrays.asList(message))
+            .namespace(namespace)
+            .build();
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("working-mem-456");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        org.opensearch.action.update.UpdateResponse updateResponse = mock(org.opensearch.action.update.UpdateResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.update.UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(org.opensearch.action.update.UpdateRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        verify(client).update(argThat(req -> {
+            org.opensearch.action.update.UpdateRequest updateReq = (org.opensearch.action.update.UpdateRequest) req;
+            return "session-index".equals(updateReq.index()) && "session-existing".equals(updateReq.id());
+        }), any());
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+    }
+
+    @Test
+    public void testSessionLastUpdatedTimeBump_NewlyCreatedSession_NoBump() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
+
+        Map<String, String> namespace = new HashMap<>();
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(Arrays.asList(message));
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-model");
+        when(config.getStrategies()).thenReturn(
+            Arrays.asList(MemoryStrategy.builder().type(MemoryStrategyType.SUMMARY).build())
+        );
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(3);
+            listener.onResponse("Summary text");
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("new-session-id");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        verify(client, org.mockito.Mockito.never()).update(
+            any(org.opensearch.action.update.UpdateRequest.class), any()
+        );
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+    }
+
+    @Test
+    public void testSessionLastUpdatedTimeBump_FailureDoesNotFailResponse() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
+
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("session_id", "session-bump-fail");
+
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(Arrays.asList(message))
+            .namespace(namespace)
+            .build();
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("working-mem-789");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.update.UpdateResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Simulated bump failure"));
+            return null;
+        }).when(client).update(any(org.opensearch.action.update.UpdateRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+        verify(actionListener, org.mockito.Mockito.never()).onFailure(any());
     }
 }

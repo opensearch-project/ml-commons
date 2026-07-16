@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
@@ -144,6 +145,61 @@ public class RetentionRuleTests {
         RetentionRule parsed = RetentionRule.parse(parser);
 
         assertEquals(original, parsed);
+    }
+
+    @Test
+    public void testToXContent_ExplicitNullMaxCountEmitted() throws IOException {
+        RetentionRule rule = new RetentionRule(30, null, false, true);
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        rule.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = TestHelper.xContentBuilderToString(builder);
+
+        assertEquals("{\"retention_days\":30,\"max_count\":null}", json);
+    }
+
+    @Test
+    public void testToXContent_ExplicitNullRetentionDaysEmitted() throws IOException {
+        RetentionRule rule = new RetentionRule(null, 100, true, false);
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        rule.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = TestHelper.xContentBuilderToString(builder);
+
+        assertEquals("{\"retention_days\":null,\"max_count\":100}", json);
+    }
+
+    @Test
+    public void testToXContent_AbsentFieldsOmitted() throws IOException {
+        RetentionRule rule = new RetentionRule(null, null, false, false);
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        rule.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = TestHelper.xContentBuilderToString(builder);
+
+        assertEquals("{}", json);
+    }
+
+    @Test
+    public void testXContentRoundTrip_ExplicitNulls_PreservesFlags() throws IOException {
+        RetentionRule original = new RetentionRule(null, null, true, true);
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        original.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = TestHelper.xContentBuilderToString(builder);
+
+        assertEquals("{\"retention_days\":null,\"max_count\":null}", json);
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        RetentionRule parsed = RetentionRule.parse(parser);
+
+        assertNull(parsed.getRetentionDays());
+        assertNull(parsed.getMaxCount());
+        assertTrue(parsed.isRetentionDaysExplicitlySet());
+        assertTrue(parsed.isMaxCountExplicitlySet());
     }
 
     @Test

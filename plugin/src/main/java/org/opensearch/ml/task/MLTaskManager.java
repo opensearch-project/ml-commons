@@ -583,7 +583,7 @@ public class MLTaskManager implements SettingsChangeListener {
         try {
             MLJobParameter jobParameter = new MLJobParameter(
                 MLJobType.MEMORY_RETENTION.name(),
-                new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.MINUTES), // DEMO: changed from HOURS to MINUTES
+                new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.HOURS),
                 120L,
                 null,
                 MLJobType.MEMORY_RETENTION,
