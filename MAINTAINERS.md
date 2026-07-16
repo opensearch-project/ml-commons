@@ -8,15 +8,11 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 |----------------------|-----------------------------------------------------|-----------|
 | Bhavana Goud Ramaram | [rbhavna](https://github.com/rbhavna)               | Amazon    |
 | Charlie Yang         | [model-collapse](https://github.com/model-collapse) | Amazon    |
-| Dhrubo Saha          | [dhrubo-os](https://github.com/dhrubo-os)           | Amazon    |
-| Jing Zhang           | [jngz-es](https://github.com/jngz-es)               | Amazon    |
 | Jiaping Zeng         | [jiapingzeng](https://github.com/jiapingzeng)       | Amazon    |
-| Junshen Wu           | [wujunshen](https://github.com/wujunshen)           | Amazon    |
 | Sicheng Song         | [b4sjoo](https://github.com/b4sjoo)                 | Amazon    |
 | Mingshi Liu          | [mingshl](https://github.com/mingshl)               | Amazon    |
 | Pavan Yekbote        | [pyek-bot](https://github.com/pyek-bot)             | Amazon    |
 | Rithin Pullela       | [rithinpullela](https://github.com/rithinpullela)             | Amazon    |
-| Xinyuan Lu           | [xinyual](https://github.com/xinyual)               | Amazon    |
 | Xun Zhang            | [Zhangxunmt](https://github.com/Zhangxunmt)         | Amazon    |
 | Yaliang Wu           | [ylwu-amzn](https://github.com/ylwu-amzn)           | Amazon    |
 | Zan Niu              | [zane-neo](https://github.com/zane-neo)             | Amazon    |
