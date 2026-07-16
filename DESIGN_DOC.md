@@ -6,7 +6,7 @@
 | **Reviewers** | Nathalie, Mingshi (mentor) |
 | **SDM** | Yaliang |
 | **Status** | In Progress |
-| **Last Updated** | 2026-07-13 |
+| **Last Updated** | 2026-07-16 |
 | **RFC** | opensearch-project/ml-commons #4859 |
 
 ---
@@ -67,8 +67,8 @@ There is no deletion job, no TTL field, and no retention configuration anywhere 
 - Individual memories can be pinned to exempt them from eviction
 - Orphaned working memory (pointing to non-existent sessions) is cleaned up automatically
 - History supports `max_count` only (audit trail does not expire by age)
-- Fully backward compatible — existing containers without a policy get defaults auto-applied (with explicit null opt-out available)
-- Retention is opt-out — new containers automatically receive cluster-default policies unless the user explicitly opts out with `null`
+- Fully backward compatible — existing containers are unaffected unless an admin explicitly configures default retention settings
+- Retention is opt-in — no data is deleted unless a user sets a policy on their container, or a cluster admin explicitly configures default values (all defaults ship as `-1`/disabled). An explicit `"retention_policy": null` prevents even admin defaults from being applied.
 
 ### 4.2 Non-Goals
 
@@ -94,9 +94,9 @@ There is no deletion job, no TTL field, and no retention configuration anywhere 
 │                        MEMORY CONTAINER                              │
 │                                                                     │
 │  memory_configuration.retention_policy:                              │
-│    sessions: { retention_days: 90, max_count: 5000 }                │
-│    long-term: { max_count: 2000 }                                   │
-│    history: { max_count: 100000 }                                   │
+│    sessions: { retention_days: 30, max_count: 100 }   ← user-set   │
+│    long-term: { max_count: 5000 }                     ← user-set   │
+│    history: { max_count: 50000 }                      ← user-set   │
 │                                                                     │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────┐ ┌─────────┐       │
 │  │Working Memory│ │Long-Term Mem │ │ Sessions │ │ History │       │
@@ -267,28 +267,28 @@ The `retention_policy` field is stored on the container document itself (in the 
 
 **Shared index safety:** Because multiple containers can share a physical index, **every deletion query in the retention job MUST include a `memory_container_id` term filter** to avoid cross-container data loss.
 
-### 6.2 Default Policy
+### 6.2 Default Policy (Opt-In, Admin-Configured)
 
-**Retention is opt-out (defaults auto-applied).** When the cluster setting `plugins.ml_commons.memory.retention_enabled=true` (the default), containers WITHOUT an explicit `retention_policy` get the following defaults auto-applied:
+**Retention is opt-in.** Out of the box, no retention policy exists on any container and no data is ever deleted automatically. Retention enforcement only occurs when:
+1. A user explicitly sets a `retention_policy` on their container, OR
+2. A cluster administrator explicitly configures default retention settings (which are then applied to containers that have no policy of their own).
 
-| Memory Type | Default `retention_days` | Default `max_count` | Rationale |
-|-------------|:----------------------------:|:-----------------------:|-----------|
-| Sessions | 90 | 5000 | 30 days is the enterprise consensus minimum (Bedrock, Purview, Dialogflow); 90 provides a generous window. 5000 covers high-throughput deployments. |
-| Long-term memory | null (disabled) | 2000 | Knowledge should persist indefinitely by default; retrieval quality degrades beyond 10-20 items per query (Liu et al. 2023, Mem0 guidance), but generous accumulation allows diverse retrieval across topics. Customers can optionally set `retention_days` if they want time-based expiry. |
-| History | N/A (not supported) | 100000 | Audit trail; count-bounded only. 100K events covers months of heavy usage for compliance investigations. |
+**All default settings ship as `-1` (disabled):**
 
-These defaults come from tunable cluster settings (so admins can adjust them cluster-wide):
+| Cluster Setting | Default | Range | Effect when set > 0 |
+|-----------------|:-------:|:-----:|---------------------|
+| `plugins.ml_commons.memory.default_session_retention_days` | -1 (off) | -1 to 3650 | Applied as sessions `retention_days` on containers without a policy |
+| `plugins.ml_commons.memory.default_session_max_count` | -1 (off) | -1 to 1,000,000 | Applied as sessions `max_count` on containers without a policy |
+| `plugins.ml_commons.memory.default_long_term_max_count` | -1 (off) | -1 to 1,000,000 | Applied as long-term `max_count` on containers without a policy |
+| `plugins.ml_commons.memory.default_history_max_count` | -1 (off) | -1 to 10,000,000 | Applied as history `max_count` on containers without a policy |
 
-| Cluster Setting | Default | Description |
-|-----------------|---------|-------------|
-| `plugins.ml_commons.memory.default_session_retention_days` | 90 | Default `retention_days` for sessions when auto-applying |
-| `plugins.ml_commons.memory.default_session_max_count` | 5000 | Default `max_count` for sessions when auto-applying |
-| `plugins.ml_commons.memory.default_long_term_max_count` | 2000 | Default `max_count` for long-term when auto-applying |
-| `plugins.ml_commons.memory.default_history_max_count` | 100000 | Default `max_count` for history when auto-applying |
+If none of these settings are set to a value greater than zero, containers without an explicit policy are simply skipped by the retention job. No backfill occurs. No data is touched.
 
-**Auto-application happens in two places:**
-1. **At container creation time** — `TransportCreateMemoryContainerAction` writes the defaults onto the container document if the user did not provide an explicit `retention_policy` in the create request.
-2. **At job execution time (backfill)** — For existing containers that have no `retention_policy` (pre-feature containers), the retention job writes the defaults onto the container document before processing it. This ensures older containers are brought into compliance without requiring manual migration.
+**When an admin does configure defaults (any setting > 0)**, auto-application happens in two places:
+1. **At container creation time** — `TransportCreateMemoryContainerAction` writes the admin-configured defaults onto the container document if the user did not provide an explicit `retention_policy` in the create request.
+2. **At job execution time (backfill)** — For existing containers that have no `retention_policy` (pre-feature containers), the retention job writes the admin-configured defaults onto the container document before processing it.
+
+The backfill only executes if any of the four default settings are greater than zero. If all four are `-1`, no backfill occurs and no containers are modified.
 
 **Important:** The backfill does NOT override an explicit null opt-out (see §6.2.2).
 
@@ -323,7 +323,7 @@ PUT /_plugins/_ml/memory_containers/{id}
     }
   }
 }
-# If cluster defaults are retention_days=90, max_count=5000:
+# If admin has configured default_session_retention_days=90, default_session_max_count=5000:
 # Result: "sessions": { "retention_days": 90, "max_count": 5000 }
 ```
 
@@ -338,8 +338,8 @@ Users can explicitly opt out of retention by setting values to `null`:
 | `"retention_days": null` | Remove the `retention_days` rule for that type (disable time-based eviction) |
 
 **Critical distinction:** A container with `"retention_policy": null` (explicit opt-out) is different from one that never had a policy set:
-- **Never had a policy:** The backfill mechanism WILL write defaults onto this container at job execution time.
-- **Explicit null opt-out:** The backfill mechanism will NOT override this — the customer's explicit decision to disable retention is preserved.
+- **Never had a policy:** If an admin has configured default retention settings (any value > 0), the backfill mechanism will write those admin-configured defaults onto this container at job execution time. If no admin defaults are configured, the container is simply skipped.
+- **Explicit null opt-out:** The backfill mechanism will NOT override this — the customer's explicit decision to disable retention is preserved, regardless of whether admin defaults are configured.
 
 Implementation: An explicit null opt-out is persisted as an empty object `{}` or a dedicated `retention_policy_opted_out: true` flag on the container document, distinguishing it from the absence of the field.
 
@@ -365,7 +365,7 @@ Types not included in the update request are left unchanged. The PUT response **
 
 | Value | Meaning |
 |-------|---------|
-| `retention_policy` absent from container (never set) | Defaults will be auto-applied (at creation or via backfill) |
+| `retention_policy` absent from container (never set) | No retention occurs. If an admin has configured default settings (> 0), those will be applied via backfill on the next job run. Otherwise, the container is skipped. |
 | `"retention_policy": null` | Explicit opt-out — no retention, backfill will not override |
 | `"retention_policy": "default"` | Reset to cluster defaults *(not yet implemented — see §6.2.1)* |
 | `retention_policy` explicitly provided with values | Policy is applied as specified |
@@ -374,7 +374,7 @@ Types not included in the update request are left unchanged. The PUT response **
 | Field set to `null` | Remove/disable that specific constraint |
 | Field set to `0`, negative, or non-integer (other than `null`/`"default"`) | Validation error |
 
-**Backward compatibility:** Existing containers created before this feature have no `retention_policy` field. The backfill mechanism will auto-apply defaults at the next job run. They can explicitly opt out via `"retention_policy": null` or customize via the update API.
+**Backward compatibility:** Existing containers created before this feature have no `retention_policy` field. If a cluster admin has configured default retention settings (any value > 0), the backfill mechanism will apply those admin-configured defaults at the next job run. If no admin defaults are configured, these containers are simply skipped — no data is deleted. Containers can explicitly opt out via `"retention_policy": null` or set a custom policy via the update API.
 
 ### 6.3 API Surface
 
@@ -779,6 +779,8 @@ FOR each memory container WHERE disableSession = false:
         _delete_by_query working_index WHERE:
             memory_container_id = {id}
             AND (session_id IN [orphan_ids] OR namespace.session_id IN [orphan_ids])
+            AND created_time < (now - orphan_ttl_days)  // age guard: prevents deletion of
+            // freshly-written working memory under caller-managed session IDs
     
     // Find working memory with no session_id at all (shouldn't exist, but can
     // from partial writes — grace period allows incomplete writes to be finished)
@@ -837,10 +839,10 @@ The orphan sweep (Phase 7) is a safety net that catches any edge cases where wor
 | `plugins.ml_commons.memory.retention_job_throttle` | `5s` | 1s–60s | Pause between containers where deletions occurred (no-op containers proceed immediately) |
 | `plugins.ml_commons.memory.orphan_ttl_days` | `7` | 1–365 | Age threshold for deleting working memory with no `session_id` |
 | `plugins.ml_commons.memory.working_memory_ttl_days` | `30` | 1–365 | TTL for working memory when `disableSession=true` (age-based, using `created_time`) |
-| `plugins.ml_commons.memory.default_session_retention_days` | `90` | 1–3650 | Default `retention_days` for sessions when auto-applying |
-| `plugins.ml_commons.memory.default_session_max_count` | `5000` | 1–1000000 | Default `max_count` for sessions when auto-applying |
-| `plugins.ml_commons.memory.default_long_term_max_count` | `2000` | 1–1000000 | Default `max_count` for long-term when auto-applying |
-| `plugins.ml_commons.memory.default_history_max_count` | `100000` | 1–10000000 | Default `max_count` for history when auto-applying |
+| `plugins.ml_commons.memory.default_session_retention_days` | `-1` (off) | -1–3650 | Admin-configured default `retention_days` for sessions. Only applied when > 0. |
+| `plugins.ml_commons.memory.default_session_max_count` | `-1` (off) | -1–1000000 | Admin-configured default `max_count` for sessions. Only applied when > 0. |
+| `plugins.ml_commons.memory.default_long_term_max_count` | `-1` (off) | -1–1000000 | Admin-configured default `max_count` for long-term. Only applied when > 0. |
+| `plugins.ml_commons.memory.default_history_max_count` | `-1` (off) | -1–10000000 | Admin-configured default `max_count` for history. Only applied when > 0. |
 
 #### 6.4.6 Failure Handling
 
@@ -925,7 +927,7 @@ Long-term memory represents the distilled value of conversations — user prefer
 | Scenario | Behavior |
 |----------|----------|
 | Working memory with no `session_id` (sessions enabled) | Cleaned up by orphan sweep after `orphan_ttl_days` (default 7 days). These shouldn't exist but can from partial writes. |
-| Working memory pointing to non-existent session | Cleaned up by orphan sweep on next job run. |
+| Working memory pointing to non-existent session | Cleaned up by orphan sweep on next job run, subject to `orphan_ttl_days` age guard (default 7 days). Freshly-written working memory under caller-managed session IDs is not deleted until it exceeds this age. |
 | Working memory in `disableSession=true` container | Deleted by age-based TTL using `created_time` (configurable, default 30 days). |
 | Pinned session | Session is not evicted → its working memory is preserved |
 | Session pinned but past `retention_days` | Not deleted (pinned overrides policy) → working memory safe |
@@ -1288,10 +1290,10 @@ The system degrades gracefully: if the job stops running entirely, the only cons
 
 | Scenario | Behavior |
 |----------|----------|
-| Container created before this feature (no `retention_policy` field) | Backfill auto-applies cluster defaults at next job run. Container can explicitly opt out with `"retention_policy": null`. |
-| Container created after this feature without explicit policy | Cluster defaults auto-applied at creation time (see §6.2). |
-| Container with explicit `"retention_policy": null` | Opted out — job skips it. Backfill will not override. |
-| Cluster upgraded with existing containers | Existing containers have no policy field → defaults auto-applied at next job run (backfill). |
+| Container created before this feature (no `retention_policy` field) | No retention occurs. If an admin has configured default settings (> 0), backfill applies those at the next job run. Otherwise, the container is skipped. Container can explicitly opt out with `"retention_policy": null`. |
+| Container created after this feature without explicit policy | If admin defaults are configured (> 0), they are applied at creation time. Otherwise, no retention occurs (see §6.2). |
+| Container with explicit `"retention_policy": null` | Opted out — job skips it. Backfill will not override, even if admin defaults are configured. |
+| Cluster upgraded with existing containers | Existing containers have no policy field → no retention occurs unless an admin explicitly configures default settings. |
 | Cluster downgraded after retention was used | `retention_policy` field ignored by older code; no deletion runs. Memories persist. |
 | New `pinned` field on old documents | Absent field treated as `false` by deletion queries. |
 
@@ -1311,7 +1313,7 @@ The system degrades gracefully: if the job stops running entirely, the only cons
 
 - `RetentionRule` serialization (XContent round-trip, StreamInput/StreamOutput round-trip)
 - Validation logic (null handling, history rejects `retention_days`, `"working"` key rejected, negative values rejected)
-- Opt-in semantics (new container without retention_policy has no policy; existing container untouched)
+- Opt-in semantics (new container without retention_policy has no policy unless admin defaults configured; existing container untouched without admin defaults)
 - Pinned document query construction (correctly excludes `pinned: true` and absent field)
 - `max_count` count calculation (excludes pinned documents from total)
 
@@ -1326,7 +1328,7 @@ The system degrades gracefully: if the job stops running entirely, the only cons
 - Orphan sweep: create working memory pointing to non-existent session → run job → verify orphan deleted
 - Orphan sweep (no session_id): create working memory with null namespace.session_id → wait past `orphan_ttl_days` → verify deleted
 - `disableSession=true` TTL: create container with disabled sessions → write working memory → wait past TTL → verify deleted by age
-- Backward compatibility: container without policy → run job → verify nothing deleted
+- Backward compatibility: container without policy (no admin defaults configured) → run job → verify nothing deleted
 - OR logic: session violates `max_count` but not `retention_days` → verify deleted with cascade
 - History: verify `retention_days` rejected, `max_count` evaluated against `created_time`
 - Opt-out: set both constraints to `null` → verify no deletion for that type
@@ -1352,17 +1354,19 @@ There is no feature flag. The retention infrastructure ships as part of the next
 
 | Phase | What Ships | Behavior |
 |-------|-----------|----------|
-| **Code merge** | `RetentionRule`, `MemoryRetentionJobProcessor`, `pinned` field, API changes, orphan sweep | Job registered at cluster startup; auto-applies defaults to containers without policies |
-| **First container created** | Container persisted with default retention_policy (unless user opts out with `null`) | Next job run begins enforcement for that container |
-| **Existing clusters upgrade** | Code deployed | Existing containers without a policy field get defaults auto-applied at next job run (backfill). Explicit `null` opt-out available. |
+| **Code merge** | `RetentionRule`, `MemoryRetentionJobProcessor`, `pinned` field, API changes, orphan sweep | Job registered at cluster startup. Does nothing unless users set policies or admins configure defaults. |
+| **First container with a policy** | Container persisted with user-specified `retention_policy` | Next job run begins enforcement for that container |
+| **Existing clusters upgrade** | Code deployed | No impact on existing containers. No data is deleted unless an admin explicitly configures default retention settings via cluster settings API. |
 
-**Opt-out:** Customers who do not want retention can set `"retention_policy": null` on their containers. This explicit opt-out is preserved across job runs (backfill will not override it).
+**Out of the box:** No retention occurs. All `default_*` settings ship as `-1` (disabled). Users must explicitly set policies on their containers, or an admin must configure cluster-level defaults, before any automated deletion happens.
 
-**Emergency disable:** Set `plugins.ml_commons.memory.retention_enabled` to `false` via cluster settings API to immediately stop all retention enforcement without removing policies from containers.
+**Opt-out (per container):** Customers who do not want retention (even if admin defaults are configured) can set `"retention_policy": null` on their containers. This explicit opt-out is preserved across job runs.
 
-**Recommended workflow for customizing retention on existing containers:**
-1. Review the auto-applied defaults (see §6.2) to understand what will be enforced
-2. Use `PUT /_plugins/_ml/memory_containers/{id}` to customize the policy or opt out with `null`
+**Emergency disable (cluster-wide):** Set `plugins.ml_commons.memory.retention_enabled` to `false` via cluster settings API to immediately stop all retention enforcement without removing policies from containers.
+
+**Recommended workflow for enabling retention on existing containers:**
+1. Decide on retention values appropriate for your organization
+2. Either configure cluster-level defaults (applies to all containers without a policy) or set per-container policies via `PUT /_plugins/_ml/memory_containers/{id}`
 3. Monitor the next job run's logs to verify expected deletion counts
 4. Tighten the policy gradually as needed
 
@@ -1425,7 +1429,7 @@ Longer-term enhancements not planned for immediate iterations:
 | 21 | Dry-run preview | 2026-06-16 | Defer to second iteration vs. include in v1 | Defer to second iteration | Reduces scope for 11-week timeline. Customers can start with conservative values and monitor job logs. |
 | 22 | On-demand purge | 2026-06-16 | Defer to second iteration vs. include in v1 | Defer to second iteration | Reduces scope. Customers can adjust job interval setting for faster enforcement. |
 | 23 | max_count sort field | 2026-07-10 | last_updated_time vs created_time | created_time | Batch updates make last_updated_time identical; created_time preserves true insertion order for fair FIFO eviction |
-| 24 | Default retention policy | 2026-07-10 | Opt-in (no defaults) vs opt-out (auto-apply defaults) | Opt-out — auto-apply defaults when retention_enabled=true | Team decision: silent unbounded growth is worse than documented defaults. Defaults come from tunable cluster settings. **Supersedes Decision #17.** |
+| 24 | Default retention policy | 2026-07-16 | Opt-in (no defaults) vs opt-out (auto-apply defaults) | Opt-in — admin-configured defaults, all shipping as `-1` (disabled) | Final decision: no data is deleted without explicit action. Admins can optionally configure cluster-level defaults; without that, containers have no retention. **Supersedes Decision #17.** |
 | 25 | Session liveness | 2026-07-10 | Static last_updated_time vs touch on message write | Touch on message write | Active conversations should extend session lifetime. Accepted write amplification tradeoff. **Supersedes Decision #19.** |
 | 26 | last_updated_time conditional bump | 2026-07-10 | Unconditional vs content-only | Content-only | Pinning/tagging should not extend retention lifetime — only content changes indicate the memory is actively used |
 

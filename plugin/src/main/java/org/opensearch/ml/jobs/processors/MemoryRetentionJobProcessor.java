@@ -1650,6 +1650,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             log.debug("[MemoryRetentionJob] container={} deleting orphaned working memory for session ids={}", containerId, batch);
         }
 
+        int orphanTtlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS);
+        long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(orphanTtlDays);
+
         DeleteByQueryRequest dbq = new DeleteByQueryRequest(workingIndex);
         dbq.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
         dbq
@@ -1658,6 +1661,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     .boolQuery()
                     .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
                     .must(buildSessionIdMatchQuery(batch))
+                    .must(buildEpochAwareCutoffQuery(CREATED_TIME_FIELD, cutoffMillis))
             );
         dbq.setRefresh(true);
 
