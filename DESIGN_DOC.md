@@ -127,7 +127,7 @@ There is no deletion job, no TTL field, and no retention configuration anywhere 
 │    5. History   → delete over-count only, skip pinned               │
 │    6. WM TTL    → (disableSession only) delete old working memory   │
 │    7. Orphan    → sweep orphaned working memory (once per job run)  │
-│    8. Throttle  → pause 5s before next container                    │
+│    8. Throttle  → pause 5s before next container (only if deleted)  │
 │                                                                     │
 │  Deletion: _delete_by_query (throttled, idempotent)                 │
 └─────────────────────────────────────────────────────────────────────┘
@@ -356,6 +356,8 @@ When a customer updates a retention policy via the PUT API, **field-level merge*
 Example: current policy is `"sessions": {"retention_days": 60, "max_count": 500}`. Customer sends `{"sessions": {"max_count": 350}}`. Result is `"sessions": {"retention_days": 60, "max_count": 350}` — `retention_days` is unchanged because it was not in the request.
 
 To remove `retention_days`: send `{"sessions": {"retention_days": null, "max_count": 350}}`.
+
+**Implementation detail:** When a field is explicitly set to null, `RetentionRule.toXContent()` emits `builder.nullField(fieldName)` so the partial-update merge correctly removes the stored value. Without this, omitting a field from the serialized update document would leave the old value intact (OpenSearch's partial merge preserves unmentioned fields). The `retentionDaysExplicitlySet` and `maxCountExplicitlySet` flags track whether the null was explicit (user intent to remove) vs. simply absent (user didn't mention the field — preserve current value).
 
 Types not included in the update request are left unchanged. The PUT response **always returns the full resulting retention_policy** so the developer can verify the final state.
 
@@ -705,9 +707,10 @@ FOR each memory container WHERE retention_policy IS NOT NULL:
     IF expired_session_ids is not empty:
         _delete_by_query working_index WHERE:
             memory_container_id = {id}
-            AND namespace.session_id IN [expired_session_ids]
+            AND (session_id IN [expired_session_ids]    // top-level keyword
+                 OR namespace.session_id IN [expired_session_ids])  // legacy flat_object
         // No pinned check — working memory does not support pinning
-        // NOTE: namespace is a flat_object; use termQuery("namespace.session_id", id)
+        // Uses buildSessionIdMatchQuery(): should(terms(session_id), terms(namespace.session_id)) minimumShouldMatch(1)
     
     // Phase 3: Delete the session documents themselves
     IF expired_session_ids is not empty:
@@ -747,7 +750,10 @@ FOR each memory container WHERE retention_policy IS NOT NULL:
         // working_memory_ttl_days is a cluster setting (default 30d), always present
     
     LOG deletion counts per type (including cascade working memory count)
-    PAUSE {throttle_interval} seconds (use threadPool.schedule(), not Thread.sleep())
+    IF any deletions occurred in this container:
+        PAUSE {throttle_interval} seconds (use threadPool.schedule(), not Thread.sleep())
+    ELSE:
+        Proceed immediately to next container (no throttle for no-op containers)
     // Then invoke next container via recursive callback (see note below)
 
 // Phase 7: Orphan Sweep (runs once per full job, not per-container)
@@ -756,22 +762,31 @@ FOR each memory container WHERE disableSession = false:
     sessions_index = container.configuration.getIndexName(MemoryType.SESSIONS)
     
     // Find working memory pointing to non-existent sessions.
-    // NOTE: namespace is a flat_object. Composite aggregation on flat_object sub-fields
-    // may not work reliably. Use paginated scroll search instead:
-    SCROLL SEARCH working_index WHERE memory_container_id = {id}
-        → extract distinct namespace.session_id values (deduplicate in memory)
-    MULTI-GET those session IDs against sessions_index (batched, 1000 per request)
+    // Uses a paged composite aggregation on the top-level session_id keyword field
+    // (namespace is flat_object and cannot be aggregated). Enumeration starts at a
+    // random keyspace position each run and wraps around, so the 50K cap truncates
+    // a different slice each run for probabilistic full coverage.
+    start_key = randomEnumerationStartKey()
+    COMPOSITE AGGREGATION on session_id field, starting at start_key, wrap around
+        → collect distinct session_id values (up to ORPHAN_SESSION_ID_CAP = 50,000)
+    // Legacy fallback: for pre-upgrade docs without top-level session_id:
+    SEARCH_AFTER on docs WHERE namespace.session_id EXISTS AND session_id NOT EXISTS
+        → extract namespace.session_id values, same random-start wrap-around pattern
+    
+    CHECK session existence via batched termsQuery("_id", batch) (1000 per request)
     orphan_ids = session IDs that returned NOT FOUND
     IF orphan_ids is not empty:
         _delete_by_query working_index WHERE:
             memory_container_id = {id}
-            AND namespace.session_id IN [orphan_ids]
+            AND (session_id IN [orphan_ids] OR namespace.session_id IN [orphan_ids])
     
     // Find working memory with no session_id at all (shouldn't exist, but can
     // from partial writes — grace period allows incomplete writes to be finished)
     _delete_by_query working_index WHERE:
         memory_container_id = {id}
-        AND (namespace.session_id IS NULL OR namespace IS NULL)
+        AND session_id NOT EXISTS
+        AND namespace.session_id NOT EXISTS
+        AND namespace.user_id NOT EXISTS AND namespace.agent_id NOT EXISTS
         AND created_time < (now - orphan_ttl_days)  // configurable, default 7d
         // 7-day grace: gives partially-written documents time to have session_id
         // set in a subsequent update before being treated as orphans
@@ -779,13 +794,13 @@ FOR each memory container WHERE disableSession = false:
 RELEASE lock (note: due to async execution, lock is actually released before work completes — see §6.4.1)
 ```
 
-**Implementation note (post-coding):** The orphan sweep uses `search_after` pagination (NOT scroll API) to enumerate distinct `namespace.session_id` values from working memory. Scroll was rejected due to memory pressure at scale — it holds open a search context for the duration. A 50,000 session_id cap prevents OOM on pathological containers; remaining orphans are caught on subsequent job runs.
+**Implementation note (post-coding):** The orphan sweep uses a paged composite aggregation on the top-level `session_id` keyword field (added to the `ml_memory_working` index mapping) to enumerate distinct session IDs at O(unique sessions) cost. The `namespace` field is `flat_object` and does not support aggregations, which is why the top-level field was denormalized. A legacy fallback enumerates pre-upgrade documents (lacking the top-level field) via `search_after` pagination on `namespace.session_id`. Enumeration starts from a per-run random keyspace position and wraps around so the 50,000 session-ID cap truncates a different slice each run (probabilistic full coverage). Scroll was rejected due to memory pressure at scale — it holds open a search context for the duration.
 
 Session existence checking uses batched `termsQuery("_id", batch)` against the sessions index (NOT MultiGetRequest). This is simpler and uses the same `client.search()` pattern as the rest of the job, avoiding additional API surface imports.
 
 **Note on `max_count` implementation:** `_delete_by_query` does not support "delete the N oldest documents." Instead, the job performs a two-step operation: (1) SEARCH with sort + size to identify the document IDs that exceed the cap, then (2) BULK DELETE those specific IDs. This means a partial failure during step 2 leaves some over-cap documents until the next run (safe — idempotent).
 
-**Note on async container iteration:** Since all OpenSearch operations use async `ActionListener` callbacks, the container loop is NOT a synchronous for-loop. Instead, it uses a recursive continuation-passing pattern: container N's final `ActionListener` success callback invokes `threadPool.schedule(throttleDelay, () -> processContainer(N+1, containerList, ...))`. This ensures the throttle pause actually separates work between containers. The pattern is similar to `StepListener` chaining or `ActionListener.wrap()` used elsewhere in the codebase.
+**Note on async container iteration:** Since all OpenSearch operations use async `ActionListener` callbacks, the container loop is NOT a synchronous for-loop. Instead, it uses a recursive continuation-passing pattern: container N's `processContainer` reports whether deletions occurred via `ActionListener<Boolean>`. If `true`, the callback invokes `threadPool.schedule(throttleDelay, () -> processContainerChain(N+1, ...))`. If `false` (no deletions — opt-out, no policy, no expired data, backfill-only), it recurses immediately without scheduling a delay. This conditional throttle ensures the pause only applies where needed while preserving cluster courtesy.
 
 **Note on cascade batching:** If thousands of sessions expire simultaneously (e.g., first-time policy on a container with years of history), the `terms` query in Phase 2 (cascade) must batch `expired_session_ids` into groups of 500–1000 per `_delete_by_query` request to stay within the max clause count (default 1024).
 
@@ -819,7 +834,7 @@ The orphan sweep (Phase 7) is a safety net that catches any edge cases where wor
 |-----------------|---------|-------|-------------|
 | `plugins.ml_commons.memory.retention_enabled` | `true` | true/false | Master kill switch — when false, the retention job skips execution entirely. Allows emergency disable without code rollback or policy removal. |
 | `plugins.ml_commons.memory.retention_job_interval` | `24h` | 1h–168h | How often the job runs |
-| `plugins.ml_commons.memory.retention_job_throttle` | `5s` | 1s–60s | Pause between processing containers |
+| `plugins.ml_commons.memory.retention_job_throttle` | `5s` | 1s–60s | Pause between containers where deletions occurred (no-op containers proceed immediately) |
 | `plugins.ml_commons.memory.orphan_ttl_days` | `7` | 1–365 | Age threshold for deleting working memory with no `session_id` |
 | `plugins.ml_commons.memory.working_memory_ttl_days` | `30` | 1–365 | TTL for working memory when `disableSession=true` (age-based, using `created_time`) |
 | `plugins.ml_commons.memory.default_session_retention_days` | `90` | 1–3650 | Default `retention_days` for sessions when auto-applying |
@@ -865,7 +880,7 @@ Total run summary at job completion:
 
 #### 6.5.2 Relationship Model
 
-- `MLWorkingMemory` stores a `session_id` in its `namespace` map (a `flat_object` field in the index mapping). Every working memory entry belongs to a session. Queried via `termQuery("namespace.session_id", sessionId)`.
+- `MLWorkingMemory` stores a `session_id` in its `namespace` map (a `flat_object` field in the index mapping) and also in a denormalized top-level `session_id` keyword field (populated on write by `TransportAddMemoriesAction`). Every working memory entry belongs to a session. Queries use a `should` matching both `session_id` (top-level keyword) and `namespace.session_id` (flat_object, for pre-upgrade backward compatibility).
 - `MLLongTermMemory` does not structurally depend on sessions. It is distilled knowledge that outlives sessions.
 - `MLMemoryHistory` is never cascaded.
 
@@ -1241,12 +1256,12 @@ ml-commons routes operations through `SdkClient` — an abstraction that switche
 | **Write latency** | Zero — no write-time eviction, no write-path changes |
 | **Background job** | Throttled by design; runs off-peak; configurable interval |
 | **Cluster resources** | `_delete_by_query` generates merge load; mitigated by inter-container pause and request throttling |
-| **Orphan sweep** | Paginated scroll search + multi-get per container — read-heavy; cost scales with number of distinct session_ids in working memory index. Note: `namespace` is a `flat_object` — composite aggregation may not work on sub-fields, so scroll-based extraction is used instead. |
+| **Orphan sweep** | Paged composite aggregation on top-level `session_id` keyword field + batched existence checks per container. Cost scales with unique session IDs (not total documents). A legacy `search_after` fallback handles pre-upgrade documents lacking the top-level field; its cost shrinks to zero as legacy documents are cleaned up. |
 
 ### 8.2 Scalability
 
 - Job runtime scales linearly with number of containers that have policies
-- With a 5-second throttle between containers, the job can process ~17,000 containers per 24-hour interval. For clusters with fewer than 1,000 containers (expected v1 scale), the job completes well within one interval.
+- With conditional throttling (5 seconds only after containers where deletions occurred), total job runtime is proportional to the number of active-deletion containers, not total containers. A cluster with 10,000 containers where only 50 have expired data takes ~250s of throttle. Expected v1 scale is under 1,000 containers, so the job completes well within one interval.
 - If a run cannot complete within one interval, the next scheduled run either waits for the lock or runs concurrently (safe — all operations are idempotent). The job processes all containers from scratch each run; there is no resumption from a partial run.
 - No index-per-policy — retention metadata lives on container documents
 - `_delete_by_query` is batch-efficient (handles thousands of deletions per sweep)
@@ -1282,8 +1297,10 @@ The system degrades gracefully: if the job stops running entirely, the only cons
 
 ### 8.6 Observability
 
-- **Logging:** Per-container deletion counts at INFO level; errors at WARN/ERROR
-- **Orphan sweep logging:** Logs orphaned working memory counts per container
+- **INFO logging:** Per-container aggregate deletion counts (sessions, cascade WM, long-term, history, orphans). Unchanged across operations — suitable for dashboards and alerting.
+- **DEBUG logging:** Per-batch document IDs for bulk-delete paths (session deletion, max_count eviction); session-ID batches for cascade/orphan delete-by-query paths; index + cutoff criteria for time-based DBQ paths. No memory content at any level — IDs and criteria only. Operators investigating "what disappeared" can raise the log level and trace specific IDs.
+- **WARN logging:** Pinned count exceeds `max_count`; partial delete failures; orphan sweep cap reached.
+- **Orphan sweep logging:** Logs orphaned working memory counts per container.
 - **Metrics (future):** Total documents deleted per run, job duration, containers processed, errors — exposed via ml-commons stats API
 
 ---
@@ -1397,7 +1414,7 @@ Longer-term enhancements not planned for immediate iterations:
 | 10 | Orphan sweep | 2026-06-15 | Ignore orphans vs. active cleanup | Active cleanup | Safety net for edge cases; low cost since it runs once per job |
 | 11 | Dry-run preview | 2026-06-15 | Include vs. defer | Defer (not in v1 scope) | Scope reduction; can be added later without design changes |
 | 12 | `disableSession=true` working memory | 2026-06-15 | Leave forever vs. age-based TTL | Age-based TTL via `created_time` | No session to cascade from — need independent cleanup |
-| 13 | Orphan sweep approach | 2026-06-16 | Composite aggregation vs. scroll search | Scroll search + multi-get | `namespace` is a `flat_object`; composite aggregation on flat_object sub-fields is unreliable. Scroll is simpler and has no codebase precedent gap. |
+| 13 | Orphan sweep approach | 2026-06-16 | Composite aggregation vs. scroll search | **Revised: composite aggregation on denormalized top-level `session_id` keyword field** | Original decision was scroll search because `namespace` is `flat_object`. Final implementation adds a top-level `session_id` keyword field to `ml_memory_working.json` (populated on write), enabling efficient composite aggregation. Legacy fallback via `search_after` handles pre-upgrade docs. Randomized start-key ensures 50K cap covers different keyspace slices across runs. |
 | 14 | Job registration timing | 2026-06-16 | Lazy (on first container) vs. startup | Startup (via MLCommonsClusterEventListener) | Follows STATS_COLLECTOR pattern. Avoids complex first-use registration logic. Job no-ops if no containers have policies. |
 | 15 | Lock and concurrency model | 2026-06-16 | Fix lock duration vs. accept idempotent concurrent execution | Accept idempotent execution | MLJobProcessor releases lock before async work completes. Fixing requires refactoring shared infra. All retention operations are idempotent by design, so concurrent execution is safe. |
 | 16 | Native Client vs. SdkClient | 2026-06-16 | Use SdkClient abstraction vs. native Client | Native Client | SdkClient lacks _delete_by_query, scroll, _mget. Follow MemoryContainerHelper.deleteDataByQuery() pattern. Multi-tenancy explicitly unsupported. |

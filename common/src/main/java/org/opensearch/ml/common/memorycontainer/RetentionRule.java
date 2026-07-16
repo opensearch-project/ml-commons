@@ -80,9 +80,14 @@ public class RetentionRule implements ToXContentObject, Writeable {
         builder.startObject();
         if (retentionDays != null) {
             builder.field(RETENTION_DAYS_FIELD, retentionDays);
+        } else if (retentionDaysExplicitlySet) {
+            // Persist the explicit null so the partial-update doc merge removes the stored value
+            builder.nullField(RETENTION_DAYS_FIELD);
         }
         if (maxCount != null) {
             builder.field(MAX_COUNT_FIELD, maxCount);
+        } else if (maxCountExplicitlySet) {
+            builder.nullField(MAX_COUNT_FIELD);
         }
         builder.endObject();
         return builder;

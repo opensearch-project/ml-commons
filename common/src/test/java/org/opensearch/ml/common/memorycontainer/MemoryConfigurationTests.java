@@ -1415,6 +1415,96 @@ public class MemoryConfigurationTests {
     }
 
     @Test
+    public void testUpdate_RetentionPolicy_ExplicitNullFieldRemovalPersists() throws Exception {
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        // Simulate parsing an update that explicitly clears max_count
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"sessions\":{\"max_count\":null}}}";
+        org.opensearch.core.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration updateContent = MemoryConfiguration.parse(parser);
+
+        config.update(updateContent);
+
+        // Merged rule: retention_days preserved, max_count cleared with the explicit-set flag carried through
+        RetentionRule mergedRule = config.getRetentionPolicy().get(MemoryType.SESSIONS);
+        assertEquals(Integer.valueOf(30), mergedRule.getRetentionDays());
+        assertNull(mergedRule.getMaxCount());
+        assertTrue(mergedRule.isMaxCountExplicitlySet());
+
+        // Serialized update doc must emit the explicit null so the partial-update merge removes it
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.common.xcontent.XContentFactory.jsonBuilder();
+        config.toXContent(builder, org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS);
+        String serialized = builder.toString();
+        assertTrue("expected explicit null max_count in: " + serialized, serialized.contains("\"max_count\":null"));
+        assertTrue("expected retention_days preserved in: " + serialized, serialized.contains("\"retention_days\":30"));
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_ExplicitNullRetentionDaysPersists() throws Exception {
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"sessions\":{\"retention_days\":null}}}";
+        org.opensearch.core.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration updateContent = MemoryConfiguration.parse(parser);
+
+        config.update(updateContent);
+
+        RetentionRule mergedRule = config.getRetentionPolicy().get(MemoryType.SESSIONS);
+        assertNull(mergedRule.getRetentionDays());
+        assertEquals(Integer.valueOf(100), mergedRule.getMaxCount());
+        assertTrue(mergedRule.isRetentionDaysExplicitlySet());
+
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.common.xcontent.XContentFactory.jsonBuilder();
+        config.toXContent(builder, org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS);
+        String serialized = builder.toString();
+        assertTrue("expected explicit null retention_days in: " + serialized, serialized.contains("\"retention_days\":null"));
+        assertTrue("expected max_count preserved in: " + serialized, serialized.contains("\"max_count\":100"));
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_AbsentFieldsOmittedAfterMerge() throws Exception {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
+
+        // Update introduces a rule that only mentions max_count; retention_days was never mentioned
+        String json = "{\"index_prefix\":\"test\",\"retention_policy\":{\"sessions\":{\"max_count\":200}}}";
+        org.opensearch.core.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON
+            .xContent()
+            .createParser(
+                org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
+                org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+        MemoryConfiguration updateContent = MemoryConfiguration.parse(parser);
+
+        config.update(updateContent);
+
+        org.opensearch.core.xcontent.XContentBuilder builder = org.opensearch.common.xcontent.XContentFactory.jsonBuilder();
+        config.toXContent(builder, org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS);
+        String serialized = builder.toString();
+        assertTrue("expected max_count in: " + serialized, serialized.contains("\"max_count\":200"));
+        assertFalse("never-mentioned retention_days must be omitted in: " + serialized, serialized.contains("retention_days"));
+    }
+
+    @Test
     public void testRetentionPolicyExplicitNull_RoundTripsThroughXContent() throws Exception {
         // Parse a config with explicit "retention_policy": null (opt-out)
         String json = "{\"index_prefix\":\"test\",\"retention_policy\":null}";
