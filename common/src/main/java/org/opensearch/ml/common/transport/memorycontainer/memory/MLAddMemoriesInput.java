@@ -7,7 +7,7 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BINARY_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CHECKPOINT_ID_FIELD;
@@ -168,7 +168,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             this.parameters = in.readMap();
         }
         this.ownerId = in.readOptionalString();
-        if (in.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (in.getVersion().onOrAfter(VERSION_3_8_0)) {
             this.pinned = in.readOptionalBoolean();
         }
         this.checkpointId = in.readOptionalString();
@@ -228,7 +228,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalString(ownerId);
-        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
             out.writeOptionalBoolean(pinned);
         }
         out.writeOptionalString(checkpointId);

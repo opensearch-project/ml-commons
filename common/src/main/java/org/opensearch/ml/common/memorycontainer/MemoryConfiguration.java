@@ -8,7 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_HISTORY_FIELD;
@@ -175,7 +175,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.disableSession = input.readBoolean();
         this.useSystemIndex = input.readBoolean();
         this.tenantId = input.readOptionalString();
-        if (input.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (input.getVersion().onOrAfter(VERSION_3_8_0)) {
             if (input.readBoolean()) {
                 int size = input.readVInt();
                 this.retentionPolicy = new EnumMap<>(MemoryType.class);
@@ -218,7 +218,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         out.writeBoolean(disableSession);
         out.writeBoolean(useSystemIndex);
         out.writeOptionalString(tenantId);
-        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
             if (retentionPolicy != null && !retentionPolicy.isEmpty()) {
                 out.writeBoolean(true);
                 out.writeVInt(retentionPolicy.size());

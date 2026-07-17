@@ -7,7 +7,7 @@ package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENTS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
@@ -101,7 +101,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
         }
         this.tenantId = in.readOptionalString();
-        if (in.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (in.getVersion().onOrAfter(VERSION_3_8_0)) {
             this.pinned = in.readOptionalBoolean();
         }
     }
@@ -139,7 +139,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalString(tenantId);
-        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
             out.writeOptionalBoolean(pinned);
         }
     }
