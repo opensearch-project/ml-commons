@@ -106,7 +106,7 @@ public class ModelAccessControlHelper {
                         .onFailure(
                             new OpenSearchStatusException(
                                 "User "
-                                    + user.getName()
+                                    + (user == null ? null : user.getName())
                                     + " is not authorized to perform action "
                                     + action
                                     + " on ml-model-group id: "
@@ -173,6 +173,7 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
+
         if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
             var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_RESOURCE_TYPE, action, ActionListener.wrap(isAuthorized -> {
@@ -181,7 +182,7 @@ public class ModelAccessControlHelper {
                         .onFailure(
                             new OpenSearchStatusException(
                                 "User "
-                                    + user.getName()
+                                    + (user == null ? null : user.getName())
                                     + " is not authorized to perform action "
                                     + action
                                     + " on ml-model-group id: "
