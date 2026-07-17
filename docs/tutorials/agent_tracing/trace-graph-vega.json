@@ -1,0 +1,451 @@
+{
+    "$schema": "https://vega.github.io/schema/vega/v5.json",
+    "padding": 10,
+    "autosize": "fit",
+  
+    "signals": [
+
+      {
+        "name": "clicked",
+        "value": null,
+        "on": [
+          {"events": "symbol:click", "update": "datum"},
+          {"events": "@closeButton:click", "update": "null"}
+        ]
+      },
+      {
+        "name": "zoom",
+        "value": 1,
+        "on": [
+          {
+            "events": {"type": "wheel", "consume": true},
+            "update": "clamp(zoom * pow(1.001, -event.deltaY * pow(16, event.deltaMode)), 0.1, 5)"
+          }
+        ]
+      },
+      {
+        "name": "tx",
+        "value": 0,
+        "on": [
+          {
+            "events": {"type": "mousedown", "consume": true},
+            "update": "tx"
+          },
+          {
+            "events": {"type": "[mousedown, window:mouseup] > window:mousemove", "consume": true},
+            "update": "tx + event.dx / zoom"
+          }
+        ]
+      },
+      {
+        "name": "ty",
+        "value": 0,
+        "on": [
+          {
+            "events": {"type": "mousedown", "consume": true},
+            "update": "ty"
+          },
+          {
+            "events": {"type": "[mousedown, window:mouseup] > window:mousemove", "consume": true},
+            "update": "ty + event.dy / zoom"
+          }
+        ]
+      },
+      {
+        "name": "showAll",
+        "value": false,
+        "on": [
+          {"events": "@showAllButton:click", "update": "!showAll"}
+        ]
+      },
+      {
+        "name": "expanded",
+        "value": [""],
+        "on": [
+          {
+            "events": {"type": "click", "marktype": "symbol"},
+            "update": "expanded + [datum.spanId]"
+          }
+        ]
+      }
+    ],
+  
+    "data": [
+      {
+        "name": "spans",
+        "url": {
+          "index": "otel-v1-apm-span-agent",
+          "body": {
+            "size": 10000,
+            "query": {
+              "term": {
+                "traceId": "<trace_id>"
+              }
+            }
+          }
+        },
+        "format": {"property": "hits.hits"},
+        "transform": [
+          {"type": "formula", "expr": "datum._source.spanId", "as": "spanId"},
+          {"type": "formula", "expr": "datum._source.parentSpanId", "as": "parentSpanId"},
+          {"type": "formula", "expr": "replace(datum._source.name, 'agent.', '')", "as": "name"},
+          {"type": "formula", "expr": "datum._source.startTime", "as": "startTime"},
+          {"type": "formula", "expr": "datum._source.durationInNanos / 1e9", "as": "durationSeconds"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@task']", "as": "agentTask"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@result']", "as": "agentResult"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@tool@name'] || 'default'", "as": "toolName"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@phase']", "as": "phase"},
+          {
+            "type": "formula",
+            "expr": "test(/^(plan|execute_step_|reflect_step_)/, datum.name) ? datum.phase : (test(/^tool_call_/, datum.name) ? datum.toolName : (test(/^llm_call/, datum.name) ? 'llm_call' : datum.name))",
+            "as": "colorKey"
+          },
+          {"type": "formula", "expr": "datum.name == 'task' ? '' : datum.parentSpanId", "as": "parentSpanId"},
+          {
+            "type": "collect",
+            "sort": {
+              "field": "startTime",
+              "order": "ascending"
+            }
+          },
+          {"type": "stratify", "key": "spanId", "parentKey": "parentSpanId"},
+          {"type": "tree", "size": [{"signal": "width"}, {"signal": "height - 100"}], "separation": true, "as": ["x", "y", "depth", "children"]}
+        ]
+      },
+      {
+        "name": "visibleSpans",
+        "source": "spans",
+        "transform": [
+                  {
+          "type": "filter",
+          "expr": "showAll || datum.parentSpanId == '' || datum.depth <= 1 || indexof(expanded, datum.parentSpanId) >= 0"
+        }
+        ]
+      },
+      {
+        "name": "visibleLinks",
+        "source": "visibleSpans",
+        "transform": [
+          {"type": "treelinks"},
+          {"type": "linkpath", "orient": "vertical", "shape": "line"}
+        ]
+      }
+    ],
+  
+    "scales": [
+      {
+        "name": "color",
+        "type": "ordinal",
+        "domain": {"data": "spans", "field": "colorKey"},
+        "range": {"scheme": "category20"}
+      }
+    ],
+  
+    "marks": [
+      {
+        "type": "group",
+        "encode": {
+          "update": {
+            "width": {"signal": "width"},
+            "height": {"signal": "height"},
+            "clip": {"value": true},
+            "cursor": {"value": "move"}
+          }
+        },
+        "marks": [
+          {
+            "type": "path",
+            "from": {"data": "visibleLinks"},
+            "encode": {
+              "update": {
+                "path": {"field": "path"},
+                "stroke": {"value": "#ccc"},
+                "strokeWidth": {"value": 1.5},
+                "x": {"signal": "tx"},
+                "y": {"signal": "ty"},
+                "scaleX": {"signal": "zoom"},
+                "scaleY": {"signal": "zoom"}
+              }
+            }
+          },
+          {
+            "type": "symbol",
+            "from": {"data": "visibleSpans"},
+            "encode": {
+              "enter": {
+                "size": {"value": 1000},
+                "cursor": {"value": "pointer"}
+              },
+              "update": {
+                "x": {"signal": "(datum.x + tx) * zoom"},
+                "y": {"signal": "(datum.y + ty) * zoom"},
+                "fill": {"scale": "color", "field": "colorKey"},
+                "stroke": {"value": "white"},
+                "strokeWidth": {"value": 1},
+                "zindex": {"value": 1}
+              },
+              "hover": {
+                "strokeWidth": {"value": 2},
+                "stroke": {"value": "#000"},
+                "zindex": {"value": 2}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "from": {"data": "visibleSpans"},
+            "encode": {
+              "enter": {
+                "fontSize": {"value": 12},
+                "baseline": {"value": "middle"},
+                "fill": {"value": "#333"}
+              },
+              "update": {
+                "x": {"signal": "(datum.x + tx) * zoom"},
+                "y": {"signal": "((datum.y + ty) * zoom) + 25"},
+                "text": {"field": "name"},
+                "align": {"value": "center"},
+                "fontSize": {"signal": "12 * zoom"}
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "rect",
+        "name": "showAllButton",
+        "encode": {
+          "enter": {
+            "x": {"value": 130},
+            "y": {"value": 5},
+            "width": {"value": 80},
+            "height": {"value": 30},
+            "fill": {"value": "#4CAF50"},
+            "cornerRadius": {"value": 5},
+            "cursor": {"value": "pointer"}
+          },
+          "update": {
+            "fill": {"signal": "showAll ? '#45a049' : '#4CAF50'"}
+          }
+        }
+      },
+      {
+        "type": "text",
+        "encode": {
+          "enter": {
+            "x": {"value": 170},
+            "y": {"value": 20},
+            "align": {"value": "center"},
+            "baseline": {"value": "middle"},
+            "fill": {"value": "white"},
+            "text": {"signal": "showAll ? 'Collapse' : 'Show All'"},
+            "fontSize": {"value": 14},
+            "fontWeight": {"value": "bold"}
+          }
+        }
+      },
+      {
+        "type": "group",
+        "encode": {
+          "update": {
+            "x": {"value": 10},
+            "y": {"value": 40},
+            "width": {"value": 560},
+            "height": {"value": 200},
+            "fill": {"value": "white"},
+            "fillOpacity": {"value": 0.95},
+            "stroke": {"value": "#aaa"},
+            "strokeWidth": {"value": 0.5},
+            "opacity": {"signal": "clicked ? 1 : 0"}
+          }
+        },
+        "marks": [
+          {
+            "type": "rect",
+            "name": "closeButton",
+            "encode": {
+              "enter": {
+                "x": {"value": 535},
+                "y": {"value": 10},
+                "width": {"value": 20},
+                "height": {"value": 20},
+                "fill": {"value": "#f0f0f0"},
+                "stroke": {"value": "#ccc"},
+                "strokeWidth": {"value": 1},
+                "cursor": {"value": "pointer"}
+              },
+              "update": {
+                "opacity": {"signal": "clicked ? 1 : 0"}
+              },
+              "hover": {
+                "fill": {"value": "#e0e0e0"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "enter": {
+                "x": {"value": 545},
+                "y": {"value": 25},
+                "text": {"value": "✕"},
+                "fill": {"value": "#666"},
+                "fontSize": {"value": 14},
+                "fontWeight": {"value": "bold"},
+                "align": {"value": "center"},
+                "baseline": {"value": "middle"}
+              },
+              "update": {
+                "opacity": {"signal": "clicked ? 1 : 0"}
+              },
+              "hover": {
+                "fill": {"value": "#000"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 20},
+                "text": {"signal": "clicked ? 'Span ID: ' + clicked.spanId : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "fontWeight": {"value": "bold"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 35},
+                "text": {"signal": "clicked ? 'Operation: ' + clicked.name : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 50},
+                "text": {"signal": "clicked ? 'Tool: ' + (clicked.toolName || 'N/A') : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 65},
+                "text": {"signal": "clicked ? 'Phase: ' + (clicked.phase || 'N/A') : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 80},
+                "text": {"signal": "clicked ? 'Start Time: ' + clicked.startTime : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 95},
+                "text": {"signal": "clicked ? 'Duration: ' + format(clicked.durationSeconds, '.3f') + ' seconds' : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 110},
+                "text": {"value": "Input:"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "fontWeight": {"value": "bold"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 125},
+                "width": {"value": 540},
+                "text": {"signal": "clicked && clicked.agentTask ? substring(clicked.agentTask, 0, 100) : 'N/A'"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 155},
+                "text": {"value": "Output:"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "fontWeight": {"value": "bold"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 170},
+                "width": {"value": 540},
+                "text": {"signal": "clicked && clicked.agentResult ? substring(clicked.agentResult, 0, 100) : 'N/A'"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "encode": {
+          "enter": {
+            "x": {"value": 10},
+            "y": {"value": 20},
+            "fill": {"value": "black"},
+            "fontSize": {"value": 14},
+            "fontWeight": {"value": "bold"}
+          },
+          "update": {
+            "text": {"signal": "'Total Spans: ' + length(data('spans'))"}
+          }
+        }
+      }
+    ]
+  }
