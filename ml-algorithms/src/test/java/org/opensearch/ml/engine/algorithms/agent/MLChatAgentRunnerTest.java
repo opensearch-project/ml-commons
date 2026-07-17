@@ -53,6 +53,7 @@ import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -1029,6 +1030,42 @@ public class MLChatAgentRunnerTest {
         };
     }
 
+    private Answer getOpenAIAnswer(boolean toolCall, String finishReason, String content, Map<String, Integer> usage) {
+        return invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            Map<String, Object> message = new HashMap<>();
+            message.put("content", content);
+            if (toolCall) {
+                message.put("tool_calls", List.of(Map.of("id", "call-1", "function", Map.of("name", FIRST_TOOL, "arguments", Map.of()))));
+            }
+            Map<String, Object> dataMap = new HashMap<>();
+            dataMap.put("choices", List.of(Map.of("finish_reason", finishReason, "message", message)));
+            dataMap.put("usage", usage);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(dataMap).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            MLTaskResponse mlTaskResponse = MLTaskResponse.builder().output(mlModelTensorOutput).build();
+            listener.onResponse(mlTaskResponse);
+            return null;
+        };
+    }
+
+    private List<MLPredictionTaskRequest> capturePredictionRequests() {
+        ArgumentCaptor<ActionRequest> requestCaptor = ArgumentCaptor.forClass(ActionRequest.class);
+        verify(client, Mockito.atLeastOnce()).execute(any(ActionType.class), requestCaptor.capture(), isA(ActionListener.class));
+        return requestCaptor
+            .getAllValues()
+            .stream()
+            .filter(MLPredictionTaskRequest.class::isInstance)
+            .map(MLPredictionTaskRequest.class::cast)
+            .collect(Collectors.toList());
+    }
+
+    private Map<String, String> getPredictionParams(MLPredictionTaskRequest request) {
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+        return inputDataSet.getParameters();
+    }
+
     private Answer generateToolResponse(String response) {
         return invocation -> {
             ActionListener<Object> listener = invocation.getArgument(1);
@@ -1510,6 +1547,79 @@ public class MLChatAgentRunnerTest {
         mlChatAgentRunner.generateLLMSummary(null, llmSpec, "tenant", "question", new HashMap<>(), listener, null, null);
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
+    public void testTokenBudgetInitialRequestGetsFullBudget() {
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put("max_tokens", "100");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        List<MLPredictionTaskRequest> requests = capturePredictionRequests();
+        assertTrue(requests.size() > 0);
+        assertEquals("100", getPredictionParams(requests.get(0)).get("max_tokens"));
+        assertEquals("100", getPredictionParams(requests.get(0)).get("maxTokens"));
+        assertEquals("100", getPredictionParams(requests.get(0)).get("maxOutputTokens"));
+    }
+
+    @Test
+    public void testTokenBudgetSecondRequestGetsRemainingBudget() {
+        List<Map<String, String>> requestParams = new java.util.ArrayList<>();
+        Mockito.doAnswer(invocation -> {
+            requestParams.add(new HashMap<>(getPredictionParams(invocation.getArgument(1))));
+            return getOpenAIAnswer(
+                true,
+                "tool_calls",
+                "",
+                ImmutableMap.of("prompt_tokens", 20, "completion_tokens", 10, "total_tokens", 30)
+            ).answer(invocation);
+        }).doAnswer(invocation -> {
+            requestParams.add(new HashMap<>(getPredictionParams(invocation.getArgument(1))));
+            return getOpenAIAnswer(
+                false,
+                "stop",
+                "This is the final answer",
+                ImmutableMap.of("prompt_tokens", 10, "completion_tokens", 5, "total_tokens", 15)
+            ).answer(invocation);
+        }).when(client).execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put("max_tokens", "100");
+        params.put("_llm_interface", "openai/v1/chat/completions");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        assertTrue(requestParams.size() >= 2);
+        assertEquals("100", requestParams.get(0).get("max_tokens"));
+        assertEquals("100", requestParams.get(0).get("maxTokens"));
+        assertEquals("100", requestParams.get(0).get("maxOutputTokens"));
+        assertEquals("70", requestParams.get(1).get("max_tokens"));
+        assertEquals("70", requestParams.get(1).get("maxTokens"));
+        assertEquals("70", requestParams.get(1).get("maxOutputTokens"));
+    }
+
+    @Test
+    public void testTokenBudgetExhaustedAfterLLMPreventsNextRequestAndToolExecution() {
+        Mockito
+            .doAnswer(
+                getOpenAIAnswer(true, "tool_calls", "", ImmutableMap.of("prompt_tokens", 60, "completion_tokens", 40, "total_tokens", 100))
+            )
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put("max_tokens", "100");
+        params.put("_llm_interface", "openai/v1/chat/completions");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        List<MLPredictionTaskRequest> requests = capturePredictionRequests();
+        assertEquals(1, requests.size());
+        verify(firstTool, never()).run(any(), any());
     }
 
     @Test
