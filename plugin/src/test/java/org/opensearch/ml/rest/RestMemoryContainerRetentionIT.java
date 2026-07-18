@@ -149,6 +149,44 @@ public class RestMemoryContainerRetentionIT extends MLCommonsRestTestCase {
         }
     }
 
+    @Test
+    public void testPinnedRoundTripOnSession() throws IOException {
+        // Bare container (no LLM/embedding) so sessions work without external credentials.
+        String containerId = createContainer("{ \"name\": \"pinned_it_" + System.currentTimeMillis() + "\", \"configuration\": {} }");
+
+        // Add a memory with a session_id namespace -> creates a session and returns its id.
+        String addBody = "{\n"
+            + "  \"messages\": [{ \"role\": \"user\", \"content\": [{ \"type\": \"text\", \"text\": \"hello\" }] }],\n"
+            + "  \"namespace\": { \"session_id\": \"pinned-session-1\" },\n"
+            + "  \"infer\": false\n"
+            + "}";
+        Response addResponse = TestHelper
+            .makeRequest(client(), "POST", CONTAINER_PATH + containerId + "/memories", null, TestHelper.toHttpEntity(addBody), null);
+        assertEquals(200, addResponse.getStatusLine().getStatusCode());
+        String sessionId = (String) parseResponseToMap(addResponse).get("session_id");
+        assertNotNull("add memory should return a session_id", sessionId);
+
+        // pinned is not valid on working memory; set it on the session (an allowed type).
+        String pinBody = "{ \"pinned\": true }";
+        Response pinResponse = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                CONTAINER_PATH + containerId + "/memories/sessions/" + sessionId,
+                null,
+                TestHelper.toHttpEntity(pinBody),
+                null
+            );
+        assertEquals(200, pinResponse.getStatusLine().getStatusCode());
+
+        // Get the session back and confirm pinned persisted.
+        Response getResponse = TestHelper
+            .makeRequest(client(), "GET", CONTAINER_PATH + containerId + "/memories/sessions/" + sessionId, null, "", null);
+        assertEquals(200, getResponse.getStatusLine().getStatusCode());
+        Map<String, Object> session = parseResponseToMap(getResponse);
+        assertEquals(Boolean.TRUE, session.get("pinned"));
+    }
+
     private String createContainer(String body) throws IOException {
         Response createResponse = TestHelper.makeRequest(client(), "POST", CREATE_PATH, null, TestHelper.toHttpEntity(body), null);
         assertEquals(200, createResponse.getStatusLine().getStatusCode());
