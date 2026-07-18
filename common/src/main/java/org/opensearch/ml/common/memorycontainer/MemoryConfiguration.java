@@ -185,6 +185,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                     this.retentionPolicy.put(key, value);
                 }
             }
+            this.retentionPolicyExplicitlyNull = input.readBoolean();
         }
     }
 
@@ -229,6 +230,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
+            out.writeBoolean(retentionPolicyExplicitlyNull);
         }
     }
 

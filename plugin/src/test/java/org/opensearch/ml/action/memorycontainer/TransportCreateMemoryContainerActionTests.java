@@ -218,6 +218,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         // Setup ML feature settings
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true); // Enable by default for tests
 
         // Create action
         action = new TransportCreateMemoryContainerAction(
@@ -251,6 +252,31 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
         assertEquals(RestStatus.FORBIDDEN, statusException.status());
         assertEquals("The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled", exception.getMessage());
+    }
+
+    public void testDoExecuteWithRetentionDisabledRejectsRetentionPolicy() {
+        // Retention feature disabled, but request carries a retention_policy
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        Map<MemoryType, RetentionRule> retentionPolicy = new EnumMap<>(MemoryType.class);
+        retentionPolicy.put(MemoryType.SESSIONS, RetentionRule.builder().retentionDays(30).build());
+        MLCreateMemoryContainerInput retentionInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test")
+            .configuration(MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(retentionPolicy).build())
+            .build();
+        MLCreateMemoryContainerRequest retentionRequest = new MLCreateMemoryContainerRequest(retentionInput);
+
+        action.doExecute(task, retentionRequest, actionListener);
+
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exception).status());
+        assertEquals(
+            "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting plugins.ml_commons.memory.retention_enabled",
+            exception.getMessage()
+        );
     }
 
     public void testDoExecuteSuccess_LongTermMemory() throws InterruptedException {

@@ -7,6 +7,7 @@ package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE;
 
 import java.time.Instant;
 import java.util.Map;
@@ -93,6 +94,15 @@ public class TransportCreateMemoryContainerAction extends
         }
 
         MLCreateMemoryContainerInput input = request.getMlCreateMemoryContainerInput();
+
+        // Reject retention_policy when the retention feature is disabled (cluster-level kill switch)
+        if (!mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && input.getConfiguration() != null
+            && input.getConfiguration().getRetentionPolicy() != null
+            && !input.getConfiguration().getRetentionPolicy().isEmpty()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
 
         // Validate tenant ID
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, input.getTenantId(), listener)) {

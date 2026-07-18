@@ -75,12 +75,12 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     private Map<String, Object> parameters;
     private String ownerId;
 
-    // Pinned field (only valid for session/long-term/history, rejected for working memory)
-    private Boolean pinned;
-
     // Checkpoint field
     private String checkpointId;
     private String tenantId;
+
+    // Pinned field (only valid for session/long-term/history, rejected for working memory)
+    private Boolean pinned;
 
     public MLAddMemoriesInput(
         String memoryContainerId,
@@ -96,9 +96,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> tags,
         Map<String, Object> parameters,
         String ownerId,
-        Boolean pinned,
         String checkpointId,
-        String tenantId
+        String tenantId,
+        Boolean pinned
     ) {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
@@ -363,7 +363,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
                     ownerId = parser.text();
                     break;
                 case PINNED_FIELD:
-                    pinned = parser.booleanValue();
+                    pinned = parser.currentToken() == XContentParser.Token.VALUE_NULL ? null : parser.booleanValue();
                     break;
                 case CHECKPOINT_ID_FIELD:
                     checkpointId = parser.text();

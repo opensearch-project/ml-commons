@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,8 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerRequest;
@@ -97,6 +100,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         // Setup thread context
         when(client.threadPool()).thenReturn(threadPool);
@@ -141,6 +145,37 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         Exception exception = captor.getValue();
         assertTrue(exception instanceof OpenSearchStatusException);
         assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exception).status());
+    }
+
+    public void testDoExecuteWithRetentionDisabledRejectsRetentionPolicyUpdate() {
+        // Retention feature disabled, but update request carries a non-empty retention_policy
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        Map<MemoryType, RetentionRule> retentionPolicy = new EnumMap<>(MemoryType.class);
+        retentionPolicy.put(MemoryType.SESSIONS, RetentionRule.builder().retentionDays(30).build());
+        MemoryConfiguration updateConfig = MemoryConfiguration.builder().retentionPolicy(retentionPolicy).build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().configuration(updateConfig).build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId("container-id")
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exception).status());
+        assertEquals(
+            "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting plugins.ml_commons.memory.retention_enabled",
+            exception.getMessage()
+        );
     }
 
     public void testDoExecuteSuccess() {

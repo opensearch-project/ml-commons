@@ -1437,6 +1437,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,

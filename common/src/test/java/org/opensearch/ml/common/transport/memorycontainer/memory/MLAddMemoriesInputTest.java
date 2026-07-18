@@ -314,6 +314,43 @@ public class MLAddMemoriesInputTest {
     }
 
     @Test
+    public void testParseWithPinnedNull() throws IOException {
+        // Explicit "pinned": null must be treated as absent, not throw.
+        String jsonString = "{"
+            + "\"memory_container_id\":\"container-123\","
+            + "\"messages\":[{\"role\":\"user\", \"content\":[{\"type\":\"text\", \"text\": \"Test\"}]}],"
+            + "\"pinned\":null"
+            + "}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null, null);
+
+        assertNull(parsed.getPinned());
+    }
+
+    @Test
+    public void testParseWithPinnedTrue() throws IOException {
+        String jsonString = "{"
+            + "\"memory_container_id\":\"container-123\","
+            + "\"messages\":[{\"role\":\"user\", \"content\":[{\"type\":\"text\", \"text\": \"Test\"}]}],"
+            + "\"pinned\":true"
+            + "}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null, null);
+
+        assertEquals(Boolean.TRUE, parsed.getPinned());
+    }
+
+    @Test
     public void testSetters() {
         MLAddMemoriesInput input = MLAddMemoriesInput
             .builder()

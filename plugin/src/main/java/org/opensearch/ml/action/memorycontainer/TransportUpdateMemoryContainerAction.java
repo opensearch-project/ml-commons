@@ -111,6 +111,19 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         List<String> allowedBackendRoles = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getBackendRoles();
         MemoryConfiguration updateConfiguration = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getConfiguration();
 
+        // Reject setting a retention_policy when the retention feature is disabled (cluster-level kill switch).
+        // An explicit "retention_policy": null wipe is still allowed, since clearing retention is consistent with the feature being off.
+        if (!mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && updateConfiguration != null
+            && updateConfiguration.getRetentionPolicy() != null
+            && !updateConfiguration.getRetentionPolicy().isEmpty()) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
+                );
+            return;
+        }
+
         // Get memory container to validate access
         memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
             // Validate access permissions

@@ -1252,6 +1252,28 @@ public class MemoryConfigurationTests {
     }
 
     @Test
+    public void testRetentionPolicy_StreamRoundTrip_ExplicitlyNullFlag() throws Exception {
+        // An explicit "retention_policy": null update must survive a node boundary so update() wipes the policy.
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
+        config.setRetentionPolicyExplicitlyNull(true);
+
+        org.opensearch.common.io.stream.BytesStreamOutput output = new org.opensearch.common.io.stream.BytesStreamOutput();
+        config.writeTo(output);
+
+        org.opensearch.core.common.io.stream.StreamInput input = output.bytes().streamInput();
+        MemoryConfiguration deserialized = new MemoryConfiguration(input);
+
+        assertTrue(deserialized.isRetentionPolicyExplicitlyNull());
+
+        // And the flag defaults to false when not set.
+        MemoryConfiguration defaultConfig = MemoryConfiguration.builder().indexPrefix("test").build();
+        org.opensearch.common.io.stream.BytesStreamOutput defaultOutput = new org.opensearch.common.io.stream.BytesStreamOutput();
+        defaultConfig.writeTo(defaultOutput);
+        MemoryConfiguration deserializedDefault = new MemoryConfiguration(defaultOutput.bytes().streamInput());
+        assertFalse(deserializedDefault.isRetentionPolicyExplicitlyNull());
+    }
+
+    @Test
     public void testUpdate_RetentionPolicy_TypeLevelReplacement() {
         Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
         existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
