@@ -289,6 +289,11 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 entry.getValue().toXContent(builder, params);
             }
             builder.endObject();
+        } else if (retentionPolicyExplicitlyNull) {
+            // Emit an explicit null so the UpdateRequest.doc() partial merge removes the stored policy
+            // (mirrors the dimension/SPARSE_ENCODING pattern above). Gated on the wipe flag so a plain
+            // policy-less container never gains a spurious retention_policy: null field.
+            builder.nullField(RETENTION_POLICY_FIELD);
         }
         builder.endObject();
         return builder;
@@ -646,7 +651,11 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         // Merge retention policy
         if (updateContent.isRetentionPolicyExplicitlyNull()) {
             this.retentionPolicy = null;
+            // Carry the wipe intent onto this config so toXContent() emits an explicit null and the
+            // partial-document merge (UpdateRequest.doc()) removes the stored policy.
+            this.retentionPolicyExplicitlyNull = true;
         } else if (updateContent.getRetentionPolicy() != null) {
+            this.retentionPolicyExplicitlyNull = false;
             validateRetentionPolicy(updateContent.getRetentionPolicy());
             if (this.retentionPolicy == null) {
                 this.retentionPolicy = new EnumMap<>(MemoryType.class);

@@ -1404,6 +1404,43 @@ public class MemoryConfigurationTests {
 
         // Policy should be wiped
         assertNull(config.getRetentionPolicy());
+        // The wipe intent must propagate so toXContent emits an explicit null (required for the
+        // UpdateRequest.doc() partial merge to actually remove the stored policy).
+        assertTrue(config.isRetentionPolicyExplicitlyNull());
+        String serialized = org.opensearch.ml.common.TestHelper
+            .xContentBuilderToString(
+                config
+                    .toXContent(
+                        org.opensearch.common.xcontent.XContentFactory.jsonBuilder(),
+                        org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS
+                    )
+            );
+        assertTrue("wiped config must serialize an explicit retention_policy:null", serialized.contains("\"retention_policy\":null"));
+    }
+
+    @Test
+    public void testUpdate_RetentionPolicy_SubsequentNonNullClearsWipeFlag() {
+        // A wipe followed by a normal non-null retention update must clear the transient wipe flag,
+        // otherwise a stale flag would emit a spurious retention_policy:null.
+        Map<MemoryType, RetentionRule> existingPolicy = new java.util.EnumMap<>(MemoryType.class);
+        existingPolicy.put(MemoryType.SESSIONS, new RetentionRule(30, 100));
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(existingPolicy).build();
+
+        // First: explicit-null wipe
+        MemoryConfiguration wipe = MemoryConfiguration.builder().build();
+        wipe.setRetentionPolicyExplicitlyNull(true);
+        config.update(wipe);
+        assertNull(config.getRetentionPolicy());
+        assertTrue(config.isRetentionPolicyExplicitlyNull());
+
+        // Then: a normal non-null policy update
+        Map<MemoryType, RetentionRule> newPolicy = new java.util.EnumMap<>(MemoryType.class);
+        newPolicy.put(MemoryType.LONG_TERM, new RetentionRule(90, null));
+        MemoryConfiguration apply = MemoryConfiguration.builder().retentionPolicy(newPolicy).build();
+        config.update(apply);
+
+        assertNotNull(config.getRetentionPolicy());
+        assertFalse("wipe flag must be cleared after a non-null policy update", config.isRetentionPolicyExplicitlyNull());
     }
 
     @Test

@@ -168,7 +168,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                         List<MemoryStrategy> mergedStrategies = StrategyMergeHelper
                             .mergeStrategies(currentConfig.getStrategies(), updateConfiguration.getStrategies());
                         // Create a new configuration with merged strategies for update
-                        // IMPORTANT: Preserve embedding fields from update request
+                        // IMPORTANT: Preserve embedding fields AND retention_policy from the update request,
+                        // otherwise a combined strategy + retention update would silently drop the retention change.
                         finalUpdateConfig = MemoryConfiguration
                             .builder()
                             .llmId(updateConfiguration.getLlmId())
@@ -177,7 +178,11 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                             .embeddingModelId(updateConfiguration.getEmbeddingModelId())
                             .embeddingModelType(updateConfiguration.getEmbeddingModelType())
                             .dimension(updateConfiguration.getDimension())
+                            .retentionPolicy(updateConfiguration.getRetentionPolicy())
                             .build();
+                        // retentionPolicyExplicitlyNull is a transient field outside the @Builder constructor,
+                        // so it must be copied explicitly to preserve an explicit "retention_policy": null wipe.
+                        finalUpdateConfig.setRetentionPolicyExplicitlyNull(updateConfiguration.isRetentionPolicyExplicitlyNull());
                     } else {
                         finalUpdateConfig = updateConfiguration;
                     }

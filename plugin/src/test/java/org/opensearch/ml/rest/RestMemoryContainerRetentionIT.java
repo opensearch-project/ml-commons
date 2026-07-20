@@ -154,17 +154,21 @@ public class RestMemoryContainerRetentionIT extends MLCommonsRestTestCase {
         // Bare container (no LLM/embedding) so sessions work without external credentials.
         String containerId = createContainer("{ \"name\": \"pinned_it_" + System.currentTimeMillis() + "\", \"configuration\": {} }");
 
-        // Add a memory with a session_id namespace -> creates a session and returns its id.
-        String addBody = "{\n"
-            + "  \"messages\": [{ \"role\": \"user\", \"content\": [{ \"type\": \"text\", \"text\": \"hello\" }] }],\n"
-            + "  \"namespace\": { \"session_id\": \"pinned-session-1\" },\n"
-            + "  \"infer\": false\n"
-            + "}";
+        // Create a real session document via the dedicated create-session endpoint (no LLM/embedding needed;
+        // POST /memories with a client-supplied session_id does NOT persist a session doc, only working memory).
+        String sessionBody = "{ \"session_id\": \"pinned-session-1\" }";
         Response addResponse = TestHelper
-            .makeRequest(client(), "POST", CONTAINER_PATH + containerId + "/memories", null, TestHelper.toHttpEntity(addBody), null);
+            .makeRequest(
+                client(),
+                "POST",
+                CONTAINER_PATH + containerId + "/memories/sessions",
+                null,
+                TestHelper.toHttpEntity(sessionBody),
+                null
+            );
         assertEquals(200, addResponse.getStatusLine().getStatusCode());
         String sessionId = (String) parseResponseToMap(addResponse).get("session_id");
-        assertNotNull("add memory should return a session_id", sessionId);
+        assertNotNull("create session should return a session_id", sessionId);
 
         // pinned is not valid on working memory; set it on the session (an allowed type).
         String pinBody = "{ \"pinned\": true }";
@@ -194,16 +198,20 @@ public class RestMemoryContainerRetentionIT extends MLCommonsRestTestCase {
             "{ \"name\": \"pinned_disabled_it_" + System.currentTimeMillis() + "\", \"configuration\": {} }"
         );
 
-        String addBody = "{\n"
-            + "  \"messages\": [{ \"role\": \"user\", \"content\": [{ \"type\": \"text\", \"text\": \"hello\" }] }],\n"
-            + "  \"namespace\": { \"session_id\": \"pinned-disabled-session-1\" },\n"
-            + "  \"infer\": false\n"
-            + "}";
+        // Create a real session document (retention still enabled here) so the PUT below reaches the retention gate.
+        String sessionBody = "{ \"session_id\": \"pinned-disabled-session-1\" }";
         Response addResponse = TestHelper
-            .makeRequest(client(), "POST", CONTAINER_PATH + containerId + "/memories", null, TestHelper.toHttpEntity(addBody), null);
+            .makeRequest(
+                client(),
+                "POST",
+                CONTAINER_PATH + containerId + "/memories/sessions",
+                null,
+                TestHelper.toHttpEntity(sessionBody),
+                null
+            );
         assertEquals(200, addResponse.getStatusLine().getStatusCode());
         String sessionId = (String) parseResponseToMap(addResponse).get("session_id");
-        assertNotNull("add memory should return a session_id", sessionId);
+        assertNotNull("create session should return a session_id", sessionId);
 
         try {
             updateClusterSettings("plugins.ml_commons.memory.retention_enabled", false);
