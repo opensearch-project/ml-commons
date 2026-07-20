@@ -250,7 +250,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT = BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2;
 
     private static final String COHERE_KEY = System.getenv("COHERE_KEY");
-    private static final String COHERE_CONNECTOR_BLUEPRINT = "{\n"
+    // Package private to share with Tenant Aware ITs in this package
+    static final String COHERE_CONNECTOR_BLUEPRINT = "{\n"
         + "    \"name\": \"Cohere Chat Model\",\n"
         + "    \"description\": \"The connector to Cohere's public chat API\",\n"
         + "    \"version\": \"1\",\n"
