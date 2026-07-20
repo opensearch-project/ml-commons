@@ -546,9 +546,9 @@ public final class MLCommonsSettings {
             + ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.getKey();
 
     // Feature flag for memory retention. Gates acceptance of retention_policy on the memory container APIs
-    // and (in a later PR) the memory retention job. Provides a cluster-level kill switch for the feature.
+    // and the memory retention job. Provides a cluster-level kill switch for the feature.
     public static final Setting<Boolean> ML_COMMONS_MEMORY_RETENTION_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory.retention_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory.retention_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE =
         "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting "
             + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
@@ -596,9 +596,6 @@ public final class MLCommonsSettings {
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
 
     // Memory retention job settings
-    public static final Setting<Boolean> ML_COMMONS_MEMORY_RETENTION_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory.retention_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
-
     public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_interval_hours",

@@ -27,7 +27,7 @@ public class RestMemoryContainerRetentionIT extends MLCommonsRestTestCase {
     @Before
     public void setup() throws IOException {
         updateClusterSettings("plugins.ml_commons.agentic_memory_enabled", true);
-        // Retention defaults to false in this PR; enable it so the retention_policy round-trip tests can run.
+        // Retention defaults to true in this PR; set it explicitly so the round-trip tests are robust to the default.
         updateClusterSettings("plugins.ml_commons.memory.retention_enabled", true);
     }
 
