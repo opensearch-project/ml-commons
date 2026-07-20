@@ -7,11 +7,13 @@ package org.opensearch.ml.action.memorycontainer;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -277,6 +279,48 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting plugins.ml_commons.memory.retention_enabled",
             exception.getMessage()
         );
+    }
+
+    public void testDoExecuteWithRetentionDisabledButNoRetentionPolicyProceeds() throws InterruptedException {
+        // Retention feature disabled, but the request carries NO retention_policy — the gate must NOT reject.
+        // Covers the false-branches of the retention gate (policy null), letting creation proceed normally.
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        MLCreateMemoryContainerInput noRetentionInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test")
+            .configuration(MemoryConfiguration.builder().indexPrefix("test").build())
+            .build();
+        MLCreateMemoryContainerRequest noRetentionRequest = new MLCreateMemoryContainerRequest(noRetentionInput);
+
+        action.doExecute(task, noRetentionRequest, actionListener);
+
+        // Must not be rejected by the retention gate (no FORBIDDEN retention_policy failure).
+        verify(actionListener, never()).onFailure(argThat(e -> e instanceof OpenSearchStatusException
+            && ((OpenSearchStatusException) e).status() == RestStatus.FORBIDDEN
+            && e.getMessage() != null
+            && e.getMessage().contains("Cannot set retention_policy")));
+    }
+
+    public void testDoExecuteWithRetentionDisabledAndEmptyRetentionPolicyProceeds() throws InterruptedException {
+        // Retention disabled + an explicitly empty retention_policy map — gate must fall through (isEmpty() true).
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        MLCreateMemoryContainerInput emptyRetentionInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test")
+            .configuration(
+                MemoryConfiguration.builder().indexPrefix("test").retentionPolicy(new EnumMap<>(MemoryType.class)).build()
+            )
+            .build();
+        MLCreateMemoryContainerRequest emptyRetentionRequest = new MLCreateMemoryContainerRequest(emptyRetentionInput);
+
+        action.doExecute(task, emptyRetentionRequest, actionListener);
+
+        verify(actionListener, never()).onFailure(argThat(e -> e instanceof OpenSearchStatusException
+            && ((OpenSearchStatusException) e).status() == RestStatus.FORBIDDEN
+            && e.getMessage() != null
+            && e.getMessage().contains("Cannot set retention_policy")));
     }
 
     public void testDoExecuteSuccess_LongTermMemory() throws InterruptedException {
