@@ -307,6 +307,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                     String modelId = parameters != null ? parameters.get("model") : null;
                     String tenantId = connector != null ? connector.getTenantId() : null;
                     log.info("First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}", modelId, tenantId, timeToFirstToken);
+                    AgentUtils.logTimeToFirstToken(modelId, tenantId, timeToFirstToken);
                     firstTokenReceived.set(true);
                 }
 

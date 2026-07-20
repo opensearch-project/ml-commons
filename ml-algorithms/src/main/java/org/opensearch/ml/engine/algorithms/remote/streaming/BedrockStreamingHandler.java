@@ -361,6 +361,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                                 tenantId,
                                 timeToFirstToken
                             );
+                        AgentUtils.logTimeToFirstToken(modelId, tenantId, timeToFirstToken);
                         firstTokenReceived.set(true);
                     }
 
