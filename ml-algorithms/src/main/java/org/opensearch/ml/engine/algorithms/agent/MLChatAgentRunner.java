@@ -1122,7 +1122,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean includeTokenUsage
     ) {
         // Token tracking: send streaming batch or add to response tensors
-        if (streamingWrapper.isStreaming()) {
+        boolean isStreaming = streamingWrapper.isStreaming();
+        if (isStreaming) {
             if (includeTokenUsage) {
                 streamingWrapper.sendTokenUsageBatch(sessionId, parentInteractionId, tokenTracker, tenantId);
             }
@@ -1150,7 +1151,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             copyOfFinalAnswer,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            isStreaming
                         );
                     }, e -> {
                         log.error("Failed to save assistant response as structured message", e);
@@ -1183,7 +1185,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             copyOfFinalAnswer,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            isStreaming
                         );
                     }, e -> {
                         log.error("Failed to save structured messages for AG-UI agent", e);
@@ -1206,7 +1209,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         copyOfFinalAnswer,
                                         tokenTracker,
                                         tenantId,
-                                        includeTokenUsage
+                                        includeTokenUsage,
+                                        isStreaming
                                     );
                                 }, e -> { listener.onFailure(e); })
                             );
@@ -1235,7 +1239,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 finalAnswer,
                 tokenTracker,
                 tenantId,
-                includeTokenUsage
+                includeTokenUsage,
+                isStreaming
             );
         }
     }
@@ -1400,7 +1405,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String finalAnswer2,
         AgentTokenTracker tokenTracker,
         String tenantId,
-        boolean includeTokenUsage
+        boolean includeTokenUsage,
+        boolean skipListenerCallback
     ) {
         cotModelTensors
             .add(
@@ -1418,12 +1424,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .build()
                 )
         );
-        if (verbose) {
-            AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId, includeTokenUsage);
-            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
-        } else {
-            AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
-            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+
+        if (!skipListenerCallback) {
+            if (verbose) {
+                AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId, includeTokenUsage);
+                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
+            } else {
+                AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
+                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+            }
         }
     }
 
