@@ -137,8 +137,18 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                     return;
                 }
 
-                // Reject pinned field for working memory type
+                // Reject pinned when the retention feature is disabled (cluster-level kill switch): pinned is only
+                // meaningful because the retention job skips pinned items, so it must be gated alongside retention_policy.
                 Map<String, Object> updateContent = updateRequest.getMlUpdateMemoryInput().getUpdateContent();
+                if (!mlFeatureEnabledSetting.isMemoryRetentionEnabled() && updateContent.containsKey(PINNED_FIELD)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(MLCommonsSettings.ML_COMMONS_MEMORY_PINNED_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
+                        );
+                    return;
+                }
+
+                // Reject pinned field for working memory type
                 if (memoryType == MemoryType.WORKING && updateContent.containsKey(PINNED_FIELD)) {
                     actionListener
                         .onFailure(

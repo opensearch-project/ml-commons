@@ -113,6 +113,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock ML feature settings
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         // Setup mock container with semantic storage
         mockContainer = MLMemoryContainer
@@ -896,6 +897,62 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         verify(actionListener, times(1)).onResponse(mockIndexResponse);
         verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testDoExecute_PinnedRejectedWhenRetentionDisabled() {
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        String memoryContainerId = "container-123";
+        String memoryId = "memory-456";
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("pinned", true);
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(MemoryType.SESSIONS)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put("owner_id", "user-123");
+        when(mockGetResponse.isExists()).thenReturn(true);
+        when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, MemoryType.SESSIONS)).thenReturn("test-session-index");
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
+
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
+
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) capturedError).status());
+        assertEquals(
+            org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_PINNED_DISABLED_MESSAGE,
+            capturedError.getMessage()
+        );
+        // Must not reach the index step when the feature is disabled.
+        verify(memoryContainerHelper, never()).indexData(any(), any(IndexRequest.class), any());
     }
 
     @Test

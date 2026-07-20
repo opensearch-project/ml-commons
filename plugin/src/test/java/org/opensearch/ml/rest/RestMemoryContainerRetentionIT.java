@@ -187,6 +187,46 @@ public class RestMemoryContainerRetentionIT extends MLCommonsRestTestCase {
         assertEquals(Boolean.TRUE, session.get("pinned"));
     }
 
+    @Test
+    public void testPinnedRejectedWhenFeatureDisabled() throws IOException {
+        // Bare container so sessions work without external credentials.
+        String containerId = createContainer(
+            "{ \"name\": \"pinned_disabled_it_" + System.currentTimeMillis() + "\", \"configuration\": {} }"
+        );
+
+        String addBody = "{\n"
+            + "  \"messages\": [{ \"role\": \"user\", \"content\": [{ \"type\": \"text\", \"text\": \"hello\" }] }],\n"
+            + "  \"namespace\": { \"session_id\": \"pinned-disabled-session-1\" },\n"
+            + "  \"infer\": false\n"
+            + "}";
+        Response addResponse = TestHelper
+            .makeRequest(client(), "POST", CONTAINER_PATH + containerId + "/memories", null, TestHelper.toHttpEntity(addBody), null);
+        assertEquals(200, addResponse.getStatusLine().getStatusCode());
+        String sessionId = (String) parseResponseToMap(addResponse).get("session_id");
+        assertNotNull("add memory should return a session_id", sessionId);
+
+        try {
+            updateClusterSettings("plugins.ml_commons.memory.retention_enabled", false);
+            String pinBody = "{ \"pinned\": true }";
+            try {
+                TestHelper
+                    .makeRequest(
+                        client(),
+                        "PUT",
+                        CONTAINER_PATH + containerId + "/memories/sessions/" + sessionId,
+                        null,
+                        TestHelper.toHttpEntity(pinBody),
+                        null
+                    );
+                fail("pinning a session should be rejected when the retention feature is disabled");
+            } catch (org.opensearch.client.ResponseException e) {
+                assertEquals(403, e.getResponse().getStatusLine().getStatusCode());
+            }
+        } finally {
+            updateClusterSettings("plugins.ml_commons.memory.retention_enabled", true);
+        }
+    }
+
     private String createContainer(String body) throws IOException {
         Response createResponse = TestHelper.makeRequest(client(), "POST", CREATE_PATH, null, TestHelper.toHttpEntity(body), null);
         assertEquals(200, createResponse.getStatusLine().getStatusCode());

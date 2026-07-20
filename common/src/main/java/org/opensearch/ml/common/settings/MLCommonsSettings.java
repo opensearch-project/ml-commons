@@ -552,6 +552,9 @@ public final class MLCommonsSettings {
     public static final String ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE =
         "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting "
             + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
+    public static final String ML_COMMONS_MEMORY_PINNED_DISABLED_MESSAGE =
+        "Cannot set pinned: the memory retention feature is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
 
     // Feature flag for global tenant id in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
