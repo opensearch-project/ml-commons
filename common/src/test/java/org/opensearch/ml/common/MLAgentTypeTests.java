@@ -7,15 +7,9 @@ package org.opensearch.ml.common;
 
 import static org.junit.Assert.*;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class MLAgentTypeTests {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void testFromWithValidTypes() {
         // Test all enum values to ensure they return correctly
@@ -43,24 +37,23 @@ public class MLAgentTypeTests {
     @Test
     public void testFromWithInvalidType() {
         // This should throw an IllegalArgumentException
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong Agent type");
-        MLAgentType.from("INVALID_TYPE");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MLAgentType.from("INVALID_TYPE"));
+        assertEquals("Wrong Agent type", exception.getMessage());
     }
 
     @Test
     public void testFromWithEmptyString() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong Agent type");
-        // This should also throw an IllegalArgumentException
-        MLAgentType.from("");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            // This should also throw an IllegalArgumentException
+            MLAgentType.from("");
+        });
+        assertEquals("Wrong Agent type", exception.getMessage());
     }
 
     @Test
     public void testFromWithNull() {
         // This should also throw an IllegalArgumentException
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Agent type can't be null");
-        MLAgentType.from(null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MLAgentType.from(null));
+        assertEquals("Agent type can't be null", exception.getMessage());
     }
 }

@@ -7,9 +7,11 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.MockitoTestHelper.mockActionListener;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigSuccess;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLExecuteSuccess;
@@ -26,11 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.swing.*;
-
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
@@ -56,11 +54,9 @@ import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
 
+import com.google.gson.reflect.TypeToken;
+
 public class StatisticalDataTaskTests {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Mock
     public SdkClient sdkClient;
 
@@ -139,9 +135,11 @@ public class StatisticalDataTaskTests {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
-        exceptionRule.expect(IllegalStateException.class);
-        exceptionRule.expectMessage("StatisticalDataTask has no prerequisites");
-        task.createPrerequisiteTask(MLIndexInsightType.FIELD_DESCRIPTION);
+        IllegalStateException exception = assertThrows(
+            IllegalStateException.class,
+            () -> task.createPrerequisiteTask(MLIndexInsightType.FIELD_DESCRIPTION)
+        );
+        assertEquals("StatisticalDataTask has no prerequisites", exception.getMessage());
     }
 
     @Test
@@ -169,7 +167,7 @@ public class StatisticalDataTaskTests {
         doAnswer(invocation -> { return null; }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
 
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
 
         task.runTask("tenant-id", listener);
 
@@ -180,7 +178,7 @@ public class StatisticalDataTaskTests {
     public void testRunTask_WithEmptyMappings() {
         Client client = setupBasicClientMocks();
         GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
 
         when(getMappingsResponse.getMappings()).thenReturn(new HashMap<>());
         setupGetMappingsCall(client, getMappingsResponse);
@@ -195,7 +193,7 @@ public class StatisticalDataTaskTests {
     public void testRunTask_WithSearchFailure() {
         Client client = setupBasicClientMocks();
         GetMappingsResponse getMappingsResponse = setupMappingResponse();
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
 
         setupGetMappingsCall(client, getMappingsResponse);
 
@@ -220,7 +218,7 @@ public class StatisticalDataTaskTests {
     public void testHandlePatternMatchedDoc_RunWithoutStoring() {
         Client client = setupBasicClientMocks();
         GetMappingsResponse getMappingsResponse = setupMappingResponse();
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
 
         Map<String, Object> patternSource = new HashMap<>();
         patternSource.put(IndexInsight.STATUS_FIELD, "COMPLETED");
@@ -242,6 +240,7 @@ public class StatisticalDataTaskTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked") // Private package methods are invoked via reflection in tests
     public void testParseSearchResult_WithEmptyAggregations() throws Exception {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
@@ -266,6 +265,7 @@ public class StatisticalDataTaskTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked") // Private package methods are invoked via reflection in tests
     public void testFilterColumns_WithFiltersAggregation() throws Exception {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
@@ -315,7 +315,7 @@ public class StatisticalDataTaskTests {
         mockMLConfigSuccess(client);
         mockMLExecuteSuccess(client, "");
         GetMappingsResponse getMappingsResponse = setupMappingResponse();
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
 
         setupGetMappingsCall(client, getMappingsResponse);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
@@ -392,8 +392,10 @@ public class StatisticalDataTaskTests {
         Map<String, Object> expectedContent = gson
             .fromJson(
                 "{\"example_docs\":[{\"index_name\":\"test-*\"}],\"important_column_and_distribution\":{\"field1\":{\"type\":\"text\",\"unique_count\":\"demo2\",\"unique_terms\":[\"demo\"],\"max_value\":\"demo2\"}}}",
-                Map.class
+                new TypeToken<Map<String, Object>>() {
+                }.getType()
             );
-        assertEquals(expectedContent, gson.fromJson(response.getContent(), Map.class));
+        assertEquals(expectedContent, gson.fromJson(response.getContent(), new TypeToken<Map<String, Object>>() {
+        }.getType()));
     }
 }

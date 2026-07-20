@@ -11,6 +11,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.MockitoTestHelper.anyActionListener;
+import static org.opensearch.ml.common.MockitoTestHelper.mockActionListener;
 
 import java.util.Map;
 
@@ -48,7 +50,7 @@ public class IndexInsightAccessControllerHelperTests {
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.indices()).thenReturn(indicesAdminClient);
 
-        ActionListener<Boolean> actionListener = mock(ActionListener.class);
+        ActionListener<Boolean> actionListener = mockActionListener();
         String sourceIndex = "test-index";
 
         GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
@@ -59,14 +61,14 @@ public class IndexInsightAccessControllerHelperTests {
             ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
             listener.onResponse(getMappingsResponse);
             return null;
-        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), anyActionListener());
 
         SearchResponse searchResponse = mock(SearchResponse.class);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
             return null;
-        }).when(client).search(any(SearchRequest.class), any(ActionListener.class));
+        }).when(client).search(any(SearchRequest.class), anyActionListener());
 
         IndexInsightAccessControllerHelper.verifyAccessController(client, actionListener, sourceIndex);
 
@@ -82,7 +84,7 @@ public class IndexInsightAccessControllerHelperTests {
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.indices()).thenReturn(indicesAdminClient);
 
-        ActionListener<Boolean> actionListener = mock(ActionListener.class);
+        ActionListener<Boolean> actionListener = mockActionListener();
         String sourceIndex = "test-index";
 
         GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
@@ -93,13 +95,13 @@ public class IndexInsightAccessControllerHelperTests {
             ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
             listener.onResponse(getMappingsResponse);
             return null;
-        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), anyActionListener());
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("no permissions"));
             return null;
-        }).when(client).search(any(SearchRequest.class), any(ActionListener.class));
+        }).when(client).search(any(SearchRequest.class), anyActionListener());
 
         IndexInsightAccessControllerHelper.verifyAccessController(client, actionListener, sourceIndex);
 
@@ -117,7 +119,7 @@ public class IndexInsightAccessControllerHelperTests {
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.indices()).thenReturn(indicesAdminClient);
 
-        ActionListener<Boolean> actionListener = mock(ActionListener.class);
+        ActionListener<Boolean> actionListener = mockActionListener();
         String sourceIndex = "abc*";
 
         GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
@@ -127,7 +129,7 @@ public class IndexInsightAccessControllerHelperTests {
             ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
             listener.onResponse(getMappingsResponse);
             return null;
-        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), anyActionListener());
 
         IndexInsightAccessControllerHelper.verifyAccessController(client, actionListener, sourceIndex);
 

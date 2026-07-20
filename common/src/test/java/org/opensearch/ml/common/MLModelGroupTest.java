@@ -5,14 +5,15 @@
 
 package org.opensearch.ml.common;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -24,16 +25,13 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
 public class MLModelGroupTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void toXContent_NullName() {
-        exceptionRule.expect(NullPointerException.class);
-        exceptionRule.expectMessage("model group name must not be null");
+        NullPointerException exception = assertThrows(NullPointerException.class, () -> {
 
-        MLModelGroup.builder().build();
+            MLModelGroup.builder().build();
+        });
+        assertEquals("model group name must not be null", exception.getMessage());
     }
 
     @Test

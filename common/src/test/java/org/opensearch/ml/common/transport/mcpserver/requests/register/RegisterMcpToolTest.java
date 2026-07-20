@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.mcpserver.requests.register;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -17,9 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -33,10 +32,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
 public class RegisterMcpToolTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     private McpToolRegisterInput mcptool;
     private final String toolName = "weather_tool";
     private final String description = "Fetch weather data";
@@ -97,9 +92,8 @@ public class RegisterMcpToolTest {
             );
         parser.nextToken();
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("type field required");
-        McpToolRegisterInput.parse(parser);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> McpToolRegisterInput.parse(parser));
+        assertEquals("type field required", exception.getMessage());
     }
 
     @Test

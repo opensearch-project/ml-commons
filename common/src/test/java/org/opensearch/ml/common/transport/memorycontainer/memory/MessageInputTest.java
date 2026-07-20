@@ -15,9 +15,7 @@ import static org.opensearch.ml.common.TestHelper.createTestContent;
 import java.io.IOException;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -31,8 +29,6 @@ import org.opensearch.ml.common.TestHelper;
 public class MessageInputTest {
 
     private MessageInput messageWithRole;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -48,9 +44,11 @@ public class MessageInputTest {
 
     @Test
     public void testBuilderWithoutRole() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Message must have role and content");
-        MessageInput.builder().content(createTestContent("Hello, how are you?")).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MessageInput.builder().content(createTestContent("Hello, how are you?")).build()
+        );
+        assertEquals("Message must have role and content", exception.getMessage());
     }
 
     @Test
@@ -71,9 +69,11 @@ public class MessageInputTest {
 
     @Test
     public void testConstructorWithEmptyContent() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Message must have role and content");
-        MessageInput.builder().role("user").content(null).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MessageInput.builder().role("user").content(null).build()
+        );
+        assertEquals("Message must have role and content", exception.getMessage());
     }
 
     @Test

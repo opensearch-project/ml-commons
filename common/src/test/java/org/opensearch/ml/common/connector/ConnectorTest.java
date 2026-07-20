@@ -1,5 +1,7 @@
 package org.opensearch.ml.common.connector;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.connector.HttpConnectorTest.createHttpConnector;
 
 import java.io.IOException;
@@ -7,9 +9,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -21,9 +21,6 @@ import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
 
 public class ConnectorTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void fromStream() throws IOException {
         HttpConnector connector = createHttpConnector();
@@ -65,19 +62,20 @@ public class ConnectorTest {
 
     @Test
     public void validateConnectorURL_Invalid() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector URL is not matching the trusted connector endpoint regex");
-        HttpConnector connector = createHttpConnector();
-        connector
-            .validateConnectorURL(
-                Arrays
-                    .asList(
-                        "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                        "^https://api\\.openai\\.com/.*$",
-                        "^https://api\\.cohere\\.ai/.*$",
-                        "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
-                    )
-            );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            HttpConnector connector = createHttpConnector();
+            connector
+                .validateConnectorURL(
+                    Arrays
+                        .asList(
+                            "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                            "^https://api\\.openai\\.com/.*$",
+                            "^https://api\\.cohere\\.ai/.*$",
+                            "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
+                        )
+                );
+        });
+        assertEquals("Connector URL is not matching the trusted connector endpoint regex", exception.getMessage());
     }
 
     @Test
@@ -103,37 +101,47 @@ public class ConnectorTest {
 
     @Test
     public void validateResolvedEndpoint_noMatch_rejected() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector URL is not matching the trusted connector endpoint regex");
-        HttpConnector connector = createHttpConnector();
-        connector
-            .validateResolvedEndpoint(
-                "https://attacker.example.com/anything?/v1/chat/completions",
-                Arrays.asList("^https://api\\.openai\\.com/.*$")
-            );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            HttpConnector connector = createHttpConnector();
+            connector
+                .validateResolvedEndpoint(
+                    "https://attacker.example.com/anything?/v1/chat/completions",
+                    Arrays.asList("^https://api\\.openai\\.com/.*$")
+                );
+        });
+        assertEquals("Connector URL is not matching the trusted connector endpoint regex", exception.getMessage());
     }
 
     @Test
     public void validateResolvedEndpoint_emptyAllowlist_rejected() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Trusted connector endpoints regex is not configured");
-        HttpConnector connector = createHttpConnector();
-        connector.validateResolvedEndpoint("https://api.openai.com/v1/chat/completions", Collections.emptyList());
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            HttpConnector connector = createHttpConnector();
+            connector.validateResolvedEndpoint("https://api.openai.com/v1/chat/completions", Collections.emptyList());
+        });
+        assertEquals(
+            "Trusted connector endpoints regex is not configured. Please set plugins.ml_commons.trusted_connector_endpoints_regex.",
+            exception.getMessage()
+        );
     }
 
     @Test
     public void validateResolvedEndpoint_nullAllowlist_rejected() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Trusted connector endpoints regex is not configured");
-        HttpConnector connector = createHttpConnector();
-        connector.validateResolvedEndpoint("https://api.openai.com/v1/chat/completions", null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            HttpConnector connector = createHttpConnector();
+            connector.validateResolvedEndpoint("https://api.openai.com/v1/chat/completions", null);
+        });
+        assertEquals(
+            "Trusted connector endpoints regex is not configured. Please set plugins.ml_commons.trusted_connector_endpoints_regex.",
+            exception.getMessage()
+        );
     }
 
     @Test
     public void validateResolvedEndpoint_nullResolvedUrl_rejected() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Resolved connector URL is null");
-        HttpConnector connector = createHttpConnector();
-        connector.validateResolvedEndpoint(null, Arrays.asList("^https://api\\.openai\\.com/.*$"));
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            HttpConnector connector = createHttpConnector();
+            connector.validateResolvedEndpoint(null, Arrays.asList("^https://api\\.openai\\.com/.*$"));
+        });
+        assertEquals("Resolved connector URL is null", exception.getMessage());
     }
 }

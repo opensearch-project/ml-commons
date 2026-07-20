@@ -299,7 +299,7 @@ public class AGUIInputConverterTest {
 
         assertNotNull(result.getAgentInput());
         assertTrue(result.getAgentInput().getInput() instanceof List);
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         assertNotNull(convertedMessages);
         assertEquals(1, convertedMessages.size());
@@ -335,7 +335,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         assertEquals(3, convertedMessages.size()); // user, tool, and assistant
         assertEquals("user", convertedMessages.get(0).getRole());
@@ -374,7 +374,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         assertEquals(3, convertedMessages.size()); // user, assistant with tool calls, and final assistant
         assertEquals("user", convertedMessages.get(0).getRole());
@@ -400,7 +400,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         ContentBlock content = convertedMessages.get(0).getContent().get(0);
         assertEquals(ContentType.TEXT, content.getType());
@@ -439,7 +439,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         List<ContentBlock> content = convertedMessages.get(0).getContent();
         assertEquals(2, content.size());
@@ -505,7 +505,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         ContentBlock imageBlock = convertedMessages.get(0).getContent().get(0);
         assertEquals(ContentType.IMAGE, imageBlock.getType());
@@ -536,7 +536,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(gson.toJson(aguiInput), "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         // Non-image binary content should be skipped
         assertTrue(convertedMessages.get(0).getContent().isEmpty());
@@ -570,7 +570,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInputJson, "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         assertEquals(1, convertedMessages.size());
         assertEquals("assistant", convertedMessages.get(0).getRole());
@@ -606,7 +606,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInputJson, "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
 
         // Should have: user, assistant with toolCalls, tool, final assistant
@@ -638,7 +638,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInputJson, "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         assertEquals(1, convertedMessages.size());
         // Context should NOT be embedded in the message content (it's applied later at LLM call time)
@@ -682,7 +682,7 @@ public class AGUIInputConverterTest {
 
         AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInputJson, "agent-id", null, false);
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
         assertEquals(1, convertedMessages.size());
         assertEquals(2, convertedMessages.get(0).getToolCalls().size());
@@ -779,7 +779,7 @@ public class AGUIInputConverterTest {
 
         assertEquals(1, result.size());
         // Multiple content blocks should be an array
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Map<String, Object>> content = (List<Map<String, Object>>) result.get(0).get("content");
         assertEquals(2, content.size());
         assertEquals("text", content.get(0).get("type"));
@@ -803,13 +803,13 @@ public class AGUIInputConverterTest {
         List<Map<String, Object>> result = AGUIInputConverter.convertToAGUIFormat(List.of(message));
 
         assertEquals(1, result.size());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) result.get(0).get("toolCalls");
         assertNotNull(toolCalls);
         assertEquals(1, toolCalls.size());
         assertEquals("call-123", toolCalls.get(0).get("id"));
         assertEquals("function", toolCalls.get(0).get("type"));
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         Map<String, String> func = (Map<String, String>) toolCalls.get(0).get("function");
         assertEquals("get_weather", func.get("name"));
         assertEquals("{\"location\":\"NYC\"}", func.get("arguments"));
@@ -870,7 +870,7 @@ public class AGUIInputConverterTest {
             """;
 
         AgentMLInput agentMLInput = AGUIInputConverter.convertFromAGUIInput(aguiInputJson, "agent-id", null, false);
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> messages = (List<Message>) agentMLInput.getAgentInput().getInput();
 
         List<Map<String, Object>> roundTripped = AGUIInputConverter.convertToAGUIFormat(messages);

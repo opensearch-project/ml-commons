@@ -13,9 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -31,9 +29,6 @@ import org.opensearch.ml.common.input.execute.agent.VideoContent;
 public class GeminiV1BetaGenerateContentModelProviderTest {
 
     private GeminiV1BetaGenerateContentModelProvider provider;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -654,11 +649,12 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(blocks);
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Input type not supported. Expected String, List<ContentBlock>, or List<Message>");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+            // Act
+            provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+        });
+        assertEquals("Input type not supported. Expected String, List<ContentBlock>, or List<Message>", exception.getMessage());
     }
 
     @Test
@@ -668,11 +664,12 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(messages);
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Input type not supported. Expected String, List<ContentBlock>, or List<Message>");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+            // Act
+            provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+        });
+        assertEquals("Input type not supported. Expected String, List<ContentBlock>, or List<Message>", exception.getMessage());
     }
 
     // ==================== Tests for extractMessageFromResponse ====================

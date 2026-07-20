@@ -6,15 +6,14 @@
 package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -26,8 +25,6 @@ public class MetricsCorrelationModelConfigTests {
 
     MetricsCorrelationModelConfig config;
     Function<XContentParser, MetricsCorrelationModelConfig> function;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -58,9 +55,11 @@ public class MetricsCorrelationModelConfigTests {
 
     @Test
     public void nullFields_ModelType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model type is null");
-        config = MetricsCorrelationModelConfig.builder().build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = MetricsCorrelationModelConfig.builder().build()
+        );
+        assertEquals("model type is null", exception.getMessage());
     }
 
     @Test

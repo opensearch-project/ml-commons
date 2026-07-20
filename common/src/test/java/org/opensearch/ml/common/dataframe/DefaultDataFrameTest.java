@@ -7,6 +7,7 @@ package org.opensearch.ml.common.dataframe;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -15,9 +16,7 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -30,9 +29,6 @@ public class DefaultDataFrameTest {
 
     DefaultDataFrame defaultDataFrame;
     Function<XContentParser, DefaultDataFrame> function;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -99,10 +95,11 @@ public class DefaultDataFrameTest {
 
     @Test
     public void appendRow_Exception_NullRow() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("input row can't be null");
-        Row row = null;
-        defaultDataFrame.appendRow(row);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            Row row = null;
+            defaultDataFrame.appendRow(row);
+        });
+        assertEquals("input row can't be null", exception.getMessage());
     }
 
     @Test
@@ -125,33 +122,36 @@ public class DefaultDataFrameTest {
 
     @Test
     public void appendRow_Exception_NullValues() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("input values can't be null");
-        Object[] values = null;
-        defaultDataFrame.appendRow(values);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            Object[] values = null;
+            defaultDataFrame.appendRow(values);
+        });
+        assertEquals("input values can't be null", exception.getMessage());
     }
 
     @Test
     public void appendRow_Exception_DifferentColumns() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("the size is different between input row:3 and column size in dataframe:4");
-        Row row = new Row(3);
-        row.setValue(0, new StringValue("string2"));
-        row.setValue(1, new IntValue(2));
-        row.setValue(2, new DoubleValue(3.0D));
-        defaultDataFrame.appendRow(row);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            Row row = new Row(3);
+            row.setValue(0, new StringValue("string2"));
+            row.setValue(1, new IntValue(2));
+            row.setValue(2, new DoubleValue(3.0D));
+            defaultDataFrame.appendRow(row);
+        });
+        assertEquals("the size is different between input row:3 and column size in dataframe:4", exception.getMessage());
     }
 
     @Test
     public void appendRow_Exception_DifferentColumnTypes() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("the column type is different in column meta:BOOLEAN and input row:DOUBLE for " + "index: 3");
-        Row row = new Row(4);
-        row.setValue(0, new StringValue("string2"));
-        row.setValue(1, new IntValue(2));
-        row.setValue(2, new DoubleValue(3.0D));
-        row.setValue(3, new DoubleValue(4.0D));
-        defaultDataFrame.appendRow(row);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            Row row = new Row(4);
+            row.setValue(0, new StringValue("string2"));
+            row.setValue(1, new IntValue(2));
+            row.setValue(2, new DoubleValue(3.0D));
+            row.setValue(3, new DoubleValue(4.0D));
+            defaultDataFrame.appendRow(row);
+        });
+        assertEquals("the column type is different in column meta:BOOLEAN and input row:DOUBLE for index: 3", exception.getMessage());
     }
 
     @Test
@@ -162,25 +162,23 @@ public class DefaultDataFrameTest {
 
     @Test
     public void remove_Exception_InputColumnIndexBiggerThanColumensLength() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:4");
-        defaultDataFrame.remove(4);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> defaultDataFrame.remove(4));
+        assertEquals("columnIndex can't be negative or bigger than columns length:4", exception.getMessage());
     }
 
     @Test
     public void remove_Exception_InputColumnIndexNegtiveColumensLength() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:4");
-        defaultDataFrame.remove(-1);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> defaultDataFrame.remove(-1));
+        assertEquals("columnIndex can't be negative or bigger than columns length:4", exception.getMessage());
     }
 
     @Test
     public void remove_EmptyColumnMeta() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:0");
-        DefaultDataFrame dataFrame = new DefaultDataFrame(new ColumnMeta[0]);
-        DataFrame newDataFrame = dataFrame.remove(0);
-        assertEquals(0, newDataFrame.size());
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new DefaultDataFrame(new ColumnMeta[0]).remove(0)
+        );
+        assertEquals("columnIndex can't be negative or bigger than columns length:0", exception.getMessage());
     }
 
     @Test
@@ -199,16 +197,14 @@ public class DefaultDataFrameTest {
 
     @Test
     public void select_Exception_EmptyInputColumns() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("columns can't be null or empty");
-        defaultDataFrame.select(new int[0]);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> defaultDataFrame.select(new int[0]));
+        assertEquals("columns can't be null or empty", exception.getMessage());
     }
 
     @Test
     public void select_Exception_InvalidColumn() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length");
-        defaultDataFrame.select(new int[] { 5 });
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> defaultDataFrame.select(new int[] { 5 }));
+        assertEquals("columnIndex can't be negative or bigger than columns length", exception.getMessage());
     }
 
     @Test

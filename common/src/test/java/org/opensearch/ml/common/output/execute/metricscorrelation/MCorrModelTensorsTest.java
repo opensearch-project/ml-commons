@@ -12,9 +12,7 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -25,9 +23,6 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTen
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
 public class MCorrModelTensorsTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
     private MCorrModelTensors mcorrModelTensors;
     private ModelResultFilter modelResultFilter;
 

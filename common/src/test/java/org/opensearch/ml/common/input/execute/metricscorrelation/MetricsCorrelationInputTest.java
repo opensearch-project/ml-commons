@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.input.execute.metricscorrelation;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -13,9 +14,7 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
@@ -33,9 +32,6 @@ public class MetricsCorrelationInputTest {
         }
     };
 
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Before
     public void setUp() {
         List<float[]> inputData = new ArrayList<>();
@@ -47,20 +43,20 @@ public class MetricsCorrelationInputTest {
 
     @Test
     public void constructor_NullOperation() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("empty input data");
-        MetricsCorrelationInput.builder().build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MetricsCorrelationInput.builder().build());
+        assertEquals("empty input data", exception.getMessage());
     }
 
     @Test
     public void constructor_variableLengthInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("All the input metrics sizes should be same");
-        List<float[]> inputData = new ArrayList<>();
-        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
-        inputData.add(new float[] { 1.0f, 2.0f, 3.0f });
-        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
-        MetricsCorrelationInput.builder().inputData(inputData).build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            List<float[]> inputData = new ArrayList<>();
+            inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+            inputData.add(new float[] { 1.0f, 2.0f, 3.0f });
+            inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+            MetricsCorrelationInput.builder().inputData(inputData).build();
+        });
+        assertEquals("All the input metrics sizes should be same", exception.getMessage());
     }
 
     @Test

@@ -6,10 +6,13 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.MockitoTestHelper.anyActionListener;
+import static org.opensearch.ml.common.MockitoTestHelper.mockActionListener;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigFailure;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigSuccess;
@@ -22,9 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
@@ -40,10 +41,6 @@ import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
 
 public class FieldDescriptionTaskTests {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     private Client client;
     private SdkClient sdkClient;
     private FieldDescriptionTask task;
@@ -56,7 +53,7 @@ public class FieldDescriptionTaskTests {
         client = mock(Client.class);
         sdkClient = mock(SdkClient.class);
         task = new FieldDescriptionTask("test-index", client, sdkClient);
-        listener = mock(ActionListener.class);
+        listener = mockActionListener();
         threadPool = mock(ThreadPool.class);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -97,9 +94,8 @@ public class FieldDescriptionTaskTests {
     @Test
     public void testCreatePrerequisiteTask_UnsupportedType() {
         MLIndexInsightType unsupportedType = MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
-        exceptionRule.expect(IllegalStateException.class);
-        exceptionRule.expectMessage("Unsupported prerequisite type: " + unsupportedType);
-        task.createPrerequisiteTask(unsupportedType);
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> task.createPrerequisiteTask(unsupportedType));
+        assertEquals("Unsupported prerequisite type: " + unsupportedType, exception.getMessage());
     }
 
     @Test
@@ -119,7 +115,7 @@ public class FieldDescriptionTaskTests {
 
         task.runTask("tenant-id", listener);
 
-        verify(client, times(2)).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
+        verify(client, times(2)).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), anyActionListener());
     }
 
     @Test
@@ -266,7 +262,7 @@ public class FieldDescriptionTaskTests {
             return null;
         }).when(indicesClient).getMappings(any(), any());
 
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.handlePatternResult(patternSource, "tenant-id", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);

@@ -82,6 +82,10 @@ jacocoTestCoverageVerification {
 }
 check.dependsOn jacocoTestCoverageVerification
 
+tasks.named('compileTestJava').configure {
+    options.compilerArgs.addAll(['-Xlint:unchecked', '-Xlint:deprecation'])
+}
+
 shadowJar {
     destinationDirectory = file("${project.buildDir}/distributions")
     archiveClassifier.set(null)

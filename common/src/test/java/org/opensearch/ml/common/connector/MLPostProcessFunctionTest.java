@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
@@ -15,15 +16,9 @@ import java.util.Collections;
 import java.util.List;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class MLPostProcessFunctionTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void contains() {
         Assert.assertTrue(MLPostProcessFunction.contains(OPENAI_EMBEDDING));
@@ -51,7 +46,6 @@ public class MLPostProcessFunctionTest {
 
     @Test
     public void test_buildModelTensorList_exception() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(null, null);
+        assertThrows(IllegalArgumentException.class, () -> MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(null, null));
     }
 }

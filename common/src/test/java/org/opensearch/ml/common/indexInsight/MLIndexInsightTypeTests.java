@@ -6,16 +6,11 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class MLIndexInsightTypeTests {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void testValidTypes() {
         assertEquals(MLIndexInsightType.STATISTICAL_DATA, MLIndexInsightType.fromString("STATISTICAL_DATA"));
@@ -26,15 +21,16 @@ public class MLIndexInsightTypeTests {
 
     @Test
     public void testNullInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("ML index insight type can't be null");
-        MLIndexInsightType.fromString(null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MLIndexInsightType.fromString(null));
+        assertEquals("ML index insight type can't be null", exception.getMessage());
     }
 
     @Test
     public void testInvalidType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong index insight type");
-        MLIndexInsightType.fromString("INVALID_TYPE");
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLIndexInsightType.fromString("INVALID_TYPE")
+        );
+        assertEquals("Wrong index insight type", exception.getMessage());
     }
 }

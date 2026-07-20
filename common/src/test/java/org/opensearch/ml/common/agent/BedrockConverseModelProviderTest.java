@@ -13,9 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -32,9 +30,6 @@ import org.opensearch.ml.common.input.execute.agent.VideoContent;
 public class BedrockConverseModelProviderTest {
 
     private BedrockConverseModelProvider provider;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -257,10 +252,11 @@ public class BedrockConverseModelProviderTest {
         modelParameters.put("region", "eu-west-1");
 
         // Arrange & Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
-        // Act
-        provider.createConnector(modelId, null, modelParameters);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            // Act
+            provider.createConnector(modelId, null, modelParameters);
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
@@ -271,11 +267,12 @@ public class BedrockConverseModelProviderTest {
         Map<String, String> modelParameters = new HashMap<>();
         modelParameters.put("region", "ap-southeast-1");
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        provider.createConnector(modelId, credential, modelParameters);
+            // Act
+            provider.createConnector(modelId, credential, modelParameters);
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
@@ -283,9 +280,11 @@ public class BedrockConverseModelProviderTest {
         // Arrange
         String modelName = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
-        provider.createConnector(modelName, new HashMap<>(), new HashMap<>());
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> provider.createConnector(modelName, new HashMap<>(), new HashMap<>())
+        );
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
@@ -975,11 +974,12 @@ public class BedrockConverseModelProviderTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(blocks);
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Input type not supported. Expected String, List<ContentBlock>, or List<Message>");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+            // Act
+            provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+        });
+        assertEquals("Input type not supported. Expected String, List<ContentBlock>, or List<Message>", exception.getMessage());
     }
 
     @Test
@@ -989,11 +989,12 @@ public class BedrockConverseModelProviderTest {
         AgentInput agentInput = new AgentInput();
         agentInput.setInput(messages);
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Input type not supported. Expected String, List<ContentBlock>, or List<Message>");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+            // Act
+            provider.mapAgentInput(agentInput, MLAgentType.CONVERSATIONAL);
+        });
+        assertEquals("Input type not supported. Expected String, List<ContentBlock>, or List<Message>", exception.getMessage());
     }
 
     @Test

@@ -7,6 +7,7 @@ package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -14,9 +15,7 @@ import java.util.Collections;
 import java.util.function.Consumer;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -37,9 +36,6 @@ public class MLDeployingSettingTests {
     private MLDeploySetting deploySettingNull;
 
     private final String expectedInputStr = "{\"is_auto_deploy_enabled\":true,\"model_ttl_minutes\":-1}";
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -75,29 +71,31 @@ public class MLDeployingSettingTests {
 
     @Test
     public void parseWithIllegalArgumentNull() throws Exception {
-        exceptionRule.expect(JsonParseException.class);
-        final String expectedInputStrWithNullField = "{\"is_auto_deploy_enabled\":null}";
+        assertThrows(JsonParseException.class, () -> {
+            final String expectedInputStrWithNullField = "{\"is_auto_deploy_enabled\":null}";
 
-        testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
-            try {
-                assertEquals("{}", serializationWithToXContent(parsedInput));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
+                try {
+                    assertEquals("{}", serializationWithToXContent(parsedInput));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         });
     }
 
     @Test
     public void parseWithIllegalArgumentInteger() throws Exception {
-        exceptionRule.expect(JsonParseException.class);
-        final String expectedInputStrWithNullField = "{\"is_auto_deploy_enabled\":364}";
+        assertThrows(JsonParseException.class, () -> {
+            final String expectedInputStrWithNullField = "{\"is_auto_deploy_enabled\":364}";
 
-        testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
-            try {
-                assertEquals("{}", serializationWithToXContent(parsedInput));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
+                try {
+                    assertEquals("{}", serializationWithToXContent(parsedInput));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         });
     }
 

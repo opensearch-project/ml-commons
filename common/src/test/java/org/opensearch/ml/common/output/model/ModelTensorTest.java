@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.output.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
@@ -17,9 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -27,10 +26,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
 
 public class ModelTensorTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     private ModelTensor modelTensor;
 
     @Before
@@ -99,31 +94,33 @@ public class ModelTensorTest {
 
     @Test
     public void test_UnknownDataType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("data type is null");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        ModelTensor
-            .builder()
-            .name("null_data")
-            .data(new Number[] { 1, 2, 3 })
-            .shape(null)
-            .dataType(MLResultDataType.UNKNOWN)
-            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
-            .build();
+            ModelTensor
+                .builder()
+                .name("null_data")
+                .data(new Number[] { 1, 2, 3 })
+                .shape(null)
+                .dataType(MLResultDataType.UNKNOWN)
+                .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+                .build();
+        });
+        assertEquals("data type is null", exception.getMessage());
     }
 
     @Test
     public void test_NullDataType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("data type is null");
-        ModelTensor
-            .builder()
-            .name("null_data")
-            .data(new Number[] { 1, 2, 3 })
-            .shape(null)
-            .dataType(null)
-            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
-            .build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            ModelTensor
+                .builder()
+                .name("null_data")
+                .data(new Number[] { 1, 2, 3 })
+                .shape(null)
+                .dataType(null)
+                .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+                .build();
+        });
+        assertEquals("data type is null", exception.getMessage());
     }
 
     @Test
@@ -139,9 +136,10 @@ public class ModelTensorTest {
         ModelTensor spyTensor = spy(modelTensor);
         doThrow(new IOException("Mock IOException")).when(spyTensor).toXContent(any(XContentBuilder.class), any());
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Can't convert ModelTensor to string");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        spyTensor.toString();
+            spyTensor.toString();
+        });
+        assertEquals("Can't convert ModelTensor to string", exception.getMessage());
     }
 }

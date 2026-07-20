@@ -5,17 +5,13 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class ColumnValueTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void equals_SameObject() {
         ColumnValue value = new IntValue(1);
@@ -24,57 +20,64 @@ public class ColumnValueTest {
 
     @Test
     public void wrongIntValue() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("the value isn't Integer type");
-        ColumnValue value = new DoubleValue(1.0);
-        value.intValue();
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            ColumnValue value = new DoubleValue(1.0);
+            value.intValue();
+        });
+        assertEquals("the value isn't Integer type", exception.getMessage());
     }
 
     @Test
     public void wrongBooleanValue() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("the value isn't Boolean type");
-        ColumnValue value = new DoubleValue(1.0);
-        value.booleanValue();
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            ColumnValue value = new DoubleValue(1.0);
+            value.booleanValue();
+        });
+        assertEquals("the value isn't Boolean type", exception.getMessage());
     }
 
     @Test
     public void wrongStringValue() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("the value isn't String type");
-        ColumnValue value = new DoubleValue(1.0);
-        value.stringValue();
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            ColumnValue value = new DoubleValue(1.0);
+            value.stringValue();
+        });
+        assertEquals("the value isn't String type", exception.getMessage());
     }
 
     @Test
     public void wrongDoubleValue() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("the value isn't Double type");
-        ColumnValue value = new BooleanValue(true);
-        value.doubleValue();
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            ColumnValue value = new BooleanValue(true);
+            value.doubleValue();
+        });
+        assertEquals("the value isn't Double type", exception.getMessage());
     }
 
     @Test
     public void wrongFloatValue() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("the value isn't Float type");
-        ColumnValue value = new IntValue(1);
-        value.floatValue();
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            ColumnValue value = new IntValue(1);
+            value.floatValue();
+        });
+        assertEquals("the value isn't Float type", exception.getMessage());
     }
 
     @Test
     public void wrongShortValue() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("the value isn't Short type");
-        ColumnValue value = new IntValue(1);
-        value.shortValue();
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            ColumnValue value = new IntValue(1);
+            value.shortValue();
+        });
+        assertEquals("the value isn't Short type", exception.getMessage());
     }
 
     @Test
     public void wrongLongValue() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("the value isn't Long type");
-        ColumnValue value = new IntValue(1);
-        value.longValue();
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            ColumnValue value = new IntValue(1);
+            value.longValue();
+        });
+        assertEquals("the value isn't Long type", exception.getMessage());
     }
 }

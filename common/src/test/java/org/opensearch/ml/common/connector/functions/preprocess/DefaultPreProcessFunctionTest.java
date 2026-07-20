@@ -6,15 +6,14 @@
 package org.opensearch.ml.common.connector.functions.preprocess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ingest.TestTemplateService;
@@ -25,9 +24,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.script.ScriptService;
 
 public class DefaultPreProcessFunctionTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     DefaultPreProcessFunction functionWithConvertToJsonString;
     DefaultPreProcessFunction functionWithoutConvertToJsonString;
 
@@ -49,27 +45,31 @@ public class DefaultPreProcessFunctionTest {
 
     @Test
     public void process_NullInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Preprocess function input can't be null");
-        functionWithConvertToJsonString.apply(null);
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> functionWithConvertToJsonString.apply(null)
+        );
+        assertEquals("Preprocess function input can't be null", exception.getMessage());
     }
 
     @Test
     public void process_CorrectInput_WrongProcessedResult() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Preprocess function output is null");
-        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(null));
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
-        functionWithConvertToJsonString.apply(mlInput);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(null));
+            MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+            functionWithConvertToJsonString.apply(mlInput);
+        });
+        assertEquals("Preprocess function output is null", exception.getMessage());
     }
 
     @Test
     public void process_CorrectInput_WrongProcessedResult_WithoutConvertToJsonString() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Preprocess function output is null");
-        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(null));
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
-        functionWithoutConvertToJsonString.apply(mlInput);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(null));
+            MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+            functionWithoutConvertToJsonString.apply(mlInput);
+        });
+        assertEquals("Preprocess function output is null", exception.getMessage());
     }
 
     @Test

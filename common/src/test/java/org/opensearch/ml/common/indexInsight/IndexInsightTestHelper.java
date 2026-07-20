@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
+import static org.opensearch.ml.common.MockitoTestHelper.anyActionListener;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.CONTENT_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.LAST_UPDATE_FIELD;
@@ -64,7 +65,7 @@ public class IndexInsightTestHelper {
             MLConfig config = MLConfig.builder().type("test").configuration(Configuration.builder().agentId("agent-id").build()).build();
             configListener.onResponse(new MLConfigGetResponse(config));
             return null;
-        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), any(ActionListener.class));
+        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), anyActionListener());
     }
 
     public static void mockMLConfigFailure(Client client, String errorMessage) {
@@ -72,7 +73,7 @@ public class IndexInsightTestHelper {
             ActionListener<MLConfigGetResponse> configListener = invocation.getArgument(2);
             configListener.onFailure(new IllegalStateException(errorMessage));
             return null;
-        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), any(ActionListener.class));
+        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), anyActionListener());
     }
 
     public static void mockMLExecuteSuccess(Client client, String response) {
@@ -83,7 +84,7 @@ public class IndexInsightTestHelper {
             ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
             executeListener.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(output).build());
             return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), anyActionListener());
     }
 
     public static void mockMLExecuteFailure(Client client, String errorMessage) {
@@ -91,7 +92,7 @@ public class IndexInsightTestHelper {
             ActionListener<MLExecuteTaskResponse> executeListener = invocation.getArgument(2);
             executeListener.onFailure(new RuntimeException(errorMessage));
             return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), anyActionListener());
     }
 
     public static void mockUpdateSuccess(SdkClient sdkClient) {

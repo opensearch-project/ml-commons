@@ -7,6 +7,7 @@ package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
@@ -17,9 +18,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -31,8 +30,6 @@ public class BaseModelConfigTests {
 
     BaseModelConfig config;
     Function<XContentParser, BaseModelConfig> function;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -73,9 +70,11 @@ public class BaseModelConfigTests {
 
     @Test
     public void nullFields_ModelType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model type is null");
-        config = BaseModelConfig.baseModelConfigBuilder().build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = BaseModelConfig.baseModelConfigBuilder().build()
+        );
+        assertEquals("model type is null", exception.getMessage());
     }
 
     @Test
@@ -129,12 +128,18 @@ public class BaseModelConfigTests {
 
     @Test
     public void duplicateKeys() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate keys found in both all_config and additional_config: key1");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
-        Map<String, Object> additionalConfig = Map.of("key1", "value3");
+            String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
+            Map<String, Object> additionalConfig = Map.of("key1", "value3");
 
-        BaseModelConfig.baseModelConfigBuilder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
+            BaseModelConfig
+                .baseModelConfigBuilder()
+                .allConfig(allConfig)
+                .modelType("testModelType")
+                .additionalConfig(additionalConfig)
+                .build();
+        });
+        assertEquals("Duplicate keys found in both all_config and additional_config: key1", exception.getMessage());
     }
 }

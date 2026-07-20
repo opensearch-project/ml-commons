@@ -8,6 +8,7 @@ package org.opensearch.ml.common;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -17,9 +18,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -49,9 +48,6 @@ public class MLCommonsClassLoaderTests {
     private StreamInput streamInputForInput;
     private Output output;
     private StreamInput streamInputForOutput;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws IOException {
@@ -89,11 +85,12 @@ public class MLCommonsClassLoaderTests {
 
     @Test
     public void testClassLoader_WrongType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Can't find class for type TEST");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        SampleAlgoParams mlAlgoParams = MLCommonsClassLoader.initMLInstance(TestEnum.TEST, streamInputForParams, StreamInput.class);
-        assertEquals(params.getSampleParam(), mlAlgoParams.getSampleParam());
+            SampleAlgoParams mlAlgoParams = MLCommonsClassLoader.initMLInstance(TestEnum.TEST, streamInputForParams, StreamInput.class);
+            assertEquals(params.getSampleParam(), mlAlgoParams.getSampleParam());
+        });
+        assertEquals("Can't find class for type TEST", exception.getMessage());
     }
 
     @Test

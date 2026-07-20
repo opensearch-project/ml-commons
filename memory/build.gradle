@@ -80,3 +80,7 @@ jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
 }
 check.dependsOn jacocoTestCoverageVerification
+
+tasks.named('compileTestJava').configure {
+    options.compilerArgs.addAll(['-Xlint:unchecked', '-Xlint:deprecation'])
+}

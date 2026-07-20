@@ -6,13 +6,15 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.memory.MockitoTestHelper.anyActionListener;
+import static org.opensearch.ml.memory.MockitoTestHelper.anyStringKeyMap;
+import static org.opensearch.ml.memory.MockitoTestHelper.forMapClass;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -114,12 +116,12 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
             listener.onResponse(updateResponse);
             return null;
-        }).when(cmHandler).updateInteraction(any(String.class), any(Map.class), isA(ActionListener.class));
+        }).when(cmHandler).updateInteraction(any(String.class), anyStringKeyMap(), anyActionListener());
 
         updateInteractionTransportAction.doExecute(task, updateRequest, actionListener);
 
-        ArgumentCaptor<Map<String, Object>> updateContentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(cmHandler).updateInteraction(any(String.class), updateContentCaptor.capture(), isA(ActionListener.class));
+        ArgumentCaptor<Map<String, Object>> updateContentCaptor = forMapClass();
+        verify(cmHandler).updateInteraction(any(String.class), updateContentCaptor.capture(), anyActionListener());
         Map<String, Object> capturedUpdateContent = updateContentCaptor.getValue();
         assertTrue(capturedUpdateContent.containsKey("updated_time"));
         verify(actionListener).onResponse(updateResponse);
@@ -130,7 +132,7 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Error in Update Request"));
             return null;
-        }).when(cmHandler).updateInteraction(any(String.class), any(Map.class), isA(ActionListener.class));
+        }).when(cmHandler).updateInteraction(any(String.class), anyStringKeyMap(), anyActionListener());
 
         updateInteractionTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
@@ -144,7 +146,7 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
             listener.onResponse(updateResponse);
             return null;
-        }).when(cmHandler).updateInteraction(any(String.class), any(Map.class), isA(ActionListener.class));
+        }).when(cmHandler).updateInteraction(any(String.class), anyStringKeyMap(), anyActionListener());
 
         updateInteractionTransportAction.doExecute(task, updateRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
@@ -153,7 +155,7 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
     public void test_execute_ThrowException() {
         doThrow(new RuntimeException("Error in Update Request"))
             .when(cmHandler)
-            .updateInteraction(any(String.class), any(Map.class), isA(ActionListener.class));
+            .updateInteraction(any(String.class), anyStringKeyMap(), anyActionListener());
 
         updateInteractionTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);

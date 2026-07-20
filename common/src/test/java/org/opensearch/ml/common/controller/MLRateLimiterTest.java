@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -17,9 +18,7 @@ import java.util.function.Consumer;
 
 import org.junit.Before;
 import org.junit.Ignore;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
@@ -44,9 +43,6 @@ public class MLRateLimiterTest {
     private MLRateLimiter rateLimiterNull;
 
     private final String expectedInputStr = "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}";
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -97,29 +93,32 @@ public class MLRateLimiterTest {
 
     @Test
     public void parseWithIllegalLimit() throws Exception {
-        exceptionRule.expect(OpenSearchParseException.class);
-        String inputStrWithIllegalLimit = "{\"limit\":\"-1\",\"unit\":\"MILLISECONDS\"}";
-        testParseFromJsonString(inputStrWithIllegalLimit, parsedInput -> {});
+        assertThrows(OpenSearchParseException.class, () -> {
+            String inputStrWithIllegalLimit = "{\"limit\":\"-1\",\"unit\":\"MILLISECONDS\"}";
+            testParseFromJsonString(inputStrWithIllegalLimit, parsedInput -> {});
+        });
     }
 
     @Test
     public void parseWithNegativeLimit() throws Exception {
-        exceptionRule.expect(OpenSearchParseException.class);
-        String inputStrWithNegativeLimit = "{\"limit\":\"ILLEGAL\",\"unit\":\"MILLISECONDS\"}";
-        testParseFromJsonString(inputStrWithNegativeLimit, parsedInput -> {});
+        assertThrows(OpenSearchParseException.class, () -> {
+            String inputStrWithNegativeLimit = "{\"limit\":\"ILLEGAL\",\"unit\":\"MILLISECONDS\"}";
+            testParseFromJsonString(inputStrWithNegativeLimit, parsedInput -> {});
+        });
     }
 
     @Test
     public void parseWithNullField() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
-        final String expectedInputStrWithNullField = "{\"limit\":\"1\",\"unit\":null}";
+        assertThrows(IllegalStateException.class, () -> {
+            final String expectedInputStrWithNullField = "{\"limit\":\"1\",\"unit\":null}";
 
-        testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
-            try {
-                assertEquals(expectedInputStr, serializationWithToXContent(parsedInput));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
+                try {
+                    assertEquals(expectedInputStr, serializationWithToXContent(parsedInput));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         });
     }
 

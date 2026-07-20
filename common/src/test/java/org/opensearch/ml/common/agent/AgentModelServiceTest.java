@@ -12,17 +12,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class AgentModelServiceTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void testCreateModelFromSpec_Success() {
         // Arrange
@@ -53,11 +47,12 @@ public class AgentModelServiceTest {
     @Test
     public void testCreateModelFromSpec_NullModelSpec() {
         // Arrange & Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Model specification not found");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        AgentModelService.createModelFromSpec(null);
+            // Act
+            AgentModelService.createModelFromSpec(null);
+        });
+        assertEquals("Model specification not found", exception.getMessage());
     }
 
     @Test
@@ -66,11 +61,12 @@ public class AgentModelServiceTest {
         MLAgentModelSpec modelSpec = MLAgentModelSpec.builder().modelId("   ").modelProvider("bedrock/converse").build();
 
         // Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model_id cannot be null or empty");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        AgentModelService.createModelFromSpec(modelSpec);
+            // Act
+            AgentModelService.createModelFromSpec(modelSpec);
+        });
+        assertEquals("model_id cannot be null or empty", exception.getMessage());
     }
 
     @Test
@@ -79,11 +75,12 @@ public class AgentModelServiceTest {
         MLAgentModelSpec modelSpec = MLAgentModelSpec.builder().modelId("test-model-id").modelProvider("  ").build();
 
         // Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model_provider cannot be null or empty");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        AgentModelService.createModelFromSpec(modelSpec);
+            // Act
+            AgentModelService.createModelFromSpec(modelSpec);
+        });
+        assertEquals("model_provider cannot be null or empty", exception.getMessage());
     }
 
     @Test
@@ -96,11 +93,11 @@ public class AgentModelServiceTest {
         String expectedMessage = "Unknown model provider type. Supported types: " + supportedTypes;
 
         // Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage(expectedMessage);
-
-        // Act
-        AgentModelService.createModelFromSpec(modelSpec);
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> AgentModelService.createModelFromSpec(modelSpec)
+        );
+        assertEquals(expectedMessage, exception.getMessage());
     }
 
     @Test
@@ -118,10 +115,11 @@ public class AgentModelServiceTest {
             .build();
 
         // Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        AgentModelService.createModelFromSpec(modelSpec);
+            AgentModelService.createModelFromSpec(modelSpec);
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
@@ -156,11 +154,12 @@ public class AgentModelServiceTest {
             .modelProvider("bedrock/converse")
             .build();
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        AgentModelService.createModelFromSpec(modelSpec);
+            // Act
+            AgentModelService.createModelFromSpec(modelSpec);
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test
@@ -225,11 +224,12 @@ public class AgentModelServiceTest {
             .build();
 
         // Assert
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        // Act
-        AgentModelService.createModelFromSpec(modelSpec);
+            // Act
+            AgentModelService.createModelFromSpec(modelSpec);
+        });
+        assertEquals("Missing credential", exception.getMessage());
     }
 
     @Test

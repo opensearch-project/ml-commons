@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.input.parameter.clustering;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.TestHelper.contentObjectToString;
 import static org.opensearch.ml.common.TestHelper.testParseFromString;
 
@@ -13,18 +14,13 @@ import java.io.IOException;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
 public class KMeansParamsTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     KMeansParams params;
     private Function<XContentParser, KMeansParams> function = parser -> {
         try {
@@ -46,18 +42,20 @@ public class KMeansParamsTest {
 
     @Test
     public void parse_KMeansParams_InvalidDoubleValue() throws IOException {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("10.01 cannot be converted to Integer without data loss");
-        String paramsStr = contentObjectToString(params);
-        testParseFromString(params, paramsStr.replace("\"iterations\":10,", "\"iterations\":10.01,"), function);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            String paramsStr = contentObjectToString(params);
+            testParseFromString(params, paramsStr.replace("\"iterations\":10,", "\"iterations\":10.01,"), function);
+        });
+        assertEquals("10.01 cannot be converted to Integer without data loss", exception.getMessage());
     }
 
     @Test
     public void parse_KMeansParams_InvalidDoubleString() throws IOException {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Integer value passed as String");
-        String paramsStr = contentObjectToString(params);
-        testParseFromString(params, paramsStr.replace("\"iterations\":10,", "\"iterations\":\"10.01\","), function);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            String paramsStr = contentObjectToString(params);
+            testParseFromString(params, paramsStr.replace("\"iterations\":10,", "\"iterations\":\"10.01\","), function);
+        });
+        assertEquals("Integer value passed as String", exception.getMessage());
     }
 
     @Test

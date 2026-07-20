@@ -6,15 +6,14 @@
 package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
 import java.util.function.Function;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -26,8 +25,6 @@ public class QuestionAnsweringModelConfigTests {
 
     QuestionAnsweringModelConfig config;
     Function<XContentParser, QuestionAnsweringModelConfig> function;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -60,16 +57,20 @@ public class QuestionAnsweringModelConfigTests {
 
     @Test
     public void nullFields_ModelType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model type is null");
-        config = QuestionAnsweringModelConfig.builder().build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = QuestionAnsweringModelConfig.builder().build()
+        );
+        assertEquals("model type is null", exception.getMessage());
     }
 
     @Test
     public void nullFields_FrameworkType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("framework type is null");
-        config = QuestionAnsweringModelConfig.builder().modelType("testModelType").build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> config = QuestionAnsweringModelConfig.builder().modelType("testModelType").build()
+        );
+        assertEquals("framework type is null", exception.getMessage());
     }
 
     @Test
@@ -81,9 +82,11 @@ public class QuestionAnsweringModelConfigTests {
 
     @Test
     public void frameworkType_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong framework type");
-        QuestionAnsweringModelConfig.FrameworkType.from("test_wrong_value");
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> QuestionAnsweringModelConfig.FrameworkType.from("test_wrong_value")
+        );
+        assertEquals("Wrong framework type", exception.getMessage());
     }
 
     @Test

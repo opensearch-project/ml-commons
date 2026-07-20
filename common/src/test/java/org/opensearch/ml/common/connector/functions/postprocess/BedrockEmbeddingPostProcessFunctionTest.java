@@ -6,20 +6,16 @@
 package org.opensearch.ml.common.connector.functions.postprocess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class BedrockEmbeddingPostProcessFunctionTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     BedrockEmbeddingPostProcessFunction function;
 
     @Before
@@ -29,16 +25,14 @@ public class BedrockEmbeddingPostProcessFunctionTest {
 
     @Test
     public void process_WrongInput_NotList() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Post process function input is not a List.");
-        function.apply("abc", null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply("abc", null));
+        assertEquals("Post process function input is not a List.", exception.getMessage());
     }
 
     @Test
     public void process_WrongInput_NotNumberList() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("The embedding should be a non-empty List containing Float values.");
-        function.apply(Arrays.asList("abc"), null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply(Arrays.asList("abc"), null));
+        assertEquals("The embedding should be a non-empty List containing Float values.", exception.getMessage());
     }
 
     @Test

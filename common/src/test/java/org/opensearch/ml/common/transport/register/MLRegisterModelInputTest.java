@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
@@ -16,9 +17,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -49,9 +48,6 @@ public class MLRegisterModelInputTest {
     @Mock
     MLModelConfig config;
     MLRegisterModelInput input;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
     private final String expectedInputStr = "{\"function_name\":\"TEXT_EMBEDDING\",\"name\":\"modelName\","
         + "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\","
         + "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\","
@@ -107,47 +103,50 @@ public class MLRegisterModelInputTest {
 
     @Test
     public void constructor_NullModel() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model name is null");
-        MLRegisterModelInput.builder().build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MLRegisterModelInput.builder().build());
+        assertEquals("model name is null", exception.getMessage());
     }
 
     @Test
     public void constructor_NullModelName() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model name is null");
-        MLRegisterModelInput.builder().functionName(functionName).modelGroupId(modelGroupId).modelName(null).build();
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLRegisterModelInput.builder().functionName(functionName).modelGroupId(modelGroupId).modelName(null).build()
+        );
+        assertEquals("model name is null", exception.getMessage());
     }
 
     @Test
     public void constructor_NullModelFormat() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model format is null");
-        MLRegisterModelInput
-            .builder()
-            .functionName(functionName)
-            .modelName(modelName)
-            .version(version)
-            .modelGroupId(modelGroupId)
-            .modelFormat(null)
-            .url(url)
-            .build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLRegisterModelInput
+                .builder()
+                .functionName(functionName)
+                .modelName(modelName)
+                .version(version)
+                .modelGroupId(modelGroupId)
+                .modelFormat(null)
+                .url(url)
+                .build();
+        });
+        assertEquals("model format is null", exception.getMessage());
     }
 
     @Test
     public void constructor_NullModelConfig() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model config is null");
-        MLRegisterModelInput
-            .builder()
-            .functionName(functionName)
-            .modelName(modelName)
-            .version(version)
-            .modelGroupId(modelGroupId)
-            .modelFormat(MLModelFormat.ONNX)
-            .modelConfig(null)
-            .url(url)
-            .build();
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLRegisterModelInput
+                .builder()
+                .functionName(functionName)
+                .modelName(modelName)
+                .version(version)
+                .modelGroupId(modelGroupId)
+                .modelFormat(MLModelFormat.ONNX)
+                .modelConfig(null)
+                .url(url)
+                .build();
+        });
+        assertEquals("model config is null", exception.getMessage());
     }
 
     @Test

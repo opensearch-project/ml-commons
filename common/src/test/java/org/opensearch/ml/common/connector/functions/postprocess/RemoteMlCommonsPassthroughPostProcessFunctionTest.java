@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector.functions.postprocess;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.output.model.ModelTensors.OUTPUT_FIELD;
 
 import java.util.Arrays;
@@ -14,16 +15,11 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class RemoteMlCommonsPassthroughPostProcessFunctionTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     RemoteMlCommonsPassthroughPostProcessFunction function;
 
     @Before
@@ -33,9 +29,8 @@ public class RemoteMlCommonsPassthroughPostProcessFunctionTest {
 
     @Test
     public void process_WrongInput_NotMapOrList() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Post process function input must be a Map or List");
-        function.apply("abc", null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> function.apply("abc", null));
+        assertEquals("Post process function input must be a Map or List", exception.getMessage());
     }
 
     /**
@@ -59,7 +54,8 @@ public class RemoteMlCommonsPassthroughPostProcessFunctionTest {
         assertEquals(innerDataAsMap, tensor.getDataAsMap());
 
         // Verify the nested sparse data structure
-        Map<String, Object> dataAsMap = (Map<String, Object>) tensor.getDataAsMap();
+        Map<String, ?> dataAsMap = tensor.getDataAsMap();
+        @SuppressWarnings("unchecked") // Nested response list is parsed from dynamic JSON structure
         List<Map<String, Object>> response = (List<Map<String, Object>>) dataAsMap.get("response");
         assertEquals(1, response.size());
         assertEquals(0.35982144, (Double) response.get(0).get("hello"), 0.0001);

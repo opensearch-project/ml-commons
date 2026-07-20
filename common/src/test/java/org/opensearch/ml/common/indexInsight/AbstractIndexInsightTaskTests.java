@@ -13,6 +13,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_UPDATE_INTERVAL;
+import static org.opensearch.ml.common.MockitoTestHelper.anyActionListener;
+import static org.opensearch.ml.common.MockitoTestHelper.forMapClass;
+import static org.opensearch.ml.common.MockitoTestHelper.mockActionListener;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.*;
 
 import java.io.IOException;
@@ -106,10 +109,10 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testGetInsightContentFromContainer() {
         mockGetSuccess(sdkClient, "{\"key\": \"value\"}");
-        ActionListener<Map<String, Object>> listener = mock(ActionListener.class);
+        ActionListener<Map<String, Object>> listener = mockActionListener();
         task.getInsightContentFromContainer(MLIndexInsightType.STATISTICAL_DATA, "", listener);
 
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass((Class) Map.class);
+        ArgumentCaptor<Map<String, Object>> captor = forMapClass();
         verify(listener).onResponse(captor.capture());
         assertEquals("value", captor.getValue().get("key"));
     }
@@ -117,10 +120,10 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testGetInsightContentFromContainer_NotExists() {
         mockGetSuccess(sdkClient, "");
-        ActionListener<Map<String, Object>> listener = mock(ActionListener.class);
+        ActionListener<Map<String, Object>> listener = mockActionListener();
         task.getInsightContentFromContainer(MLIndexInsightType.STATISTICAL_DATA, "", listener);
 
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass((Class) Map.class);
+        ArgumentCaptor<Map<String, Object>> captor = forMapClass();
         verify(listener).onResponse(captor.capture());
         assertNull(captor.getValue());
     }
@@ -128,7 +131,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testSaveResult() {
         mockUpdateSuccess(sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.saveResult("test content", "test-tenant", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
@@ -144,7 +147,7 @@ public class AbstractIndexInsightTaskTests {
         failedFuture.completeExceptionally(new Exception("SDK Client update failed"));
         when(sdkClient.putDataObjectAsync(any())).thenReturn(failedFuture);
 
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.saveResult("test content", "test-storage", listener);
 
         verify(listener).onFailure(any());
@@ -153,7 +156,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testSaveFailedStatus() {
         mockUpdateSuccess(sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.saveFailedStatus("", new RuntimeException("test error"), listener);
         ArgumentCaptor<PutDataObjectRequest> captor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
 
@@ -175,7 +178,7 @@ public class AbstractIndexInsightTaskTests {
         source.put(IndexInsight.TASK_TYPE_FIELD, "STATISTICAL_DATA");
         source.put(IndexInsight.CONTENT_FIELD, "test content");
 
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.handleExistingDoc(source, "test-tenant", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
@@ -193,7 +196,7 @@ public class AbstractIndexInsightTaskTests {
         source.put(IndexInsight.CONTENT_FIELD, "test content");
 
         mockFullFlowExecution(sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.handleExistingDoc(source, "test-tenant", listener);
 
         // Verify prerequisite task execution: 5 threadPool calls indicate both prerequisite and main task ran
@@ -207,7 +210,7 @@ public class AbstractIndexInsightTaskTests {
         source.put(IndexInsight.STATUS_FIELD, "GENERATING");
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
 
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.handleExistingDoc(source, "test-tenant", listener);
 
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
@@ -223,7 +226,7 @@ public class AbstractIndexInsightTaskTests {
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - INDEX_INSIGHT_GENERATING_TIMEOUT - 3600);
 
         mockFullFlowExecution(sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.handleExistingDoc(source, "test-tenant", listener);
 
         verify(client, times(5)).threadPool();
@@ -237,7 +240,7 @@ public class AbstractIndexInsightTaskTests {
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
 
         mockFullFlowExecution(sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.handleExistingDoc(source, "test-tenant", listener);
 
         verify(client, times(5)).threadPool();
@@ -247,7 +250,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testRunWithPrerequisites_Success() throws IOException {
         mockFullFlowExecution(sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.runWithPrerequisites("test-tenant", listener);
 
         verify(listener).onResponse(any(IndexInsight.class));
@@ -260,7 +263,7 @@ public class AbstractIndexInsightTaskTests {
         failedFuture.completeExceptionally(new Exception("Prerequisite failed"));
         when(sdkClient.getDataObjectAsync(any())).thenReturn(failedFuture);
 
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.runWithPrerequisites("test-tenant", listener);
 
         verify(listener).onFailure(any());
@@ -278,7 +281,7 @@ public class AbstractIndexInsightTaskTests {
 
         mockGetSuccess(sdkClient, prereqSource);
         mockUpdateSuccess(sdkClient);
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.runWithPrerequisites("test-tenant", listener);
 
         verify(client, times(2)).threadPool();
@@ -305,7 +308,7 @@ public class AbstractIndexInsightTaskTests {
         SearchHit[] hits = new SearchHit[] { patternHit };
         mockSearchWithPatternHit(sdkClient, hits);
 
-        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        ActionListener<IndexInsight> listener = mockActionListener();
         task.execute("test-tenant", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
@@ -319,7 +322,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testGetAgentIdToRun_Success() {
         Client client = mock(Client.class);
-        ActionListener<String> actionListener = mock(ActionListener.class);
+        ActionListener<String> actionListener = mockActionListener();
         String tenantId = "test-tenant";
         String expectedAgentId = "test-agent-id";
 
@@ -331,7 +334,7 @@ public class AbstractIndexInsightTaskTests {
             ActionListener<MLConfigGetResponse> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(client).execute(any(), any(MLConfigGetRequest.class), any(ActionListener.class));
+        }).when(client).execute(any(), any(MLConfigGetRequest.class), anyActionListener());
 
         AbstractIndexInsightTask.getAgentIdToRun(client, tenantId, actionListener);
 
@@ -341,7 +344,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testGetAgentIdToRun_Failure() {
         Client client = mock(Client.class);
-        ActionListener<String> actionListener = mock(ActionListener.class);
+        ActionListener<String> actionListener = mockActionListener();
         String tenantId = "test-tenant";
         Exception expectedException = new RuntimeException("Test error");
 
@@ -349,7 +352,7 @@ public class AbstractIndexInsightTaskTests {
             ActionListener<MLConfigGetResponse> listener = invocation.getArgument(2);
             listener.onFailure(expectedException);
             return null;
-        }).when(client).execute(any(), any(MLConfigGetRequest.class), any(ActionListener.class));
+        }).when(client).execute(any(), any(MLConfigGetRequest.class), anyActionListener());
 
         AbstractIndexInsightTask.getAgentIdToRun(client, tenantId, actionListener);
 
@@ -435,7 +438,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testCallLLMWithAgent_SuccessWithJson() {
         Client client = mock(Client.class);
-        ActionListener<String> listener = mock(ActionListener.class);
+        ActionListener<String> listener = mockActionListener();
         String agentId = "test-agent";
         String prompt = "test prompt";
         String sourceIndex = "test-index";
@@ -457,7 +460,7 @@ public class AbstractIndexInsightTaskTests {
             ActionListener<MLExecuteTaskResponse> responseListener = invocation.getArgument(2);
             responseListener.onResponse(response);
             return null;
-        }).when(client).execute(any(), any(MLExecuteTaskRequest.class), any(ActionListener.class));
+        }).when(client).execute(any(), any(MLExecuteTaskRequest.class), anyActionListener());
 
         AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, listener);
 
@@ -467,7 +470,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testCallLLMWithAgent_SuccessWithPlainText() {
         Client client = mock(Client.class);
-        ActionListener<String> listener = mock(ActionListener.class);
+        ActionListener<String> listener = mockActionListener();
         String agentId = "test-agent";
         String prompt = "test prompt";
         String sourceIndex = "test-index";
@@ -489,7 +492,7 @@ public class AbstractIndexInsightTaskTests {
             ActionListener<MLExecuteTaskResponse> responseListener = invocation.getArgument(2);
             responseListener.onResponse(response);
             return null;
-        }).when(client).execute(any(), any(MLExecuteTaskRequest.class), any(ActionListener.class));
+        }).when(client).execute(any(), any(MLExecuteTaskRequest.class), anyActionListener());
 
         AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, listener);
 
@@ -499,7 +502,7 @@ public class AbstractIndexInsightTaskTests {
     @Test
     public void testCallLLMWithAgent_Failure() {
         Client client = mock(Client.class);
-        ActionListener<String> listener = mock(ActionListener.class);
+        ActionListener<String> listener = mockActionListener();
         String agentId = "test-agent";
         String prompt = "test prompt";
         String sourceIndex = "test-index";
@@ -509,7 +512,7 @@ public class AbstractIndexInsightTaskTests {
             ActionListener<MLExecuteTaskResponse> responseListener = invocation.getArgument(2);
             responseListener.onFailure(expectedException);
             return null;
-        }).when(client).execute(any(), any(MLExecuteTaskRequest.class), any(ActionListener.class));
+        }).when(client).execute(any(), any(MLExecuteTaskRequest.class), anyActionListener());
 
         AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, listener);
 

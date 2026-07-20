@@ -186,7 +186,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.CONTENT_BLOCKS, deserializedInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<ContentBlock> deserializedBlocks = (List<ContentBlock>) deserializedInput.getInput();
         assertEquals(2, deserializedBlocks.size());
         assertEquals(ContentType.TEXT, deserializedBlocks.get(0).getType());
@@ -222,7 +222,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, deserializedInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
         assertEquals(1, deserializedMessages.size());
         assertEquals("user", deserializedMessages.get(0).getRole());
@@ -251,7 +251,7 @@ public class AgentInputTest {
         AgentInput deserializedInput = new AgentInput(input);
 
         // Assert
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<ContentBlock> deserializedBlocks = (List<ContentBlock>) deserializedInput.getInput();
         assertEquals(1, deserializedBlocks.size());
         assertEquals(ContentType.VIDEO, deserializedBlocks.get(0).getType());
@@ -281,7 +281,7 @@ public class AgentInputTest {
         AgentInput deserializedInput = new AgentInput(input);
 
         // Assert
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<ContentBlock> deserializedBlocks = (List<ContentBlock>) deserializedInput.getInput();
         assertEquals(1, deserializedBlocks.size());
         assertEquals(ContentType.DOCUMENT, deserializedBlocks.get(0).getType());
@@ -348,7 +348,7 @@ public class AgentInputTest {
         // Assert
         assertNotNull(agentInput.getInput());
         assertEquals(InputType.CONTENT_BLOCKS, agentInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
         assertEquals(1, blocks.size());
         assertEquals(ContentType.TEXT, blocks.get(0).getType());
@@ -370,7 +370,7 @@ public class AgentInputTest {
         // Assert
         assertNotNull(agentInput.getInput());
         assertEquals(InputType.MESSAGES, agentInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> messages = (List<Message>) agentInput.getInput();
         assertEquals(1, messages.size());
         assertEquals("user", messages.get(0).getRole());
@@ -392,7 +392,7 @@ public class AgentInputTest {
 
         // Assert
         assertNotNull(agentInput.getInput());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
         assertEquals(1, blocks.size());
         assertEquals(ContentType.IMAGE, blocks.get(0).getType());
@@ -417,7 +417,7 @@ public class AgentInputTest {
 
         // Assert
         assertNotNull(agentInput.getInput());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
         assertEquals(1, blocks.size());
         assertEquals(ContentType.VIDEO, blocks.get(0).getType());
@@ -440,7 +440,7 @@ public class AgentInputTest {
 
         // Assert
         assertNotNull(agentInput.getInput());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
         assertEquals(1, blocks.size());
         assertEquals(ContentType.DOCUMENT, blocks.get(0).getType());
@@ -544,7 +544,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, deserializedInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
         assertEquals(1, deserializedMessages.size());
         assertEquals(2, deserializedMessages.get(0).getContent().size());
@@ -597,7 +597,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, deserializedInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
         assertEquals(2, deserializedMessages.size());
         assertEquals("user", deserializedMessages.get(0).getRole());
@@ -630,7 +630,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, agentInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> resultMessages = (List<Message>) agentInput.getInput();
         assertEquals(1, resultMessages.size());
         assertNotNull(resultMessages.get(0).getToolCalls());
@@ -659,7 +659,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, agentInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> resultMessages = (List<Message>) agentInput.getInput();
         assertEquals(1, resultMessages.size());
         assertEquals("tool", resultMessages.get(0).getRole());
@@ -702,7 +702,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, deserializedInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
         assertEquals(1, deserializedMessages.size());
         assertEquals("assistant", deserializedMessages.get(0).getRole());
@@ -742,7 +742,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, deserializedInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
         assertEquals(1, deserializedMessages.size());
         assertEquals("tool", deserializedMessages.get(0).getRole());
@@ -777,7 +777,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, agentInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> messages = (List<Message>) agentInput.getInput();
         assertEquals(1, messages.size());
         assertEquals("assistant", messages.get(0).getRole());
@@ -807,7 +807,7 @@ public class AgentInputTest {
 
         // Assert
         assertEquals(InputType.MESSAGES, agentInput.getInputType());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> messages = (List<Message>) agentInput.getInput();
         assertEquals(1, messages.size());
         assertEquals("tool", messages.get(0).getRole());
@@ -865,7 +865,7 @@ public class AgentInputTest {
         AgentInput deserializedInput = new AgentInput(input);
 
         // Assert
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unchecked") // AgentInput.getInput() returns Object; cast to typed list for assertion
         List<Message> deserializedMessages = (List<Message>) deserializedInput.getInput();
         assertEquals(4, deserializedMessages.size());
 

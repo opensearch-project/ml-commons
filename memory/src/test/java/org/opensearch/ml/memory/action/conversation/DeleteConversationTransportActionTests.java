@@ -24,6 +24,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+import static org.opensearch.ml.memory.MockitoTestHelper.mockActionListener;
 
 import java.io.IOException;
 import java.util.Set;
@@ -90,8 +91,7 @@ public class DeleteConversationTransportActionTests extends OpenSearchTestCase {
         this.xContentRegistry = Mockito.mock(NamedXContentRegistry.class);
         this.transportService = Mockito.mock(TransportService.class);
         this.actionFilters = Mockito.mock(ActionFilters.class);
-        @SuppressWarnings("unchecked")
-        ActionListener<DeleteConversationResponse> al = (ActionListener<DeleteConversationResponse>) Mockito.mock(ActionListener.class);
+        ActionListener<DeleteConversationResponse> al = mockActionListener();
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 

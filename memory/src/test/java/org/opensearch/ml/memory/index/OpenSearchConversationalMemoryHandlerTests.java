@@ -24,6 +24,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.memory.MockitoTestHelper.forListClass;
+import static org.opensearch.ml.memory.MockitoTestHelper.mockActionListener;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -123,8 +125,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             .response("rsp")
             .promptTemplate("pt")
             .additionalInfo(Collections.singletonMap("meta", "some meta"));
-        @SuppressWarnings("unchecked")
-        ActionListener<String> createInteractionListener = mock(ActionListener.class);
+        ActionListener<String> createInteractionListener = mockActionListener();
         cmHandler.createInteraction(builder, createInteractionListener);
         ArgumentCaptor<String> argCaptor = ArgumentCaptor.forClass(String.class);
         verify(createInteractionListener, times(1)).onResponse(argCaptor.capture());
@@ -185,9 +186,9 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             al.onResponse(List.of());
             return null;
         }).when(interactionsIndex).getTraces(any(), anyInt(), anyInt(), any());
-        ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
+        ActionListener<List<Interaction>> getTracesListener = mockActionListener();
         cmHandler.getTraces("iId", 0, 10, getTracesListener);
-        ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<Interaction>> argCaptor = forListClass();
         verify(getTracesListener, times(1)).onResponse(argCaptor.capture());
         assert (argCaptor.getValue().size() == 0);
     }
@@ -201,7 +202,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             return null;
         }).when(conversationMetaIndex).updateConversation(any(), any(), any());
 
-        ActionListener<UpdateResponse> updateConversationListener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> updateConversationListener = mockActionListener();
         cmHandler.updateConversation("cId", new HashMap<>(), updateConversationListener);
         ArgumentCaptor<UpdateResponse> argCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
         verify(updateConversationListener, times(1)).onResponse(argCaptor.capture());
@@ -213,8 +214,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             al.onResponse(false);
             return null;
         }).when(conversationMetaIndex).checkAccess(anyString(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteListener = mockActionListener();
         cmHandler.deleteConversation("cid", deleteListener);
         ArgumentCaptor<OpenSearchStatusException> argCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(deleteListener).onFailure(argCaptor.capture());
@@ -237,8 +237,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             al.onResponse(true);
             return null;
         }).when(interactionsIndex).deleteConversation(anyString(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteListener = mockActionListener();
         cmHandler.deleteConversation("cid", deleteListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(deleteListener, times(1)).onResponse(argCaptor.capture());
@@ -261,8 +260,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             al.onResponse(false);
             return null;
         }).when(interactionsIndex).deleteConversation(anyString(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteListener = mock(ActionListener.class);
+        ActionListener<Boolean> deleteListener = mockActionListener();
         cmHandler.deleteConversation("cid", deleteListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(deleteListener, times(1)).onResponse(argCaptor.capture());
@@ -355,7 +353,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             return null;
         }).when(interactionsIndex).updateInteraction(any(), any(), any());
 
-        ActionListener<UpdateResponse> updateInteractionListener = mock(ActionListener.class);
+        ActionListener<UpdateResponse> updateInteractionListener = mockActionListener();
         cmHandler.updateInteraction("iId", new HashMap<>(), updateInteractionListener);
         ArgumentCaptor<UpdateResponse> argCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
         verify(updateInteractionListener, times(1)).onResponse(argCaptor.capture());

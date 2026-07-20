@@ -25,6 +25,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+import static org.opensearch.ml.memory.MockitoTestHelper.mockActionListener;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -88,8 +89,7 @@ public class GetConversationTransportActionTests extends OpenSearchTestCase {
         this.xContentRegistry = Mockito.mock(NamedXContentRegistry.class);
         this.transportService = Mockito.mock(TransportService.class);
         this.actionFilters = Mockito.mock(ActionFilters.class);
-        @SuppressWarnings("unchecked")
-        ActionListener<GetConversationResponse> al = (ActionListener<GetConversationResponse>) Mockito.mock(ActionListener.class);
+        ActionListener<GetConversationResponse> al = mockActionListener();
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 

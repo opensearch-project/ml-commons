@@ -10,9 +10,7 @@ import java.time.Instant;
 import java.util.Collections;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
@@ -25,10 +23,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
 public class MLConfigTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void toXContent_Minimal() throws IOException {
         MLConfig config = MLConfig.builder().type("test_type").build();

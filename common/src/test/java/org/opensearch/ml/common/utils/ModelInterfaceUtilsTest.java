@@ -29,9 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Spy;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -52,9 +50,6 @@ public class ModelInterfaceUtilsTest {
     public ConnectorAction connectorActionWithPostProcessFunction;
 
     public ConnectorAction connectorActionWithoutPostProcessFunction;
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {

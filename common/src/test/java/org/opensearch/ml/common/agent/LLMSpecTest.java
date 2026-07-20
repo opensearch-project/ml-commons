@@ -7,9 +7,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -21,16 +19,13 @@ import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
 
 public class LLMSpecTest {
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     @Test
     public void constructor_NonModelID() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model id is null");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
 
-        LLMSpec spec = new LLMSpec(null, Map.of("test_key", "test_value"));
+            LLMSpec spec = new LLMSpec(null, Map.of("test_key", "test_value"));
+        });
+        assertEquals("model id is null", exception.getMessage());
     }
 
     @Test

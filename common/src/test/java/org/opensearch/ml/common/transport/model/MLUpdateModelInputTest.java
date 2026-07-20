@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
@@ -21,9 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -82,9 +81,6 @@ public class MLUpdateModelInputTest {
         "{\"model_id\":\"test-model-id\",\"name\":\"name\",\"description\":\"description\",\"model_group_id\":"
             + "\"modelGroupId\",\"model_config\":"
             + "{\"model_type\":\"sparse_encoding\",\"additional_config\":{\"space_type\":\"l2\"}}}";
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -180,19 +176,20 @@ public class MLUpdateModelInputTest {
 
     @Test
     public void parseWithNullFieldWithoutModel() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
-        String expectedInputStrWithNullField =
-            "{\"model_id\":\"test-model_id\",\"name\":null,\"description\":\"description\",\"model_version\":"
-                + "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":"
-                + "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"},\"model_config\":"
-                + "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
-                + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
-        testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
-            try {
-                assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+        assertThrows(IllegalStateException.class, () -> {
+            String expectedInputStrWithNullField =
+                "{\"model_id\":\"test-model_id\",\"name\":null,\"description\":\"description\",\"model_version\":"
+                    + "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":"
+                    + "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"},\"model_config\":"
+                    + "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
+                    + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
+            testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
+                try {
+                    assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         });
     }
 

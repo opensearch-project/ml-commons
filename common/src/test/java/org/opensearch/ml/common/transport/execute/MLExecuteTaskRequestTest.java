@@ -7,9 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.ml.common.FunctionName;
@@ -19,8 +17,6 @@ import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelat
 public class MLExecuteTaskRequestTest {
     private Input exInput;
     private List<float[]> inputData;
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -54,11 +50,12 @@ public class MLExecuteTaskRequestTest {
 
     @Test
     public void validate_Exception_NullFunctionNane() {
-        exceptionRule.expect(NullPointerException.class);
-        exceptionRule.expectMessage("functionName is marked non-null but is null");
-        MLExecuteTaskRequest request = MLExecuteTaskRequest.builder().build();
+        NullPointerException exception = assertThrows(NullPointerException.class, () -> {
+            MLExecuteTaskRequest request = MLExecuteTaskRequest.builder().build();
 
-        request.validate();
+            request.validate();
+        });
+        assertEquals("functionName is marked non-null but is null", exception.getMessage());
     }
 
     @Test
