@@ -324,6 +324,9 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.plugin.grpc.ClientAdapter;
+import org.opensearch.ml.plugin.grpc.ModelManagerAdapter;
+import org.opensearch.ml.plugin.grpc.UserContextProviderAdapter;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
@@ -465,7 +468,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 public class MachineLearningPlugin extends Plugin
     implements
         ActionPlugin,
@@ -959,6 +964,20 @@ public class MachineLearningPlugin extends Plugin
 
         mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
+
+        // Initialize gRPC service factory only if transport-grpc module is available
+        try {
+            Class.forName("org.opensearch.transport.grpc.spi.GrpcServiceFactory");
+            org.opensearch.ml.grpc.MLGrpcServiceFactory
+                .initialize(
+                    new ModelManagerAdapter(mlModelManager),
+                    mlFeatureEnabledSetting,
+                    new ClientAdapter(client),
+                    new UserContextProviderAdapter(client)
+                );
+        } catch (ClassNotFoundException e) {
+            log.info("transport-grpc module not installed, gRPC streaming disabled");
+        }
 
         return ImmutableList
             .of(

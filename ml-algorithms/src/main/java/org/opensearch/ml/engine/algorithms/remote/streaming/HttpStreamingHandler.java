@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agui.BaseEvent;
 import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.TextMessageContentEvent;
@@ -211,7 +213,12 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 // HTTP error (e.g., 400 Bad Request)
                 try {
                     String errorBody = response.body() != null ? response.body().string() : "";
-                    streamActionListener.onFailure(new MLException("Error from remote service: " + errorBody));
+                    int statusCode = response.code();
+                    RestStatus restStatus = RestStatus.fromCode(statusCode);
+                    if (restStatus == null) {
+                        restStatus = RestStatus.INTERNAL_SERVER_ERROR;
+                    }
+                    streamActionListener.onFailure(new OpenSearchStatusException("Error from remote service: " + errorBody, restStatus));
                 } catch (IOException e) {
                     streamActionListener.onFailure(new MLException("SSE failure - unable to read error details"));
                 }
@@ -307,6 +314,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                     String modelId = parameters != null ? parameters.get("model") : null;
                     String tenantId = connector != null ? connector.getTenantId() : null;
                     log.info("First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}", modelId, tenantId, timeToFirstToken);
+                    AgentUtils.logTimeToFirstToken(modelId, tenantId, timeToFirstToken);
                     firstTokenReceived.set(true);
                 }
 
