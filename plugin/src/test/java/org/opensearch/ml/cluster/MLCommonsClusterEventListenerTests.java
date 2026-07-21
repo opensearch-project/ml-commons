@@ -6,6 +6,7 @@
 package org.opensearch.ml.cluster;
 
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -118,6 +119,43 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         listener.clusterChanged(event);
 
         verify(mlTaskManager, never()).indexStatsCollectorJob(anyBoolean());
+    }
+
+    public void testClusterChanged_MemoryRetentionJobStarted() {
+        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
+        setupClusterState(dataNode, false);
+        when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager).indexMemoryRetentionJob(24);
+    }
+
+    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenMultiTenancyEnabled() {
+        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
+        setupClusterState(dataNode, false);
+        when(clusterService.getSettings())
+            .thenReturn(org.opensearch.common.settings.Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
+    }
+
+    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenAgenticMemoryDisabled() {
+        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
+        setupClusterState(dataNode, false);
+        when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
     }
 
     private DiscoveryNode createDataNode(Version version) {

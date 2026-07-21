@@ -7,9 +7,14 @@ package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE;
 
 import java.time.Instant;
+import java.util.EnumMap;
 import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
@@ -18,6 +23,7 @@ import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.logging.HeaderWarning;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -64,6 +70,7 @@ public class TransportCreateMemoryContainerAction extends
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final MLModelManager mlModelManager;
+    private final ClusterService clusterService;
 
     @Inject
     public TransportCreateMemoryContainerAction(
@@ -74,7 +81,8 @@ public class TransportCreateMemoryContainerAction extends
         MLIndicesHandler mlIndicesHandler,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        ClusterService clusterService
     ) {
         super(MLCreateMemoryContainerAction.NAME, transportService, actionFilters, MLCreateMemoryContainerRequest::new);
         this.client = client;
@@ -83,6 +91,7 @@ public class TransportCreateMemoryContainerAction extends
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlModelManager = mlModelManager;
+        this.clusterService = clusterService;
     }
 
     @Override
@@ -158,6 +167,44 @@ public class TransportCreateMemoryContainerAction extends
                 // Set enabled to true if not specified (default for new strategies)
                 if (strategy.getEnabled() == null) {
                     strategy.setEnabled(true);
+                }
+            }
+        }
+
+        // Auto-apply admin-configured default retention policy when user did not provide one.
+        // Gated by the retention kill switch: when retention is disabled we neither accept a user policy
+        // (rejected in doExecute) nor stamp an admin default, so no policy is ever written while the feature is off.
+        if (mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && configuration != null
+            && !configuration.isRetentionPolicyExplicitlyNull()) {
+            Map<MemoryType, RetentionRule> existingPolicy = configuration.getRetentionPolicy();
+            if (existingPolicy == null || existingPolicy.isEmpty()) {
+                int sessionRetentionDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS);
+                int sessionMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT);
+                int longTermMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT);
+                int historyMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT);
+
+                boolean anyConfigured = sessionRetentionDays > 0 || sessionMaxCount > 0 || longTermMaxCount > 0 || historyMaxCount > 0;
+                if (anyConfigured) {
+                    Map<MemoryType, RetentionRule> defaultPolicy = new EnumMap<>(MemoryType.class);
+                    if (sessionRetentionDays > 0 || sessionMaxCount > 0) {
+                        defaultPolicy
+                            .put(
+                                MemoryType.SESSIONS,
+                                new RetentionRule(
+                                    sessionRetentionDays > 0 ? sessionRetentionDays : null,
+                                    sessionMaxCount > 0 ? sessionMaxCount : null
+                                )
+                            );
+                    }
+                    if (longTermMaxCount > 0) {
+                        defaultPolicy.put(MemoryType.LONG_TERM, new RetentionRule(null, longTermMaxCount));
+                    }
+                    if (historyMaxCount > 0) {
+                        defaultPolicy.put(MemoryType.HISTORY, new RetentionRule(null, historyMaxCount));
+                    }
+                    configuration.setRetentionPolicy(defaultPolicy);
+                    log.info("Auto-applied default retention policy to new container '{}'", input.getName());
                 }
             }
         }

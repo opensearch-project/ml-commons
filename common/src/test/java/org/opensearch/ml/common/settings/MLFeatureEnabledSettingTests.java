@@ -219,7 +219,7 @@ public class MLFeatureEnabledSettingTests {
         Settings settings = Settings.EMPTY;
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
 
-        // Default is false in this PR; will be flipped to true once the retention job (PR2) lands.
+        // Retention is opt-in: the kill switch defaults to false so nothing is deleted until an operator turns it on.
         assertFalse(setting.isMemoryRetentionEnabled());
     }
 
@@ -233,7 +233,8 @@ public class MLFeatureEnabledSettingTests {
 
     @Test
     public void testMemoryRetentionDynamicUpdate() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.memory.retention_enabled", false).build();
+        // Default is false; construct disabled, then dynamically flip the kill switch on (a real change from the default).
+        Settings settings = Settings.EMPTY;
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
 
         assertFalse(setting.isMemoryRetentionEnabled());

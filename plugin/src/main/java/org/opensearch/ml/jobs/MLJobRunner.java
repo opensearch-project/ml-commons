@@ -13,6 +13,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
 import org.opensearch.ml.jobs.processors.MLStatsJobProcessor;
+import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -25,7 +26,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLJobRunner implements ScheduledJobRunner {
 
-    private static MLJobRunner instance;
+    private static volatile MLJobRunner instance;
 
     public static MLJobRunner getInstance() {
         if (instance != null) {
@@ -58,7 +59,7 @@ public class MLJobRunner implements ScheduledJobRunner {
     @Setter
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private boolean initialized;
+    private volatile boolean initialized;
 
     @VisibleForTesting
     MLJobRunner() {
@@ -78,8 +79,8 @@ public class MLJobRunner implements ScheduledJobRunner {
         this.client = client;
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
-        this.initialized = true;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.initialized = true;
     }
 
     @Override
@@ -105,6 +106,9 @@ public class MLJobRunner implements ScheduledJobRunner {
                 break;
             case BATCH_TASK_UPDATE:
                 MLBatchTaskUpdateProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);
+                break;
+            case MEMORY_RETENTION:
+                MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported job type " + jobParameter.getJobType());

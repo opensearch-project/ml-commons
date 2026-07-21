@@ -82,7 +82,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private boolean useSystemIndex;
     private String tenantId;
     private Map<MemoryType, RetentionRule> retentionPolicy;
-    private transient boolean retentionPolicyExplicitlyNull = false;
+    /**
+     * True when the user explicitly set "retention_policy": null (opt-out of retention).
+     * Persisted as an explicit null field in toXContent() so the opt-out round-trips through
+     * the container index and survives partial-update merges; distinct from field absence.
+     */
+    private boolean retentionPolicyExplicitlyNull = false;
 
     @Builder
     public MemoryConfiguration(
@@ -648,7 +653,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             // Only update dimension for TEXT_EMBEDDING if provided
             this.dimension = updateContent.getDimension();
         }
-        // Merge retention policy
+        // Merge retention policy with field-level semantics within each type
         if (updateContent.isRetentionPolicyExplicitlyNull()) {
             this.retentionPolicy = null;
             // Carry the wipe intent onto this config so toXContent() emits an explicit null and the
@@ -661,7 +666,27 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 this.retentionPolicy = new EnumMap<>(MemoryType.class);
             }
             for (Map.Entry<MemoryType, RetentionRule> entry : updateContent.getRetentionPolicy().entrySet()) {
-                this.retentionPolicy.put(entry.getKey(), entry.getValue());
+                MemoryType type = entry.getKey();
+                RetentionRule incoming = entry.getValue();
+                RetentionRule existing = this.retentionPolicy.get(type);
+
+                if (existing == null) {
+                    // No existing rule for this type: use incoming as-is
+                    this.retentionPolicy.put(type, incoming);
+                } else {
+                    // Field-level merge: only override fields that were explicitly set in the request
+                    Integer mergedDays = incoming.isRetentionDaysExplicitlySet()
+                        ? incoming.getRetentionDays()
+                        : existing.getRetentionDays();
+                    Integer mergedCount = incoming.isMaxCountExplicitlySet() ? incoming.getMaxCount() : existing.getMaxCount();
+                    // Carry the explicit-set flags through the merge so toXContent() emits
+                    // explicit nulls for cleared fields and the partial-update doc merge
+                    // removes them from storage
+                    boolean mergedDaysExplicitlySet = incoming.isRetentionDaysExplicitlySet() || existing.isRetentionDaysExplicitlySet();
+                    boolean mergedCountExplicitlySet = incoming.isMaxCountExplicitlySet() || existing.isMaxCountExplicitlySet();
+                    this.retentionPolicy
+                        .put(type, new RetentionRule(mergedDays, mergedCount, mergedDaysExplicitlySet, mergedCountExplicitlySet));
+                }
             }
         }
         // Note: indexPrefix and other structural fields are intentionally not updated
