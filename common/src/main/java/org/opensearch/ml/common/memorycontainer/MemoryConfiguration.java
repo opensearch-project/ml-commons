@@ -192,9 +192,6 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             }
             this.retentionPolicyExplicitlyNull = input.readBoolean();
         }
-        if (input.getVersion().onOrAfter(VERSION_3_8_0)) {
-            this.retentionPolicyExplicitlyNull = input.readBoolean();
-        }
     }
 
     @Override
@@ -238,9 +235,6 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
-            out.writeBoolean(retentionPolicyExplicitlyNull);
-        }
-        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
             out.writeBoolean(retentionPolicyExplicitlyNull);
         }
     }
