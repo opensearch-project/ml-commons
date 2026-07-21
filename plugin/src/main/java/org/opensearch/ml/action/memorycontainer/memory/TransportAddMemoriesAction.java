@@ -228,11 +228,14 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 // When the client supplies its own session_id, no session doc is created by the summarize path above.
                 // Lazily upsert a minimal backing session doc so the retention orphan sweep can distinguish
                 // "session never created" from "session deleted" and does not evict this live working memory after
-                // orphan_ttl_days. Fire-and-continue: the sweep runs days later, so the write need not block the add.
+                // orphan_ttl_days. Chained (not fire-and-forget): the working memory is only written after the
+                // session doc is confirmed to exist, so a genuine session-write failure fails the add rather than
+                // silently leaving orphan-eligible working memory behind.
                 if (userProvidedSessionId && !configuration.isDisableSession()) {
-                    upsertSessionIfAbsent(input, configuration);
+                    upsertSessionThenProcess(input, container, user, actionListener, configuration);
+                } else {
+                    processAndIndexMemory(input, container, user, actionListener, false);
                 }
-                processAndIndexMemory(input, container, user, actionListener, false);
             }
         } catch (Exception e) {
             log.error("Failed to create session", e);
@@ -241,47 +244,55 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
     }
 
     /**
-     * Idempotently upserts a minimal session doc for a client-supplied session_id so the retention orphan
-     * sweep does not treat this session's working memory as orphaned. Uses opType CREATE, so it is a no-op
-     * when the session already exists (create-session was called, or a prior add already upserted it). The
-     * doc carries created_time and last_updated_time so session-level retention (time-based and max-count)
-     * still applies. Best-effort and non-blocking: failures are logged and do not fail the add-memories call.
+     * Idempotently creates a minimal backing session doc for a client-supplied session_id, then proceeds to
+     * write the working memory only once the session doc is confirmed to exist. Uses opType CREATE, so a
+     * VersionConflictEngineException means the session already exists (create-session was called, or a prior
+     * add already created it) — that is the expected no-op and we continue. Any other failure fails the
+     * add-memories call rather than silently leaving working memory that the retention orphan sweep would
+     * later evict after orphan_ttl_days. The session doc carries created_time and last_updated_time so
+     * session-level retention (time-based and max-count) still applies.
      */
-    private void upsertSessionIfAbsent(MLAddMemoriesInput input, MemoryConfiguration configuration) {
-        try {
-            String sessionId = input.getNamespace().get(SESSION_ID_FIELD);
-            if (sessionId == null || sessionId.isBlank()) {
+    private void upsertSessionThenProcess(
+        MLAddMemoriesInput input,
+        MLMemoryContainer container,
+        User user,
+        ActionListener<MLAddMemoriesResponse> actionListener,
+        MemoryConfiguration configuration
+    ) {
+        String sessionId = input.getNamespace() != null ? input.getNamespace().get(SESSION_ID_FIELD) : null;
+        if (sessionId == null || sessionId.isBlank()) {
+            // No usable session id to back; nothing to create, proceed with the working-memory write.
+            processAndIndexMemory(input, container, user, actionListener, false);
+            return;
+        }
+        Instant now = Instant.now();
+        // Build the source with a mutable map: owner_id may be null when security is disabled, and Map.of
+        // rejects null values (which previously caused this upsert to silently NPE and never create the doc).
+        Map<String, Object> source = new HashMap<>();
+        if (input.getOwnerId() != null) {
+            source.put(OWNER_ID_FIELD, input.getOwnerId());
+        }
+        source.put(MEMORY_CONTAINER_ID_FIELD, input.getMemoryContainerId());
+        source.put(NAMESPACE_FIELD, input.getNamespace());
+        source.put(CREATED_TIME_FIELD, now.toEpochMilli());
+        source.put(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+        IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName())
+            .id(sessionId)
+            .opType(DocWriteRequest.OpType.CREATE) // no-op if session already exists
+            .source(source);
+        memoryContainerHelper.indexData(configuration, indexRequest, ActionListener.wrap(r -> {
+            // Session doc created (or created concurrently) — safe to write the working memory.
+            processAndIndexMemory(input, container, user, actionListener, false);
+        }, e -> {
+            if (e instanceof VersionConflictEngineException) {
+                // Session already exists — expected no-op, proceed with the working-memory write.
+                processAndIndexMemory(input, container, user, actionListener, false);
                 return;
             }
-            Instant now = Instant.now();
-            IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName())
-                .id(sessionId)
-                .opType(DocWriteRequest.OpType.CREATE) // no-op if session already exists
-                .source(
-                    Map
-                        .of(
-                            OWNER_ID_FIELD,
-                            input.getOwnerId(),
-                            MEMORY_CONTAINER_ID_FIELD,
-                            input.getMemoryContainerId(),
-                            NAMESPACE_FIELD,
-                            input.getNamespace(),
-                            CREATED_TIME_FIELD,
-                            now.toEpochMilli(),
-                            LAST_UPDATED_TIME_FIELD,
-                            now.toEpochMilli()
-                        )
-                );
-            memoryContainerHelper.indexData(configuration, indexRequest, ActionListener.wrap(r -> {}, e -> {
-                if (e instanceof VersionConflictEngineException) {
-                    // Session already exists — expected no-op, nothing to do.
-                    return;
-                }
-                log.warn("Failed to lazily create backing session doc for session_id [{}]", sessionId, e);
-            }));
-        } catch (Exception e) {
-            log.warn("Failed to lazily create backing session doc", e);
-        }
+            // A genuine session-write failure: do not proceed, or we would create orphan-eligible working memory.
+            log.error("Failed to create backing session doc for session_id [{}]; aborting add-memories", sessionId, e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+        }));
     }
 
     private void processAndIndexMemory(

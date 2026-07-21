@@ -359,10 +359,17 @@ public class TransportAddMemoriesActionTests {
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
+        // Two indexData calls: the backing-session upsert (client-supplied session_id) and the working-memory write.
         ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
-        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), requestCaptor.capture(), any());
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), requestCaptor.capture(), any());
 
-        Map<String, Object> source = requestCaptor.getValue().sourceAsMap();
+        IndexRequest workingMemoryRequest = requestCaptor
+            .getAllValues()
+            .stream()
+            .filter(r -> "working-memory-index".equals(r.index()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("working-memory write not found"));
+        Map<String, Object> source = workingMemoryRequest.sourceAsMap();
         assertEquals("session-123", source.get("session_id"));
         @SuppressWarnings("unchecked")
         Map<String, Object> indexedNamespace = (Map<String, Object>) source.get("namespace");
@@ -543,9 +550,15 @@ public class TransportAddMemoriesActionTests {
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
-        // Mock indexData to trigger failure callback
+        // First indexData call is the backing-session upsert (succeeds); second is the working-memory write (fails).
         Exception indexingException = new RuntimeException("Index failure");
         doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("session-123");
+            listener.onResponse(indexResponse);
+            return null;
+        }).doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(2);
             listener.onFailure(indexingException);
             return null;
@@ -553,7 +566,7 @@ public class TransportAddMemoriesActionTests {
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
-        // Two indexData calls: the lazy backing-session upsert (client-supplied session_id) and the working-memory write.
+        // Two indexData calls: the backing-session upsert (succeeds) and the working-memory write (fails).
         verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onFailure(indexingException);
     }
@@ -811,6 +824,71 @@ public class TransportAddMemoriesActionTests {
         assertNotNull("session doc must carry created_time for session retention", source.get("created_time"));
         assertNotNull("session doc must carry last_updated_time", source.get("last_updated_time"));
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_UserProvidedSessionId_SessionWriteFailure_AbortsBeforeWorkingMemory() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("session_id", "existing-session-123"); // User provided session_id
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // The backing-session write fails with a non-version-conflict error. The add must abort here rather than
+        // writing working memory that the retention orphan sweep would later evict as orphaned.
+        Exception sessionWriteFailure = new RuntimeException("session index write rejected");
+        doAnswer(invocation -> {
+            IndexRequest indexRequest = invocation.getArgument(1);
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            if ("session-index".equals(indexRequest.index())) {
+                listener.onFailure(sessionWriteFailure);
+            } else {
+                IndexResponse indexResponse = mock(IndexResponse.class);
+                when(indexResponse.getId()).thenReturn("working-mem-123");
+                listener.onResponse(indexResponse);
+            }
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Only the session write is attempted; the working-memory write is never reached.
+        ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), requestCaptor.capture(), any());
+        assertEquals("session-index", requestCaptor.getValue().index());
+        verify(actionListener, org.mockito.Mockito.never()).onResponse(any(MLAddMemoriesResponse.class));
+        verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
+            && ((OpenSearchStatusException) exception).status() == RestStatus.INTERNAL_SERVER_ERROR));
     }
 
     @Test
