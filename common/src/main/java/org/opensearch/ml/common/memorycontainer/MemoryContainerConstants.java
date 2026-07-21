@@ -216,6 +216,9 @@ public class MemoryContainerConstants {
     // Each constant is the value for the corresponding _xxx_json injection parameter in HttpConnector.
     // The full MemoryContainerHelper.getStructuredOutputParameters() implementation selects the right
     // constant and parameter name based on the model's connector URL.
+    // Reminder: Keep in sync with HttpConnector.STRUCTURED_OUTPUT_ALLOWED_FIELDS: the top-level field name
+    // embedded in each constant (_response_format_json → "response_format", etc.) must appear in
+    // that allowlist, otherwise the injection parameter is silently dropped at the wire layer.
 
     // OpenAI, Azure OpenAI, Ollama (OpenAI-compatible), DeepSeek — value for _response_format_json
     public static final String FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON = """

@@ -68,6 +68,8 @@ public class HttpConnector extends AbstractConnector {
     // Allowlist of top-level JSON fields that _<field>_json / _<field>_additions_json parameters may inject.
     // Restricts injection to structured-output fields only; prevents callers from overriding
     // provider control fields such as "model", "stream", or "max_tokens".
+    // Each entry corresponds to a FACTS_EXTRACTION_* constant in MemoryContainerConstants.
+    // Any new field added here must have a matching constant wired into MemoryContainerHelper.schemaForUrl.
     static final Set<String> STRUCTURED_OUTPUT_ALLOWED_FIELDS = Set
         .of(
             "response_format",  // OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere
@@ -406,6 +408,8 @@ public class HttpConnector extends AbstractConnector {
     // (b) a non-empty, allowlisted field name, and (c) a valid JSON object value string.
     // Replacements (_X_json) are applied before merges (_X_additions_json) so behaviour is
     // deterministic when both are present for the same field.
+    // Collision semantics: keys already present in the target object are preserved — the operation
+    // is strictly additive. Use _<field>_json (full replacement) to override existing keys.
     // Note: matched parameters are read but not removed from the map.
     private String injectStructuredOutputParams(Map<String, String> parameters, String payload) {
         JsonElement parsed = JsonParser.parseString(payload);
@@ -415,6 +419,7 @@ public class HttpConnector extends AbstractConnector {
         boolean modified = false;
 
         // Pass 1: _<field>_json — inject or replace a top-level field
+        // Without this skip, allowlist still prevents Pass 1 from processing *_additions_json keys, but explicit is safer.
         for (Map.Entry<String, String> entry : parameters.entrySet()) {
             if (entry.getKey().endsWith("_additions_json"))
                 continue;
@@ -435,7 +440,10 @@ public class HttpConnector extends AbstractConnector {
             JsonObject target = body.has(fieldName) && body.get(fieldName).isJsonObject()
                 ? body.getAsJsonObject(fieldName)
                 : new JsonObject();
-            additions.entrySet().forEach(e -> target.add(e.getKey(), e.getValue()));
+            additions.entrySet().forEach(e -> {
+                if (!target.has(e.getKey()))
+                    target.add(e.getKey(), e.getValue());
+            });
             body.add(fieldName, target);
             modified = true;
         }
