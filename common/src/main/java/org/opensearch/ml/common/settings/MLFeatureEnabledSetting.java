@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOC
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
@@ -69,6 +70,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isRemoteAgenticMemoryEnabled;
 
+    private volatile Boolean isMemoryRetentionEnabled;
+
     private volatile Boolean isIndexInsightEnabled;
 
     private volatile Boolean isStreamEnabled;
@@ -100,6 +103,7 @@ public class MLFeatureEnabledSetting {
         isMcpConnectorEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(settings);
         isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
         isRemoteAgenticMemoryEnabled = ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.get(settings);
+        isMemoryRetentionEnabled = ML_COMMONS_MEMORY_RETENTION_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
         maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
@@ -139,6 +143,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED, it -> isRemoteAgenticMemoryEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MEMORY_RETENTION_ENABLED, it -> isMemoryRetentionEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
         clusterService
             .getClusterSettings()
@@ -279,6 +286,15 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isRemoteAgenticMemoryEnabled() {
         return isRemoteAgenticMemoryEnabled;
+    }
+
+    /**
+     * Whether the memory retention feature is enabled. If disabled, the memory container APIs reject
+     * retention_policy and the memory retention job does not run.
+     * @return whether the memory retention feature is enabled.
+     */
+    public boolean isMemoryRetentionEnabled() {
+        return isMemoryRetentionEnabled;
     }
 
     @VisibleForTesting
