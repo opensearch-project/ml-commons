@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,7 @@ public class McpStreamableHttpTool implements WithModelTool {
 
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
+        long startNanos = System.nanoTime();
         try {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get("input");
@@ -65,8 +67,10 @@ public class McpStreamableHttpTool implements WithModelTool {
             String resultJson = StringUtils.toJson(result.content());
             @SuppressWarnings("unchecked")
             T response = (T) resultJson;
+            McpToolMetrics.recordConnectorInvocation(MCP_STREAMABLE_HTTP, startNanos, "success");
             listener.onResponse(response);
         } catch (Exception e) {
+            McpToolMetrics.recordConnectorInvocation(MCP_STREAMABLE_HTTP, startNanos, "failure");
             log.error("Failed to call MCP streamable HTTP tool: {}", this.getName(), e);
             listener.onFailure(e);
         }

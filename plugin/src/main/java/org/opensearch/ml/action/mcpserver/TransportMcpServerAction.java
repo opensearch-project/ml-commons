@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -26,7 +27,10 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpServerAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.server.MLMcpServerRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.server.MLMcpServerResponse;
+import org.opensearch.ml.stats.otel.counters.MLMcpServerMetricsCounter;
+import org.opensearch.ml.stats.otel.metrics.McpServerMetric;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.transport.TransportService;
 
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
@@ -36,6 +40,23 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Log4j2
 public class TransportMcpServerAction extends HandledTransportAction<ActionRequest, MLMcpServerResponse> {
+
+    /**
+     * JSON-RPC methods this server advertises and dispatches. Used to bound the cardinality
+     * of the {@code method} tag on MCP_SERVER_REQUEST_COUNT — anything else is collapsed to
+     * "other" so a misbehaving or hostile client can't inflate the time-series count.
+     *
+     * Keep in sync with {@link McpStatelessServerHolder}'s ServerCapabilities.
+     */
+    private static final Set<String> KNOWN_METHODS = Set
+        .of(
+            McpSchema.METHOD_INITIALIZE,
+            McpSchema.METHOD_NOTIFICATION_INITIALIZED,
+            McpSchema.METHOD_PING,
+            McpSchema.METHOD_TOOLS_LIST,
+            McpSchema.METHOD_TOOLS_CALL,
+            McpSchema.METHOD_LOGGING_SET_LEVEL
+        );
 
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
     JsonMapper objectMapper;
@@ -81,11 +102,15 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
                 message = McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(objectMapper), mlMcpServerRequest.getRequestBody());
             } catch (Exception e) {
                 log.error("Parse error: " + e.getMessage(), e);
+                recordRequest("unknown", "failure");
                 handleError(null, JSON_RPC_PARSE_ERROR, "Parse error: " + e.getMessage(), listener);
                 return;
             }
 
+            final String method = extractMethod(message);
+
             if (message instanceof McpSchema.JSONRPCNotification) {
+                recordRequest(method, "success");
                 listener.onResponse(new MLMcpServerResponse(true, null, null));
                 return;
             }
@@ -96,19 +121,40 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
             transportProvider.handleRequest(message).subscribe(response -> {
                 try {
                     String responseJson = objectMapper.writeValueAsString(response);
+                    recordRequest(method, "success");
                     listener.onResponse(new MLMcpServerResponse(true, responseJson, null));
                 } catch (Exception e) {
                     log.error("Response serialization failed: " + e.getMessage(), e);
+                    recordRequest(method, "failure");
                     handleError(id, JSON_RPC_INTERNAL_ERROR, "Response serialization failed: " + e.getMessage(), listener);
                 }
             }, error -> {
                 log.error("Internal server error: " + error.getMessage(), error);
+                recordRequest(method, "failure");
                 handleError(id, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + error.getMessage(), listener);
             });
         } catch (Exception e) {
             log.error("Failed to handle stateless MCP request", e);
+            recordRequest("unknown", "failure");
             handleError(null, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + e.getMessage(), listener);
         }
+    }
+
+    private static String extractMethod(McpSchema.JSONRPCMessage message) {
+        String method;
+        if (message instanceof McpSchema.JSONRPCRequest) {
+            method = ((McpSchema.JSONRPCRequest) message).method();
+        } else if (message instanceof McpSchema.JSONRPCNotification) {
+            method = ((McpSchema.JSONRPCNotification) message).method();
+        } else {
+            return "unknown";
+        }
+        return KNOWN_METHODS.contains(method) ? method : "other";
+    }
+
+    private static void recordRequest(String method, String status) {
+        Tags tags = Tags.create().addTag("method", method).addTag("status", status);
+        MLMcpServerMetricsCounter.getInstance().incrementCounter(McpServerMetric.MCP_SERVER_REQUEST_COUNT, tags);
     }
 
     /**

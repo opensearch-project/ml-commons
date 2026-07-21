@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 
 import java.util.List;
 import java.util.Map;
@@ -58,14 +59,17 @@ public class McpSseTool implements WithModelTool {
 
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
+        long startNanos = System.nanoTime();
         try {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get("input");
             Map<String, Object> inputArgs = StringUtils.fromJson(input, "input");
             McpSchema.CallToolResult result = mcpSyncClient.callTool(new McpSchema.CallToolRequest(this.name, inputArgs));
             String resultJson = StringUtils.toJson(result.content());
+            McpToolMetrics.recordConnectorInvocation(MCP_SSE, startNanos, "success");
             listener.onResponse((T) resultJson);
         } catch (Exception e) {
+            McpToolMetrics.recordConnectorInvocation(MCP_SSE, startNanos, "failure");
             log.error("Failed to call MCP tool: {}", this.getName(), e);
             listener.onFailure(e);
         }
