@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -761,5 +762,108 @@ public class MLRegisterModelInputTest {
         streamInput.setVersion(VERSION_3_5_0);
         MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
         assertNull(deserialized.getProvisionedBy());
+    }
+
+    // ---- id (modelId) tests ----
+
+    @Test
+    public void builder_WithModelId() {
+        MLRegisterModelInput withModelId = input.toBuilder().modelId("my-model").build();
+        assertEquals("my-model", withModelId.getModelId());
+    }
+
+    @Test
+    public void builder_WithoutModelId_DefaultsToNull() {
+        assertNull(input.getModelId());
+    }
+
+    @Test
+    public void toXContent_WithModelId_OmitsField() throws Exception {
+        // modelId is only used as the OpenSearch document id, so it is intentionally excluded from the serialized body
+        MLRegisterModelInput withModelId = input.toBuilder().modelId("my-model").build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        withModelId.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertFalse(jsonStr.contains("\"id\":\"my-model\""));
+    }
+
+    @Test
+    public void toXContent_WithoutModelId_OmitsField() throws Exception {
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertFalse(jsonStr.contains("\"id\":"));
+    }
+
+    @Test
+    public void parse_WithModelId() throws Exception {
+        String json = "{\"id\":\"my-model\",\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\"}";
+        testParseFromJsonString("modelName", "version", true, json, parsedInput -> { assertEquals("my-model", parsedInput.getModelId()); });
+    }
+
+    @Test
+    public void parse_WithoutModel_WithModelId() throws Exception {
+        String json = "{\"id\":\"my-model\",\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\"}";
+        testParseFromJsonString(true, json, parsedInput -> { assertEquals("my-model", parsedInput.getModelId()); });
+    }
+
+    @Test
+    public void parse_WithoutModelId_IsNull() throws Exception {
+        String json = "{\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\"}";
+        testParseFromJsonString(true, json, parsedInput -> { assertNull(parsedInput.getModelId()); });
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithModelId() throws IOException {
+        MLRegisterModelInput inputWithModelId = input.toBuilder().modelId("my-model").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_8_0);
+        inputWithModelId.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_8_0);
+        MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
+        assertEquals("my-model", deserialized.getModelId());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ModelId_OldVersion_IsNull() throws IOException {
+        MLRegisterModelInput inputWithModelId = input.toBuilder().modelId("my-model").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_7_0);
+        inputWithModelId.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_7_0);
+        MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
+        assertNull(deserialized.getModelId());
+    }
+
+    @Test
+    public void builder_WithBlankModelId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model id cannot be blank");
+        input.toBuilder().modelId("  ").build();
+    }
+
+    @Test
+    public void builder_WithTooLongModelId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("too long");
+        input.toBuilder().modelId("a".repeat(513)).build();
+    }
+
+    @Test
+    public void builder_WithUnsafeModelId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        input.toBuilder().modelId("bad<id>").build();
+    }
+
+    @Test
+    public void builder_WithModelIdAndHidden_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("custom model id is not supported for hidden models");
+        input.toBuilder().modelId("my-model").isHidden(true).build();
     }
 }

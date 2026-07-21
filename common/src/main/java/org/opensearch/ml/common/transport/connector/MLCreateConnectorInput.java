@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -34,6 +35,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
 import lombok.Data;
@@ -41,6 +43,7 @@ import lombok.Setter;
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
+    public static final String CONNECTOR_ID_FIELD = "id";
     public static final String CONNECTOR_NAME_FIELD = "name";
     public static final String CONNECTOR_DESCRIPTION_FIELD = "description";
     public static final String CONNECTOR_VERSION_FIELD = "version";
@@ -63,6 +66,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
+    private String connectorId; // docId for persistence in OpenSearch
     private String name;
     private String description;
     private String version;
@@ -85,6 +89,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(
+        String connectorId,
         String name,
         String description,
         String version,
@@ -128,6 +133,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
             ConnectorProtocols.validateProtocol(protocol);
         }
+        StringUtils.validateCustomId(connectorId, "connector id");
+        this.connectorId = connectorId;
         this.name = name;
         this.description = description;
         this.version = version;
@@ -152,6 +159,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser, boolean updateConnector) throws IOException {
+        String connectorId = null;
         String name = null;
         String description = null;
         String version = null;
@@ -175,6 +183,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
+                case CONNECTOR_ID_FIELD:
+                    connectorId = parser.textOrNull();
+                    break;
                 case CONNECTOR_NAME_FIELD:
                     name = parser.text();
                     break;
@@ -237,6 +248,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
         return new MLCreateConnectorInput(
+            connectorId,
             name,
             description,
             version,
@@ -377,6 +389,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             output.writeOptionalString(provisionedBy);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_8_0)) {
+            output.writeOptionalString(connectorId);
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -420,5 +435,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+        this.connectorId = streamInputVersion.onOrAfter(VERSION_3_8_0) ? input.readOptionalString() : null;
     }
 }

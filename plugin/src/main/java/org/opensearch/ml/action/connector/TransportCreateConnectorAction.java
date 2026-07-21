@@ -8,6 +8,7 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -27,6 +29,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
@@ -106,6 +109,10 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 AbstractConnector.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
             }
         }
+        if (mlCreateConnectorInput.getConnectorId() != null && !mlFeatureEnabledSetting.isUserDefinedIdEnabled()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
         if (mlCreateConnectorInput.getProtocol() != null
             && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
             && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
@@ -131,7 +138,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             User user = RestActionUtils.getUserContext(client);
             if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
                 validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
-                indexConnector(connector, listener);
+                indexConnector(connector, mlCreateConnectorInput.getConnectorId(), listener);
             } else {
                 validateRequest4AccessControl(mlCreateConnectorInput, user);
                 if (Boolean.TRUE.equals(mlCreateConnectorInput.getAddAllBackendRoles())) {
@@ -140,7 +147,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 connector.setBackendRoles(mlCreateConnectorInput.getBackendRoles());
                 connector.setOwner(user);
                 connector.setAccess(mlCreateConnectorInput.getAccess());
-                indexConnector(connector, listener);
+                indexConnector(connector, mlCreateConnectorInput.getConnectorId(), listener);
             }
         } catch (MetaDataException e) {
             log.error("The masterKey for credential encryption is missing in connector creation");
@@ -151,7 +158,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
     }
 
-    private void indexConnector(Connector connector, ActionListener<MLCreateConnectorResponse> listener) {
+    private void indexConnector(Connector connector, String id, ActionListener<MLCreateConnectorResponse> listener) {
         ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(res -> {
             log.info("connector created, indexing into the connector system index");
             mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
@@ -169,6 +176,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                                 .builder()
                                 .tenantId(connector.getTenantId())
                                 .index(ML_CONNECTOR_INDEX)
+                                .id(id)
+                                // a custom id fails on conflict instead of overwriting (null = auto-generate)
+                                .overwriteIfExists(id == null)
                                 .dataObject(connector)
                                 .build()
                         )

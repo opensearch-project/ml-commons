@@ -1071,4 +1071,96 @@ public class MLAgentTest {
 
         assertNull(exception);
     }
+
+    // ---- id (agentId) tests ----
+
+    @Test
+    public void builder_WithAgentId() {
+        MLAgent agent = MLAgent.builder().agentId("my-agent").name("test_agent").type(MLAgentType.FLOW.name()).build();
+        assertEquals("my-agent", agent.getAgentId());
+    }
+
+    @Test
+    public void builder_WithoutAgentId_DefaultsToNull() {
+        MLAgent agent = MLAgent.builder().name("test_agent").type(MLAgentType.FLOW.name()).build();
+        assertNull(agent.getAgentId());
+    }
+
+    @Test
+    public void constructor_WithBlankAgentId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("agent id cannot be blank");
+        MLAgent.builder().agentId("  ").name("test_agent").type(MLAgentType.FLOW.name()).build();
+    }
+
+    @Test
+    public void constructor_WithTooLongAgentId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("too long");
+        MLAgent.builder().agentId("a".repeat(513)).name("test_agent").type(MLAgentType.FLOW.name()).build();
+    }
+
+    @Test
+    public void constructor_WithUnsafeAgentId_Throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        MLAgent.builder().agentId("bad<id>").name("test_agent").type(MLAgentType.FLOW.name()).build();
+    }
+
+    @Test
+    public void constructor_WithAgentIdAndHidden_Allowed() {
+        // hidden is set by the system based on super-admin status, not user input, and does not change the agent's
+        // doc id, so a custom agent id must remain valid for hidden agents (e.g. super-admin registrations)
+        MLAgent agent = MLAgent.builder().agentId("my-agent").name("test_agent").type(MLAgentType.FLOW.name()).isHidden(true).build();
+        assertEquals("my-agent", agent.getAgentId());
+        assertTrue(agent.getIsHidden());
+    }
+
+    @Test
+    public void toXContent_WithAgentId_OmitsField() throws IOException {
+        // agentId is only used as the OpenSearch document id, so it is intentionally excluded from the serialized body
+        MLAgent agent = MLAgent.builder().agentId("my-agent").name("test_agent").type(MLAgentType.FLOW.name()).build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        assertFalse(content.contains("\"id\":\"my-agent\""));
+    }
+
+    @Test
+    public void parse_WithAgentId() throws IOException {
+        String jsonStr = "{\"id\":\"my-agent\",\"name\":\"test_agent\",\"type\":\"flow\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parse(parser);
+        assertEquals("my-agent", agent.getAgentId());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithAgentId() throws IOException {
+        MLAgent agent = MLAgent.builder().agentId("my-agent").name("test_agent").type(MLAgentType.FLOW.name()).build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_8_0);
+        agent.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_8_0);
+        MLAgent deserialized = new MLAgent(streamInput);
+        assertEquals("my-agent", deserialized.getAgentId());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_AgentId_OldVersion_IsNull() throws IOException {
+        MLAgent agent = MLAgent.builder().agentId("my-agent").name("test_agent").type(MLAgentType.FLOW.name()).build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        agent.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLAgent deserialized = new MLAgent(streamInput);
+        assertNull(deserialized.getAgentId());
+    }
 }

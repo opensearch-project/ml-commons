@@ -33,6 +33,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.telemetry.metrics.tags.Tags;
 
 import lombok.Builder;
@@ -42,6 +43,7 @@ import lombok.Getter;
 @EqualsAndHashCode
 @Getter
 public class MLAgent implements ToXContentObject, Writeable {
+    public static final String AGENT_ID_FIELD = "id"; // optional, user-specified docId for persistence in OpenSearch
     public static final String AGENT_NAME_FIELD = "name";
     public static final String AGENT_TYPE_FIELD = "type";
     public static final String DESCRIPTION_FIELD = "description";
@@ -66,6 +68,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONTEXT_MANAGEMENT = CommonValue.VERSION_3_5_0;
 
+    private String agentId; // optional user-specified docId for persistence in OpenSearch
     private String name;
     private String type;
     private String description;
@@ -86,6 +89,7 @@ public class MLAgent implements ToXContentObject, Writeable {
 
     @Builder(toBuilder = true)
     public MLAgent(
+        String agentId,
         String name,
         String type,
         String description,
@@ -103,6 +107,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String tenantId,
         String provisionedBy
     ) {
+        this.agentId = agentId;
         this.name = name;
         this.type = type;
         this.description = description;
@@ -123,6 +128,46 @@ public class MLAgent implements ToXContentObject, Writeable {
         validate();
     }
 
+    // Backward compatible constructor without agentId (defaults to auto-generated id)
+    public MLAgent(
+        String name,
+        String type,
+        String description,
+        LLMSpec llm,
+        MLAgentModelSpec model,
+        List<MLToolSpec> tools,
+        Map<String, String> parameters,
+        MLMemorySpec memory,
+        Instant createdTime,
+        Instant lastUpdateTime,
+        String appType,
+        Boolean isHidden,
+        String contextManagementName,
+        ContextManagementTemplate contextManagement,
+        String tenantId,
+        String provisionedBy
+    ) {
+        this(
+            null,
+            name,
+            type,
+            description,
+            llm,
+            model,
+            tools,
+            parameters,
+            memory,
+            createdTime,
+            lastUpdateTime,
+            appType,
+            isHidden,
+            contextManagementName,
+            contextManagement,
+            tenantId,
+            provisionedBy
+        );
+    }
+
     // Backward compatible constructor for existing tests
     public MLAgent(
         String name,
@@ -141,6 +186,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String tenantId
     ) {
         this(
+            null,
             name,
             type,
             description,
@@ -161,6 +207,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     private void validate() {
+        StringUtils.validateCustomId(agentId, "agent id");
         if (name == null) {
             throw new IllegalArgumentException("Agent name can't be null");
         }
@@ -250,6 +297,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+        this.agentId = streamInputVersion.onOrAfter(CommonValue.VERSION_3_8_0) ? input.readOptionalString() : null;
         validate();
     }
 
@@ -312,6 +360,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             out.writeOptionalString(provisionedBy);
+        }
+        if (streamOutputVersion.onOrAfter(CommonValue.VERSION_3_8_0)) {
+            out.writeOptionalString(agentId);
         }
     }
 
@@ -390,6 +441,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     private static MLAgent parseCommonFields(XContentParser parser, boolean parseHidden) throws IOException {
+        String agentId = null;
         String name = null;
         String type = null;
         String description = null;
@@ -413,6 +465,9 @@ public class MLAgent implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
+                case AGENT_ID_FIELD:
+                    agentId = parser.textOrNull();
+                    break;
                 case AGENT_NAME_FIELD:
                     name = parser.text();
                     break;
@@ -474,6 +529,7 @@ public class MLAgent implements ToXContentObject, Writeable {
 
         return MLAgent
             .builder()
+            .agentId(agentId)
             .name(name)
             .type(type)
             .description(description)

@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
 import java.time.Instant;
@@ -91,6 +92,11 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
+
+        if (mlAgent.getAgentId() != null && !mlFeatureEnabledSetting.isUserDefinedIdEnabled()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_USER_DEFINED_ID_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
 
         if (mlAgent.getMemory() != null
             && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(mlAgent.getMemory().getType())
@@ -210,6 +216,9 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         // Create CONVERSATION agent with same configuration but different type and name
         MLAgent conversationAgent = planExecuteReflectAgent
             .toBuilder()
+            // the child executor agent must get its own auto-generated id; otherwise it would collide with the
+            // user-supplied id that the parent PER agent is about to be persisted with
+            .agentId(null)
             .name(planExecuteReflectAgent.getName() + " (ReAct)")
             .type(MLAgentType.CONVERSATIONAL.name())
             .description("Execution Agent for Plan Execute Reflect - " + planExecuteReflectAgent.getName())
@@ -231,7 +240,15 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     sdkClient
                         .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()
+                            PutDataObjectRequest
+                                .builder()
+                                .index(ML_AGENT_INDEX)
+                                .id(mlAgent.getAgentId())
+                                // a custom id fails on conflict instead of overwriting (null = auto-generate)
+                                .overwriteIfExists(mlAgent.getAgentId() == null)
+                                .tenantId(tenantId)
+                                .dataObject(mlAgent)
+                                .build()
                         )
                         .whenComplete((r, throwable) -> {
                             context.restore();

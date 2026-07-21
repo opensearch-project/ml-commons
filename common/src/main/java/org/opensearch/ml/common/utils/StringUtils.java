@@ -731,6 +731,32 @@ public class StringUtils {
         return SAFE_INPUT_PATTERN.matcher(value).matches();
     }
 
+    // OpenSearch document _id is limited to 512 bytes (UTF-8 encoded).
+    public static final int MAX_DOC_ID_LENGTH_IN_BYTES = 512;
+
+    /**
+     * Validates a user-supplied OpenSearch document id (e.g. connector id or model id).
+     * The id must be non-blank, must not exceed the 512-byte OpenSearch _id limit, and must
+     * only contain safe characters. Throws IllegalArgumentException with a clear message otherwise.
+     *
+     * @param id        the user-supplied id to validate
+     * @param fieldName human-readable field name used in error messages (e.g. "connector id")
+     */
+    public static void validateCustomId(String id, String fieldName) {
+        if (id == null) {
+            return; // null means auto-generate, which is allowed
+        }
+        if (id.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " cannot be blank");
+        }
+        if (id.getBytes(StandardCharsets.UTF_8).length > MAX_DOC_ID_LENGTH_IN_BYTES) {
+            throw new IllegalArgumentException(fieldName + " is too long, must be at most " + MAX_DOC_ID_LENGTH_IN_BYTES + " bytes");
+        }
+        if (!matchesSafePattern(id)) {
+            throw new IllegalArgumentException(fieldName + " " + SAFE_INPUT_DESCRIPTION);
+        }
+    }
+
     /**
      * Parses a JSON array string into a List of Strings.
      *

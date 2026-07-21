@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
@@ -43,6 +44,7 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
 import lombok.Data;
@@ -54,6 +56,7 @@ import lombok.Data;
 public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
+    public static final String MODEL_ID_FIELD = "id";
     public static final String NAME_FIELD = "name";
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     public static final String DESCRIPTION_FIELD = "description";
@@ -81,6 +84,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE = CommonValue.VERSION_2_14_0;
 
     private FunctionName functionName;
+    private String modelId; // optional user-specified docId for persistence in OpenSearch
     private String modelName;
     private String modelGroupId;
     private String version;
@@ -114,6 +118,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     @Builder(toBuilder = true)
     public MLRegisterModelInput(
         FunctionName functionName,
+        String modelId,
         String modelName,
         String modelGroupId,
         String version,
@@ -157,6 +162,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 throw new IllegalArgumentException("model config is null");
             }
         }
+        StringUtils.validateCustomId(modelId, "model id");
+        // hidden models always use the model name as their document id, so a custom model id would be silently ignored
+        if (modelId != null && Boolean.TRUE.equals(isHidden)) {
+            throw new IllegalArgumentException("custom model id is not supported for hidden models");
+        }
+        this.modelId = modelId;
         this.modelName = modelName;
         this.modelGroupId = modelGroupId;
         this.version = version;
@@ -246,6 +257,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? in.readOptionalString() : null;
+        this.modelId = streamInputVersion.onOrAfter(VERSION_3_8_0) ? in.readOptionalString() : null;
     }
 
     @Override
@@ -333,6 +345,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             out.writeOptionalString(provisionedBy);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_8_0)) {
+            out.writeOptionalString(modelId);
+        }
     }
 
     @Override
@@ -414,6 +429,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel)
         throws IOException {
         FunctionName functionName = null;
+        String modelId = null;
         String modelGroupId = null;
         Boolean isEnabled = null;
         MLRateLimiter rateLimiter = null;
@@ -443,6 +459,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case MODEL_ID_FIELD:
+                    modelId = parser.textOrNull();
                     break;
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
@@ -528,6 +547,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         return new MLRegisterModelInput(
             functionName,
+            modelId,
             modelName,
             modelGroupId,
             version,
@@ -557,6 +577,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
         FunctionName functionName = null;
+        String modelId = null;
         String name = null;
         String modelGroupId = null;
         String version = null;
@@ -589,6 +610,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case MODEL_ID_FIELD:
+                    modelId = parser.textOrNull();
                     break;
                 case NAME_FIELD:
                     name = parser.text();
@@ -680,6 +704,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         return new MLRegisterModelInput(
             functionName,
+            modelId,
             name,
             modelGroupId,
             version,

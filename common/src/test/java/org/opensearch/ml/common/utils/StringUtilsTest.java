@@ -1416,4 +1416,34 @@ public class StringUtilsTest {
         );
         assertTrue(exception.getMessage().contains("Invalid JSON format"));
     }
+
+    @Test
+    public void validateCustomId_Null_Allowed() {
+        StringUtils.validateCustomId(null, "model id"); // null means auto-generate; should not throw
+    }
+
+    @Test
+    public void validateCustomId_Valid() {
+        StringUtils.validateCustomId("my-model_1.0", "model id"); // should not throw
+    }
+
+    @Test
+    public void validateCustomId_Blank_Throws() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> StringUtils.validateCustomId("   ", "model id"));
+        assertEquals("model id cannot be blank", e.getMessage());
+    }
+
+    @Test
+    public void validateCustomId_TooLong_Throws() {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.validateCustomId("a".repeat(StringUtils.MAX_DOC_ID_LENGTH_IN_BYTES + 1), "model id")
+        );
+        assertTrue(e.getMessage().contains("too long"));
+    }
+
+    @Test
+    public void validateCustomId_UnsafeChars_Throws() {
+        assertThrows(IllegalArgumentException.class, () -> StringUtils.validateCustomId("bad<id>", "model id"));
+    }
 }

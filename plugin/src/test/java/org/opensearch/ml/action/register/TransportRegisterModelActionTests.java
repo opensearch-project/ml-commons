@@ -297,6 +297,27 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testDoExecute_customModelId_featureDisabled_throwsException() {
+        when(mlFeatureEnabledSetting.isUserDefinedIdEnabled()).thenReturn(false);
+
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+                .builder()
+                .functionName(FunctionName.REMOTE)
+                .modelId("my-custom-model")
+                .modelGroupId("modelGroupID")
+                .modelName("Test Model")
+                .build();
+
+        MLRegisterModelRequest mlRegisterModelRequest = new MLRegisterModelRequest(registerModelInput);
+
+        OpenSearchStatusException e = assertThrows(
+                OpenSearchStatusException.class,
+                () -> transportRegisterModelAction.doExecute(task, mlRegisterModelRequest, actionListener)
+        );
+        assertEquals(RestStatus.FORBIDDEN, e.status());
+    }
+
+    @Test
     public void testDoExecute_userHasNoAccessException() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(7);
