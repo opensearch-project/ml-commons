@@ -9,6 +9,7 @@ import static org.junit.Assert.*;
 
 import org.junit.Test;
 import org.opensearch.ml.common.agent.BedrockConverseModelProvider;
+import org.opensearch.ml.common.agent.BedrockConverseNovaModelProvider;
 
 public class ModelProviderFactoryTest {
 
@@ -102,5 +103,44 @@ public class ModelProviderFactoryTest {
         // Assert
         assertNotNull(provider);
         assertEquals("bedrock/converse/claude", provider.getLLMInterface());
+    }
+
+    @Test
+    public void testGetProvider_BedrockConverseNova() {
+        // Arrange
+        String providerType = "bedrock/converse/nova";
+
+        // Act
+        ModelProvider provider = ModelProviderFactory.getProvider(providerType);
+
+        // Assert
+        assertNotNull(provider);
+        assertTrue(provider instanceof BedrockConverseNovaModelProvider);
+    }
+
+    @Test
+    public void testGetProvider_BedrockConverseNova_CaseInsensitive() {
+        // Arrange
+        String providerType = "BEDROCK/CONVERSE/NOVA";
+
+        // Act
+        ModelProvider provider = ModelProviderFactory.getProvider(providerType);
+
+        // Assert
+        assertNotNull(provider);
+        assertTrue(provider instanceof BedrockConverseNovaModelProvider);
+    }
+
+    @Test
+    public void testGetProvider_BedrockConverseNova_VerifyInterface() {
+        // Arrange
+        String providerType = "bedrock/converse/nova";
+
+        // Act
+        ModelProvider provider = ModelProviderFactory.getProvider(providerType);
+
+        // Assert
+        assertNotNull(provider);
+        assertEquals("bedrock/converse/nova", provider.getLLMInterface());
     }
 }
