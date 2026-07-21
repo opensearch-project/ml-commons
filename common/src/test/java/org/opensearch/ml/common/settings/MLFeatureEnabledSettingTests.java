@@ -50,6 +50,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
@@ -211,6 +212,35 @@ public class MLFeatureEnabledSettingTests {
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
         assertFalse(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Default is false in this PR; will be flipped to true once the retention job (PR2) lands.
+        assertFalse(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.memory.retention_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.memory.retention_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMemoryRetentionEnabled());
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_enabled", true).build());
+
+        assertTrue(setting.isMemoryRetentionEnabled());
     }
 
     @Test

@@ -24,6 +24,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.logging.HeaderWarning;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -32,6 +33,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerAction;
@@ -108,6 +111,19 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         List<String> allowedBackendRoles = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getBackendRoles();
         MemoryConfiguration updateConfiguration = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getConfiguration();
 
+        // Reject setting a retention_policy when the retention feature is disabled (cluster-level kill switch).
+        // An explicit "retention_policy": null wipe is still allowed, since clearing retention is consistent with the feature being off.
+        if (!mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && updateConfiguration != null
+            && updateConfiguration.getRetentionPolicy() != null
+            && !updateConfiguration.getRetentionPolicy().isEmpty()) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
+                );
+            return;
+        }
+
         // Get memory container to validate access
         memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
             // Validate access permissions
@@ -152,7 +168,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                         List<MemoryStrategy> mergedStrategies = StrategyMergeHelper
                             .mergeStrategies(currentConfig.getStrategies(), updateConfiguration.getStrategies());
                         // Create a new configuration with merged strategies for update
-                        // IMPORTANT: Preserve embedding fields from update request
+                        // IMPORTANT: Preserve embedding fields AND retention_policy from the update request,
+                        // otherwise a combined strategy + retention update would silently drop the retention change.
                         finalUpdateConfig = MemoryConfiguration
                             .builder()
                             .llmId(updateConfiguration.getLlmId())
@@ -161,7 +178,11 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                             .embeddingModelId(updateConfiguration.getEmbeddingModelId())
                             .embeddingModelType(updateConfiguration.getEmbeddingModelType())
                             .dimension(updateConfiguration.getDimension())
+                            .retentionPolicy(updateConfiguration.getRetentionPolicy())
                             .build();
+                        // retentionPolicyExplicitlyNull is a transient field outside the @Builder constructor,
+                        // so it must be copied explicitly to preserve an explicit "retention_policy": null wipe.
+                        finalUpdateConfig.setRetentionPolicyExplicitlyNull(updateConfiguration.isRetentionPolicyExplicitlyNull());
                     } else {
                         finalUpdateConfig = updateConfiguration;
                     }
@@ -186,6 +207,9 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
 
                     // No transition - proceed with normal update
                     updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, currentConfig);
+
+                    // Emit warning if sessions retention is set on a container with disableSession=true
+                    emitDisableSessionRetentionWarning(currentConfig);
                 } catch (Exception e) {
                     log.error("Failed to update configuration for container {}", memoryContainerId, e);
                     actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
@@ -251,6 +275,20 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                         + "Create a new memory container if you need different embedding configuration."
                 );
             }
+        }
+    }
+
+    private void emitDisableSessionRetentionWarning(MemoryConfiguration config) {
+        if (config == null) {
+            return;
+        }
+        Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
+        if (config.isDisableSession() && retentionPolicy != null && retentionPolicy.containsKey(MemoryType.SESSIONS)) {
+            HeaderWarning
+                .addWarning(
+                    "sessions retention_policy has no effect when disableSession=true;"
+                        + " working memory TTL is governed by cluster setting plugins.ml_commons.memory.working_memory_ttl_days"
+                );
         }
     }
 

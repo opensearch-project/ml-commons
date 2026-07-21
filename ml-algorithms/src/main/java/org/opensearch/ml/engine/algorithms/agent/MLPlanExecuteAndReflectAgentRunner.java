@@ -27,6 +27,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractStatus
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logModelInvocationFailure;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
@@ -34,14 +35,15 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MAX_IT
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_REFLECT_PROMPT;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_REFLECT_PROMPT_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.EXECUTOR_RESPONSIBILITY;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_RESPONSIBILITY;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getCorePlanningInstructions;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getPlanExecuteReflectResponseFormat;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,6 +59,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTaskState;
@@ -120,8 +123,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private String plannerWithHistoryPromptTemplate;
 
     @VisibleForTesting
-    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = PLANNER_RESPONSIBILITY + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT
-        + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
+    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX + getCorePlanningInstructions()
+        + getPlanExecuteReflectResponseFormat() + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 
     @VisibleForTesting
     static final String DEFAULT_EXECUTOR_SYSTEM_PROMPT = EXECUTOR_RESPONSIBILITY;
@@ -141,6 +144,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD = "plan_execute_reflect_response_format";
     public static final String PROMPT_TEMPLATE_FIELD = "prompt_template";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String RESULT_EXPAND_OVERRIDE = "result_expand_and_override";
+    public static final String IMPORTANT_RULES_EXPAND = "important_rules_expand";
+    public static final String PLANNER_SYSTEM_PROMPT_PREFIX = "planner_system_prompt_prefix";
     public static final String QUESTION_FIELD = "question";
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String PARENT_INTERACTION_ID_FIELD = "parent_interaction_id";
@@ -211,11 +217,58 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String dateFormat = params.get(DATETIME_FORMAT_FIELD);
         String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
 
-        String plannerSystemPrompt = params.getOrDefault(SYSTEM_PROMPT_FIELD, DEFAULT_PLANNER_SYSTEM_PROMPT);
+        String template = this.plannerPromptTemplate;
         if (injectDate) {
-            plannerSystemPrompt = String.format("%s\n\n%s", plannerSystemPrompt, currentDateTime);
+            template = template + "\n\n" + currentDateTime;
         }
-        params.put(SYSTEM_PROMPT_FIELD, plannerSystemPrompt);
+        params.put(PROMPT_TEMPLATE_FIELD, template);
+
+        String clientBusinessPrompt = params.get(SYSTEM_PROMPT_FIELD);
+
+        if (clientBusinessPrompt != null && !clientBusinessPrompt.isEmpty()) { // Replace the whole prompt if client specifies system prompt
+                                                                               // template
+            params.put(SYSTEM_PROMPT_FIELD, clientBusinessPrompt);
+        } else { // Using the default system prompt template if client does not specify.
+            params.put(SYSTEM_PROMPT_FIELD, DEFAULT_PLANNER_SYSTEM_PROMPT);
+        }
+
+        String resultExpandOverride = params.get(RESULT_EXPAND_OVERRIDE);
+        String importantRulesExpand = params.get(IMPORTANT_RULES_EXPAND);
+        String plannerSystemPromptPrefix = params.get(PLANNER_SYSTEM_PROMPT_PREFIX);
+
+        // Append / mutate the system prompt through these 3 parameters: plannerSystemPromptPrefix, resultExpandOverride and
+        // importantRulesExpand
+        boolean hasPlannerSystemPromptPrefix = plannerSystemPromptPrefix != null && !plannerSystemPromptPrefix.isEmpty();
+        boolean hasResultExpandOverride = resultExpandOverride != null && !resultExpandOverride.isEmpty();
+        boolean hasImportantRulesExpand = importantRulesExpand != null && !importantRulesExpand.isEmpty();
+        long providedCount = (hasPlannerSystemPromptPrefix ? 1 : 0) + (hasResultExpandOverride ? 1 : 0) + (hasImportantRulesExpand ? 1 : 0);
+        if (providedCount > 0 && providedCount < 3) {
+            log
+                .warn(
+                    "Partial prompt customization params provided (missing: {}{}{}). All 3 params [planner_system_prompt_prefix, result_expand_and_override, important_rules_expand] must be set together. Using defaults for missing params.",
+                    hasPlannerSystemPromptPrefix ? "" : "planner_system_prompt_prefix ",
+                    hasResultExpandOverride ? "" : "result_expand_and_override ",
+                    hasImportantRulesExpand ? "" : "important_rules_expand"
+                );
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder
+                .append(hasPlannerSystemPromptPrefix ? plannerSystemPromptPrefix : DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX)
+                .append("\n");
+            stringBuilder.append(getCorePlanningInstructions()).append("\n");
+            stringBuilder.append(getPlanExecuteReflectResponseFormat(resultExpandOverride, importantRulesExpand));
+            String finalPlannerPrompt = stringBuilder.toString();
+
+            params.put(SYSTEM_PROMPT_FIELD, finalPlannerPrompt);
+        }
+        if (hasPlannerSystemPromptPrefix && hasResultExpandOverride && hasImportantRulesExpand) {
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.append(plannerSystemPromptPrefix).append("\n");
+            stringBuilder.append(getCorePlanningInstructions()).append("\n");
+            stringBuilder.append(getPlanExecuteReflectResponseFormat(resultExpandOverride, importantRulesExpand));
+            String finalPlannerPrompt = stringBuilder.toString();
+
+            params.put(SYSTEM_PROMPT_FIELD, finalPlannerPrompt);
+        }
 
         String executorSystemPrompt = params.getOrDefault(EXECUTOR_SYSTEM_PROMPT_FIELD, DEFAULT_EXECUTOR_SYSTEM_PROMPT);
         if (injectDate) {
@@ -245,7 +298,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             this.plannerWithHistoryPromptTemplate = params.get(PLANNER_WITH_HISTORY_TEMPLATE_FIELD);
         }
 
-        params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT);
+        params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, getPlanExecuteReflectResponseFormat());
 
         params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
 
@@ -720,9 +773,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         tokenTracker
                     );
                 }, e -> {
-                    String agentId = allParams.getOrDefault(AGENT_ID_LOG_FIELD, "unknown");
                     String tenantIdLog = allParams.get(TENANT_ID_FIELD);
-                    log.error("Failed to execute ReAct agent. agentId={}, tenantId={}", agentId, tenantIdLog, e);
+                    log
+                        .error(
+                            "Failed to execute ReAct agent. agentId={}, tenantId={}",
+                            allParams.get(CommonValue.AGENT_ID_LOG_FIELD),
+                            tenantIdLog,
+                            e
+                        );
                     finalListener.onFailure(e);
                 }));
             }
@@ -736,6 +794,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     extractStatusCode(e),
                     e
                 );
+            logModelInvocationFailure(
+                llm.getModelId(),
+                allParams.get(AGENT_ID_LOG_FIELD),
+                allParams.get(TENANT_ID_FIELD),
+                extractStatusCode(e)
+            );
             finalListener.onFailure(e);
         });
 
@@ -1085,6 +1149,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         extractStatusCode(e),
                         e
                     );
+                logModelInvocationFailure(
+                    llmSpec.getModelId(),
+                    summaryParams.get(AGENT_ID_LOG_FIELD),
+                    summaryParams.get(TENANT_ID_FIELD),
+                    extractStatusCode(e)
+                );
                 listener.onFailure(e);
             }));
         } catch (Exception e) {

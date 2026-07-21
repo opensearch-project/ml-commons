@@ -7,8 +7,10 @@ package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE;
 
 import java.time.Instant;
+import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
@@ -17,6 +19,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.logging.HeaderWarning;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -24,6 +27,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
@@ -90,6 +95,15 @@ public class TransportCreateMemoryContainerAction extends
 
         MLCreateMemoryContainerInput input = request.getMlCreateMemoryContainerInput();
 
+        // Reject retention_policy when the retention feature is disabled (cluster-level kill switch)
+        if (!mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && input.getConfiguration() != null
+            && input.getConfiguration().getRetentionPolicy() != null
+            && !input.getConfiguration().getRetentionPolicy().isEmpty()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
+
         // Validate tenant ID
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, input.getTenantId(), listener)) {
             return;
@@ -100,6 +114,9 @@ public class TransportCreateMemoryContainerAction extends
 
         // Validate configuration before creating memory container
         validateConfiguration(input.getConfiguration(), ActionListener.wrap(isValid -> {
+            // Emit warning if sessions retention is set on a container with disableSession=true
+            emitDisableSessionRetentionWarning(input.getConfiguration());
+
             // Check if memory container index exists, create if not
             ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
                 try {
@@ -285,6 +302,20 @@ public class TransportCreateMemoryContainerAction extends
         } catch (Exception e) {
             log.error("Failed to save memory container", e);
             listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+        }
+    }
+
+    private void emitDisableSessionRetentionWarning(MemoryConfiguration config) {
+        if (config == null) {
+            return;
+        }
+        Map<MemoryType, RetentionRule> retentionPolicy = config.getRetentionPolicy();
+        if (config.isDisableSession() && retentionPolicy != null && retentionPolicy.containsKey(MemoryType.SESSIONS)) {
+            HeaderWarning
+                .addWarning(
+                    "sessions retention_policy has no effect when disableSession=true;"
+                        + " working memory TTL is governed by cluster setting plugins.ml_commons.memory.working_memory_ttl_days"
+                );
         }
     }
 
