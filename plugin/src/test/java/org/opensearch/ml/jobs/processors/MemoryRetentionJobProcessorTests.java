@@ -1601,6 +1601,71 @@ public class MemoryRetentionJobProcessorTests {
         verify(client, never()).bulk(any(BulkRequest.class), isA(ActionListener.class));
     }
 
+    @Test
+    public void testWorkingMemoryTTLDisabledByDefault() {
+        // working_memory_ttl_days=-1 (the default, off): even a disable_session=true container must NOT have its
+        // working memory aged out, so session-less working memory is kept indefinitely.
+        Settings ttlOffSettings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .put("plugins.ml_commons.memory.default_session_retention_days", -1)
+            .put("plugins.ml_commons.memory.default_session_max_count", -1)
+            .put("plugins.ml_commons.memory.default_long_term_max_count", -1)
+            .put("plugins.ml_commons.memory.default_history_max_count", -1)
+            .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
+            .put("plugins.ml_commons.memory.working_memory_ttl_days", -1)
+            .build();
+        when(clusterService.getSettings()).thenReturn(ttlOffSettings);
+        java.util.Set<Setting<?>> ttlOffSet = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(ttlOffSettings, ttlOffSet));
+
+        // Container with disable_session=true AND a retention_policy, so Pass 1 runs the retention pipeline and
+        // reaches the working-memory TTL stage. That stage must still be skipped because the TTL is off (-1).
+        // (sessions retention_policy has no effect when disable_session=true; it just drives the pipeline to run.)
+        String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"disable_session\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"retention_days\":7}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-ttl-off", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                listener.onResponse(emptySearchResponse());
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // TTL off -> no working-memory delete_by_query should ever run.
+        verify(client, never()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+    }
+
     // --- All phases chain test ---
 
     @Test

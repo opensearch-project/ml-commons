@@ -619,11 +619,13 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS = Setting
         .intSetting(ML_PLUGIN_SETTING_PREFIX + "memory.orphan_ttl_days", 7, 1, 365, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    // TTL for working memory in sessionless containers (disable_session=true). Defaults to -1 (off) so callers can
+    // keep session-less working memory indefinitely; an operator must set a value > 0 to age it out. -1 = unset/off.
     public static final Setting<Integer> ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "memory.working_memory_ttl_days",
-            30,
-            1,
+            -1,
+            -1,
             365,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic

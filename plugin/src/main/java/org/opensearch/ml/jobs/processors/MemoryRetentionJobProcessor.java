@@ -1132,6 +1132,12 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
 
         int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
+        // TTL is off by default (-1): with no configured TTL, session-less working memory is kept indefinitely.
+        // Only age it out when an operator sets a positive value.
+        if (ttlDays <= 0) {
+            listener.onResponse(false);
+            return;
+        }
         long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(ttlDays);
         log
             .debug(
