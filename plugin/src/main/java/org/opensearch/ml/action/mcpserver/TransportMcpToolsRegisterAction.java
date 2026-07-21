@@ -21,7 +21,6 @@ import java.util.stream.Collectors;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteRequest;
-import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
@@ -38,10 +37,10 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.tasks.Task;
@@ -146,23 +145,14 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
             ActionListener<MLMcpToolsRegisterNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<BulkResponse> indexResultListener = ActionListener.wrap(bulkResponse -> {
                 if (!bulkResponse.hasFailures()) {
-                    // documents indexing successfully, merge existing tools and new tools to form a fullTools, when a node doesn't have any
-                    // tool registered,
-                    // register full tools, this way any node at any time it only have either non or all tools in it.
-                    // This also addressed an edge case that a node doesn't have any tool registered and received a register tool request,
-                    // it'll be registered
-                    // with new tools only, when SSE connection request comes, it tries to load all tools, and then it'll have tool already
-                    // exist in MCP server issue.
-                    registerMcpToolsOnNodes(
-                        new StringBuilder(),
-                        updateVersion(registerNodesRequest, bulkResponse),
-                        registerNodesRequest
-                            .getMcpTools()
-                            .stream()
-                            .map(McpToolRegisterInput::getName)
-                            .collect(Collectors.toUnmodifiableSet()),
-                        restoreListener
-                    );
+                    restoreListener
+                        .onResponse(
+                            new MLMcpToolsRegisterNodesResponse(
+                                clusterService.getClusterName(),
+                                List.of(new MLMcpToolsRegisterNodeResponse(clusterService.localNode(), true)),
+                                List.of()
+                            )
+                        );
                 } else {
                     AtomicReference<Set<String>> indexSucceedTools = new AtomicReference<>();
                     indexSucceedTools.set(new HashSet<>());
@@ -194,16 +184,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     StringBuilder respErrMsgBuilder = new StringBuilder(
                         String.format(Locale.ROOT, "Failed to persist %s mcp tool(s) into system index", indexFailedTools.get().size())
                     );
-                    if (!indexSucceedTools.get().isEmpty()) {
-                        registerMcpToolsOnNodes(
-                            respErrMsgBuilder,
-                            updateVersion(registerNodesRequest, bulkResponse),
-                            indexSucceedTools.get(),
-                            restoreListener
-                        );
-                    } else {
-                        restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
-                    }
+                    restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
                 }
             }, e -> {
                 log.error("Failed to persist mcp tools into system index because exception: {}", e.getMessage());
@@ -230,70 +211,6 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
             client.bulk(bulkRequest, indexResultListener);
         } catch (Exception e) {
             log.error("Failed to register mcp tools", e);
-            listener.onFailure(e);
-        }
-    }
-
-    private MLMcpToolsRegisterNodesRequest updateVersion(MLMcpToolsRegisterNodesRequest registerNodesRequest, BulkResponse bulkResponse) {
-        Map<String, Long> version = Arrays
-            .stream(bulkResponse.getItems())
-            .filter(x -> !x.isFailed())
-            .collect(Collectors.toMap(BulkItemResponse::getId, x -> x.getResponse().getVersion()));
-        registerNodesRequest.getMcpTools().forEach(x -> x.setVersion(version.get(x.getName())));
-        return registerNodesRequest;
-    }
-
-    private void registerMcpToolsOnNodes(
-        StringBuilder errMsgBuilder,
-        MLMcpToolsRegisterNodesRequest registerNodesRequest,
-        Set<String> indexSucceedTools,
-        ActionListener<MLMcpToolsRegisterNodesResponse> listener
-    ) {
-        StringBuilder respErrBuilder = new StringBuilder(errMsgBuilder.toString());
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLMcpToolsRegisterNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
-            ActionListener<MLMcpToolsRegisterNodesResponse> addToMemoryResultListener = ActionListener.wrap(r -> {
-                if (r.failures() != null && !r.failures().isEmpty()) {
-                    r.failures().forEach(x -> {
-                        errMsgBuilder
-                            .append(
-                                String
-                                    .format(
-                                        Locale.ROOT,
-                                        "Tools: %s are persisted successfully but failed to register to mcp server memory with error: %s",
-                                        indexSucceedTools,
-                                        x.getRootCause().getMessage()
-                                    )
-                            );
-                        errMsgBuilder.append("\n");
-                    });
-                    errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1);
-                    log.error(errMsgBuilder.toString());
-                    respErrBuilder.append("Tools are persisted successfully but failed to register to mcp server memory");
-                    restoreListener.onFailure(new OpenSearchException(respErrBuilder.toString()));
-                } else {
-                    if (errMsgBuilder.isEmpty()) {
-                        restoreListener.onResponse(r);
-                    } else {
-                        restoreListener.onFailure(new OpenSearchException(respErrBuilder.toString()));
-                    }
-                }
-            }, e -> {
-                errMsgBuilder
-                    .append(
-                        String
-                            .format(
-                                Locale.ROOT,
-                                "Tools are persisted successfully but failed to register to mcp server memory with error: %s",
-                                e.getMessage()
-                            )
-                    );
-                log.error(errMsgBuilder.toString(), e);
-                restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
-            });
-            client.execute(MLMcpToolsRegisterOnNodesAction.INSTANCE, registerNodesRequest, addToMemoryResultListener);
-        } catch (Exception e) {
-            log.error("Failed to register mcp tools on nodes", e);
             listener.onFailure(e);
         }
     }
