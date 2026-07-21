@@ -227,7 +227,8 @@ public class MemoryRetentionJobProcessorTests {
 
     @Test
     public void testRunExecutesWithDefaultSettings() {
-        Settings defaultSettings = Settings.EMPTY;
+        // retention_enabled defaults to false, so enable it explicitly; all other settings stay at their defaults.
+        Settings defaultSettings = Settings.builder().put("plugins.ml_commons.memory.retention_enabled", true).build();
         when(clusterService.getSettings()).thenReturn(defaultSettings);
         java.util.Set<Setting<?>> s = new java.util.HashSet<>(
             java.util.Arrays

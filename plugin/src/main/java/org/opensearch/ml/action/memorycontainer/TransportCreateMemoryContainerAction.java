@@ -171,8 +171,12 @@ public class TransportCreateMemoryContainerAction extends
             }
         }
 
-        // Auto-apply admin-configured default retention policy when user did not provide one
-        if (configuration != null && !configuration.isRetentionPolicyExplicitlyNull()) {
+        // Auto-apply admin-configured default retention policy when user did not provide one.
+        // Gated by the retention kill switch: when retention is disabled we neither accept a user policy
+        // (rejected in doExecute) nor stamp an admin default, so no policy is ever written while the feature is off.
+        if (mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && configuration != null
+            && !configuration.isRetentionPolicyExplicitlyNull()) {
             Map<MemoryType, RetentionRule> existingPolicy = configuration.getRetentionPolicy();
             if (existingPolicy == null || existingPolicy.isEmpty()) {
                 int sessionRetentionDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS);
