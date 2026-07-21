@@ -53,7 +53,7 @@ public class ModelGuardrail extends Guardrail {
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String RESPONSE_FILTER_FIELD = "response_filter";
     public static final String RESPONSE_VALIDATION_REGEX_FIELD = "response_validation_regex";
-    public static final long ML_GUARDRAIL_TIMEOUT_IN_SECONDS = 5;
+    public static final long ML_GUARDRAIL_TIMEOUT_IN_SECONDS = 60;
 
     private String modelId;
     private String responseFilter;
