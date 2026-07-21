@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 2
+    "schema_version": 3
   },
   "properties": {
     "name": {
@@ -20,6 +20,10 @@
       "format": "strict_date_time||epoch_millis"
     },
     "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "orphan_sweep_baseline_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
     },

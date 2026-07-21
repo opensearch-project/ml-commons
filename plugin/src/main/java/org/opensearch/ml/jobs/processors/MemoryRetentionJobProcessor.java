@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STORAGE_CONFIG_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ORPHAN_SWEEP_BASELINE_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RETENTION_POLICY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
@@ -1298,6 +1299,42 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 return;
             }
 
+            // First-observation grace: defer all orphan deletion until orphan_ttl_days after the sweep first
+            // observed this container. Orphan deletion keys off created_time, so without this gate a container
+            // that already holds working memory older than orphan_ttl_days (e.g. written before this feature
+            // shipped, or via paths that create no session doc) would have that memory deleted on the very
+            // first sweep. Stamping a baseline and waiting one full window gives such memory a chance to be
+            // backed by a session doc (create-session, or the lazy upsert on the add path) before it can be
+            // classified as orphaned. Deletion is only delayed by one window, never skipped.
+            Long baseline = extractTimestamp(hit, ORPHAN_SWEEP_BASELINE_TIME_FIELD);
+            long now = System.currentTimeMillis();
+            if (baseline == null) {
+                log
+                    .info(
+                        "[MemoryRetentionJob] container={} first orphan-sweep observation; stamping baseline and deferring "
+                            + "orphan deletion for one orphan_ttl_days window",
+                        containerId
+                    );
+                stampOrphanSweepBaseline(containerId, now);
+                processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+                return;
+            }
+
+            int orphanTtlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS);
+            long graceUntil = baseline + TimeUnit.DAYS.toMillis(orphanTtlDays);
+            if (now < graceUntil) {
+                log
+                    .debug(
+                        "[MemoryRetentionJob] container={} still within orphan-sweep grace window (baseline={}, grace_until={}); "
+                            + "skipping orphan deletion this run",
+                        containerId,
+                        baseline,
+                        graceUntil
+                    );
+                processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+                return;
+            }
+
             sweepOrphansForContainer(
                 config,
                 containerId,
@@ -1311,6 +1348,48 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         } catch (Exception e) {
             log.error("[MemoryRetentionJob] Error parsing config for orphan sweep container [{}]", containerId, e);
             processOrphanSweepContainerChain(hits, index + 1, nextPageSortValues);
+        }
+    }
+
+    /**
+     * Records the epoch-millis baseline at which the orphan sweep first observed a container. Uses a conditional
+     * painless script so the baseline is written exactly once: if it already exists the update is a noop, so a
+     * concurrent or later run never resets the grace window. Best-effort — a failure just means the baseline is
+     * retried on the next run, which only ever delays (never advances) the first deletion, so it is safe.
+     */
+    private void stampOrphanSweepBaseline(String containerId, long baselineMillis) {
+        try {
+            String scriptSource = "if (ctx._source.containsKey(params.field)) { ctx.op = 'noop'; }"
+                + " else { ctx._source.put(params.field, params.baseline); }";
+            Map<String, Object> scriptParams = Map.of("field", ORPHAN_SWEEP_BASELINE_TIME_FIELD, "baseline", baselineMillis);
+            UpdateRequest updateRequest = new UpdateRequest(ML_MEMORY_CONTAINER_INDEX, containerId)
+                .script(new Script(ScriptType.INLINE, "painless", scriptSource, scriptParams))
+                .retryOnConflict(3);
+            try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+                client
+                    .update(
+                        updateRequest,
+                        ActionListener
+                            .wrap(
+                                response -> log.debug("[MemoryRetentionJob] container={} orphan-sweep baseline recorded", containerId),
+                                e -> {
+                                    if (ExceptionsHelper.unwrapCause(e) instanceof VersionConflictEngineException) {
+                                        log.debug("[MemoryRetentionJob] container={} orphan-sweep baseline already set", containerId);
+                                    } else {
+                                        log
+                                            .warn(
+                                                "[MemoryRetentionJob] Failed to record orphan-sweep baseline for container [{}]; "
+                                                    + "will retry next run",
+                                                containerId,
+                                                e
+                                            );
+                                    }
+                                }
+                            )
+                    );
+            }
+        } catch (Exception e) {
+            log.warn("[MemoryRetentionJob] Failed to build orphan-sweep baseline update for container [{}]", containerId, e);
         }
     }
 

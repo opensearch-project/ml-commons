@@ -24,6 +24,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ORPHAN_SWEEP_BASELINE_TIME_FIELD;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -1744,6 +1745,71 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
+    public void testOrphanSweepFirstObservationStampsBaselineAndDefersDeletion() {
+        // Container has NO orphan_sweep_baseline_time: this is the first time the sweep observes it. The sweep
+        // must stamp a baseline (client.update) and defer ALL orphan deletion for one orphan_ttl_days window,
+        // so pre-existing session-less working memory is not deleted on the first run after retention is enabled.
+        String sourceJson = "{\""
+            + ORPHAN_SWEEP_BASELINE_TIME_FIELD
+            + "\":null,"
+            + "\"configuration\":{\"index_prefix\":\"test-prefix\","
+            + "\"use_system_index\":true,"
+            + "\"retention_policy\":{\"sessions\":{\"max_count\":1000}}}}";
+
+        SearchResponse containerSearchResponse = createContainerSearchResponseFromJson("container-first-obs", sourceJson);
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                int count = containerSearchCount.getAndIncrement();
+                if (count == 0 || count == 1) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                if (request.source() != null && request.source().size() == 0) {
+                    SearchResponse countResp = mock(SearchResponse.class);
+                    SearchHits countHits = new SearchHits(new SearchHit[0], new TotalHits(5, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                    when(countResp.getHits()).thenReturn(countHits);
+                    listener.onResponse(countResp);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        AtomicInteger baselineUpdateCount = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            org.opensearch.action.update.UpdateRequest updateRequest = invocation.getArgument(0);
+            if (ML_MEMORY_CONTAINER_INDEX.equals(updateRequest.index()) && "container-first-obs".equals(updateRequest.id())) {
+                baselineUpdateCount.incrementAndGet();
+            }
+            ActionListener<org.opensearch.action.update.UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(org.opensearch.action.update.UpdateResponse.class));
+            return null;
+        }).when(client).update(any(org.opensearch.action.update.UpdateRequest.class), isA(ActionListener.class));
+
+        AtomicInteger orphanDbqCount = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            orphanDbqCount.incrementAndGet();
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mock(BulkByScrollResponse.class));
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertTrue("First observation should stamp an orphan-sweep baseline", baselineUpdateCount.get() >= 1);
+        assertEquals("No orphan deletion should occur on the first observation", 0, orphanDbqCount.get());
+    }
+
+    @Test
     public void testOrphanEnumerationUsesCompositeAggregation() {
         String sourceJson = "{\"configuration\":{\"index_prefix\":\"test-prefix\","
             + "\"use_system_index\":true,"
@@ -2807,6 +2873,14 @@ public class MemoryRetentionJobProcessorTests {
     private SearchResponse createContainerSearchResponseFromJson(String containerId, String sourceJson) {
         SearchResponse searchResponse = mock(SearchResponse.class);
         SearchHit hit = new SearchHit(0, containerId, null, null);
+        // Inject an already-elapsed orphan-sweep baseline so the first-observation grace window has passed and
+        // the orphan sweep proceeds (steady state after the container was first observed in a prior run). Tests
+        // that specifically exercise the "first observation stamps a baseline and defers deletion" behavior build
+        // their container source directly and omit this. Non-orphan retention paths ignore the field.
+        if (!sourceJson.contains(ORPHAN_SWEEP_BASELINE_TIME_FIELD)) {
+            long elapsedBaseline = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(365);
+            sourceJson = sourceJson.replaceFirst("\\{", "{\"" + ORPHAN_SWEEP_BASELINE_TIME_FIELD + "\":" + elapsedBaseline + ",");
+        }
         hit.sourceRef(new BytesArray(sourceJson));
         SearchHits hits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
         when(searchResponse.getHits()).thenReturn(hits);
