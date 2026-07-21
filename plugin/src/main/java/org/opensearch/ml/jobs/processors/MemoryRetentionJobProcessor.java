@@ -38,6 +38,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -724,7 +725,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 int excess = (int) (totalCount - maxCount);
                 // Step 2: evict the least-recently-updated excess sessions (LRU). last_updated_time is bumped
                 // on every message add, so this keeps the most recently active sessions and drops stale ones.
-                // Tie-broken by _id via search_after (see collectOldestDocIdsPage), so identical timestamps are safe.
+                // Tie-broken by _id via search_after (see OldestDocIdsPager), so identical timestamps are safe.
                 collectOldestDocIds(sessionIndex, containerId, LAST_UPDATED_TIME_FIELD, excess, listener);
             }, listener::onFailure));
         }
@@ -931,7 +932,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 int excess = (int) (totalCount - maxCount);
                 // Step 2: evict the least-recently-updated excess docs (LRU). last_updated_time advances when a
                 // long-term memory is updated, so this keeps the most recently touched facts and drops stale ones.
-                // Tie-broken by _id via search_after (see collectOldestDocIdsPage), so identical timestamps are safe.
+                // Tie-broken by _id via search_after (see OldestDocIdsPager), so identical timestamps are safe.
                 collectOldestDocIds(longTermIndex, containerId, LAST_UPDATED_TIME_FIELD, excess, ActionListener.wrap(idsToDelete -> {
                     if (idsToDelete.isEmpty()) {
                         listener.onResponse(0L);
@@ -957,58 +958,128 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 );
         }
         Set<String> collected = new HashSet<>();
-        collectOldestDocIdsPage(index, containerId, timeField, cappedLimit, collected, null, listener);
+        new OldestDocIdsPager(index, containerId, timeField, cappedLimit, collected, listener).start();
     }
 
-    private void collectOldestDocIdsPage(
-        String index,
-        String containerId,
-        String timeField,
-        int limit,
-        Set<String> collected,
-        Object[] searchAfter,
-        ActionListener<Set<String>> listener
-    ) {
-        SearchRequest request = new SearchRequest(index);
-        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+    /**
+     * Pages through the oldest (timeField ASC, _id ASC) non-pinned docs of a container via search_after, collecting up
+     * to {@code limit} doc IDs. Formerly this paging was expressed as a method that recursed into itself from inside the
+     * search callback; with a synchronous client (e.g. a mocked client in unit tests) that produced real on-stack
+     * recursion of up to ~500 frames (COUNT_BASED_ID_CAP 50k / CONTAINER_PAGE_SIZE 100), which overflowed the stack on
+     * smaller CI stack sizes. This driver replaces the recursion with a work-in-progress (wip) serialized drain: page
+     * fetches are issued from a single {@link #drain()} loop, so paging uses O(1) stack whether the search callback
+     * fires synchronously (same thread) or asynchronously (real client on another thread), and it is free of
+     * lost-wakeup races. Behavior is otherwise identical: same final {@code collected} set, same cap enforcement
+     * (never more than {@code limit}), same stop conditions ({@code hits.length < pageSize} or
+     * {@code collected.size() >= limit}), same error propagation via the caller's {@code listener::onFailure}.
+     */
+    private final class OldestDocIdsPager {
+        private final String index;
+        private final String containerId;
+        private final String timeField;
+        private final int limit;
+        private final Set<String> collected;
+        private final ActionListener<Set<String>> listener;
 
-        BoolQueryBuilder query = QueryBuilders
-            .boolQuery()
-            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
-            .mustNot(QueryBuilders.termQuery(PINNED_FIELD, true));
+        private final AtomicInteger wip = new AtomicInteger(0);
+        private final AtomicBoolean done = new AtomicBoolean(false);
+        private volatile Object[] searchAfter = null;
 
-        int pageSize = Math.min(CONTAINER_PAGE_SIZE, limit - collected.size());
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
-            .query(query)
-            .size(pageSize)
-            .sort(timeField, SortOrder.ASC)
-            .sort("_id", SortOrder.ASC)
-            .fetchSource(false);
-
-        if (searchAfter != null) {
-            sourceBuilder.searchAfter(searchAfter);
+        OldestDocIdsPager(
+            String index,
+            String containerId,
+            String timeField,
+            int limit,
+            Set<String> collected,
+            ActionListener<Set<String>> listener
+        ) {
+            this.index = index;
+            this.containerId = containerId;
+            this.timeField = timeField;
+            this.limit = limit;
+            this.collected = collected;
+            this.listener = listener;
         }
 
-        request.source(sourceBuilder);
+        void start() {
+            drain();
+        }
 
-        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
-            client.search(request, ActionListener.wrap(response -> {
-                SearchHit[] hits = response.getHits().getHits();
-                for (SearchHit hit : hits) {
-                    collected.add(hit.getId());
-                    if (collected.size() >= limit) {
-                        listener.onResponse(collected);
-                        return;
+        /**
+         * Exclusive driver loop. Only one thread runs the body at a time (guarded by the wip counter); any callback
+         * that arrives while the loop is running simply increments wip so the loop issues the next page, and a callback
+         * that arrives after the loop has parked (wip drained to 0) resumes the loop on its own thread. Either way the
+         * next page is fetched from this single frame rather than nested inside the previous page's callback.
+         */
+        private void drain() {
+            if (wip.getAndIncrement() != 0) {
+                return;
+            }
+            int missed = 1;
+            for (;;) {
+                if (done.get()) {
+                    return;
+                }
+                fetchNextPage();
+                missed = wip.addAndGet(-missed);
+                if (missed == 0) {
+                    return;
+                }
+            }
+        }
+
+        private void fetchNextPage() {
+            SearchRequest request = new SearchRequest(index);
+            request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+
+            BoolQueryBuilder query = QueryBuilders
+                .boolQuery()
+                .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+                .mustNot(QueryBuilders.termQuery(PINNED_FIELD, true));
+
+            int pageSize = Math.min(CONTAINER_PAGE_SIZE, limit - collected.size());
+            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+                .query(query)
+                .size(pageSize)
+                .sort(timeField, SortOrder.ASC)
+                .sort("_id", SortOrder.ASC)
+                .fetchSource(false);
+
+            if (searchAfter != null) {
+                sourceBuilder.searchAfter(searchAfter);
+            }
+
+            request.source(sourceBuilder);
+
+            try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+                client.search(request, ActionListener.wrap(response -> {
+                    SearchHit[] hits = response.getHits().getHits();
+                    for (SearchHit hit : hits) {
+                        collected.add(hit.getId());
+                        if (collected.size() >= limit) {
+                            complete();
+                            return;
+                        }
                     }
-                }
 
-                if (hits.length == pageSize && collected.size() < limit) {
-                    Object[] nextSearchAfter = hits[hits.length - 1].getSortValues();
-                    collectOldestDocIdsPage(index, containerId, timeField, limit, collected, nextSearchAfter, listener);
-                } else {
-                    listener.onResponse(collected);
-                }
-            }, listener::onFailure));
+                    if (hits.length == pageSize && collected.size() < limit) {
+                        searchAfter = hits[hits.length - 1].getSortValues();
+                        // Do not recurse here; hand control back to drain() so the next page is fetched on a single
+                        // frame. If drain() has parked, this re-enters it on the current (async) thread.
+                        drain();
+                    } else {
+                        complete();
+                    }
+                }, e -> {
+                    done.set(true);
+                    listener.onFailure(e);
+                }));
+            }
+        }
+
+        private void complete() {
+            done.set(true);
+            listener.onResponse(collected);
         }
     }
 
