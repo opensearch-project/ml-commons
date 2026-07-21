@@ -381,7 +381,10 @@ public class MemoryRetentionJobProcessorTests {
                     when(countResp.getHits()).thenReturn(countHits);
                     listener.onResponse(countResp);
                 } else if (searchNum == 2) {
-                    // Search for oldest 5 excess sessions by created_time ASC
+                    // Evict the 5 least-recently-updated excess sessions (LRU): sort must be last_updated_time
+                    String sourceStr = request.source().toString();
+                    assertTrue("Session count-based eviction must sort by last_updated_time", sourceStr.contains("last_updated_time"));
+                    assertTrue("Session count-based eviction must NOT sort by created_time", !sourceStr.contains("created_time"));
                     SearchHit[] hits = new SearchHit[5];
                     for (int i = 0; i < 5; i++) {
                         hits[i] = new SearchHit(i, "session-" + i, null, null);
@@ -1087,6 +1090,10 @@ public class MemoryRetentionJobProcessorTests {
                     when(countResp.getHits()).thenReturn(countHits);
                     listener.onResponse(countResp);
                 } else {
+                    // Evict the 50 least-recently-updated excess docs (LRU): sort must be last_updated_time
+                    String sourceStr = request.source().toString();
+                    assertTrue("Long-term count-based eviction must sort by last_updated_time", sourceStr.contains("last_updated_time"));
+                    assertTrue("Long-term count-based eviction must NOT sort by created_time", !sourceStr.contains("created_time"));
                     // Search for oldest 50 IDs: return 50 hits
                     SearchHit[] hits = new SearchHit[50];
                     for (int i = 0; i < 50; i++) {

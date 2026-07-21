@@ -722,8 +722,10 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 }
 
                 int excess = (int) (totalCount - maxCount);
-                // Step 2: search for oldest excess sessions by created_time ASC
-                collectOldestDocIds(sessionIndex, containerId, CREATED_TIME_FIELD, excess, listener);
+                // Step 2: evict the least-recently-updated excess sessions (LRU). last_updated_time is bumped
+                // on every message add, so this keeps the most recently active sessions and drops stale ones.
+                // Tie-broken by _id via search_after (see collectOldestDocIdsPage), so identical timestamps are safe.
+                collectOldestDocIds(sessionIndex, containerId, LAST_UPDATED_TIME_FIELD, excess, listener);
             }, listener::onFailure));
         }
     }
@@ -927,8 +929,10 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 }
 
                 int excess = (int) (totalCount - maxCount);
-                // Step 2: search for oldest excess docs by created_time ASC
-                collectOldestDocIds(longTermIndex, containerId, CREATED_TIME_FIELD, excess, ActionListener.wrap(idsToDelete -> {
+                // Step 2: evict the least-recently-updated excess docs (LRU). last_updated_time advances when a
+                // long-term memory is updated, so this keeps the most recently touched facts and drops stale ones.
+                // Tie-broken by _id via search_after (see collectOldestDocIdsPage), so identical timestamps are safe.
+                collectOldestDocIds(longTermIndex, containerId, LAST_UPDATED_TIME_FIELD, excess, ActionListener.wrap(idsToDelete -> {
                     if (idsToDelete.isEmpty()) {
                         listener.onResponse(0L);
                         return;
