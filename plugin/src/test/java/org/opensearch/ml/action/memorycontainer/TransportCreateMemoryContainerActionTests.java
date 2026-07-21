@@ -2371,6 +2371,65 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     }
 
     @Test
+    public void testBuildMemoryContainer_NoAutoApplyRetention_WhenFeatureDisabled() throws InterruptedException {
+        // Retention feature disabled (the default): even when admin default_* settings are configured, the
+        // auto-apply block must be skipped so no retention policy is stamped onto the new container.
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        Settings settingsWithRetention = Settings
+            .builder()
+            .put("plugins.ml_commons.memory.default_session_retention_days", 30)
+            .put("plugins.ml_commons.memory.default_session_max_count", 100)
+            .put("plugins.ml_commons.memory.default_long_term_max_count", 500)
+            .put("plugins.ml_commons.memory.default_history_max_count", 1000)
+            .build();
+
+        java.util.Set<Setting<?>> clusterSettingsSet = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT
+                )
+        );
+        ClusterSettings clusterSettings = new ClusterSettings(settingsWithRetention, clusterSettingsSet);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+
+        // Configuration WITHOUT retention policy
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test-memory-index")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("test-embedding-model")
+            .llmId("test-llm-model")
+            .dimension(768)
+            .build(); // No retentionPolicy set
+
+        MLCreateMemoryContainerInput testInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("disabled-retention-container")
+            .configuration(config)
+            .tenantId(TENANT_ID)
+            .build();
+
+        MLCreateMemoryContainerRequest testRequest = new MLCreateMemoryContainerRequest(testInput);
+
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, testRequest, actionListener);
+
+        verify(actionListener).onResponse(responseCaptor.capture());
+
+        // Feature disabled -> no default policy stamped, even though cluster defaults are configured.
+        assertNull(config.getRetentionPolicy());
+    }
+
+    @Test
     public void testEmitDisableSessionRetentionWarning_WithDisableSessionAndSessionsRetention() throws InterruptedException {
         // Test that warning is emitted when disableSession=true and SESSIONS retention is set
         Map<MemoryType, RetentionRule> retentionPolicy = new EnumMap<>(MemoryType.class);
