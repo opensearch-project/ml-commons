@@ -7,6 +7,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -31,6 +32,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -309,7 +311,8 @@ public class TransportAddMemoriesActionTests {
 
         // Verify the full flow
         verify(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
-        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        // Two indexData calls: the lazy backing-session upsert (client-supplied session_id) and the working-memory write.
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
     }
 
@@ -469,7 +472,8 @@ public class TransportAddMemoriesActionTests {
 
         // Verify the full flow including response
         verify(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
-        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        // Two indexData calls: the lazy backing-session upsert (client-supplied session_id) and the working-memory write.
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
         // Note: Async LLM processing happens in background thread pool - not verified in unit test
     }
@@ -549,7 +553,8 @@ public class TransportAddMemoriesActionTests {
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
-        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        // Two indexData calls: the lazy backing-session upsert (client-supplied session_id) and the working-memory write.
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onFailure(indexingException);
     }
 
@@ -739,7 +744,7 @@ public class TransportAddMemoriesActionTests {
     }
 
     @Test
-    public void testDoExecute_UserProvidedSessionId_SkipsCreation() {
+    public void testDoExecute_UserProvidedSessionId_UpsertsBackingSession() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
 
         MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
@@ -762,6 +767,7 @@ public class TransportAddMemoriesActionTests {
 
         MemoryConfiguration config = mock(MemoryConfiguration.class);
         when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
         when(config.isDisableSession()).thenReturn(false);
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
@@ -785,8 +791,25 @@ public class TransportAddMemoriesActionTests {
 
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
-        // Verify session creation was skipped (no session index call) and went directly to working memory
-        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        // The client supplied its own session_id without calling create-session, so we lazily upsert a backing
+        // session doc (idempotent CREATE) so the retention orphan sweep does not evict this live working memory.
+        // Two indexData calls now occur: the session upsert and the working-memory write.
+        ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2))
+            .indexData(any(MemoryConfiguration.class), requestCaptor.capture(), any());
+
+        IndexRequest sessionRequest = requestCaptor
+            .getAllValues()
+            .stream()
+            .filter(r -> "session-index".equals(r.index()))
+            .findFirst()
+            .orElse(null);
+        assertNotNull("a backing session doc should be upserted for the client-supplied session_id", sessionRequest);
+        assertEquals("existing-session-123", sessionRequest.id());
+        assertEquals(DocWriteRequest.OpType.CREATE, sessionRequest.opType());
+        Map<String, Object> source = sessionRequest.sourceAsMap();
+        assertNotNull("session doc must carry created_time for session retention", source.get("created_time"));
+        assertNotNull("session doc must carry last_updated_time", source.get("last_updated_time"));
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
     }
 
@@ -950,7 +973,8 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify response returned immediately (async processing happens in background)
-        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        // Two indexData calls: the lazy backing-session upsert (client-supplied session_id) and the working-memory write.
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
     }
 

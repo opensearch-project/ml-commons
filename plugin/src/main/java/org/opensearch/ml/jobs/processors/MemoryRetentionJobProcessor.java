@@ -91,6 +91,12 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     private static final int DELETE_BY_QUERY_BATCH_SIZE = 500;
     private static final int BULK_DELETE_BATCH_SIZE = 1000;
     private static final int ORPHAN_SESSION_ID_CAP = 50_000;
+    // Per-run cap on the number of oldest doc IDs collected for count-based eviction (session/long-term/history
+    // max-count paths). Without this, a large (totalCount - maxCount) backlog would accumulate an unbounded
+    // Set of IDs on the job thread and risk heap exhaustion. Because the query sorts created_time ASC, _id ASC,
+    // each run removes the globally-oldest slice and the backlog converges over subsequent scheduled runs.
+    // Mirrors ORPHAN_SESSION_ID_CAP.
+    private static final int COUNT_BASED_ID_CAP = 50_000;
     private static final int ORPHAN_SESSION_BATCH_SIZE = 1000;
     private static final int ORPHAN_ENUMERATION_PAGE_SIZE = 1000;
     private static final String SESSION_IDS_AGG_NAME = "session_ids";
@@ -934,8 +940,19 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     }
 
     private void collectOldestDocIds(String index, String containerId, String timeField, int limit, ActionListener<Set<String>> listener) {
+        int cappedLimit = Math.min(limit, COUNT_BASED_ID_CAP);
+        if (limit > COUNT_BASED_ID_CAP) {
+            log
+                .warn(
+                    "Count-based eviction for container [{}] on index [{}] requested {} docs, capping at {} this run; remaining covered in future runs.",
+                    containerId,
+                    index,
+                    limit,
+                    COUNT_BASED_ID_CAP
+                );
+        }
         Set<String> collected = new HashSet<>();
-        collectOldestDocIdsPage(index, containerId, timeField, limit, collected, null, listener);
+        collectOldestDocIdsPage(index, containerId, timeField, cappedLimit, collected, null, listener);
     }
 
     private void collectOldestDocIdsPage(

@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.jobs.processors;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,10 +25,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -2888,5 +2895,50 @@ public class MemoryRetentionJobProcessorTests {
         json.append("}");
         hit.sourceRef(new BytesArray(json.toString()));
         return hit;
+    }
+
+    @Test
+    public void testCollectOldestDocIdsCapsAtCountBasedCap() throws Exception {
+        // Regression guard for the heap-exhaustion fix: collectOldestDocIds must not accumulate more than
+        // COUNT_BASED_ID_CAP IDs in a single run, even when the caller requests far more (large backlog).
+        Field capField = MemoryRetentionJobProcessor.class.getDeclaredField("COUNT_BASED_ID_CAP");
+        capField.setAccessible(true);
+        final int cap = (int) capField.get(null);
+
+        final int pageSize = 100; // == CONTAINER_PAGE_SIZE
+        final AtomicInteger nextId = new AtomicInteger(0);
+
+        // Every search page returns a full page of unique, monotonically increasing hits, so the pager would
+        // page forever (collecting all requested IDs) if the cap were not enforced.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchHit[] hits = new SearchHit[pageSize];
+            for (int i = 0; i < pageSize; i++) {
+                int id = nextId.getAndIncrement();
+                hits[i] = new SearchHit(id, "doc-" + id, null, null);
+                hits[i]
+                    .sortValues(new Object[] { (long) id, "doc-" + id }, new DocValueFormat[] { DocValueFormat.RAW, DocValueFormat.RAW });
+            }
+            SearchHits searchHits = new SearchHits(hits, new TotalHits(pageSize, TotalHits.Relation.EQUAL_TO), Float.NaN);
+            SearchResponse response = mock(SearchResponse.class);
+            when(response.getHits()).thenReturn(searchHits);
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // Request eviction of far more docs than the cap allows in a single run.
+        int requestedLimit = cap + 10_000;
+
+        Method collect = MemoryRetentionJobProcessor.class
+            .getDeclaredMethod("collectOldestDocIds", String.class, String.class, String.class, int.class, ActionListener.class);
+        collect.setAccessible(true);
+
+        AtomicReference<Set<String>> result = new AtomicReference<>();
+        ActionListener<Set<String>> listener = ActionListener.wrap(result::set, e -> fail("collectOldestDocIds failed: " + e));
+
+        collect.invoke(processor, "long-term-index", "container-huge", "created_time", requestedLimit, listener);
+
+        assertNotNull("collectOldestDocIds should have completed synchronously", result.get());
+        assertEquals("collectOldestDocIds must not collect more than the per-run cap", cap, result.get().size());
     }
 }

@@ -26,6 +26,7 @@ import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -43,6 +44,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
@@ -223,11 +225,62 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
                 memoryProcessingService.summarizeMessages(tenantId, container.getConfiguration(), messages, summaryListener);
             } else {
+                // When the client supplies its own session_id, no session doc is created by the summarize path above.
+                // Lazily upsert a minimal backing session doc so the retention orphan sweep can distinguish
+                // "session never created" from "session deleted" and does not evict this live working memory after
+                // orphan_ttl_days. Fire-and-continue: the sweep runs days later, so the write need not block the add.
+                if (userProvidedSessionId && !configuration.isDisableSession()) {
+                    upsertSessionIfAbsent(input, configuration);
+                }
                 processAndIndexMemory(input, container, user, actionListener, false);
             }
         } catch (Exception e) {
             log.error("Failed to create session", e);
             actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+        }
+    }
+
+    /**
+     * Idempotently upserts a minimal session doc for a client-supplied session_id so the retention orphan
+     * sweep does not treat this session's working memory as orphaned. Uses opType CREATE, so it is a no-op
+     * when the session already exists (create-session was called, or a prior add already upserted it). The
+     * doc carries created_time and last_updated_time so session-level retention (time-based and max-count)
+     * still applies. Best-effort and non-blocking: failures are logged and do not fail the add-memories call.
+     */
+    private void upsertSessionIfAbsent(MLAddMemoriesInput input, MemoryConfiguration configuration) {
+        try {
+            String sessionId = input.getNamespace().get(SESSION_ID_FIELD);
+            if (sessionId == null || sessionId.isBlank()) {
+                return;
+            }
+            Instant now = Instant.now();
+            IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName())
+                .id(sessionId)
+                .opType(DocWriteRequest.OpType.CREATE) // no-op if session already exists
+                .source(
+                    Map
+                        .of(
+                            OWNER_ID_FIELD,
+                            input.getOwnerId(),
+                            MEMORY_CONTAINER_ID_FIELD,
+                            input.getMemoryContainerId(),
+                            NAMESPACE_FIELD,
+                            input.getNamespace(),
+                            CREATED_TIME_FIELD,
+                            now.toEpochMilli(),
+                            LAST_UPDATED_TIME_FIELD,
+                            now.toEpochMilli()
+                        )
+                );
+            memoryContainerHelper.indexData(configuration, indexRequest, ActionListener.wrap(r -> {}, e -> {
+                if (e instanceof VersionConflictEngineException) {
+                    // Session already exists — expected no-op, nothing to do.
+                    return;
+                }
+                log.warn("Failed to lazily create backing session doc for session_id [{}]", sessionId, e);
+            }));
+        } catch (Exception e) {
+            log.warn("Failed to lazily create backing session doc", e);
         }
     }
 
