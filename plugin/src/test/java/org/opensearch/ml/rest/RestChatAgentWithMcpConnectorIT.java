@@ -12,12 +12,12 @@ import java.util.Map;
 
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
-import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -54,8 +54,13 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
     private String llmModelId;
 
     @Before
-    public void setup() throws IOException, ParseException, InterruptedException {
+    public void setup() throws Exception {
         Assume.assumeNotNull(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY);
+        Assume
+            .assumeFalse(
+                "MCP loopback connector cannot authenticate on the containerized cluster leg",
+                "docker-cluster".equals(System.getProperty("tests.clustername"))
+            );
 
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
         updateClusterSettings("plugins.ml_commons.memory_feature_enabled", true);
@@ -77,13 +82,41 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
             );
         assertEquals(200, registerResponse.getStatusLine().getStatusCode());
 
+        // Registration writes to the system index with an immediate refresh, and the MCP server
+        // loads tools from that index per request, so the tool is servable as soon as register returns.
+        String toolsListRequest = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}";
+        assertBusyWithFixedSleepTime(() -> {
+            String toolsListBody;
+            try {
+                Response listResponse = TestHelper
+                    .makeRequest(
+                        client(),
+                        "POST",
+                        "/_plugins/_ml/mcp",
+                        null,
+                        toolsListRequest,
+                        ImmutableList.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
+                    );
+                toolsListBody = TestHelper.httpEntityToString(listResponse.getEntity());
+            } catch (Exception e) {
+                // assertBusy only retries on AssertionError
+                throw new AssertionError("MCP tools/list request failed: " + e.getMessage(), e);
+            }
+            assertTrue(
+                "ListIndexTool did not become servable via MCP tools/list within 30s, got: " + toolsListBody,
+                toolsListBody.contains("ListIndexTool")
+            );
+        }, TimeValue.timeValueSeconds(30), TimeValue.timeValueMillis(500));
+
         ingestIrisData(irisIndex);
         llmModelId = registerAndDeployBedrockModel();
     }
 
     @After
     public void teardown() throws IOException {
-        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null) {
+        if (AWS_ACCESS_KEY_ID == null
+            || AWS_SECRET_ACCESS_KEY == null
+            || "docker-cluster".equals(System.getProperty("tests.clustername"))) {
             return;
         }
         try {
@@ -106,7 +139,9 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
         HttpHost host = getClusterHosts().get(0);
         String mcpServerUrl = host.getSchemeName() + "://" + host.getHostName() + ":" + host.getPort();
 
-        // Step 1 – create the MCP streamable-http connector pointing at this cluster's own MCP server.
+        // Step 1 – create the MCP streamable-http connector pointing at this cluster's own MCP
+        // server. Generous client_config timeouts because the default 30s intermittently trips
+        // on the loopback tool call under CI load.
         String connectorBody = "{\n"
             + "  \"name\": \"Self MCP Connector\",\n"
             + "  \"description\": \"MCP streamable-http connector pointing back at the same cluster's MCP server\",\n"
@@ -117,6 +152,10 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
             + "\",\n"
             + "  \"parameters\": {\n"
             + "    \"endpoint\": \"/_plugins/_ml/mcp\"\n"
+            + "  },\n"
+            + "  \"client_config\": {\n"
+            + "    \"connection_timeout\": 120,\n"
+            + "    \"read_timeout\": 120\n"
             + "  },\n"
             + "  \"credential\": {}\n"
             + "}";

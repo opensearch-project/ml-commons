@@ -43,8 +43,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     // Use ca_cert_pem in credentials for custom CA certificates instead
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
@@ -54,7 +54,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     // Note: No default value for keystoreType to prevent field pollution in connector configs
     // CertificateProcessor applies PEM fallback when needed (line 91 in CertificateProcessor.java)
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = Version.V_2_19_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = Version.V_3_6_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
@@ -109,8 +109,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
                 this.mutualTlsEnabled = input.readOptionalBoolean();
                 this.keystoreType = input.readOptionalString();
-                // Note: truststorePath was removed - skip reading it for backward compatibility
-                input.readOptionalString(); // Skip the truststorePath field
             }
         }
     }
@@ -149,8 +147,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
                 out.writeOptionalBoolean(mutualTlsEnabled);
                 out.writeOptionalString(keystoreType);
-                // Note: truststorePath was removed - write null for backward compatibility
-                out.writeOptionalString(null);
             }
         }
     }
@@ -244,7 +240,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                     mutualTlsEnabled = parser.booleanValue();
                     break;
                 case KEYSTORE_TYPE_FIELD:
-                    keystoreType = parser.text();
+                    keystoreType = parser.textOrNull();
                     break;
                 // Note: TRUSTSTORE_PATH_FIELD case was removed as the field is no longer supported
                 // File-based truststores are not supported - use ca_cert_pem in credentials instead

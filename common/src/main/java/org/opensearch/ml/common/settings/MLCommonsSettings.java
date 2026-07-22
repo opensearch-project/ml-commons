@@ -545,6 +545,17 @@ public final class MLCommonsSettings {
         "The remote agentic memory feature is not enabled. To enable, please update the setting "
             + ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.getKey();
 
+    // Feature flag for memory retention. Gates acceptance of retention_policy on the memory container APIs
+    // and the memory retention job. Provides a cluster-level kill switch for the feature.
+    public static final Setting<Boolean> ML_COMMONS_MEMORY_RETENTION_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory.retention_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE =
+        "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
+    public static final String ML_COMMONS_MEMORY_PINNED_DISABLED_MESSAGE =
+        "Cannot set pinned: the memory retention feature is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
+
     // Feature flag for global tenant id in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);
@@ -583,6 +594,82 @@ public final class MLCommonsSettings {
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
+
+    // Memory retention job settings
+    public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_interval_hours",
+            24,
+            1,
+            168,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_throttle_seconds",
+            5,
+            1,
+            60,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "memory.orphan_ttl_days", 7, 1, 365, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // TTL for working memory in sessionless containers (disable_session=true). Defaults to -1 (off) so callers can
+    // keep session-less working memory indefinitely; an operator must set a value > 0 to age it out. -1 = unset/off.
+    public static final Setting<Integer> ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.working_memory_ttl_days",
+            -1,
+            -1,
+            365,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_session_retention_days",
+            -1,
+            -1,
+            3650,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_session_max_count",
+            -1,
+            -1,
+            1000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_long_term_max_count",
+            -1,
+            -1,
+            1000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_history_max_count",
+            -1,
+            -1,
+            10000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
     private static void validateRegexSafety(String regex) {
         // Reject nested quantifiers or backreferences

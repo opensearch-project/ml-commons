@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.httpclient;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -17,6 +19,7 @@ import javax.net.ssl.KeyManager;
 import javax.net.ssl.TrustManager;
 
 import org.junit.Test;
+import org.opensearch.ml.common.exception.MLValidationException;
 
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
@@ -55,27 +58,6 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_getAsyncHttpClient_withSSLContext_success() {
-        SdkAsyncHttpClient client = MLHttpClientFactory
-            .getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false, false, null);
-        assertNotNull(client);
-    }
-
-    @Test
-    public void test_getAsyncHttpClient_withSSLContext_skipSslVerification_success() {
-        SdkAsyncHttpClient client = MLHttpClientFactory
-            .getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false, true, null);
-        assertNotNull(client);
-    }
-
-    @Test
-    public void test_getAsyncHttpClient_withSSLContextAndDescription_success() {
-        SdkAsyncHttpClient client = MLHttpClientFactory
-            .getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, false, false, null, "test-client");
-        assertNotNull(client);
-    }
-
-    @Test
     public void test_getAsyncHttpClient_withManagers_success() {
         KeyManager[] keyManagers = new KeyManager[0];
         TrustManager[] trustManagers = new TrustManager[0];
@@ -89,8 +71,6 @@ public class MLHttpClientFactoryTests {
                 Collections.emptyList(),
                 Collections.emptyList(),
                 false,
-                null,
-                "test-client",
                 keyManagers,
                 trustManagers
             );
@@ -108,8 +88,6 @@ public class MLHttpClientFactoryTests {
                 Collections.emptyList(),
                 Collections.emptyList(),
                 false,
-                null,
-                null,
                 null,
                 null
             );
@@ -130,8 +108,6 @@ public class MLHttpClientFactoryTests {
                 Collections.emptyList(),
                 Collections.emptyList(),
                 true,
-                null,
-                "test-client",
                 keyManagers,
                 trustManagers
             );
@@ -151,8 +127,6 @@ public class MLHttpClientFactoryTests {
                 Collections.emptyList(),
                 Collections.emptyList(),
                 false,
-                null,
-                "test-client",
                 keyManagers,
                 null
             );
@@ -173,8 +147,6 @@ public class MLHttpClientFactoryTests {
                 Collections.emptyList(),
                 false,
                 null,
-                "test-client",
-                null,
                 trustManagers
             );
         assertNotNull(client);
@@ -193,12 +165,31 @@ public class MLHttpClientFactoryTests {
                 Collections.emptyList(),
                 Collections.emptyList(),
                 true, // skipSslVerification = true
-                null,
-                "test-mtls-skip-ssl-client",
-                keyManagers, // mTLS enabled
+                keyManagers, // empty array - no client cert actually presented
                 null
             );
         assertNotNull(client);
+    }
+
+    @Test
+    public void test_getAsyncHttpClient_mTlsWithSkipSslVerification_throwsException() {
+        KeyManager[] keyManagers = new KeyManager[] { mock(KeyManager.class) };
+
+        assertThrows(
+            MLValidationException.class,
+            () -> MLHttpClientFactory
+                .getAsyncHttpClient(
+                    Duration.ofSeconds(100),
+                    Duration.ofSeconds(100),
+                    100,
+                    false,
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    true, // skipSslVerification = true
+                    keyManagers, // a real client cert is present
+                    null
+                )
+        );
     }
 
     @Test

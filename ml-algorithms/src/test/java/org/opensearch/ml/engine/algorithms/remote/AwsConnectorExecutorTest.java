@@ -175,7 +175,21 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null, null))
+            .connectorClientConfig(
+                ConnectorClientConfig
+                    .builder()
+                    .maxConnections(10)
+                    .connectionTimeout(10)
+                    .readTimeout(10)
+                    .retryBackoffMillis(1)
+                    .retryTimeoutSeconds(1)
+                    .maxRetryTimes(0)
+                    .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                    .skipSslVerification(null)
+                    .mutualTlsEnabled(null)
+                    .keystoreType(null)
+                    .build()
+            )
             .build();
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
@@ -275,7 +289,21 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null, null))
+            .connectorClientConfig(
+                ConnectorClientConfig
+                    .builder()
+                    .maxConnections(10)
+                    .connectionTimeout(10)
+                    .readTimeout(10)
+                    .retryBackoffMillis(1)
+                    .retryTimeoutSeconds(1)
+                    .maxRetryTimes(0)
+                    .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                    .skipSslVerification(null)
+                    .mutualTlsEnabled(null)
+                    .keystoreType(null)
+                    .build()
+            )
             .build();
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
@@ -337,7 +365,18 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null, null))
+            .connectorClientConfig(
+                ConnectorClientConfig
+                    .builder()
+                    .maxConnections(10)
+                    .connectionTimeout(10)
+                    .readTimeout(10)
+                    .retryBackoffMillis(1)
+                    .retryTimeoutSeconds(1)
+                    .maxRetryTimes(0)
+                    .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                    .build()
+            )
             .build();
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
@@ -403,7 +442,18 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null, null))
+            .connectorClientConfig(
+                ConnectorClientConfig
+                    .builder()
+                    .maxConnections(10)
+                    .connectionTimeout(10)
+                    .readTimeout(10)
+                    .retryBackoffMillis(1)
+                    .retryTimeoutSeconds(1)
+                    .maxRetryTimes(0)
+                    .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                    .build()
+            )
             .build();
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
@@ -466,7 +516,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null, null))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null))
             .build();
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
@@ -819,7 +869,6 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             RetryBackoffPolicy.CONSTANT,
             null,
             null,
-            null,
             null
         );
         Connector connector = AwsConnector
@@ -868,7 +917,6 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             1,
             1,
             RetryBackoffPolicy.CONSTANT,
-            null,
             null,
             null,
             null
@@ -940,7 +988,6 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             RetryBackoffPolicy.CONSTANT,
             null,
             null,
-            null,
             null
         );
         ExecutionContext executionContext = new ExecutionContext(123);
@@ -999,7 +1046,6 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             RetryBackoffPolicy.CONSTANT,
             null,
             null,
-            null,
             null
         );
         ExecutionContext executionContext = new ExecutionContext(123);
@@ -1048,19 +1094,16 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(
-            10,
-            10,
-            10,
-            1,
-            10,
-            -1,
-            RetryBackoffPolicy.CONSTANT,
-            null,
-            null,
-            null,
-            null
-        );
+        ConnectorClientConfig connectorClientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(10)
+            .connectionTimeout(10)
+            .readTimeout(10)
+            .retryBackoffMillis(1)
+            .retryTimeoutSeconds(10)
+            .maxRetryTimes(-1)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .build();
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -1133,19 +1176,17 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
     @Test
     public void testInvokeRemoteServiceStream_With_SkipSslVerification_True() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
-            ConnectorClientConfig clientConfig = new ConnectorClientConfig(
-                10,
-                10,
-                10,
-                1,
-                1,
-                0,
-                RetryBackoffPolicy.CONSTANT,
-                true,
-                null,
-                null,
-                null
-            );
+            ConnectorClientConfig clientConfig = ConnectorClientConfig
+                .builder()
+                .maxConnections(10)
+                .connectionTimeout(10)
+                .readTimeout(10)
+                .retryBackoffMillis(1)
+                .retryTimeoutSeconds(1)
+                .maxRetryTimes(0)
+                .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                .skipSslVerification(true)
+                .build();
             AwsConnector mockConnector = mock(AwsConnector.class);
             when(mockConnector.getAccessKey()).thenReturn("test-access-key");
             when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
@@ -1190,19 +1231,17 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
     @Test
     public void testInvokeRemoteServiceStream_With_SkipSslVerification_False() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
-            ConnectorClientConfig clientConfig = new ConnectorClientConfig(
-                10,
-                10,
-                10,
-                1,
-                1,
-                0,
-                RetryBackoffPolicy.CONSTANT,
-                false,
-                null,
-                null,
-                null
-            );
+            ConnectorClientConfig clientConfig = ConnectorClientConfig
+                .builder()
+                .maxConnections(10)
+                .connectionTimeout(10)
+                .readTimeout(10)
+                .retryBackoffMillis(1)
+                .retryTimeoutSeconds(1)
+                .maxRetryTimes(0)
+                .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                .skipSslVerification(false)
+                .build();
             AwsConnector mockConnector = mock(AwsConnector.class);
             when(mockConnector.getAccessKey()).thenReturn("test-access-key");
             when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
@@ -1247,19 +1286,16 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
     @Test
     public void testInvokeRemoteServiceStream_With_SkipSslVerification_Null() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
-            ConnectorClientConfig clientConfig = new ConnectorClientConfig(
-                10,
-                10,
-                10,
-                1,
-                1,
-                0,
-                RetryBackoffPolicy.CONSTANT,
-                null,
-                null,
-                null,
-                null
-            );
+            ConnectorClientConfig clientConfig = ConnectorClientConfig
+                .builder()
+                .maxConnections(10)
+                .connectionTimeout(10)
+                .readTimeout(10)
+                .retryBackoffMillis(1)
+                .retryTimeoutSeconds(1)
+                .maxRetryTimes(0)
+                .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                .build();
             AwsConnector mockConnector = mock(AwsConnector.class);
             when(mockConnector.getAccessKey()).thenReturn("test-access-key");
             when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
@@ -1330,7 +1366,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null))
             .build();
 
         endecryptConnectorCredentials(connector, encryptor, false);
@@ -1389,7 +1425,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null, null, null))
             .build();
 
         endecryptConnectorCredentials(connector, encryptor, false);

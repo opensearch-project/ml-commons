@@ -339,8 +339,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(),
                             anyBoolean(),
                             any(),
-                            any(),
-                            any(),
                             any()
                         )
                 )
@@ -373,8 +371,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(),
                             any(),
                             sslVerificationCaptor.capture(),
-                            any(),
-                            any(),
                             any(),
                             any()
                         )
@@ -428,8 +424,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(),
                             anyBoolean(),
                             any(),
-                            any(),
-                            any(),
                             any()
                         )
                 )
@@ -462,8 +456,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(),
                             any(),
                             sslVerificationCaptor.capture(),
-                            any(),
-                            any(),
                             any(),
                             any()
                         )
@@ -517,8 +509,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(),
                             anyBoolean(),
                             any(),
-                            any(),
-                            any(),
                             any()
                         )
                 )
@@ -551,8 +541,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                             any(),
                             any(),
                             sslVerificationCaptor.capture(),
-                            any(),
-                            any(),
                             any(),
                             any()
                         )
@@ -823,24 +811,19 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
 
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
 
-        try {
-            java.lang.reflect.Method method = HttpJsonConnectorExecutor.class.getDeclaredMethod("generateHttpClientCacheKey");
-            method.setAccessible(true);
+        // Access the cache manager directly to test the generateHttpClientCacheKey method
+        MLHttpClientCacheManager cacheManager = new MLHttpClientCacheManager();
 
-            String cacheKey1 = (String) method.invoke(executor);
-            String cacheKey2 = (String) method.invoke(executor);
+        String cacheKey1 = cacheManager.generateHttpClientCacheKey(connector, clientConfig);
+        String cacheKey2 = cacheManager.generateHttpClientCacheKey(connector, clientConfig);
 
-            assertEquals("Cache key should be consistent", cacheKey1, cacheKey2);
+        assertEquals("Cache key should be consistent", cacheKey1, cacheKey2);
 
-            assertTrue("Cache key should contain connection timeout", cacheKey1.contains("conn:10"));
-            assertTrue("Cache key should contain read timeout", cacheKey1.contains("read:10"));
-            assertTrue("Cache key should contain max connections", cacheKey1.contains("max:10"));
-            assertTrue("Cache key should contain SSL settings", cacheKey1.contains("skipSsl:false"));
-            assertTrue("Cache key should contain mTLS settings", cacheKey1.contains("mtls:false"));
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to test cache key generation", e);
-        }
+        assertTrue("Cache key should contain connection timeout", cacheKey1.contains("conn:10"));
+        assertTrue("Cache key should contain read timeout", cacheKey1.contains("read:10"));
+        assertTrue("Cache key should contain max connections", cacheKey1.contains("max:10"));
+        assertTrue("Cache key should contain SSL settings", cacheKey1.contains("skipSsl:false"));
+        assertTrue("Cache key should contain mTLS settings", cacheKey1.contains("mtls:false"));
     }
 
     @Test

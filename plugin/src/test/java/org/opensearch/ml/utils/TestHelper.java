@@ -41,12 +41,14 @@ import java.util.TreeSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.lucene.search.TotalHits;
@@ -56,6 +58,7 @@ import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Request;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.WarningsHandler;
 import org.opensearch.cluster.ClusterName;
@@ -201,8 +204,69 @@ public class TestHelper {
         if (entity != null) {
             request.setEntity(entity);
         }
-        return client.performRequest(request);
+        return performRequestWithRemoteRetry(client, request);
     }
+
+    // Retries transient remote-service 5xx blips (Bedrock/OpenAI/Cohere) so a momentary outage
+    // doesn't fail CI. If the remote stays unavailable across every attempt, the error is re-thrown
+    // and the test fails normally, so a genuine regression is never masked.
+    private static Response performRequestWithRemoteRetry(RestClient client, Request request) throws IOException {
+        for (int attempt = 0; attempt <= MAX_REMOTE_RETRIES; attempt++) {
+            try {
+                return client.performRequest(request);
+            } catch (ResponseException e) {
+                if (!isTransientRemoteServiceError(e) || attempt == MAX_REMOTE_RETRIES) {
+                    throw e;
+                }
+                try {
+                    Thread.sleep(REMOTE_RETRY_BACKOFF_MS * (attempt + 1)); // linear backoff
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e; // interrupted: stop retrying, surface the remote error
+                }
+            }
+        }
+        throw new IllegalStateException("unreachable"); // loop always returns or throws
+    }
+
+    // True only for the two narrow remote-unavailability signatures (503 wrapper, 500 connectivity
+    // timeout/reset); everything else fails normally.
+    private static boolean isTransientRemoteServiceError(ResponseException e) {
+        int status = e.getResponse().getStatusLine().getStatusCode();
+        if (status != 503 && status != 500) {
+            return false;
+        }
+        String body;
+        try {
+            body = EntityUtils.toString(e.getResponse().getEntity());
+        } catch (Exception ignored) {
+            return false;
+        }
+        if (body == null) {
+            return false;
+        }
+        if (status == 503 && REMOTE_SERVICE_ERROR_PATTERN.matcher(body).find()) {
+            return true;
+        }
+        return status == 500 && REMOTE_TIMEOUT_ERROR_PATTERN.matcher(body).find();
+    }
+
+    private static final int MAX_REMOTE_RETRIES = 3;
+    private static final long REMOTE_RETRY_BACKOFF_MS = 3000;
+
+    // CommonValue.REMOTE_SERVICE_ERROR wrapper plus common upstream 503 phrasings.
+    private static final Pattern REMOTE_SERVICE_ERROR_PATTERN = Pattern
+        .compile(
+            "Error from remote service|Service Unavailable|ServiceUnavailable|model.{0,20}not ready",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+        );
+
+    // MLSdkAsyncHttpResponseHandler connectivity wrapper — timeouts/resets only.
+    private static final Pattern REMOTE_TIMEOUT_ERROR_PATTERN = Pattern
+        .compile(
+            "Error communicating with remote model.{0,40}(Read timed out|timed out|Connection reset|Connection refused)",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+        );
 
     public static HttpEntity toHttpEntity(ToXContentObject object) throws IOException {
         return new StringEntity(toJsonString(object), APPLICATION_JSON);
@@ -644,60 +708,6 @@ public class TestHelper {
         ThreadContext threadContext = new ThreadContext(settings);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(client.threadPool()).thenReturn(threadPool);
-    }
-
-    /**
-     * Resets McpStatelessServerHolder singleton state between tests.
-     * Uses reflection to clear static fields, ensuring clean test isolation.
-     * This method should be called in both @Before and @After methods of test classes
-     * that test McpStatelessServerHolder functionality.
-     * 
-     * This method is designed to be safe to call multiple times and will not throw exceptions,
-     * ensuring test cleanup is always possible even if the class structure changes.
-     */
-    public static void resetMcpStatelessServerHolder() {
-        try {
-            Class<?> holderClass = Class.forName("org.opensearch.ml.action.mcpserver.McpStatelessServerHolder");
-
-            // Reset initialized flag
-            try {
-                java.lang.reflect.Field initializedField = holderClass.getDeclaredField("initialized");
-                initializedField.setAccessible(true);
-                initializedField.set(null, false);
-            } catch (Exception e) {
-                // Field might not exist or be accessible - continue with other fields
-            }
-
-            // Reset server instance
-            try {
-                java.lang.reflect.Field serverField = holderClass.getDeclaredField("mcpStatelessAsyncServer");
-                serverField.setAccessible(true);
-                serverField.set(null, null);
-            } catch (Exception e) {
-                // Field might not exist or be accessible - continue with other fields
-            }
-
-            // Reset transport provider
-            try {
-                java.lang.reflect.Field providerField = holderClass.getDeclaredField("mcpStatelessServerTransportProvider");
-                providerField.setAccessible(true);
-                providerField.set(null, null);
-            } catch (Exception e) {
-                // Field might not exist or be accessible - continue with other fields
-            }
-
-            // Reset in-memory tools map
-            try {
-                java.lang.reflect.Field toolsField = holderClass.getDeclaredField("IN_MEMORY_MCP_TOOLS");
-                toolsField.setAccessible(true);
-                toolsField.set(null, new java.util.concurrent.ConcurrentHashMap<>());
-            } catch (Exception e) {
-                // Field might not exist or be accessible - continue
-            }
-        } catch (Exception e) {
-            // Class might not exist or be accessible - this is expected in some test environments
-            // Continue silently to ensure tests don't fail due to reflection issues
-        }
     }
 
     public static SearchResponse createSearchResponse(ToXContent toXContent, int size) throws IOException {

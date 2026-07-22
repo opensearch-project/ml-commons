@@ -94,16 +94,13 @@ import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
-import org.opensearch.ml.action.mcpserver.McpStatelessServerHolder;
 import org.opensearch.ml.action.mcpserver.McpToolsHelper;
+import org.opensearch.ml.action.mcpserver.TransportMcpConnectorListToolsAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpServerAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsListAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsRegisterAction;
-import org.opensearch.ml.action.mcpserver.TransportMcpToolsRegisterOnNodesAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsRemoveAction;
-import org.opensearch.ml.action.mcpserver.TransportMcpToolsRemoveOnNodesAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsUpdateAction;
-import org.opensearch.ml.action.mcpserver.TransportMcpToolsUpdateOnNodesAction;
 import org.opensearch.ml.action.memorycontainer.TransportCreateMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.TransportDeleteMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.TransportGetMemoryContainerAction;
@@ -205,14 +202,12 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpConnectorListToolsAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpServerAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNodesAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
@@ -322,6 +317,9 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.plugin.grpc.ClientAdapter;
+import org.opensearch.ml.plugin.grpc.ModelManagerAdapter;
+import org.opensearch.ml.plugin.grpc.UserContextProviderAdapter;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
@@ -402,6 +400,7 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpConnectorListToolsAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRegisterAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRemoveAction;
@@ -462,7 +461,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 public class MachineLearningPlugin extends Plugin
     implements
         ActionPlugin,
@@ -486,7 +487,6 @@ public class MachineLearningPlugin extends Plugin
     public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
-    public static final String MCP_TOOLS_SYNC_THREAD_POOL = "opensearch_mcp_tools_sync";
     public static final String AGENTIC_MEMORY_THREAD_POOL = "opensearch_ml_agentic_memory";
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
@@ -534,7 +534,6 @@ public class MachineLearningPlugin extends Plugin
     private ScriptService scriptService;
     private Encryptor encryptor;
     private McpToolsHelper mcpToolsHelper;
-    private McpStatelessServerHolder statelessServerHolder;
 
     public MachineLearningPlugin() {}
 
@@ -575,6 +574,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLCreateConnectorAction.INSTANCE, TransportCreateConnectorAction.class),
                 new ActionHandler<>(MLExecuteConnectorAction.INSTANCE, ExecuteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
+                new ActionHandler<>(MLMcpConnectorListToolsAction.INSTANCE, TransportMcpConnectorListToolsAction.class),
                 new ActionHandler<>(MLIndexInsightGetAction.INSTANCE, GetIndexInsightTransportAction.class),
                 new ActionHandler<>(MLIndexInsightConfigGetAction.INSTANCE, GetIndexInsightConfigTransportAction.class),
                 new ActionHandler<>(MLIndexInsightConfigPutAction.INSTANCE, PutIndexInsightConfigTransportAction.class),
@@ -624,12 +624,9 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLBatchIngestionAction.INSTANCE, TransportBatchIngestionAction.class),
                 new ActionHandler<>(MLCancelBatchJobAction.INSTANCE, CancelBatchJobTransportAction.class),
                 new ActionHandler<>(MLMcpToolsRegisterAction.INSTANCE, TransportMcpToolsRegisterAction.class),
-                new ActionHandler<>(MLMcpToolsRegisterOnNodesAction.INSTANCE, TransportMcpToolsRegisterOnNodesAction.class),
                 new ActionHandler<>(MLMcpToolsRemoveAction.INSTANCE, TransportMcpToolsRemoveAction.class),
-                new ActionHandler<>(MLMcpToolsRemoveOnNodesAction.INSTANCE, TransportMcpToolsRemoveOnNodesAction.class),
                 new ActionHandler<>(MLMcpToolsListAction.INSTANCE, TransportMcpToolsListAction.class),
                 new ActionHandler<>(MLMcpToolsUpdateAction.INSTANCE, TransportMcpToolsUpdateAction.class),
-                new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class),
                 new ActionHandler<>(MLMcpServerAction.INSTANCE, TransportMcpServerAction.class),
                 new ActionHandler<>(MLCreateContextManagementTemplateAction.INSTANCE, CreateContextManagementTemplateTransportAction.class),
                 new ActionHandler<>(MLUpdateContextManagementTemplateAction.INSTANCE, UpdateContextManagementTemplateTransportAction.class),
@@ -954,7 +951,20 @@ public class MachineLearningPlugin extends Plugin
         }
 
         mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
-        statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
+
+        // Initialize gRPC service factory only if transport-grpc module is available
+        try {
+            Class.forName("org.opensearch.transport.grpc.spi.GrpcServiceFactory");
+            org.opensearch.ml.grpc.MLGrpcServiceFactory
+                .initialize(
+                    new ModelManagerAdapter(mlModelManager),
+                    mlFeatureEnabledSetting,
+                    new ClientAdapter(client),
+                    new UserContextProviderAdapter(client)
+                );
+        } catch (ClassNotFoundException e) {
+            log.info("transport-grpc module not installed, gRPC streaming disabled");
+        }
 
         return ImmutableList
             .of(
@@ -986,8 +996,7 @@ public class MachineLearningPlugin extends Plugin
                 cmHandler,
                 sdkClient,
                 toolFactoryWrapper,
-                mcpToolsHelper,
-                statelessServerHolder
+                mcpToolsHelper
             );
     }
 
@@ -1045,6 +1054,9 @@ public class MachineLearningPlugin extends Plugin
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction(mlFeatureEnabledSetting);
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
+        RestMLMcpConnectorListToolsAction restMLMcpConnectorListToolsAction = new RestMLMcpConnectorListToolsAction(
+            mlFeatureEnabledSetting
+        );
         RestMLGetIndexInsightAction restMLGetIndexInsightAction = new RestMLGetIndexInsightAction(mlFeatureEnabledSetting);
         RestMLPutIndexInsightConfigAction restMLPutIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(
             mlFeatureEnabledSetting
@@ -1157,6 +1169,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLDeleteModelGroupAction,
                 restMLCreateConnectorAction,
                 restMLGetConnectorAction,
+                restMLMcpConnectorListToolsAction,
                 restMLGetIndexInsightAction,
                 restMLDeleteConnectorAction,
                 restMLSearchConnectorAction,
@@ -1306,14 +1319,6 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + STREAM_EXECUTE_THREAD_POOL,
             false
         );
-        FixedExecutorBuilder mcpThreadPool = new FixedExecutorBuilder(
-            settings,
-            MCP_TOOLS_SYNC_THREAD_POOL,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
-            ML_THREAD_POOL_PREFIX + MCP_TOOLS_SYNC_THREAD_POOL,
-            false
-        );
 
         FixedExecutorBuilder agenticMemoryThreadPool = new FixedExecutorBuilder(
             settings,
@@ -1337,7 +1342,6 @@ public class MachineLearningPlugin extends Plugin
                 sdkClientThreadPool,
                 streamPredictThreadPool,
                 streamExecuteThreadPool,
-                mcpThreadPool,
                 agenticMemoryThreadPool
             );
     }
@@ -1429,6 +1433,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
@@ -1436,7 +1441,15 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                 MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
-                MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
+                MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT
             );
         return settings;
     }
