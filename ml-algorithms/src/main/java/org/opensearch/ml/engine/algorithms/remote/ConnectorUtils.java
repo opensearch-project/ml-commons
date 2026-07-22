@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.BEDROCK;
 import static org.opensearch.ml.common.connector.ConnectorAction.COHERE;
 import static org.opensearch.ml.common.connector.ConnectorAction.OPENAI;
 import static org.opensearch.ml.common.connector.ConnectorAction.SAGEMAKER;
+import static org.opensearch.ml.common.connector.ConnectorAction.VERTEX_AI;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
@@ -471,6 +472,14 @@ public class ConnectorUtils {
                 url = isCancelAction
                     ? predictEndpoint + "/${parameters.processedJobArn}/stop"
                     : predictEndpoint + "/${parameters.processedJobArn}";
+                method = isCancelAction ? "POST" : "GET";
+                break;
+            case VERTEX_AI:
+                // Vertex batch responses carry a full resource name
+                // (projects/<num>/locations/<loc>/batchPredictionJobs/<id>). Status/cancel are
+                // addressed as {host}/v1/{name}[:cancel], so build from the endpoint's base URL.
+                String vertexBaseUrl = predictEndpoint.substring(0, predictEndpoint.indexOf("/v1/") + "/v1/".length());
+                url = isCancelAction ? vertexBaseUrl + "${parameters.name}:cancel" : vertexBaseUrl + "${parameters.name}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
             default:

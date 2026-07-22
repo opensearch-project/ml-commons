@@ -393,6 +393,53 @@ public class ConnectorUtilsTest {
         assertNull(result.getRequestBody());
     }
 
+    private Connector vertexBatchConnector() {
+        return HttpConnector
+            .builder()
+            .name("test")
+            .protocol("google_cloud")
+            .version("1")
+            .credential(Map.of("private_key", "pk", "client_email", "sa@p.iam.gserviceaccount.com"))
+            .parameters(Map.of("project_id", "p", "location", "us-central1"))
+            .actions(
+                new ArrayList<>(
+                    Arrays
+                        .asList(
+                            ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                .method("POST")
+                                .url(
+                                    "https://${parameters.location}-aiplatform.googleapis.com/v1/projects/${parameters.project_id}/locations/${parameters.location}/batchPredictionJobs"
+                                )
+                                .requestBody("{\\\"displayName\\\":\\\"${parameters.job_name}\\\"}")
+                                .build()
+                        )
+                )
+            )
+            .build();
+    }
+
+    @Test
+    public void testGetTask_createBatchStatusActionForVertexAI() {
+        ConnectorAction result = ConnectorUtils.createConnectorAction(vertexBatchConnector(), BATCH_PREDICT_STATUS);
+
+        assertEquals(ConnectorAction.ActionType.BATCH_PREDICT_STATUS, result.getActionType());
+        assertEquals("GET", result.getMethod());
+        assertEquals("https://us-central1-aiplatform.googleapis.com/v1/${parameters.name}", result.getUrl());
+        assertNull(result.getRequestBody());
+    }
+
+    @Test
+    public void testGetTask_createCancelBatchActionForVertexAI() {
+        ConnectorAction result = ConnectorUtils.createConnectorAction(vertexBatchConnector(), CANCEL_BATCH_PREDICT);
+
+        assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
+        assertEquals("POST", result.getMethod());
+        assertEquals("https://us-central1-aiplatform.googleapis.com/v1/${parameters.name}:cancel", result.getUrl());
+        assertNull(result.getRequestBody());
+    }
+
     @Test
     public void testEscapeRemoteInferenceInputData_WithSpecialCharacters() {
         Map<String, String> params = new HashMap<>();

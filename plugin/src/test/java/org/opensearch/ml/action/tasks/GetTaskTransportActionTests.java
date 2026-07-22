@@ -25,6 +25,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -178,7 +179,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                             ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX,
                             ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX,
                             ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX,
-                            ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX
+                            ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX,
+                            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
                         )
                 )
             );
