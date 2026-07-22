@@ -181,7 +181,11 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
         String callerIdentity = user != null ? user.getName() : "unknown";
         log.error("gRPC error in {}: user={}", operation, callerIdentity, e);
         Status status = GrpcStatusMapper.toGrpcStatus(e);
-        responseObserver.onError(status.asRuntimeException());
+        try {
+            responseObserver.onError(status.asRuntimeException());
+        } catch (RuntimeException ex) {
+            log.warn("gRPC stream already terminated when handling error in {}, ignoring: {}", operation, ex.getMessage());
+        }
     }
 
     /**

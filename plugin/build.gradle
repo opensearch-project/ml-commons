@@ -135,6 +135,16 @@ dependencies {
 
     // https://mvnrepository.com/artifact/io.projectreactor/reactor-test
     testImplementation("io.projectreactor:reactor-test:3.5.20")
+
+    // gRPC client + generated ML service stubs for end-to-end streaming integration tests.
+    testImplementation "org.opensearch:protobufs:${versions.opensearchprotobufs}"
+    testImplementation "io.grpc:grpc-api:${versions.grpc}"
+    testImplementation "io.grpc:grpc-core:${versions.grpc}"
+    testImplementation "io.grpc:grpc-netty-shaded:${versions.grpc}"
+    testImplementation "io.grpc:grpc-protobuf:${versions.grpc}"
+    testImplementation "io.grpc:grpc-protobuf-lite:${versions.grpc}"
+    testImplementation "io.grpc:grpc-stub:${versions.grpc}"
+    testImplementation "io.perfmark:perfmark-api:0.27.0"
 }
 
 publishing {
@@ -301,6 +311,14 @@ def securityPluginFile = resolvePluginFile("opensearch-security")
 testClusters.integTest {
     testDistribution = "ARCHIVE"
     if (_numNodes > 1) numberOfNodes = _numNodes
+
+    // gRPC setup - enable with -Dgrpc=true
+    if (System.getProperty("grpc") == "true") {
+        setting 'aux.transport.types', '[transport-grpc]'
+        setting 'aux.transport.transport-grpc.port', '9401'
+        setting 'grpc.host', '["127.0.0.1"]'
+        setting 'grpc.publish_host', '["127.0.0.1"]'
+    }
 
     // Streaming setup - enable with -Dstreaming=true
     if (System.getProperty("streaming") == "true") {
