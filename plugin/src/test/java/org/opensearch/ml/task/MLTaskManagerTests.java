@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,7 +33,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.WriteRequest;
@@ -40,14 +43,20 @@ import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.engine.VersionConflictEngineException;
+import org.opensearch.index.get.GetResult;
+import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobType;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -432,6 +441,159 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.indexStatsCollectorJob(true);
 
         verify(client).index(any(), any());
+    }
+
+    public void testUpsertMemoryRetentionJob() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.upsertMemoryRetentionJob(1);
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+
+        IndexRequest capturedRequest = indexRequestCaptor.getValue();
+        assertEquals(ML_JOBS_INDEX, capturedRequest.index());
+        assertEquals(MLJobType.MEMORY_RETENTION.name(), capturedRequest.id());
+        // The upsert path must use INDEX (version-bumping) rather than CREATE so JobScheduler reschedules.
+        assertEquals(DocWriteRequest.OpType.INDEX, capturedRequest.opType());
+        assertEquals(WriteRequest.RefreshPolicy.IMMEDIATE, capturedRequest.getRefreshPolicy());
+        // The caller's interval must actually be serialized into the persisted schedule (guards against a hardcoded value).
+        assertEquals(1, extractScheduleIntervalPeriod(capturedRequest));
+    }
+
+    @SuppressWarnings("unchecked")
+    private int extractScheduleIntervalPeriod(IndexRequest indexRequest) {
+        Map<String, Object> source = indexRequest.sourceAsMap();
+        Map<String, Object> schedule = (Map<String, Object>) source.get("schedule");
+        Map<String, Object> interval = (Map<String, Object>) schedule.get("interval");
+        return ((Number) interval.get("period")).intValue();
+    }
+
+    public void testUpsertMemoryRetentionJob_NotGatedByLatch() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        // Even after the memoryRetentionJobStarted latch is set by a first upsert, subsequent upserts must still write.
+        mlTaskManager.upsertMemoryRetentionJob(1);
+        mlTaskManager.upsertMemoryRetentionJob(2);
+
+        verify(client, times(2)).index(any(), any());
+    }
+
+    public void testUpsertMemoryRetentionJob_VersionConflictSwallowed() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener
+                .onFailure(
+                    new VersionConflictEngineException(new ShardId(ML_JOBS_INDEX, "_na_", 0), MLJobType.MEMORY_RETENTION.name(), "conflict")
+                );
+            return null;
+        }).when(client).index(any(), any());
+
+        // The swallow branch in indexJob treats a VersionConflictEngineException as success; no exception should escape.
+        mlTaskManager.upsertMemoryRetentionJob(1);
+
+        // Prove the swallow branch actually ran its success callback (not the error branch): the callback flips the
+        // memoryRetentionJobStarted latch, so a subsequent CREATE-path call must early-return without a second index.
+        // If the swallow logic were deleted/inverted, the latch would stay false and this CREATE would issue index #2.
+        mlTaskManager.indexMemoryRetentionJob(24);
+
+        verify(client, times(1)).index(any(), any());
+    }
+
+    public void testReconcileMemoryRetentionJob_UpsertsWhenIntervalDiffers() throws IOException {
+        int persistedInterval = 24;
+        int desiredInterval = 1;
+        GetResponse getResponse = buildMemoryRetentionJobGetResponse(persistedInterval);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.reconcileMemoryRetentionJob(desiredInterval);
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+        assertEquals(DocWriteRequest.OpType.INDEX, indexRequestCaptor.getValue().opType());
+    }
+
+    public void testReconcileMemoryRetentionJob_NoOpWhenIntervalSame() throws IOException {
+        int interval = 24;
+        GetResponse getResponse = buildMemoryRetentionJobGetResponse(interval);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        mlTaskManager.reconcileMemoryRetentionJob(interval);
+
+        verify(client, never()).index(any(), any());
+    }
+
+    public void testReconcileMemoryRetentionJob_NoOpWhenDocAbsent() throws IOException {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        mlTaskManager.reconcileMemoryRetentionJob(1);
+
+        verify(client, never()).index(any(), any());
+    }
+
+    private GetResponse buildMemoryRetentionJobGetResponse(int intervalHours) throws IOException {
+        MLJobParameter jobParameter = new MLJobParameter(
+            MLJobType.MEMORY_RETENTION.name(),
+            new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.HOURS),
+            120L,
+            null,
+            MLJobType.MEMORY_RETENTION,
+            true
+        );
+        BytesReference bytesReference = BytesReference.bytes(jobParameter.toXContent(XContentFactory.jsonBuilder(), null));
+        GetResult getResult = new GetResult(ML_JOBS_INDEX, MLJobType.MEMORY_RETENTION.name(), 1L, 1L, 1L, true, bytesReference, null, null);
+        return new GetResponse(getResult);
     }
 
     public void testUpdateMLTaskDirectly_NullTaskId() {
