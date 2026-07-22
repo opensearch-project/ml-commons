@@ -48,7 +48,7 @@ public class GoogleCredentialProvider {
                     .newBuilder()
                     .setClientEmail(connector.getClientEmail())
                     .setPrivateKeyString(connector.getPrivateKey())
-                    .setTokenServerUri(URI.create(connector.getTokenUri()))
+                    .setTokenServerUri(validateTokenUri(connector.getTokenUri()))
                     .setScopes(scopes)
                     .build();
             }
@@ -57,6 +57,34 @@ public class GoogleCredentialProvider {
             String mode = connector.useAdc() ? "ADC/Workload Identity" : "service-account key";
             throw new MLException("Failed to initialize Google credentials (" + mode + "): " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Validate the OAuth2 token endpoint before it is used to refresh tokens. token_uri is a
+     * user-controlled connector credential; without this guard an administrator could point it at
+     * an internal address and have the node POST the signed JWT there (SSRF). Restrict it to
+     * Google's token hosts over HTTPS.
+     */
+    static URI validateTokenUri(String tokenUri) {
+        URI uri;
+        try {
+            uri = URI.create(tokenUri);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid token_uri: " + tokenUri);
+        }
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+        if (!"https".equalsIgnoreCase(scheme) || host == null) {
+            throw new IllegalArgumentException("token_uri must be an https Google endpoint, got: " + tokenUri);
+        }
+        String lowerHost = host.toLowerCase(java.util.Locale.ROOT);
+        boolean allowed = lowerHost.equals("oauth2.googleapis.com")
+            || lowerHost.equals("googleapis.com")
+            || lowerHost.endsWith(".googleapis.com");
+        if (!allowed) {
+            throw new IllegalArgumentException("token_uri host is not an allowed Google endpoint: " + host);
+        }
+        return uri;
     }
 
     public String getAccessToken() {
