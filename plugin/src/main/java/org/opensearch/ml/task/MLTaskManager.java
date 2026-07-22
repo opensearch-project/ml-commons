@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -43,10 +44,14 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
+import org.opensearch.jobscheduler.spi.schedule.Schedule;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -58,6 +63,7 @@ import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobType;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
@@ -603,6 +609,97 @@ public class MLTaskManager implements SettingsChangeListener {
             });
         } catch (IOException e) {
             log.error("Failed to index memory retention job", e);
+        }
+    }
+
+    /**
+     * Upsert the memory retention job document with a new interval.
+     *
+     * <p>Unlike {@link #indexMemoryRetentionJob(int)}, this method uses {@link DocWriteRequest.OpType#INDEX} (a
+     * version-bumping upsert) rather than {@code CREATE}, and is intentionally NOT guarded by the
+     * {@code memoryRetentionJobStarted} latch. Overwriting the existing document bumps its version, which the
+     * JobScheduler {@code JobSweeper.postIndex} hook observes and uses to deschedule the stale job and reschedule
+     * it from the fresh {@link IntervalSchedule} — with no cluster restart.
+     *
+     * <p>No {@code setIfSeqNo}/{@code setIfPrimaryTerm} guard is set on purpose: adding one would reintroduce
+     * version conflicts, defeating the point of the upsert. Callers MUST ensure only a single node (the elected
+     * cluster manager) invokes this to avoid multi-node reschedule churn, since the job document has a fixed id.
+     *
+     * @param intervalHours the new interval, in hours, for the retention job schedule
+     */
+    public void upsertMemoryRetentionJob(int intervalHours) {
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.MEMORY_RETENTION.name(),
+                new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.HOURS),
+                120L,
+                null,
+                MLJobType.MEMORY_RETENTION,
+                true
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.MEMORY_RETENTION.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .opType(DocWriteRequest.OpType.INDEX)
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            indexJob(indexRequest, MLJobType.MEMORY_RETENTION, () -> {
+                this.memoryRetentionJobStarted = true;
+                log.info("Memory retention job upserted with interval {} hour(s)", intervalHours);
+            });
+        } catch (IOException e) {
+            log.error("Failed to upsert memory retention job", e);
+        }
+    }
+
+    /**
+     * Reconcile the persisted memory retention job schedule with the current interval setting, upserting only if
+     * they differ. Used on the startup path so a value supplied via {@code settings.yml} or a cluster restart is
+     * applied to the already-existing (write-once) job document.
+     *
+     * <p>Reconcile-<em>if-different</em> (rather than an unconditional upsert) matters: a fresh
+     * {@link IntervalSchedule} resets the next-run anchor to {@code now + interval}, so upserting on every startup
+     * could keep pushing the anchor forward and starve the job. If the document is absent, unparseable, or already
+     * carries the desired interval, this is a no-op. Callers MUST gate this on the elected cluster manager.
+     *
+     * @param intervalHours the desired interval, in hours, from the current setting value
+     */
+    public void reconcileMemoryRetentionJob(int intervalHours) {
+        GetRequest getRequest = new GetRequest(CommonValue.ML_JOBS_INDEX, MLJobType.MEMORY_RETENTION.name());
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(getResponse -> {
+                if (getResponse == null || !getResponse.isExists()) {
+                    // No persisted job yet; the CREATE path will seed it with the current interval.
+                    return;
+                }
+                try (
+                    XContentParser parser = MLNodeUtils
+                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, getResponse.getSourceAsBytesRef())
+                ) {
+                    MLJobParameter jobParameter = MLJobParameter.parse(parser);
+                    Schedule schedule = jobParameter.getSchedule();
+                    if (schedule instanceof IntervalSchedule) {
+                        IntervalSchedule intervalSchedule = (IntervalSchedule) schedule;
+                        if (intervalSchedule.getUnit() == ChronoUnit.HOURS && intervalSchedule.getInterval() == intervalHours) {
+                            log.debug("Memory retention job interval already {} hour(s); nothing to reconcile", intervalHours);
+                            return;
+                        }
+                    }
+                    log.info("Reconciling memory retention job interval to {} hour(s)", intervalHours);
+                    upsertMemoryRetentionJob(intervalHours);
+                } catch (Exception e) {
+                    log.error("Failed to parse persisted memory retention job during reconcile", e);
+                }
+            }, e -> {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+                    // Jobs index not created yet; the CREATE path will seed it.
+                    log.debug("ML jobs index not found during memory retention reconcile");
+                } else {
+                    log.error("Failed to get memory retention job during reconcile", e);
+                }
+            }), context::restore));
         }
     }
 
