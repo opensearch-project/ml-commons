@@ -6,9 +6,12 @@ and you do **not** add an `Authorization` header — the plugin injects it per r
 
 Two credential modes are supported:
 - **Service-account key** — supply the service account's `private_key` and `client_email`.
+  The `token_uri` is optional and, when set, is restricted to Google token endpoints
+  (`*.googleapis.com` over HTTPS).
 - **ADC / Workload Identity** — set `auth_mode: adc` and supply no credentials; the node's
   Application Default Credentials (GKE Workload Identity, GCE metadata server, or an ADC file)
-  are used.
+  are used. Use this mode only on GCP-hosted nodes: it resolves credentials from the
+  environment, which includes contacting the GCE/GKE metadata server.
 
 ## 1. Add Vertex AI endpoint to trusted URLs
 
