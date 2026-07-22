@@ -26,19 +26,25 @@ import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
@@ -118,6 +124,18 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             return;
         }
 
+        // Reject pinned field — add-memories creates working memory which cannot be pinned
+        if (input.getPinned() != null) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "pinned field is not supported for working memory type." + " To preserve a conversation, pin the session instead.",
+                        RestStatus.BAD_REQUEST
+                    )
+                );
+            return;
+        }
+
         String memoryContainerId = input.getMemoryContainerId();
 
         if (StringUtils.isBlank(memoryContainerId)) {
@@ -177,15 +195,15 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     NAMESPACE_FIELD,
                                     input.getNamespace(),
                                     CREATED_TIME_FIELD,
-                                    now.getEpochSecond(),
+                                    now.toEpochMilli(),
                                     LAST_UPDATED_TIME_FIELD,
-                                    now.getEpochSecond()
+                                    now.toEpochMilli()
                                 )
                         );
                     indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                         input.getNamespace().put(SESSION_ID_FIELD, r.getId());
-                        processAndIndexMemory(input, container, user, actionListener);
+                        processAndIndexMemory(input, container, user, actionListener, true);
                     }, e -> {
                         log.error("Failed to index session data", e);
                         actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
@@ -207,7 +225,17 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
                 memoryProcessingService.summarizeMessages(tenantId, container.getConfiguration(), messages, summaryListener);
             } else {
-                processAndIndexMemory(input, container, user, actionListener);
+                // When the client supplies its own session_id, no session doc is created by the summarize path above.
+                // Lazily upsert a minimal backing session doc so the retention orphan sweep can distinguish
+                // "session never created" from "session deleted" and does not evict this live working memory after
+                // orphan_ttl_days. Chained (not fire-and-forget): the working memory is only written after the
+                // session doc is confirmed to exist, so a genuine session-write failure fails the add rather than
+                // silently leaving orphan-eligible working memory behind.
+                if (userProvidedSessionId && !configuration.isDisableSession()) {
+                    upsertSessionThenProcess(input, container, user, actionListener, configuration);
+                } else {
+                    processAndIndexMemory(input, container, user, actionListener, false);
+                }
             }
         } catch (Exception e) {
             log.error("Failed to create session", e);
@@ -215,11 +243,64 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
     }
 
+    /**
+     * Idempotently creates a minimal backing session doc for a client-supplied session_id, then proceeds to
+     * write the working memory only once the session doc is confirmed to exist. Uses opType CREATE, so a
+     * VersionConflictEngineException means the session already exists (create-session was called, or a prior
+     * add already created it) — that is the expected no-op and we continue. Any other failure fails the
+     * add-memories call rather than silently leaving working memory that the retention orphan sweep would
+     * later evict after orphan_ttl_days. The session doc carries created_time and last_updated_time so
+     * session-level retention (time-based and max-count) still applies.
+     */
+    private void upsertSessionThenProcess(
+        MLAddMemoriesInput input,
+        MLMemoryContainer container,
+        User user,
+        ActionListener<MLAddMemoriesResponse> actionListener,
+        MemoryConfiguration configuration
+    ) {
+        String sessionId = input.getNamespace() != null ? input.getNamespace().get(SESSION_ID_FIELD) : null;
+        if (sessionId == null || sessionId.isBlank()) {
+            // No usable session id to back; nothing to create, proceed with the working-memory write.
+            processAndIndexMemory(input, container, user, actionListener, false);
+            return;
+        }
+        Instant now = Instant.now();
+        // Build the source with a mutable map: owner_id may be null when security is disabled, and Map.of
+        // rejects null values (which previously caused this upsert to silently NPE and never create the doc).
+        Map<String, Object> source = new HashMap<>();
+        if (input.getOwnerId() != null) {
+            source.put(OWNER_ID_FIELD, input.getOwnerId());
+        }
+        source.put(MEMORY_CONTAINER_ID_FIELD, input.getMemoryContainerId());
+        source.put(NAMESPACE_FIELD, input.getNamespace());
+        source.put(CREATED_TIME_FIELD, now.toEpochMilli());
+        source.put(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+        IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName())
+            .id(sessionId)
+            .opType(DocWriteRequest.OpType.CREATE) // no-op if session already exists
+            .source(source);
+        memoryContainerHelper.indexData(configuration, indexRequest, ActionListener.wrap(r -> {
+            // Session doc created (or created concurrently) — safe to write the working memory.
+            processAndIndexMemory(input, container, user, actionListener, false);
+        }, e -> {
+            if (e instanceof VersionConflictEngineException) {
+                // Session already exists — expected no-op, proceed with the working-memory write.
+                processAndIndexMemory(input, container, user, actionListener, false);
+                return;
+            }
+            // A genuine session-write failure: do not proceed, or we would create orphan-eligible working memory.
+            log.error("Failed to create backing session doc for session_id [{}]; aborting add-memories", sessionId, e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+        }));
+    }
+
     private void processAndIndexMemory(
         MLAddMemoriesInput input,
         MLMemoryContainer container,
         User user,
-        ActionListener<MLAddMemoriesResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener,
+        boolean newlyCreatedSession
     ) {
         try {
             boolean infer = input.isInfer();
@@ -244,6 +325,26 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     .workingMemoryId(r.getId())
                     .build();
                 actionListener.onResponse(response);
+
+                // Bump last_updated_time on existing sessions
+                if (!newlyCreatedSession && !memoryConfig.isDisableSession()) {
+                    String sessionId = input.getSessionId();
+                    String sessionIndex = memoryConfig.getSessionIndexName();
+                    if (sessionId != null && sessionIndex != null) {
+                        UpdateRequest updateRequest = new UpdateRequest(sessionIndex, sessionId)
+                            .doc(Map.of(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli()))
+                            .retryOnConflict(3);
+                        client
+                            .update(
+                                updateRequest,
+                                ActionListener
+                                    .wrap(
+                                        resp -> log.debug("Bumped session {} last_updated_time", sessionId),
+                                        e -> log.debug("Failed to bump session {} last_updated_time", sessionId, e)
+                                    )
+                            );
+                    }
+                }
 
                 if (infer) {
                     threadPool.executor(AGENTIC_MEMORY_THREAD_POOL).execute(() -> {
@@ -272,7 +373,16 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             // Add memory content from input object
             mlAddMemoriesInput.toXContent(builder, ToXContent.EMPTY_PARAMS, true);
 
-            indexRequest.source(builder);
+            // Denormalize session_id to a top-level keyword field (namespace is flat_object and
+            // cannot be aggregated) so the retention job can enumerate sessions efficiently
+            String sessionId = mlAddMemoriesInput.getSessionId();
+            if (sessionId != null) {
+                Map<String, Object> source = XContentHelper.convertToMap(BytesReference.bytes(builder), false, XContentType.JSON).v2();
+                source.put(SESSION_ID_FIELD, sessionId);
+                indexRequest.source(source);
+            } else {
+                indexRequest.source(builder);
+            }
             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             return indexRequest;
         } catch (IOException e) {
