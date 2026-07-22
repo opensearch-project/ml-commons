@@ -221,11 +221,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
             Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
             boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
-
             if (skipSslVerificationValue) {
                 log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
             }
-
             log
                 .info(
                     "AwsConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
@@ -234,7 +232,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     super.getConnectorClientConfig().getConnectionTimeout(),
                     super.getConnectorClientConfig().getReadTimeout()
                 );
-
             this.httpClientRef
                 .compareAndSet(
                     null,
