@@ -205,7 +205,7 @@ test {
     // Unit tests don't run inside OpenSearch, so we add bc-fips directly to the test classpath.
     if (FipsBuildParams.isInFipsMode()) {
         classpath += configurations.detachedConfiguration(
-            dependencies.create("org.bouncycastle:bc-fips:2.1.2")
+            dependencies.create("org.bouncycastle:bc-fips:2.1.3")
         )
     }
 }
