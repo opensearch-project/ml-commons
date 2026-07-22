@@ -60,6 +60,44 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         this.mlModelAutoReDeployer = mlModelAutoReDeployer;
         this.client = client;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+
+        // Apply live changes to the retention job interval (dynamic PUT _cluster/settings) by upserting the persisted
+        // job document. The version bump is observed by JobScheduler's JobSweeper, which reschedules with no restart.
+        // The consumer runs on every node, so gate the write on the elected cluster manager to avoid multi-node churn.
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS, newIntervalHours -> {
+                if (shouldManageMemoryRetentionJob()) {
+                    mlTaskManager.upsertMemoryRetentionJob(newIntervalHours);
+                }
+            });
+    }
+
+    /**
+     * Single-writer gate for memory-retention job writes that mutate the shared, fixed-id job document. Exactly one
+     * node (the elected cluster manager) should ever upsert/reconcile, and only when agentic memory is enabled and
+     * multi-tenancy is disabled (mirroring the startup scheduling path). The 3.1+ data-node check mirrors the startup
+     * loop's rolling-upgrade guard so a live setting change during a mixed-version upgrade does not create the new
+     * {@code .plugins-ml-jobs} index before the cluster is ready for it.
+     */
+    private boolean shouldManageMemoryRetentionJob() {
+        return clusterService.state().nodes().isLocalNodeElectedClusterManager()
+            && hasDataNodeOnOrAfterV31()
+            && mlFeatureEnabledSetting.isAgenticMemoryEnabled()
+            && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings());
+    }
+
+    /**
+     * Whether the cluster contains at least one data node running 3.1 or later. The new {@code .plugins-ml-jobs} index
+     * and its jobs must not be written until this holds, to avoid issues during blue/green and rolling upgrades.
+     */
+    private boolean hasDataNodeOnOrAfterV31() {
+        for (DiscoveryNode node : clusterService.state().nodes()) {
+            if (node.isDataNode() && node.getVersion().onOrAfter(Version.V_3_1_0)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -106,7 +144,14 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                     && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
                     && !this.startedMemoryRetentionJob) {
                     int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(clusterService.getSettings());
+                    // CREATE (conflict-swallowing) seeds the job doc; safe to run on any node.
                     mlTaskManager.indexMemoryRetentionJob(intervalHours);
+                    // Reconcile a settings.yml / restart value onto the already-existing (write-once) doc. This upserts
+                    // only when the persisted interval differs, so restart doesn't keep resetting the next-run anchor.
+                    // Gate on the elected cluster manager so exactly one node ever writes the shared doc.
+                    if (clusterService.state().nodes().isLocalNodeElectedClusterManager()) {
+                        mlTaskManager.reconcileMemoryRetentionJob(intervalHours);
+                    }
                     this.startedMemoryRetentionJob = true;
                 }
 
