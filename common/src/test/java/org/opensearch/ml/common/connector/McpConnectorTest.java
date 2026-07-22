@@ -47,7 +47,7 @@ public class McpConnectorTest {
 
     private ActionListener<Boolean> actionListener = mock(ActionListener.class);
     String TEST_CONNECTOR_JSON_STRING =
-        "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"sse_endpoint\":\"/custom/sse\"}}";
+        "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30,\"read_timeout\":30,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"sse_endpoint\":\"/custom/sse\"}}";
 
     @Test
     public void constructor_InvalidProtocol() {
@@ -268,8 +268,8 @@ public class McpConnectorTest {
         ConnectorClientConfig clientConfig = ConnectorClientConfig
             .builder()
             .maxConnections(30)
-            .connectionTimeout(30000)
-            .readTimeout(30000)
+            .connectionTimeout(30)
+            .readTimeout(30)
             .retryBackoffMillis(10)
             .retryTimeoutSeconds(10)
             .maxRetryTimes(-1)
@@ -328,8 +328,8 @@ public class McpConnectorTest {
                 "last_updated_time": %d,
                 "client_config": {
                     "max_connection": 10,
-                    "connection_timeout": 30000,
-                    "read_timeout": 30000,
+                    "connection_timeout": 30,
+                    "read_timeout": 30,
                     "max_retry_times": 3,
                     "retry_delay_ms": 1000,
                     "retry_timeout": 60000,

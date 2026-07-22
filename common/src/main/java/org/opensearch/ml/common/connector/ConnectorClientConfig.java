@@ -39,12 +39,10 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
     public static final String MUTUAL_TLS_ENABLED_FIELD = "mutual_tls_enabled";
     public static final String KEYSTORE_TYPE_FIELD = "keystore_type";
-    // Note: TRUSTSTORE_PATH_FIELD was removed as file-based truststores are not supported
-    // Use ca_cert_pem in credentials for custom CA certificates instead
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
-    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
@@ -52,9 +50,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final Boolean SKIP_SSL_VERIFICATION_DEFAULT_VALUE = Boolean.FALSE;
     public static final Boolean MUTUAL_TLS_ENABLED_DEFAULT_VALUE = Boolean.FALSE;
     // Note: No default value for keystoreType to prevent field pollution in connector configs
-    // CertificateProcessor applies PEM fallback when needed (line 91 in CertificateProcessor.java)
+    // CertificateProcessor.KeystoreType.from() falls back to PEM when the type is not set
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = Version.V_3_6_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = Version.V_3_8_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
@@ -65,8 +63,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     private Boolean skipSslVerification;
     private Boolean mutualTlsEnabled;
     private String keystoreType;
-    // Note: truststorePath field was removed as file-based truststores are not supported
-    // Use ca_cert_pem in credentials for custom CA certificates instead
 
     @Builder(toBuilder = true)
     public ConnectorClientConfig(
@@ -124,7 +120,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
         this.mutualTlsEnabled = MUTUAL_TLS_ENABLED_DEFAULT_VALUE;
         this.keystoreType = null; // No default - prevents field pollution in serialized output
-        // Note: truststorePath field was removed
     }
 
     @Override
@@ -184,8 +179,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         if (keystoreType != null) {
             builder.field(KEYSTORE_TYPE_FIELD, keystoreType);
         }
-        // Security: Do not expose truststorePath in API responses to prevent filesystem path disclosure
-        // The truststorePath is only used internally and should not be serialized to XContent
         return builder.endObject();
     }
 
@@ -242,8 +235,6 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 case KEYSTORE_TYPE_FIELD:
                     keystoreType = parser.textOrNull();
                     break;
-                // Note: TRUSTSTORE_PATH_FIELD case was removed as the field is no longer supported
-                // File-based truststores are not supported - use ca_cert_pem in credentials instead
                 default:
                     parser.skipChildren();
                     break;

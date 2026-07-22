@@ -144,7 +144,7 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testValidateCertificateOnlyAuthentication_MixedAuth_ThrowsException() {
+    public void testValidateCertificateConfig_MixedAuth_ThrowsException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
@@ -154,54 +154,8 @@ public class CertificateProcessorTest {
         assertThrows(
             "Should throw MLValidationException when both certificates and API key are present",
             MLValidationException.class,
-            () -> certificateProcessor.validateCertificateOnlyAuthentication(config, credentials)
+            () -> certificateProcessor.validateCertificateConfig(config, credentials)
         );
-    }
-
-    @Test
-    public void testValidateCertificateOnlyAuthentication_CertificateOnly_NoException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-        // No API key - this should pass validation
-
-        // Should not throw any exception
-        certificateProcessor.validateCertificateOnlyAuthentication(config, credentials);
-    }
-
-    @Test
-    public void testIsCertificateOnlyAuthentication_WithCertificatesOnly_ReturnsTrue() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertTrue("Should return true for certificate-only authentication", result);
-    }
-
-    @Test
-    public void testIsCertificateOnlyAuthentication_WithMixedAuth_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-        credentials.put("api_key", "test-api-key");
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false when both certificates and API key are present", result);
-    }
-
-    @Test
-    public void testIsCertificateOnlyAuthentication_MutualTlsDisabled_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(false).build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false when mutual TLS is disabled", result);
     }
 
     @Test
@@ -248,97 +202,29 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testIsCertificateOnlyAuthentication_NullCredentials_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, null);
-        assertFalse("Should return false when credentials are null", result);
-    }
-
-    @Test
-    public void testIsCertificateOnlyAuthentication_EmptyApiKey_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-        credentials.put("api_key", ""); // Empty API key
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false when API key field is present even if empty", result);
-    }
-
-    @Test
-    public void testIsCertificateOnlyAuthentication_WhitespaceApiKey_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
-        credentials.put("api_key", "   "); // Whitespace-only API key
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false when API key field is present even if whitespace only", result);
-    }
-
-    @Test
-    public void testIsCertificateOnlyAuthentication_PKCS12Type_ReturnsTrue() {
+    public void testValidateCertificateConfig_PKCS12Type_CertificateOnly_NoException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         credentials.put(CLIENT_CERT_PKCS12_FIELD, "test-pkcs12-cert");
 
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertTrue("Should return true for PKCS12 certificate-only authentication", result);
+        // Should not throw any exception
+        certificateProcessor.validateCertificateConfig(config, credentials);
     }
 
     @Test
-    public void testIsCertificateOnlyAuthentication_JKSType_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("JKS").build();
-
-        credentials.put("some_jks_field", "test-jks-cert");
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false for unsupported JKS keystore type", result);
-    }
-
-    @Test
-    public void testIsCertificateOnlyAuthentication_UnsupportedKeystoreType_ReturnsFalse() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("UNSUPPORTED").build();
-
-        credentials.put("some_field", "test-cert");
-
-        boolean result = certificateProcessor.isCertificateOnlyAuthentication(config, credentials);
-        assertFalse("Should return false for non-certificate credential field", result);
-    }
-
-    @Test
-    public void testValidateCertificateOnlyAuthentication_MutualTlsDisabled_NoValidation() {
+    public void testValidateCertificateConfig_MutualTlsDisabled_MixedAuthIgnored() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(false).build();
 
-        // Should not throw any exception
-        certificateProcessor.validateCertificateOnlyAuthentication(config, credentials);
+        credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
+        credentials.put(CLIENT_KEY_PEM_FIELD, "test-key");
+        credentials.put("api_key", "test-api-key");
+
+        // Should not throw - no mTLS validation applies when mutual TLS is disabled
+        certificateProcessor.validateCertificateConfig(config, credentials);
     }
 
     @Test
-    public void testValidateCertificateOnlyAuthentication_NullCredentials_NoValidation() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        // Should not throw any exception
-        certificateProcessor.validateCertificateOnlyAuthentication(config, null);
-    }
-
-    @Test
-    public void testValidateCertificateOnlyAuthentication_NoCertificates_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        // No certificates provided
-        assertThrows(
-            "Should throw MLValidationException when no certificates are provided",
-            MLValidationException.class,
-            () -> certificateProcessor.validateCertificateOnlyAuthentication(config, credentials)
-        );
-    }
-
-    @Test
-    public void testValidateCertificateOnlyAuthentication_EmptyApiKey_NoException() {
+    public void testValidateCertificateConfig_EmptyApiKey_NoException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
@@ -346,11 +232,11 @@ public class CertificateProcessorTest {
         credentials.put("api_key", ""); // Empty API key should be allowed
 
         // Should not throw any exception
-        certificateProcessor.validateCertificateOnlyAuthentication(config, credentials);
+        certificateProcessor.validateCertificateConfig(config, credentials);
     }
 
     @Test
-    public void testValidateCertificateOnlyAuthentication_WhitespaceApiKey_NoException() {
+    public void testValidateCertificateConfig_WhitespaceApiKey_NoException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "test-cert");
@@ -358,7 +244,7 @@ public class CertificateProcessorTest {
         credentials.put("api_key", "   "); // Whitespace-only API key should be allowed
 
         // Should not throw any exception
-        certificateProcessor.validateCertificateOnlyAuthentication(config, credentials);
+        certificateProcessor.validateCertificateConfig(config, credentials);
     }
 
     @Test

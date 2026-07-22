@@ -176,7 +176,7 @@ final class MLHttpClientCacheManager {
         }
 
         // Use CertificateProcessor to resolve mTLS configuration in a single call
-        // This consolidates validateCertificateConfig + validateCertificateOnlyAuthentication + buildSSLContext
+        // This consolidates validateCertificateConfig + buildSSLContext
         CertificateProcessor.SSLContextWithManagers contextWithManagers = null;
         try {
             contextWithManagers = certificateProcessor.resolveMtls(config, connector.getDecryptedCredential());

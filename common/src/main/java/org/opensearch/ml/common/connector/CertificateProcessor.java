@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,10 +47,14 @@ public class CertificateProcessor {
     public static final String CA_CERT_PEM_FIELD = "ca_cert_pem";
     public static final String KEYSTORE_PASSWORD_FIELD = "keystore_password";
 
-    // Allowed credential fields for certificate-only authentication
-    // When mTLS is enabled, only these fields are permitted to prevent mixed authentication methods
-    private static final Set<String> CERTIFICATE_ONLY_CREDENTIAL_FIELDS = Set
-        .of(CLIENT_CERT_PEM_FIELD, CLIENT_KEY_PEM_FIELD, CLIENT_CERT_PKCS12_FIELD, CA_CERT_PEM_FIELD, KEYSTORE_PASSWORD_FIELD);
+    // Non-certificate credential field that conflicts with certificate-only authentication
+    private static final String API_KEY_FIELD = "api_key";
+
+    // Keystore type used internally to hold parsed key material, independent of the input format
+    private static final String PKCS12_KEYSTORE_TYPE = "PKCS12";
+
+    // Alias for the client key entry in the internally-built keystore
+    private static final String CLIENT_KEY_ALIAS = "client";
 
     /**
      * Supported keystore types for certificate processing
@@ -198,7 +201,10 @@ public class CertificateProcessor {
 
         if (certPem == null || keyPem == null) {
             throw new MLValidationException(
-                "Both client certificate and private key are required for PEM keystore. " + "Provide client_cert_pem and client_key_pem"
+                "Both client certificate and private key are required for PEM keystore. Provide "
+                    + CLIENT_CERT_PEM_FIELD
+                    + " and "
+                    + CLIENT_KEY_PEM_FIELD
             );
         }
 
@@ -207,17 +213,46 @@ public class CertificateProcessor {
         X509Certificate[] certificateChain = parsePemCertificateChain(certPem);
         validateChainOrder(certificateChain);
 
-        // Parse private key
         PrivateKey privateKey = parsePemPrivateKey(keyPem);
 
-        // Create keystore
-        KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        keyStore.load(null, null);
+        // Start from an empty keystore and add the parsed key entry
+        return buildKeyManagers(password, (keyStore, keyPassword) -> {
+            keyStore.load(null, null);
+            keyStore.setKeyEntry(CLIENT_KEY_ALIAS, privateKey, keyPassword, certificateChain);
+        });
+    }
 
+    /**
+     * Creates key managers from PKCS12 format certificates.
+     */
+    private KeyManager[] createPkcs12KeyManagers(Map<String, String> credentials) throws Exception {
+        String pkcs12Data = getCertificateContent(credentials, CLIENT_CERT_PKCS12_FIELD);
+        String password = credentials.get(KEYSTORE_PASSWORD_FIELD);
+
+        if (pkcs12Data == null) {
+            throw new MLValidationException("PKCS12 certificate is required for PKCS12 keystore. Provide " + CLIENT_CERT_PKCS12_FIELD);
+        }
+
+        byte[] keystoreBytes = Base64.getMimeDecoder().decode(pkcs12Data);
+
+        // Load the keystore directly from the decoded PKCS12 bytes
+        return buildKeyManagers(password, (keyStore, keyPassword) -> keyStore.load(new ByteArrayInputStream(keystoreBytes), keyPassword));
+    }
+
+    /**
+     * Populates a PKCS12 keystore and derives key managers from it. Shared by the PEM and PKCS12
+     * paths, which differ only in how the keystore is populated.
+     *
+     * @param password The keystore password, may be null
+     * @param populator Callback that fills the keystore, given the keystore and the password
+     * @return The key managers backed by the populated keystore
+     */
+    private KeyManager[] buildKeyManagers(String password, KeyStorePopulator populator) throws Exception {
         char[] keyPassword = password != null ? password.toCharArray() : new char[0];
         try {
-            keyStore.setKeyEntry("client", privateKey, keyPassword, certificateChain);
-            // Create key manager factory
+            KeyStore keyStore = KeyStore.getInstance(PKCS12_KEYSTORE_TYPE);
+            populator.populate(keyStore, keyPassword);
+
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(keyStore, keyPassword);
 
@@ -230,32 +265,12 @@ public class CertificateProcessor {
     }
 
     /**
-     * Creates key managers from PKCS12 format certificates.
+     * Strategy for populating a keystore, allowing the PEM and PKCS12 paths to share the
+     * surrounding keystore and key manager setup.
      */
-    private KeyManager[] createPkcs12KeyManagers(Map<String, String> credentials) throws Exception {
-        String pkcs12Data = getCertificateContent(credentials, CLIENT_CERT_PKCS12_FIELD);
-        String password = credentials.get(KEYSTORE_PASSWORD_FIELD);
-
-        if (pkcs12Data == null) {
-            throw new MLValidationException("PKCS12 certificate is required for PKCS12 keystore. " + "Provide client_cert_pkcs12");
-        }
-
-        // Decode the base64 content
-        byte[] keystoreBytes = Base64.getMimeDecoder().decode(pkcs12Data);
-        char[] keystorePassword = password != null ? password.toCharArray() : new char[0];
-        try {
-            KeyStore keyStore = KeyStore.getInstance("PKCS12");
-            keyStore.load(new ByteArrayInputStream(keystoreBytes), keystorePassword);
-
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(keyStore, keystorePassword);
-
-            return kmf.getKeyManagers();
-        } finally {
-            // Best-effort: Clear password char array from memory
-            // Note: Original password String remains in heap until GC due to Java string immutability
-            Arrays.fill(keystorePassword, '\0');
-        }
+    @FunctionalInterface
+    private interface KeyStorePopulator {
+        void populate(KeyStore keyStore, char[] password) throws Exception;
     }
 
     /**
@@ -275,7 +290,7 @@ public class CertificateProcessor {
         // intermediate/root certificates, not just a single CA certificate
         X509Certificate[] caCertificates = parsePemCertificateChain(caCertPem);
 
-        KeyStore trustStore = KeyStore.getInstance("PKCS12");
+        KeyStore trustStore = KeyStore.getInstance(PKCS12_KEYSTORE_TYPE);
         trustStore.load(null, null);
         for (int i = 0; i < caCertificates.length; i++) {
             trustStore.setCertificateEntry("ca-" + i, caCertificates[i]);
@@ -430,14 +445,14 @@ public class CertificateProcessor {
                         log.debug("Successfully decoded and validated base64 certificate content for field: {}", contentField);
                         return decodedContent;
                     } else {
-                        // Hard error: base64-detected content that doesn't decode to valid PEM
+                        // Hard error: base64-detected content that doesn't decode to valid PEM.
+                        // Security: never echo the decoded content - it may be private key material.
                         throw new MLValidationException(
                             String
                                 .format(
                                     "Certificate field '%s' appears to be base64 encoded but does not contain valid PEM content after decoding. "
-                                        + "Expected PEM headers (-----BEGIN...) but found: %s",
-                                    contentField,
-                                    decodedContent.length() > 100 ? decodedContent.substring(0, 100) + "..." : decodedContent
+                                        + "Expected PEM headers (-----BEGIN...).",
+                                    contentField
                                 )
                         );
                     }
@@ -486,7 +501,13 @@ public class CertificateProcessor {
     }
 
     /**
-     * Validates certificate configuration before processing.
+     * Validates the mutual TLS configuration: SSL verification consistency, presence of the
+     * certificate material required by the configured keystore type, and absence of conflicting
+     * (non certificate-based) authentication methods.
+     *
+     * @param config The connector client configuration
+     * @param credentials The connector credentials
+     * @throws MLValidationException if the mutual TLS configuration is invalid
      */
     public void validateCertificateConfig(ConnectorClientConfig config, Map<String, String> credentials) {
         if (!Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
@@ -497,8 +518,9 @@ public class CertificateProcessor {
             throw new MLValidationException(
                 "skip_ssl_verification cannot be enabled together with mutual_tls_enabled. Disabling server "
                     + "certificate validation while presenting a client certificate defeats the purpose of mutual "
-                    + "TLS and allows man-in-the-middle attacks. Provide a trusted CA certificate (ca_cert_pem) "
-                    + "instead of skipping SSL verification."
+                    + "TLS and allows man-in-the-middle attacks. Provide a trusted CA certificate ("
+                    + CA_CERT_PEM_FIELD
+                    + ") instead of skipping SSL verification."
             );
         }
 
@@ -512,116 +534,39 @@ public class CertificateProcessor {
             case PEM:
                 boolean hasPemContent = credentials.containsKey(CLIENT_CERT_PEM_FIELD) && credentials.containsKey(CLIENT_KEY_PEM_FIELD);
                 if (!hasPemContent) {
-                    throw new MLValidationException("For PEM keystore, provide both client_cert_pem and client_key_pem");
+                    throw new MLValidationException(
+                        "For PEM keystore, provide both " + CLIENT_CERT_PEM_FIELD + " and " + CLIENT_KEY_PEM_FIELD
+                    );
                 }
                 break;
             case PKCS12:
                 boolean hasPkcs12Content = credentials.containsKey(CLIENT_CERT_PKCS12_FIELD);
                 if (!hasPkcs12Content) {
-                    throw new MLValidationException("For PKCS12 keystore, provide client_cert_pkcs12");
+                    throw new MLValidationException("For PKCS12 keystore, provide " + CLIENT_CERT_PKCS12_FIELD);
                 }
                 break;
             default:
                 throw new MLValidationException("Unsupported keystore type: " + keystoreType);
         }
-    }
 
-    /**
-     * Checks if the connector is configured for certificate-only authentication.
-     * This means mutual TLS is enabled and no traditional API keys are present.
-     *
-     * @param config The connector client configuration
-     * @param credentials The connector credentials
-     * @return true if using certificate-only authentication
-     */
-    public boolean isCertificateOnlyAuthentication(ConnectorClientConfig config, Map<String, String> credentials) {
-        if (!Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
-            return false;
-        }
-
-        if (credentials == null) {
-            return false;
-        }
-
-        // Check if certificate credentials are present
-        boolean hasCertificates = hasCertificateCredentials(config, credentials);
-
-        // When mTLS is enabled, only certificate-related fields are allowed
-        // Any other credential field indicates mixed authentication methods
-        for (String credentialKey : credentials.keySet()) {
-            if (!CERTIFICATE_ONLY_CREDENTIAL_FIELDS.contains(credentialKey)) {
-                // Return false for mixed authentication instead of throwing exception
-                // The validateCertificateOnlyAuthentication method should be used for validation with exceptions
-                log.debug("Mixed authentication detected: found non-certificate credential '{}' when mTLS is enabled", credentialKey);
-                return false;
-            }
-        }
-
-        return hasCertificates;
-    }
-
-    /**
-     * Checks if certificate credentials are present based on keystore type.
-     */
-    private boolean hasCertificateCredentials(ConnectorClientConfig config, Map<String, String> credentials) {
-        try {
-            KeystoreType keystoreType = KeystoreType.from(config.getKeystoreType());
-
-            switch (keystoreType) {
-                case PEM:
-                    boolean hasPemContent = credentials.containsKey(CLIENT_CERT_PEM_FIELD) && credentials.containsKey(CLIENT_KEY_PEM_FIELD);
-                    return hasPemContent;
-                case PKCS12:
-                    return credentials.containsKey(CLIENT_CERT_PKCS12_FIELD);
-                default:
-                    return false;
-            }
-        } catch (MLValidationException e) {
-            // If keystore type is unsupported, return false instead of throwing exception
-            // This allows isCertificateOnlyAuthentication to return false gracefully
-            log.debug("Unsupported keystore type '{}', returning false for certificate credentials check", config.getKeystoreType());
-            return false;
-        }
-    }
-
-    /**
-     * Validates that certificate-only authentication is properly configured.
-     * This ensures no conflicting authentication methods are present.
-     */
-    public void validateCertificateOnlyAuthentication(ConnectorClientConfig config, Map<String, String> credentials) {
-        if (!Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
-            return;
-        }
-
-        if (credentials == null) {
-            return;
-        }
-
-        boolean hasCertificates = hasCertificateCredentials(config, credentials);
-        boolean hasApiKey = credentials.containsKey("api_key")
-            && credentials.get("api_key") != null
-            && !credentials.get("api_key").trim().isEmpty();
-
-        // Strictly enforce certificate-only authentication - no mixed authentication methods
-        if (hasCertificates && hasApiKey) {
+        // Certificate material is present at this point, so an API key means mixed authentication.
+        // Strictly enforce certificate-only authentication when mTLS is enabled.
+        String apiKey = credentials.get(API_KEY_FIELD);
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
             throw new MLValidationException(
                 "Mixed authentication methods are not allowed. "
                     + "When using mutual TLS with client certificates, API keys should not be provided. "
-                    + "Please remove the 'api_key' from credentials when 'mutual_tls_enabled' is true."
+                    + "Please remove the '"
+                    + API_KEY_FIELD
+                    + "' from credentials when 'mutual_tls_enabled' is true."
             );
         }
-
-        if (!hasCertificates) {
-            throw new MLValidationException("Client certificates are required when mutual TLS is enabled");
-        }
-
-        log.debug("Certificate-only authentication validated successfully - no conflicting authentication methods found");
     }
 
     /**
      * Resolves mutual TLS configuration by consolidating validation and SSL context creation.
-     * This method combines validateCertificateConfig, validateCertificateOnlyAuthentication,
-     * and buildSSLContext into a single call to reduce credential parsing overhead.
+     * This method combines validateCertificateConfig and buildSSLContext into a single call
+     * to reduce credential parsing overhead.
      *
      * @param config The connector client configuration
      * @param credentials The decrypted credentials containing certificate data
@@ -634,9 +579,7 @@ public class CertificateProcessor {
             return null;
         }
 
-        // Perform all validations in one pass
         validateCertificateConfig(config, credentials);
-        validateCertificateOnlyAuthentication(config, credentials);
 
         // Build and return SSL context with managers
         return buildSSLContext(config, credentials);
