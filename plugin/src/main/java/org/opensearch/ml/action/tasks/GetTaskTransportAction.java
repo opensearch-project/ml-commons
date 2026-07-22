@@ -27,6 +27,8 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
@@ -126,6 +128,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     volatile List<String> remoteJobStatusFields;
+    volatile List<String> trustedConnectorEndpointsRegex;
     volatile Pattern remoteJobCompletedStatusRegexPattern;
     volatile Pattern remoteJobCancelledStatusRegexPattern;
     volatile Pattern remoteJobCancellingStatusRegexPattern;
@@ -169,6 +172,10 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
+        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
         initializeRegexPattern(
             ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX,
             settings,
@@ -356,6 +363,13 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     .orElse(null)
             );
 
+        // The Vertex AI batch job identifier ("name") is a slash-delimited resource path used
+        // directly in the status/cancel URL; keep it un-escaped so its '/' are not turned into '\/'.
+        if (parameters.containsKey("name")) {
+            String existingNoEscape = parameters.get(NO_ESCAPE_PARAMS);
+            parameters.put(NO_ESCAPE_PARAMS, existingNoEscape == null || existingNoEscape.isBlank() ? "name" : existingNoEscape + ",name");
+        }
+
         RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(
             parameters,
             ActionType.BATCH_PREDICT_STATUS,
@@ -473,6 +487,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connectorExecutor.setClusterService(clusterService);
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
+            connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
             connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
                 connectorExecutor.close();
                 processTaskResponse(mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, r, actionListener);

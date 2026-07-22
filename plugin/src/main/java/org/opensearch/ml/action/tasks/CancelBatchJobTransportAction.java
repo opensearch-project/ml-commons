@@ -9,10 +9,13 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -85,6 +88,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
     MLTaskManager mlTaskManager;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    volatile List<String> trustedConnectorEndpointsRegex;
+
     @Inject
     public CancelBatchJobTransportAction(
         TransportService transportService,
@@ -111,6 +116,10 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
     }
 
     @Override
@@ -181,6 +190,13 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                     .map(jobArn -> jobArn.substring(jobArn.lastIndexOf("/") + 1))
                     .orElse(null)
             );
+
+        // The Vertex AI batch job identifier ("name") is a slash-delimited resource path used
+        // directly in the status/cancel URL; keep it un-escaped so its '/' are not turned into '\/'.
+        if (parameters.containsKey("name")) {
+            String existingNoEscape = parameters.get(NO_ESCAPE_PARAMS);
+            parameters.put(NO_ESCAPE_PARAMS, existingNoEscape == null || existingNoEscape.isBlank() ? "name" : existingNoEscape + ",name");
+        }
 
         RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(
             parameters,
@@ -265,6 +281,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             connectorExecutor.setClusterService(clusterService);
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
+            connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
             connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
                 connectorExecutor.close();
                 processTaskResponse(taskResponse, actionListener);
