@@ -88,7 +88,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private volatile List<String> trustedConnectorEndpointsRegex;
 
     private final CertificateProcessor certificateProcessor = new CertificateProcessor();
-    // APPLE-DOWNSTREAM: Cache manager for client lifecycle management
+    // Cache manager for client lifecycle management
     private final MLHttpClientCacheManager cacheManager = new MLHttpClientCacheManager();
 
     @Setter
@@ -208,7 +208,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     @VisibleForTesting
     protected SdkAsyncHttpClient getHttpClient() {
-        // APPLE-DOWNSTREAM: Use cache manager for client lifecycle management
+        // Use cache manager for client lifecycle management
         SdkAsyncHttpClient httpClient = cacheManager
             .getOrCreateHttpClient(connector, super.getConnectorClientConfig(), client, this::createHttpClient);
 
