@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Date;
 
 import org.junit.Test;
@@ -42,5 +43,38 @@ public class GoogleCredentialProviderTest {
 
         GoogleCredentialProvider provider = new GoogleCredentialProvider(credentials);
         provider.getAccessToken();
+    }
+
+    @Test
+    public void validateTokenUri_acceptsGoogleEndpoints() {
+        assertEquals(
+            URI.create("https://oauth2.googleapis.com/token"),
+            GoogleCredentialProvider.validateTokenUri("https://oauth2.googleapis.com/token")
+        );
+        assertEquals(
+            URI.create("https://us-central1-aiplatform.googleapis.com/token"),
+            GoogleCredentialProvider.validateTokenUri("https://us-central1-aiplatform.googleapis.com/token")
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validateTokenUri_rejectsNonGoogleHost() {
+        GoogleCredentialProvider.validateTokenUri("https://evil.example.com/token");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validateTokenUri_rejectsInternalMetadataAddress() {
+        GoogleCredentialProvider.validateTokenUri("http://169.254.169.254/token");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validateTokenUri_rejectsNonHttpsScheme() {
+        GoogleCredentialProvider.validateTokenUri("http://oauth2.googleapis.com/token");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validateTokenUri_rejectsHostSuffixSpoofing() {
+        // Ensure endsWith(".googleapis.com") cannot be bypassed by a lookalike domain.
+        GoogleCredentialProvider.validateTokenUri("https://googleapis.com.evil.example/token");
     }
 }
