@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector;
 
 import static org.mockito.Mockito.mock;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.supportedProtocols;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,7 +68,7 @@ public class HttpConnectorTest {
     @Test
     public void constructor_InvalidProtocol() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of " + supportedProtocols());
 
         HttpConnector.builder().protocol("wrong protocol").build();
     }

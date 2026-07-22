@@ -10,9 +10,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.GOOGLE_CLOUD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.VALID_PROTOCOLS;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.supportedProtocols;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -198,10 +199,7 @@ public class MLCreateConnectorInputTests {
                 .addAllBackendRoles(false)
                 .build();
         });
-        assertEquals(
-            "Unsupported connector protocol. Please use one of " + Arrays.toString(VALID_PROTOCOLS.toArray(new String[0])),
-            exception.getMessage()
-        );
+        assertEquals("Unsupported connector protocol. Please use one of " + supportedProtocols(), exception.getMessage());
     }
 
     @Test
@@ -287,6 +285,28 @@ public class MLCreateConnectorInputTests {
 
         assertNotNull(connector);
         assertEquals(MCP_SSE, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_GoogleCloudWithEmptyCredential_ShouldNotThrow() {
+        // google_cloud connectors may omit credentials when using ADC / Workload Identity.
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .parameters(Map.of("auth_mode", "adc"))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(GOOGLE_CLOUD, connector.getProtocol());
         assertTrue(connector.getCredential().isEmpty());
     }
 
