@@ -27,6 +27,8 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -382,5 +384,38 @@ public class RestActionUtils {
                 log.debug("Put MCP header: {}", headerName);
             }
         }
+    }
+
+    /**
+     * Wraps an exception for an {@link ActionListener} failure so that the client receives a meaningful HTTP status
+     * instead of a blanket 500, while never leaking server-side error detail.
+     * <p>
+     * The REST layer derives the response status via {@link ExceptionsHelper#status(Throwable)}. This helper forwards
+     * only exceptions that represent a genuine <em>client</em> error, so their real status and message reach the caller:
+     * <ul>
+     *   <li>an {@link OpenSearchException} whose {@code status()} is in the 4xx range (e.g. 404 not-found, 403 access
+     *       denied, 409 conflict, 429 too-many-requests); and</li>
+     *   <li>an {@link IllegalArgumentException}, which the REST layer maps to {@code 400 BAD_REQUEST}.</li>
+     * </ul>
+     * Everything else — including {@code 5xx} {@link OpenSearchException}s whose messages may embed internal
+     * infrastructure detail (node addresses, shard routing, cluster-block reasons) and any other unexpected exception —
+     * is replaced with a generic {@code 500 Internal server error}. This matches the 4xx-only forwarding pattern used by
+     * the sibling failure handlers in the memory-container transport actions and keeps server internals out of client
+     * responses.
+     *
+     * @param e the exception received by the failure handler
+     * @return the exception to pass to {@link ActionListener#onFailure(Exception)}
+     */
+    public static Exception wrapAsStatusException(Exception e) {
+        if (e instanceof IllegalArgumentException) {
+            return e;
+        }
+        if (e instanceof OpenSearchException) {
+            int status = ((OpenSearchException) e).status().getStatus();
+            if (status >= 400 && status < 500) {
+                return e;
+            }
+        }
+        return new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
     }
 }
