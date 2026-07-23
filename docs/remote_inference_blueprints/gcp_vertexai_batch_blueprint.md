@@ -54,20 +54,15 @@ POST /_plugins/_ml/connectors/_create
                 "Content-Type": "application/json"
             },
             "request_body": "{\"displayName\":\"${parameters.job_name}\",\"model\":\"publishers/google/models/${parameters.model}\",\"inputConfig\":{\"instancesFormat\":\"jsonl\",\"gcsSource\":{\"uris\":[\"${parameters.input_uri}\"]}},\"outputConfig\":{\"predictionsFormat\":\"jsonl\",\"gcsDestination\":{\"outputUriPrefix\":\"${parameters.output_uri}\"}}}"
-        },
-        {
-            "action_type": "batch_predict_status",
-            "method": "GET",
-            "url": "https://${parameters.location}-aiplatform.googleapis.com/v1/projects/${parameters.project_id}/locations/${parameters.location}/batchPredictionJobs/${parameters.job_id}"
-        },
-        {
-            "action_type": "cancel_batch_predict",
-            "method": "POST",
-            "url": "https://${parameters.location}-aiplatform.googleapis.com/v1/projects/${parameters.project_id}/locations/${parameters.location}/batchPredictionJobs/${parameters.job_id}:cancel"
         }
     ]
 }
 ```
+
+Only the `batch_predict` action is defined. ml-commons derives the status and cancel calls
+from it automatically (using the Vertex batch job's resource `name` returned at submit time),
+so you do **not** declare separate `batch_predict_status` / `cancel_batch_predict` actions —
+doing so would leave an unresolved `${parameters.job_id}` in the derived URL.
 
 For ADC / Workload Identity mode, set `"auth_mode": "adc"` in `parameters` and leave
 `credential` empty (`{}`).
@@ -90,24 +85,20 @@ POST /_plugins/_ml/models/<MODEL_ID>/_batch_predict
 }
 ```
 
+Submitting returns a `task_id`. Status and cancel are performed against that task via the
+ML task APIs below (not a `_predict/...` route).
+
 ## 5. Check job status
 
 ```json
-POST /_plugins/_ml/models/<MODEL_ID>/_predict/batch_predict_status
-{
-    "parameters": {
-        "job_id": "<BATCH_PREDICTION_JOB_ID>"
-    }
-}
+GET /_plugins/_ml/tasks/<TASK_ID>
 ```
+
+The response includes the refreshed remote job state under `remote_job.state` (e.g.
+`JOB_STATE_PENDING`, `JOB_STATE_RUNNING`, `JOB_STATE_SUCCEEDED`, `JOB_STATE_CANCELLED`).
 
 ## 6. Cancel a job
 
 ```json
-POST /_plugins/_ml/models/<MODEL_ID>/_predict/cancel_batch_predict
-{
-    "parameters": {
-        "job_id": "<BATCH_PREDICTION_JOB_ID>"
-    }
-}
+POST /_plugins/_ml/tasks/<TASK_ID>/_cancel
 ```
