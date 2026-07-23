@@ -110,6 +110,7 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
             StreamObserverAdapter<PredictResponse> adapter = new StreamObserverAdapter<>(responseObserver);
 
             // Set the request to use gRPC channel
+            mlRequest.setDispatchTask(false);
             mlRequest.setStreamingChannel(adapter.getChannel());
 
             client
@@ -181,7 +182,11 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
         String callerIdentity = user != null ? user.getName() : "unknown";
         log.error("gRPC error in {}: user={}", operation, callerIdentity, e);
         Status status = GrpcStatusMapper.toGrpcStatus(e);
-        responseObserver.onError(status.asRuntimeException());
+        try {
+            responseObserver.onError(status.asRuntimeException());
+        } catch (RuntimeException ex) {
+            log.warn("gRPC stream already terminated when handling error in {}, ignoring: {}", operation, ex.getMessage());
+        }
     }
 
     /**
