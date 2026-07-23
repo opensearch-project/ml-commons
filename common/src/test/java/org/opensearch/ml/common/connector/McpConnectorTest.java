@@ -47,7 +47,7 @@ public class McpConnectorTest {
 
     private ActionListener<Boolean> actionListener = mock(ActionListener.class);
     String TEST_CONNECTOR_JSON_STRING =
-        "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30,\"read_timeout\":30,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"sse_endpoint\":\"/custom/sse\"}}";
+        "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"sse_endpoint\":\"/custom/sse\"}}";
 
     @Test
     public void constructor_InvalidProtocol() {
@@ -185,7 +185,17 @@ public class McpConnectorTest {
         updatedCredential.put("new_key", "new_value");
         List<String> updatedBackendRoles = List.of("role3", "role4");
         AccessMode updatedAccessMode = AccessMode.PRIVATE;
-        ConnectorClientConfig updatedClientConfig = new ConnectorClientConfig(40, 40000, 40000, 20, 20, 5, CONSTANT, null);
+        ConnectorClientConfig updatedClientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(40)
+            .connectionTimeout(40000)
+            .readTimeout(40000)
+            .retryBackoffMillis(20)
+            .retryTimeoutSeconds(20)
+            .maxRetryTimes(5)
+            .retryBackoffPolicy(CONSTANT)
+            .skipSslVerification(null)
+            .build();
         String updatedUrl = "https://updated.test.com";
         Map<String, String> updatedHeaders = new HashMap<>();
         updatedHeaders.put("new_header", "new_header_value");
@@ -255,7 +265,17 @@ public class McpConnectorTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("sse_endpoint", "/custom/sse");
 
-        ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30, 30, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
+        ConnectorClientConfig clientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(30)
+            .connectionTimeout(30000)
+            .readTimeout(30000)
+            .retryBackoffMillis(10)
+            .retryTimeoutSeconds(10)
+            .maxRetryTimes(-1)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .skipSslVerification(null)
+            .build();
 
         return McpConnector
             .builder()
