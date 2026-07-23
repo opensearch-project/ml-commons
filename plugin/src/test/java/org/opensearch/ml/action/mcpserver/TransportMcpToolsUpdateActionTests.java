@@ -7,7 +7,6 @@ package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,7 +29,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.search.SearchResponse;
@@ -50,7 +48,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
-import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodesResponse;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.tasks.Task;
@@ -58,8 +55,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
-
-import com.google.common.collect.ImmutableList;
 
 public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
@@ -94,29 +89,20 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings())
             .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+        when(clusterService.getClusterName()).thenReturn(ClusterName.DEFAULT);
+        when(clusterService.localNode())
+            .thenReturn(
+                new DiscoveryNode(
+                    "localNode",
+                    new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+                    Collections.emptyMap(),
+                    Collections.singleton(CLUSTER_MANAGER_ROLE),
+                    Version.CURRENT
+                )
+            );
         TestHelper.mockClientStashContext(client, settings);
         when(clusterService.state().metadata().hasIndex(MLIndex.MCP_TOOLS.getIndexName())).thenReturn(true);
 
-        doAnswer(invocationOnMock -> {
-            ActionListener<MLMcpToolsUpdateNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<MLMcpToolsUpdateNodeResponse> nodes = List
-                .of(
-                    new MLMcpToolsUpdateNodeResponse(
-                        new DiscoveryNode(
-                            "foo0",
-                            "foo0",
-                            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                            Collections.emptyMap(),
-                            Collections.singleton(CLUSTER_MANAGER_ROLE),
-                            Version.CURRENT
-                        ),
-                        true
-                    )
-                );
-            MLMcpToolsUpdateNodesResponse response = new MLMcpToolsUpdateNodesResponse(ClusterName.DEFAULT, nodes, ImmutableList.of());
-            actionListener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), isA(ActionListener.class));
         action = new TransportMcpToolsUpdateAction(
             transportService,
             mock(ActionFilters.class),
@@ -141,7 +127,11 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<MLMcpToolsUpdateNodesResponse> captor = ArgumentCaptor.forClass(MLMcpToolsUpdateNodesResponse.class);
         verify(listener).onResponse(captor.capture());
-        assertEquals(1, captor.getValue().getNodes().size());
+        MLMcpToolsUpdateNodesResponse response = captor.getValue();
+        assertEquals(1, response.getNodes().size());
+        assertEquals("localNode", response.getNodes().get(0).getNode().getId());
+        assertTrue(response.getNodes().get(0).getUpdated());
+        assertTrue(response.failures().isEmpty());
     }
 
     @Test
@@ -257,34 +247,6 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
         assertEquals("Failed to update 1 tool(s) in system index", captor.getValue().getMessage());
     }
 
-    @Test
-    public void test_doExecute_allNodeUpdateFailure() throws IOException {
-        MLMcpToolsUpdateNodesRequest request = createTestRequest();
-        mockSearchResponse(true, true);
-        mockBulkResponse(false);
-        mockNodeUpdateAllFailure();
-
-        action.doExecute(task, request, listener);
-
-        ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
-        verify(listener).onFailure(captor.capture());
-        assertEquals("Tools are updated successfully, but failed to update to mcp server memory", captor.getValue().getMessage());
-    }
-
-    @Test
-    public void test_doExecute_partialNodeUpdateFailure() throws IOException {
-        MLMcpToolsUpdateNodesRequest request = createTestRequest();
-        mockSearchResponse(true, true);
-        mockBulkResponse(false);
-        mockNodeUpdatePartialFailure();
-
-        action.doExecute(task, request, listener);
-
-        ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
-        verify(listener).onFailure(captor.capture());
-        assertEquals("Tools are updated successfully, but failed to update to mcp server memory", captor.getValue().getMessage());
-    }
-
     private MLMcpToolsUpdateNodesRequest createTestRequest() {
         McpToolUpdateInput tool = new McpToolUpdateInput("ListIndexTool", null, null, null, null, null);
         List<McpToolUpdateInput> tools = new ArrayList<>();
@@ -382,24 +344,5 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
         );
         when(bulkItemResponse.getFailure()).thenReturn(failure);
         return bulkItemResponse;
-    }
-
-    private void mockNodeUpdateAllFailure() {
-        doAnswer(inv -> {
-            ActionListener<MLMcpToolsUpdateNodesResponse> listener = inv.getArgument(2);
-            listener.onFailure(new OpenSearchException("Node update failed"));
-            return null;
-        }).when(client).execute(any(), any(), any());
-    }
-
-    private void mockNodeUpdatePartialFailure() {
-        doAnswer(invocationOnMock -> {
-            ActionListener<MLMcpToolsUpdateNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<FailedNodeException> failures = List
-                .of(new FailedNodeException("mockNodeId", "Node update failed", new RuntimeException("Node update failed")));
-            MLMcpToolsUpdateNodesResponse response = new MLMcpToolsUpdateNodesResponse(ClusterName.DEFAULT, ImmutableList.of(), failures);
-            actionListener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), isA(ActionListener.class));
     }
 }

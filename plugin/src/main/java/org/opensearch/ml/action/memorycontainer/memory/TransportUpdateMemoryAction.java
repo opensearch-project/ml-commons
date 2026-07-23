@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_BLOB_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FIELD;
@@ -136,6 +137,30 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                     return;
                 }
 
+                // Reject pinned when the retention feature is disabled (cluster-level kill switch): pinned is only
+                // meaningful because the retention job skips pinned items, so it must be gated alongside retention_policy.
+                Map<String, Object> updateContent = updateRequest.getMlUpdateMemoryInput().getUpdateContent();
+                if (!mlFeatureEnabledSetting.isMemoryRetentionEnabled() && updateContent.containsKey(PINNED_FIELD)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(MLCommonsSettings.ML_COMMONS_MEMORY_PINNED_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
+                        );
+                    return;
+                }
+
+                // Reject pinned field for working memory type
+                if (memoryType == MemoryType.WORKING && updateContent.containsKey(PINNED_FIELD)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "pinned field is not supported for working memory type."
+                                    + " To preserve a conversation, pin the session instead.",
+                                RestStatus.BAD_REQUEST
+                            )
+                        );
+                    return;
+                }
+
                 // Prepare the update
                 Map<String, Object> newDoc = constructNewDoc(updateRequest.getMlUpdateMemoryInput(), memoryType, originalDoc);
                 IndexRequest indexRequest = new IndexRequest(memoryIndexName).id(memoryId).source(newDoc);
@@ -169,8 +194,34 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                     break;
             }
         }
-        updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        if (shouldBumpLastUpdatedTime(memoryType, updateContent)) {
+            updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        }
         return updateFields;
+    }
+
+    /**
+     * Determines whether last_updated_time should be bumped based on the memory type
+     * and the fields being updated. Only content field changes trigger a timestamp bump.
+     * Non-content fields (tags, pinned, metadata, additional_info, agents) do not.
+     */
+    private boolean shouldBumpLastUpdatedTime(MemoryType memoryType, Map<String, Object> updateContent) {
+        if (memoryType == null) {
+            return false;
+        }
+        switch (memoryType) {
+            case SESSIONS:
+                return updateContent.containsKey(SUMMARY_FIELD);
+            case LONG_TERM:
+                return updateContent.containsKey(MEMORY_FIELD);
+            case WORKING:
+                return updateContent.containsKey(MESSAGES_FIELD)
+                    || updateContent.containsKey(BINARY_DATA_FIELD)
+                    || updateContent.containsKey(STRUCTURED_DATA_FIELD)
+                    || updateContent.containsKey(STRUCTURED_DATA_BLOB_FIELD);
+            default:
+                return false;
+        }
     }
 
     public Map<String, Object> constructSessionMemUpdateFields(Map<String, Object> updateFields, Map<String, Object> updateContent) {
@@ -185,6 +236,9 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }
         if (updateContent.containsKey(ADDITIONAL_INFO_FIELD)) {
             updateFields.put(ADDITIONAL_INFO_FIELD, updateContent.get(ADDITIONAL_INFO_FIELD));
+        }
+        if (updateContent.containsKey(PINNED_FIELD)) {
+            updateFields.put(PINNED_FIELD, updateContent.get(PINNED_FIELD));
         }
         return updateFields;
     }
@@ -217,6 +271,9 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }
         if (updateContent.containsKey(TAGS_FIELD)) {
             updateFields.put(TAGS_FIELD, updateContent.get(TAGS_FIELD));
+        }
+        if (updateContent.containsKey(PINNED_FIELD)) {
+            updateFields.put(PINNED_FIELD, updateContent.get(PINNED_FIELD));
         }
         return updateFields;
     }

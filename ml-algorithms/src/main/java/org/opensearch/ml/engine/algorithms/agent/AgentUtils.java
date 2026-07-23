@@ -54,6 +54,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -123,6 +124,7 @@ import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 
+import io.modelcontextprotocol.client.McpSyncClient;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -1107,11 +1109,49 @@ public class AgentUtils {
         Encryptor encryptor,
         ActionListener<List<MLToolSpec>> toolListener
     ) {
+        getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, toolListener, false);
+    }
+
+    /**
+     * Strict version of MCP tool listing for explicit user-facing APIs. This API will propagate the failures to the listener
+     *
+     * @param connectorId
+     * @param tenantId
+     * @param sdkClient
+     * @param client
+     * @param encryptor
+     * @param toolListener
+     */
+    public static void getMCPToolSpecsFromConnectorWithPropagatingFailures(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> toolListener
+    ) {
+        getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, toolListener, true);
+    }
+
+    private static void getMCPToolSpecsFromConnector(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> toolListener,
+        boolean isPropagatingFailures
+    ) {
         getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
             try {
                 if (!(connector instanceof McpConnector) && !(connector instanceof McpStreamableHttpConnector)) {
-                    log.error("Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector");
-                    toolListener.onResponse(Collections.emptyList());
+                    String errorMessage = "Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector";
+                    log.error(errorMessage);
+                    if (isPropagatingFailures) {
+                        toolListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.BAD_REQUEST));
+                    } else {
+                        toolListener.onResponse(Collections.emptyList());
+                    }
                     return;
                 }
                 ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
@@ -1136,8 +1176,6 @@ public class AgentUtils {
                         toolListener.onResponse(mcpToolSpecs);
                         return;
                     }
-                    log.error("Unsupported connector type for connector: " + connectorId);
-                    toolListener.onResponse(Collections.emptyList());
                 }, e -> {
                     log.error("Failed to decrypt credentials in connector", e);
                     toolListener.onFailure(e);
@@ -1146,11 +1184,23 @@ public class AgentUtils {
             } catch (Throwable t) {
                 // Throwable, not Exception: ServiceConfigurationError would otherwise stall the async chain.
                 log.error("Error retrieving MCP tool specs from connector: " + connectorId, t);
-                toolListener.onResponse(Collections.emptyList());
+                if (isPropagatingFailures) {
+                    if (t instanceof Exception) {
+                        toolListener.onFailure((Exception) t);
+                    } else {
+                        toolListener.onFailure(new RuntimeException("Error retrieving MCP tool specs from connector: " + connectorId, t));
+                    }
+                } else {
+                    toolListener.onResponse(Collections.emptyList());
+                }
             }
         }, e -> {
             log.error("Failed to get connector for MCP tool specs, connectorId=" + connectorId, e);
-            toolListener.onResponse(Collections.emptyList());
+            if (isPropagatingFailures) {
+                toolListener.onFailure(e);
+            } else {
+                toolListener.onResponse(Collections.emptyList());
+            }
         }));
 
     }
@@ -1311,6 +1361,24 @@ public class AgentUtils {
             } else if (tool instanceof McpStreamableHttpTool) {
                 // TODO: make this more general, avoid checking specific tool type
                 ((McpStreamableHttpTool) tool).getMcpSyncClient().closeGracefully();
+            }
+        }
+    }
+
+    /**
+     * Closes MCP sync clients held in {@link MLToolSpec} runtime resources.
+     * @param toolSpecs
+     */
+    public static void cleanUpResource(List<MLToolSpec> toolSpecs) {
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
+            return;
+        }
+        for (MLToolSpec toolSpec : toolSpecs) {
+            if (toolSpec != null && toolSpec.getRuntimeResources() != null) {
+                Object client = toolSpec.getRuntimeResources().get(MCP_SYNC_CLIENT);
+                if (client instanceof McpSyncClient mcpSyncClient) {
+                    mcpSyncClient.closeGracefully();
+                }
             }
         }
     }
@@ -1958,5 +2026,133 @@ public class AgentUtils {
                 log.info("{}", StringUtils.toJson(logEntry));
             }
         }
+    }
+
+    // ---- Structured metric logging methods for CloudWatch metric filter extraction ----
+
+    private static void logMetric(boolean isError, String metricType, Object... kvPairs) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("metric_type", metricType);
+        if (kvPairs.length % 2 != 0) {
+            log.warn("logMetric called with odd number of kvPairs for metric_type={}, dropping last unpaired key", metricType);
+        }
+        for (int i = 0; i + 1 < kvPairs.length; i += 2) {
+            m.put(String.valueOf(kvPairs[i]), kvPairs[i + 1]);
+        }
+        if (isError) {
+            log.error(toJson(m));
+        } else {
+            log.info(toJson(m));
+        }
+    }
+
+    /**
+     * Logs a structured metric for an agent execution failure. Emitted at ERROR level.
+     *
+     * @param agentType  the agent type (e.g. CONVERSATIONAL, PLAN_EXECUTE_AND_REFLECT), or "unknown" if unavailable
+     * @param agentId    the executing agent's ID
+     * @param tenantId   the tenant ID
+     * @param latencyMs  elapsed time in milliseconds before the failure occurred (0 if not measured)
+     * @param statusCode the HTTP status code string describing the failure reason
+     */
+    public static void logAgentExecutionFailure(String agentType, String agentId, String tenantId, long latencyMs, String statusCode) {
+        logMetric(
+            true,
+            "AgentExecutionFailure",
+            "agentType",
+            agentType,
+            "agentId",
+            agentId,
+            "tenantId",
+            tenantId,
+            "latencyMs",
+            latencyMs,
+            "statusCode",
+            statusCode
+        );
+    }
+
+    /**
+     * Logs a structured metric for agent execution latency on success. Emitted at INFO level.
+     *
+     * @param agentType the agent type
+     * @param agentId   the executing agent's ID
+     * @param tenantId  the tenant ID
+     * @param latencyMs elapsed time in milliseconds for the execution
+     */
+    public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs) {
+        logMetric(false, "AgentExecutionLatency", "agentType", agentType, "agentId", agentId, "tenantId", tenantId, "latencyMs", latencyMs);
+    }
+
+    /**
+     * Logs a structured metric for agent execution latency on success, including the async task ID. Emitted at INFO level.
+     *
+     * @param agentType the agent type
+     * @param agentId   the executing agent's ID
+     * @param tenantId  the tenant ID
+     * @param latencyMs elapsed time in milliseconds for the execution
+     * @param taskId    the async ML task ID
+     */
+    public static void logAgentExecutionLatency(String agentType, String agentId, String tenantId, long latencyMs, String taskId) {
+        logMetric(
+            false,
+            "AgentExecutionLatency",
+            "agentType",
+            agentType,
+            "agentId",
+            agentId,
+            "tenantId",
+            tenantId,
+            "latencyMs",
+            latencyMs,
+            "taskId",
+            taskId
+        );
+    }
+
+    /**
+     * Logs a structured metric for a successful tool invocation. Emitted at INFO level.
+     *
+     * @param toolName the name of the tool that was invoked
+     * @param agentId  the executing agent's ID
+     * @param tenantId the tenant ID
+     */
+    public static void logToolInvocation(String toolName, String agentId, String tenantId) {
+        logMetric(false, "ToolInvocation", "toolName", toolName, "agentId", agentId, "tenantId", tenantId);
+    }
+
+    /**
+     * Logs a structured metric for a tool execution failure. Emitted at ERROR level.
+     *
+     * @param toolName   the name of the tool that failed
+     * @param agentId    the executing agent's ID
+     * @param tenantId   the tenant ID
+     * @param statusCode the HTTP status code string describing the failure
+     */
+    public static void logToolFailure(String toolName, String agentId, String tenantId, String statusCode) {
+        logMetric(true, "ToolFailure", "toolName", toolName, "agentId", agentId, "tenantId", tenantId, "statusCode", statusCode);
+    }
+
+    /**
+     * Logs a structured metric for an LLM model invocation failure. Emitted at ERROR level.
+     *
+     * @param modelId    the model ID that failed
+     * @param agentId    the executing agent's ID
+     * @param tenantId   the tenant ID
+     * @param statusCode the HTTP status code string describing the failure
+     */
+    public static void logModelInvocationFailure(String modelId, String agentId, String tenantId, String statusCode) {
+        logMetric(true, "ModelInvocationFailure", "modelId", modelId, "agentId", agentId, "tenantId", tenantId, "statusCode", statusCode);
+    }
+
+    /**
+     * Logs a structured metric for time-to-first-token from a streaming model response. Emitted at INFO level.
+     *
+     * @param modelId           the model ID
+     * @param tenantId          the tenant ID
+     * @param timeToFirstTokenMs elapsed time in milliseconds until the first token was received
+     */
+    public static void logTimeToFirstToken(String modelId, String tenantId, long timeToFirstTokenMs) {
+        logMetric(false, "TimeToFirstToken", "modelId", modelId, "tenantId", tenantId, "timeToFirstTokenMs", timeToFirstTokenMs);
     }
 }

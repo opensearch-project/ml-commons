@@ -9,6 +9,7 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
@@ -991,5 +993,20 @@ public class AbstractV2AgentRunnerTest {
         } catch (UnsupportedOperationException e) {
             assertTrue(e.getMessage().contains("V2 agents require message list"));
         }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testRunV2_coversAgentIdLogFieldLine() {
+        // Exercises the line: String agentId = params.get(AGENT_ID_LOG_FIELD)
+        // runV2 fails at validateV2Agent(null memory) → listener.onFailure
+        Map<String, String> params = new HashMap<>();
+        params.put(CommonValue.AGENT_ID_LOG_FIELD, "test-agent-id");
+        when(mlAgent.getTenantId()).thenReturn("tenant-1");
+
+        ActionListener<Object> listener = mock(ActionListener.class);
+        runner.runV2(mlAgent, params, listener, channel, null, new ArrayList<>());
+
+        verify(listener).onFailure(any(IllegalStateException.class));
     }
 }

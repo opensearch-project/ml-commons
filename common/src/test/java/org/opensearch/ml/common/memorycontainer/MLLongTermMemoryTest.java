@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 
 public class MLLongTermMemoryTest {
@@ -423,5 +424,148 @@ public class MLLongTermMemoryTest {
         assertEquals(specialMemory.getNamespace().get(SESSION_ID_FIELD), parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals(specialMemory.getMemory(), parsed.getMemory());
         assertEquals(specialMemory.getTags(), parsed.getTags());
+    }
+
+    @Test
+    public void testPinnedFieldXContentRoundTrip() throws IOException {
+        MLLongTermMemory pinnedMemory = MLLongTermMemory
+            .builder()
+            .namespace(Map.of(SESSION_ID_FIELD, "session-123"))
+            .memory("Pinned memory")
+            .strategyType(MemoryStrategyType.SEMANTIC)
+            .createdTime(testCreatedTime)
+            .lastUpdatedTime(testUpdatedTime)
+            .pinned(true)
+            .build();
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        pinnedMemory.toXContent(builder, EMPTY_PARAMS);
+        String jsonString = TestHelper.xContentBuilderToString(builder);
+
+        assertTrue(jsonString.contains("\"pinned\":true"));
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
+        assertEquals(true, parsed.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldStreamRoundTrip() throws IOException {
+        MLLongTermMemory pinnedMemory = MLLongTermMemory
+            .builder()
+            .namespace(Map.of(SESSION_ID_FIELD, "session-123"))
+            .memory("Pinned memory")
+            .strategyType(MemoryStrategyType.SEMANTIC)
+            .createdTime(testCreatedTime)
+            .lastUpdatedTime(testUpdatedTime)
+            .pinned(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        pinnedMemory.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLLongTermMemory deserialized = new MLLongTermMemory(in);
+
+        assertEquals(true, deserialized.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldDefaultIsNull() throws IOException {
+        String jsonString = "{"
+            + "\"namespace\":{\"session_id\":\"session-123\"},"
+            + "\"memory\":\"No pinned field\","
+            + "\"strategy_type\":\"SEMANTIC\","
+            + "\"created_time\":"
+            + testCreatedTime.toEpochMilli()
+            + ","
+            + "\"last_updated_time\":"
+            + testUpdatedTime.toEpochMilli()
+            + "}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
+        assertNull(parsed.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldFalse() throws IOException {
+        MLLongTermMemory unpinnedMemory = MLLongTermMemory
+            .builder()
+            .namespace(Map.of(SESSION_ID_FIELD, "session-123"))
+            .memory("Unpinned memory")
+            .strategyType(MemoryStrategyType.SEMANTIC)
+            .createdTime(testCreatedTime)
+            .lastUpdatedTime(testUpdatedTime)
+            .pinned(false)
+            .build();
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        unpinnedMemory.toXContent(builder, EMPTY_PARAMS);
+        String jsonString = TestHelper.xContentBuilderToString(builder);
+
+        assertTrue(jsonString.contains("\"pinned\":false"));
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
+        assertEquals(false, parsed.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldStreamRoundTripNull() throws IOException {
+        MLLongTermMemory memory = MLLongTermMemory
+            .builder()
+            .namespace(Map.of(SESSION_ID_FIELD, "session-123"))
+            .memory("No pinned")
+            .strategyType(MemoryStrategyType.SEMANTIC)
+            .createdTime(testCreatedTime)
+            .lastUpdatedTime(testUpdatedTime)
+            .pinned(null)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        memory.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLLongTermMemory deserialized = new MLLongTermMemory(in);
+
+        assertNull(deserialized.getPinned());
+    }
+
+    @Test
+    public void testBackwardCompatStreamFromOldNode() throws IOException {
+        MLLongTermMemory memory = MLLongTermMemory
+            .builder()
+            .namespace(Map.of(SESSION_ID_FIELD, "session-123"))
+            .memory("Test memory")
+            .strategyType(MemoryStrategyType.SEMANTIC)
+            .createdTime(testCreatedTime)
+            .lastUpdatedTime(testUpdatedTime)
+            .pinned(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_5_0);
+        memory.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_5_0);
+        MLLongTermMemory deserialized = new MLLongTermMemory(in);
+
+        assertEquals("Test memory", deserialized.getMemory());
+        assertEquals(MemoryStrategyType.SEMANTIC, deserialized.getStrategyType());
+        assertNull(deserialized.getPinned());
     }
 }

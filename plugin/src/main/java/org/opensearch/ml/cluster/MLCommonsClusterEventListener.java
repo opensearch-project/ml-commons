@@ -21,6 +21,7 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -40,6 +41,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     private final Client client;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private boolean startedStatsJob;
+    private boolean startedMemoryRetentionJob;
 
     public MLCommonsClusterEventListener(
         ClusterService clusterService,
@@ -98,6 +100,14 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                     mlTaskManager.indexStatsCollectorJob(true);
                     // using this variable in case if same node has a cluster state change event and the state is not updated yet
                     this.startedStatsJob = true;
+                }
+
+                if (mlFeatureEnabledSetting.isAgenticMemoryEnabled()
+                    && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
+                    && !this.startedMemoryRetentionJob) {
+                    int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(clusterService.getSettings());
+                    mlTaskManager.indexMemoryRetentionJob(intervalHours);
+                    this.startedMemoryRetentionJob = true;
                 }
 
                 break;
