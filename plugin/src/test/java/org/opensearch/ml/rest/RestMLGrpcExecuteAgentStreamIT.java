@@ -106,10 +106,6 @@ public class RestMLGrpcExecuteAgentStreamIT extends MLCommonsRestTestCase {
             );
     }
 
-    // ---------------------------------------------------------------------------------------------
-    // Happy paths
-    // ---------------------------------------------------------------------------------------------
-
     @Test
     public void testExecuteAgentStream_openAiStreamsChunksEndToEnd() throws Exception {
         assumeOpenAiAvailable();
@@ -139,10 +135,6 @@ public class RestMLGrpcExecuteAgentStreamIT extends MLCommonsRestTestCase {
         assertTrue("expected at least one streamed chunk", collector.responses().size() >= 1);
         assertTrue("stream should have completed", collector.completed());
     }
-
-    // ---------------------------------------------------------------------------------------------
-    // Error cases
-    // ---------------------------------------------------------------------------------------------
 
     @Test
     public void testExecuteAgentStream_invalidAgentIdReturnsNotFound() throws Exception {
@@ -179,10 +171,6 @@ public class RestMLGrpcExecuteAgentStreamIT extends MLCommonsRestTestCase {
 
         assertStreamError(agentRequest(agentId, AGENT_QUESTION), Status.Code.PERMISSION_DENIED);
     }
-
-    // ---------------------------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------------------------
 
     private MlExecuteAgentStreamRequest agentRequest(String agentId, String question) {
         return MlExecuteAgentStreamRequest

@@ -99,10 +99,6 @@ public class RestMLGrpcPredictStreamIT extends MLCommonsRestTestCase {
             );
     }
 
-    // ---------------------------------------------------------------------------------------------
-    // Happy path
-    // ---------------------------------------------------------------------------------------------
-
     @Test
     public void testPredictModelStream_openAiStreamsChunksEndToEnd() throws Exception {
         assumeOpenAiAvailable();
@@ -134,10 +130,6 @@ public class RestMLGrpcPredictStreamIT extends MLCommonsRestTestCase {
         assertTrue("expected at least one streamed chunk", collector.responses().size() >= 1);
         assertTrue("stream should have completed", collector.completed());
     }
-
-    // ---------------------------------------------------------------------------------------------
-    // Error cases
-    // ---------------------------------------------------------------------------------------------
 
     @Test
     public void testPredictModelStream_invalidModelIdReturnsNotFound() throws Exception {
@@ -199,10 +191,6 @@ public class RestMLGrpcPredictStreamIT extends MLCommonsRestTestCase {
         MlPredictModelStreamRequest request = predictRequest(modelId, bedrockInputParameters());
         assertStreamError(request, Status.Code.PERMISSION_DENIED);
     }
-
-    // ---------------------------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------------------------
 
     /** Standard chat-completion parameters: an OpenAI llm interface plus a single user message. */
     private Parameters chatMessageParameters() {
