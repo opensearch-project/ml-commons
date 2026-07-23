@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
@@ -41,6 +42,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -114,6 +116,7 @@ public class MLModel implements ToXContentObject {
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String GUARDRAILS_FIELD = "guardrails";
     public static final String INTERFACE_FIELD = "interface";
+    public static final String BATCH_INFERENCE_CONFIG_FIELD = "batch_inference_config";
 
     private static final String TAG_DEPLOYMENT = "deployment";
     private static final String TAG_REMOTE_DEPLOYMENT_VALUE = "remote";
@@ -242,6 +245,7 @@ public class MLModel implements ToXContentObject {
     private Guardrails guardrails;
     private String tenantId;
     private String provisionedBy;
+    private BatchInferenceConfig batchInferenceConfig;
 
     /**
      * Model interface is a map that contains the input and output fields of the model, with JSON schema as the value.
@@ -310,7 +314,8 @@ public class MLModel implements ToXContentObject {
         Guardrails guardrails,
         Map<String, String> modelInterface,
         String tenantId,
-        String provisionedBy
+        String provisionedBy,
+        BatchInferenceConfig batchInferenceConfig
     ) {
         this.name = name;
         this.modelGroupId = modelGroupId;
@@ -348,6 +353,7 @@ public class MLModel implements ToXContentObject {
         this.modelInterface = modelInterface;
         this.tenantId = tenantId;
         this.provisionedBy = provisionedBy;
+        this.batchInferenceConfig = batchInferenceConfig;
     }
 
     public MLModel(StreamInput input) throws IOException {
@@ -419,6 +425,9 @@ public class MLModel implements ToXContentObject {
             }
             this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
             this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+            if (streamInputVersion.onOrAfter(VERSION_3_8_0) && input.readBoolean()) {
+                this.batchInferenceConfig = new BatchInferenceConfig(input);
+            }
         }
     }
 
@@ -508,6 +517,14 @@ public class MLModel implements ToXContentObject {
         }
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             out.writeOptionalString(provisionedBy);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_8_0)) {
+            if (batchInferenceConfig != null) {
+                out.writeBoolean(true);
+                batchInferenceConfig.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
         }
     }
 
@@ -622,6 +639,9 @@ public class MLModel implements ToXContentObject {
         if (provisionedBy != null) {
             builder.field(PROVISIONED_BY_FIELD, provisionedBy);
         }
+        if (batchInferenceConfig != null) {
+            builder.field(BATCH_INFERENCE_CONFIG_FIELD, batchInferenceConfig);
+        }
         builder.endObject();
         return builder;
     }
@@ -669,6 +689,7 @@ public class MLModel implements ToXContentObject {
         Map<String, String> modelInterface = null;
         String tenantId = null;
         String provisionedBy = null;
+        BatchInferenceConfig batchInferenceConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -813,6 +834,9 @@ public class MLModel implements ToXContentObject {
                 case PROVISIONED_BY_FIELD:
                     provisionedBy = parser.textOrNull();
                     break;
+                case BATCH_INFERENCE_CONFIG_FIELD:
+                    batchInferenceConfig = BatchInferenceConfig.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -856,6 +880,7 @@ public class MLModel implements ToXContentObject {
             .modelInterface(modelInterface)
             .tenantId(tenantId)
             .provisionedBy(provisionedBy)
+            .batchInferenceConfig(batchInferenceConfig)
             .build();
     }
 

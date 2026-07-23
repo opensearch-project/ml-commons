@@ -673,6 +673,7 @@ public class MLModelManager {
                     .modelInterface(registerModelInput.getModelInterface())
                     .tenantId(registerModelInput.getTenantId())
                     .provisionedBy(registerModelInput.getProvisionedBy())
+                    .batchInferenceConfig(registerModelInput.getBatchInferenceConfig())
                     .build();
 
                 PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
@@ -783,6 +784,7 @@ public class MLModelManager {
                 .modelInterface(registerModelInput.getModelInterface())
                 .tenantId(registerModelInput.getTenantId())
                 .provisionedBy(registerModelInput.getProvisionedBy())
+                .batchInferenceConfig(registerModelInput.getBatchInferenceConfig())
                 .build();
 
             PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
@@ -877,6 +879,7 @@ public class MLModelManager {
                     .modelInterface(registerModelInput.getModelInterface())
                     .tenantId(registerModelInput.getTenantId())
                     .provisionedBy(registerModelInput.getProvisionedBy())
+                    .batchInferenceConfig(registerModelInput.getBatchInferenceConfig())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {
@@ -1924,6 +1927,16 @@ public class MLModelManager {
      */
     public Map<String, String> getModelInterface(String modelId) {
         return modelCacheHelper.getModelInterface(modelId);
+    }
+
+    /**
+     * Get the cached model metadata for a model id.
+     *
+     * @param modelId model id
+     * @return the cached {@link MLModel}, or {@code null} if not cached on this node
+     */
+    public MLModel getModelInfo(String modelId) {
+        return modelCacheHelper.getModelInfo(modelId);
     }
 
     /**
