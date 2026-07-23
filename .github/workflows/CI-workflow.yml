@@ -87,7 +87,7 @@ jobs:
                                echo "build and run tests" && ./gradlew build -x spotlessJava &&
                                echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
                                echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava &&
-                               echo "gRPC Streaming Integration Testing" && ./gradlew integTest --tests "org.opensearch.ml.rest.RestMLGrpc*IT" -Dgrpc=true -x spotlessJava'
+                               echo "gRPC Streaming Integration Testing" && ./gradlew integTest --tests "org.opensearch.ml.rest.RestMLGrpc*IT" -Dgrpc=true -PnumNodes=2 -x spotlessJava'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./

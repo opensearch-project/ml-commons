@@ -315,7 +315,7 @@ testClusters.integTest {
     // gRPC setup - enable with -Dgrpc=true
     if (System.getProperty("grpc") == "true") {
         setting 'aux.transport.types', '[transport-grpc]'
-        setting 'aux.transport.transport-grpc.port', '9401'
+        setting 'aux.transport.transport-grpc.port', '9400-9500'
         setting 'grpc.host', '["127.0.0.1"]'
         setting 'grpc.publish_host', '["127.0.0.1"]'
     }

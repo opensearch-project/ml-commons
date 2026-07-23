@@ -48,19 +48,28 @@ public class RestMLGrpcPredictStreamIT extends MLCommonsRestTestCase {
     private static final String BEDROCK_MODEL = "global.anthropic.claude-sonnet-4-5-20250929-v1:0";
     private static final String LLM_INTERFACE_BEDROCK = "bedrock/converse/claude";
 
+    private static final int GRPC_PORT_RANGE_START = 9400;
+    private static final int GRPC_PORT_RANGE_END = 9500;
+
     private final String grpcHost = System.getProperty("tests.grpc.host", "127.0.0.1");
-    private final int grpcPort = Integer.parseInt(System.getProperty("tests.grpc.port", "9401"));
 
     private ManagedChannel channel;
 
     @Before
     public void setupGrpcChannel() {
-        // The gRPC aux transport is only enabled when the cluster is started with -Dgrpc=true
-        // When it is not enabled the endpoint won't be listening, so skip rather than fail
+        // The gRPC aux transport is only enabled when the cluster is started with -Dgrpc=true. When it is not
+        // enabled nothing in the range is listening, so skip rather than fail.
+        int grpcPort = resolveGrpcPort();
         Assume
             .assumeTrue(
-                "gRPC endpoint " + grpcHost + ":" + grpcPort + " is not reachable (start the cluster with -Dgrpc=true); skipping",
-                isGrpcEndpointReachable()
+                "no reachable gRPC endpoint on "
+                    + grpcHost
+                    + " in port range ["
+                    + GRPC_PORT_RANGE_START
+                    + "-"
+                    + GRPC_PORT_RANGE_END
+                    + "] (start the cluster with -Dgrpc=true); skipping",
+                grpcPort > 0
             );
 
         // Plaintext channel: the test cluster enables the non-secure transport-grpc aux transport
@@ -74,10 +83,28 @@ public class RestMLGrpcPredictStreamIT extends MLCommonsRestTestCase {
         }
     }
 
-    /** Returns true if a TCP connection to the configured gRPC endpoint succeeds within a short timeout. */
-    private boolean isGrpcEndpointReachable() {
+    /**
+     * Resolves the gRPC port to connect to. Honors an explicit {@code -Dtests.grpc.port} override; otherwise
+     * probes the aux-transport port range and returns the first reachable port, or -1 if none is listening.
+     */
+    private int resolveGrpcPort() {
+        String override = System.getProperty("tests.grpc.port");
+        if (override != null) {
+            int port = Integer.parseInt(override);
+            return isGrpcPortReachable(port) ? port : -1;
+        }
+        for (int port = GRPC_PORT_RANGE_START; port <= GRPC_PORT_RANGE_END; port++) {
+            if (isGrpcPortReachable(port)) {
+                return port;
+            }
+        }
+        return -1;
+    }
+
+    /** Returns true if a TCP connection to the given gRPC port on the configured host succeeds quickly. */
+    private boolean isGrpcPortReachable(int port) {
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(grpcHost, grpcPort), 2000);
+            socket.connect(new InetSocketAddress(grpcHost, port), 500);
             return true;
         } catch (Exception e) {
             return false;

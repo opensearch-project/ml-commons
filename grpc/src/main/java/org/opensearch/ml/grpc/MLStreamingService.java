@@ -110,6 +110,7 @@ public class MLStreamingService extends MLServiceGrpc.MLServiceImplBase {
             StreamObserverAdapter<PredictResponse> adapter = new StreamObserverAdapter<>(responseObserver);
 
             // Set the request to use gRPC channel
+            mlRequest.setDispatchTask(false);
             mlRequest.setStreamingChannel(adapter.getChannel());
 
             client
