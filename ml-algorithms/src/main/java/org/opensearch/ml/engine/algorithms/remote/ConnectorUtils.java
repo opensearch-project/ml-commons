@@ -478,7 +478,14 @@ public class ConnectorUtils {
                 // Vertex batch responses carry a full resource name
                 // (projects/<num>/locations/<loc>/batchPredictionJobs/<id>). Status/cancel are
                 // addressed as {host}/v1/{name}[:cancel], so build from the endpoint's base URL.
-                String vertexBaseUrl = predictEndpoint.substring(0, predictEndpoint.indexOf("/v1/") + "/v1/".length());
+                int v1Index = predictEndpoint.indexOf("/v1/");
+                if (v1Index < 0) {
+                    throw new IllegalArgumentException(
+                        "Vertex AI batch_predict endpoint must contain a '/v1/' path segment to derive the status/cancel URL, got: "
+                            + predictEndpoint
+                    );
+                }
+                String vertexBaseUrl = predictEndpoint.substring(0, v1Index + "/v1/".length());
                 url = isCancelAction ? vertexBaseUrl + "${parameters.name}:cancel" : vertexBaseUrl + "${parameters.name}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
