@@ -441,6 +441,38 @@ public class ConnectorUtilsTest {
     }
 
     @Test
+    public void testGetTask_vertexAIBatchEndpointMissingV1_throws() {
+        // A Vertex batch_predict endpoint without a /v1/ segment must fail fast rather than
+        // produce a malformed status/cancel URL.
+        Connector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("google_cloud")
+            .version("1")
+            .credential(Map.of("private_key", "pk", "client_email", "sa@p.iam.gserviceaccount.com"))
+            .parameters(Map.of("project_id", "p", "location", "us-central1"))
+            .actions(
+                new ArrayList<>(
+                    Arrays
+                        .asList(
+                            ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                .method("POST")
+                                .url("https://us-central1-aiplatform.googleapis.com/batchPredictionJobs")
+                                .requestBody("{}")
+                                .build()
+                        )
+                )
+            )
+            .build();
+
+        IllegalArgumentException e = org.junit.Assert
+            .assertThrows(IllegalArgumentException.class, () -> ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS));
+        org.junit.Assert.assertTrue(e.getMessage().contains("/v1/"));
+    }
+
+    @Test
     public void testEscapeRemoteInferenceInputData_WithSpecialCharacters() {
         Map<String, String> params = new HashMap<>();
         params.put("key1", "hello \"world\" \n \t");
