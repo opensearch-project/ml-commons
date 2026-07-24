@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.GOOGLE_CLOUD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -115,7 +116,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 throw new IllegalArgumentException("Connector protocol is null");
             }
             boolean isMcpConnector = (protocol.equals(MCP_SSE) || protocol.equals(MCP_STREAMABLE_HTTP));
-            if ((credential == null || credential.isEmpty()) && !isMcpConnector) {
+            // google_cloud connectors may omit credentials when using ADC / Workload Identity.
+            boolean allowsEmptyCredential = isMcpConnector || protocol.equals(GOOGLE_CLOUD);
+            if ((credential == null || credential.isEmpty()) && !allowsEmptyCredential) {
                 throw new IllegalArgumentException("Connector credential is null or empty list");
             }
             if (actions != null) {
