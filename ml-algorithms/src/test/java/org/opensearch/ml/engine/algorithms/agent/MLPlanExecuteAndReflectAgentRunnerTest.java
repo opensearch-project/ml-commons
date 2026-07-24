@@ -409,6 +409,58 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testAgentCallDepthForwardedToExecutorSubAgent() {
+        // Plan-Execute-Reflect dispatches its executor sub-agent via client.execute, NOT through
+        // AgentTool. If the runner doesn't explicitly forward _agent_call_depth, a Plan-Execute
+        // agent reached via AgentTool would re-enter at depth=0 every step and bypass the bound.
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor
+                .builder()
+                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"\"}"))
+                .build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlExecuteTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put("parent_interaction_id", "test_parent_interaction_id");
+        // Simulate this Plan-Execute agent itself having been reached via AgentTool at depth 1.
+        params.put(org.opensearch.ml.engine.tools.AgentTool.AGENT_CALL_DEPTH_FIELD, "1");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
+
+        ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());
+
+        AgentMLInput agentInput = (AgentMLInput) executeCaptor.getValue().getInput();
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+        Map<String, String> executorParams = dataset.getParameters();
+        assertEquals("1", executorParams.get(org.opensearch.ml.engine.tools.AgentTool.AGENT_CALL_DEPTH_FIELD));
+    }
+
+    @Test
     public void testMaxStepsReachedWithSummary() {
         MLAgent mlAgent = createMLAgentWithTools();
 

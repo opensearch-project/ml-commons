@@ -837,7 +837,7 @@ public class MachineLearningPlugin extends Plugin
         IndexInsightTool.Factory.getInstance().init(client);
         McpSseTool.Factory.getInstance().init();
         McpStreamableHttpTool.Factory.getInstance().init();
-        AgentTool.Factory.getInstance().init(client);
+        AgentTool.Factory.getInstance().init(client, clusterService);
         ListIndexTool.Factory.getInstance().init(client, clusterService);
         IndexMappingTool.Factory.getInstance().init(client);
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
@@ -1404,6 +1404,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENT_MAX_CALL_DEPTH,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS,
