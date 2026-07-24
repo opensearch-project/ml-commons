@@ -145,6 +145,7 @@ public abstract class DLModelExecute implements MLExecutable {
                         FileUtils.deleteDirectory(pathFile);
                     }
                     ZipUtils.unzip(modelZipFile, modelPath);
+                    ModelHelper.verifyModelDirSafety(modelPath);
                     boolean findModelFile = false;
                     for (File file : Objects.requireNonNull(pathFile.listFiles())) {
                         String name = file.getName();

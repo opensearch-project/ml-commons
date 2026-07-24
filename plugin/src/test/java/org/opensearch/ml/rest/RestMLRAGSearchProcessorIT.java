@@ -207,6 +207,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "  \"description\": \"The connector to bedrock claude haiku 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 200\n"
+        + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
