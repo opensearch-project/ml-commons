@@ -14,7 +14,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
@@ -144,7 +143,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                     }
                 }, e -> {
                     log.error("Failed to check for shared index prefix, aborting deletion for safety", e);
-                    actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    actionListener.onFailure(RestActionUtils.wrapAsStatusException(e));
                 }));
             } else {
                 // No index deletion requested, proceed with container-only deletion
@@ -159,16 +158,9 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 );
             }
         }, error -> {
-            // Preserve client errors (4XX) with their detailed messages
-            if (error instanceof OpenSearchException) {
-                OpenSearchException osException = (OpenSearchException) error;
-                if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
-                    actionListener.onFailure(error);
-                    return;
-                }
-            }
             log.error("Failed to retrieve memory container: {} for deletion", memoryContainerId, error);
-            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            // Preserve client errors (4xx + IllegalArgumentException) with their real status; sanitize the rest to 500.
+            actionListener.onFailure(RestActionUtils.wrapAsStatusException(error));
         }));
     }
 
@@ -220,8 +212,11 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
     ) {
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            // The delete call does not throw when the document is absent (that surfaces as a NOT_FOUND
+            // DeleteResponse on the success path), so any throwable here is a genuine failure. Preserve its
+            // real status instead of masking every error as a misleading 404.
             log.error("Failed to delete ML Memory Container {}", memoryContainerId, cause);
-            actionListener.onFailure((new OpenSearchStatusException("Failed to find memory container", RestStatus.NOT_FOUND)));
+            actionListener.onFailure(RestActionUtils.wrapAsStatusException(cause));
         } else {
             try {
                 DeleteResponse deleteResponse = response.deleteResponse();
@@ -298,16 +293,9 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                     );
                 actionListener.onResponse(deleteResponse);
             }, e -> {
-                // Preserve client errors (4XX) with their detailed messages
-                if (e instanceof OpenSearchException) {
-                    OpenSearchException osException = (OpenSearchException) e;
-                    if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
-                        actionListener.onFailure(e);
-                        return;
-                    }
-                }
                 log.error("Failed to delete selective memory indices [{}] for container: {}.", memoryContainerId, indicesToDelete, e);
-                actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                // Preserve client errors (4xx + IllegalArgumentException) with their real status; sanitize the rest to 500.
+                actionListener.onFailure(RestActionUtils.wrapAsStatusException(e));
             }));
         } else {
             log.info("No valid memory indices to delete for container: {}", memoryContainerId);
