@@ -324,7 +324,8 @@ public class MLSyncUpCron implements Runnable {
             sdkClient.searchDataObjectAsync(searchRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        SearchResponse res = SearchResponse.fromXContent(r.parser());
+                        SearchResponse res = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         SearchHit[] hits = res.getHits().getHits();
                         Map<String, String> tenantIds = new HashMap<>();
                         Map<String, MLModelState> newModelStates = new HashMap<>();

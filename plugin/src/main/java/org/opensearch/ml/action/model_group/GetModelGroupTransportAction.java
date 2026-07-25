@@ -146,7 +146,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
         try {
-            GetResponse gr = getDataObjectResponse.parser() == null ? null : GetResponse.fromXContent(getDataObjectResponse.parser());
+            GetResponse gr = getDataObjectResponse.getResponse();
             if (gr != null && gr.isExists()) {
                 try (
                     XContentParser parser = jsonXContent
