@@ -212,7 +212,9 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                     emitDisableSessionRetentionWarning(currentConfig);
                 } catch (Exception e) {
                     log.error("Failed to update configuration for container {}", memoryContainerId, e);
-                    actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    // Validation failures (IllegalArgumentException -> 400) and status-carrying exceptions
+                    // (e.g. a 404 strategy-not-found) must reach the client with their real status, not a blanket 500.
+                    actionListener.onFailure(RestActionUtils.wrapAsStatusException(e));
                     return;
                 }
             }
@@ -221,7 +223,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
             performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, actionListener);
         }, e -> {
             log.error("Failed to get memory container for update", e);
-            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            // Preserve the original status (e.g. 404 when the container doesn't exist, 403 on access denial).
+            actionListener.onFailure(RestActionUtils.wrapAsStatusException(e));
         }));
     }
 
@@ -383,7 +386,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                 performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
             }, e -> {
                 log.error("Failed to create history index '{}'", historyIndexName, e);
-                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                listener.onFailure(RestActionUtils.wrapAsStatusException(e));
             }));
         } else {
             updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
@@ -415,7 +418,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                     performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
                 }, e -> {
                     log.error("Failed to create history index '{}'", historyIndexName, e);
-                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    listener.onFailure(RestActionUtils.wrapAsStatusException(e));
                 }));
             } else {
                 updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
@@ -424,7 +427,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
             }
         }, e -> {
             log.error("Failed to create long-term index '{}'", longTermIndexName, e);
-            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            listener.onFailure(RestActionUtils.wrapAsStatusException(e));
         }));
     }
 

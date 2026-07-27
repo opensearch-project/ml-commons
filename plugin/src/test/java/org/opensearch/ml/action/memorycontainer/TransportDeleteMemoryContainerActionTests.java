@@ -29,6 +29,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
@@ -229,7 +230,12 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find memory container", argumentCaptor.getValue().getMessage());
+        // A genuine delete failure must NOT be masked as a misleading 404 "Failed to find memory container".
+        // A plain unexpected exception surfaces as a sanitized 500.
+        Exception captured = argumentCaptor.getValue();
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(captured));
+        assertTrue(captured instanceof OpenSearchStatusException);
+        assertEquals("Internal server error", captured.getMessage());
     }
 
     public void testDeleteMemoryContainer_IndexNotFoundException() {
@@ -250,6 +256,28 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception instanceof IndexNotFoundException);
         assertEquals(RestStatus.NOT_FOUND, ((IndexNotFoundException) exception).status());
         assertTrue(exception.getMessage().contains("Memory container index not found"));
+    }
+
+    public void testDeleteMemoryContainer_GetContainerFails_SanitizesServerError() {
+        // Regression for the get-container failure handler: an unexpected server-side exception must be
+        // sanitized to a generic 500 so internal detail never reaches the client.
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("shard [3] on node [10.0.0.5:9300] unavailable"));
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+
+        Exception exception = argumentCaptor.getValue();
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(exception));
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals("Internal server error", exception.getMessage());
+        // The raw infrastructure detail must not leak through.
+        assertFalse(exception.getMessage().contains("10.0.0.5"));
     }
 
     public void testDeleteMemoryContainer_MultiTenancyEnabled_ValidTenantId() {
