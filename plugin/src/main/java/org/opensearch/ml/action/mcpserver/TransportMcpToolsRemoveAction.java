@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
@@ -23,6 +24,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLIndex;
@@ -98,7 +100,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                                 removeToolsOnNodesRequest.getMcpTools()
                             );
                         log.info(exceptionMessage);
-                        restoreListener.onFailure(new OpenSearchException(exceptionMessage));
+                        restoreListener.onFailure(new OpenSearchStatusException(exceptionMessage, RestStatus.BAD_REQUEST));
                     } else {
                         bulkDeleteMcpTools(removeToolsOnNodesRequest, foundTools, restoreListener);
                     }
@@ -106,7 +108,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                     // No results found searching tools, do not proceed.
                     String exceptionMessage = "Unable to remove tools as no tool in the request found in system index";
                     log.warn(exceptionMessage);
-                    restoreListener.onFailure(new OpenSearchException(exceptionMessage));
+                    restoreListener.onFailure(new OpenSearchStatusException(exceptionMessage, RestStatus.BAD_REQUEST));
                 }
             }, e -> {
                 log.error("Failed to search mcp tools index", e);
