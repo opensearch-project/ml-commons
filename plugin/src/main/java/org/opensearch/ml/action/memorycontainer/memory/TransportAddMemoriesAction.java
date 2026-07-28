@@ -206,7 +206,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         processAndIndexMemory(input, container, user, actionListener, true);
                     }, e -> {
                         log.error("Failed to index session data", e);
-                        actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                        actionListener.onFailure(RestActionUtils.wrapAsStatusException(e));
                     });
                     memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
                 }, exception -> {
@@ -291,7 +291,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             }
             // A genuine session-write failure: do not proceed, or we would create orphan-eligible working memory.
             log.error("Failed to create backing session doc for session_id [{}]; aborting add-memories", sessionId, e);
-            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            actionListener.onFailure(RestActionUtils.wrapAsStatusException(e));
         }));
     }
 
