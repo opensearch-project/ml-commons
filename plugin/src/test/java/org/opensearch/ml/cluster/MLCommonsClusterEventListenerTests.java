@@ -23,13 +23,17 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.cluster.ClusterChangedEvent;
 import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.block.ClusterBlocks;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
+import org.opensearch.cluster.routing.IndexRoutingTable;
+import org.opensearch.cluster.routing.RoutingTable;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.gateway.GatewayService;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -61,6 +65,10 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     private ClusterState clusterState;
     @Mock
     private Metadata metadata;
+    @Mock
+    private ClusterBlocks clusterBlocks;
+    @Mock
+    private RoutingTable routingTable;
 
     private MLCommonsClusterEventListener listener;
     private ClusterSettings clusterSettings;
@@ -262,6 +270,53 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).reconcileMemoryRetentionJob(anyInt());
     }
 
+    public void testClusterChanged_SkippedWhenStateNotRecovered() {
+        // On a restart this listener fires before cluster state is recovered; the startup block must be deferred so a
+        // read/write against .plugins-ml-jobs does not hit the state-not-recovered block and wedge the one-shot flags.
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        setupElectedClusterManagerState(dataNode, true, true);
+        when(clusterBlocks.hasGlobalBlock(GatewayService.STATE_NOT_RECOVERED_BLOCK)).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
+        verify(mlTaskManager, never()).reconcileMemoryRetentionJob(anyInt());
+        verify(mlTaskManager, never()).indexStatsCollectorJob(anyBoolean());
+    }
+
+    public void testClusterChanged_SkippedWhenJobsIndexPrimaryShardsNotActive() {
+        // State is recovered, but on a restart the existing jobs index's primary shard may not be allocated yet; a GET
+        // would throw NoShardAvailableActionException. The startup block must defer until the shards are active.
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        setupElectedClusterManagerState(dataNode, true, true);
+        IndexRoutingTable indexRoutingTable = mock(IndexRoutingTable.class);
+        when(routingTable.index(ML_JOBS_INDEX)).thenReturn(indexRoutingTable);
+        when(indexRoutingTable.allPrimaryShardsActive()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
+        verify(mlTaskManager, never()).reconcileMemoryRetentionJob(anyInt());
+    }
+
+    public void testClusterChanged_ProceedsWhenJobsIndexAbsent() {
+        // A fresh cluster has no jobs index yet; the shard-active gate must be skipped so the CREATE path can seed it.
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        setupElectedClusterManagerState(dataNode, false, true);
+        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager).indexMemoryRetentionJob(24);
+        verify(mlTaskManager).reconcileMemoryRetentionJob(24);
+    }
+
     public void testSettingsUpdateConsumer_UpsertsOnElectedClusterManager() {
         DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
         DiscoveryNodes nodes = DiscoveryNodes
@@ -358,6 +413,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         when(clusterService.state()).thenReturn(clusterState);
         when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(hasMLJobsIndex);
         when(metadata.settings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        setupStateReady();
     }
 
     private void setupElectedClusterManagerState(DiscoveryNode node, boolean hasMLJobsIndex, boolean localNodeIsClusterManager) {
@@ -375,5 +431,19 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         when(clusterService.state()).thenReturn(clusterState);
         when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(hasMLJobsIndex);
         when(metadata.settings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        setupStateReady();
+    }
+
+    /**
+     * Default "state is ready" stubs for the startup guards: no state-not-recovered block, and (if the jobs index is
+     * present) its primary shards are active. Individual tests override these to exercise the deferral paths.
+     */
+    private void setupStateReady() {
+        when(clusterState.blocks()).thenReturn(clusterBlocks);
+        when(clusterBlocks.hasGlobalBlock(GatewayService.STATE_NOT_RECOVERED_BLOCK)).thenReturn(false);
+        when(clusterState.routingTable()).thenReturn(routingTable);
+        IndexRoutingTable indexRoutingTable = mock(IndexRoutingTable.class);
+        when(routingTable.index(ML_JOBS_INDEX)).thenReturn(indexRoutingTable);
+        when(indexRoutingTable.allPrimaryShardsActive()).thenReturn(true);
     }
 }
