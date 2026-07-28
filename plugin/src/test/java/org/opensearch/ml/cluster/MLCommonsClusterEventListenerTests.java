@@ -73,9 +73,8 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         );
     }
 
-    public void testClusterChanged_WithV31DataNode_MetricCollectionEnabled() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
-        setupClusterState(dataNode, false);
+    public void testClusterChanged_AllNodesCurrent_MetricCollectionEnabled() {
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
 
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
@@ -85,33 +84,55 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager).indexStatsCollectorJob(true);
     }
 
-    public void testClusterChanged_WithPreV31DataNode_NoJobsStarted() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_0_0);
-        setupClusterState(dataNode, false);
+    public void testClusterChanged_MixedVersionCluster_NoIndex_NoJobsStarted() {
+        // rolling upgrade in flight: one upgraded node, one old node, jobs index absent.
+        // Creating the index now would strand its replica on version-allocation rules,
+        // so neither job may be created.
+        setupClusterState(false, createDataNode("new", Version.CURRENT), createDataNode("old", Version.V_3_1_0));
 
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         listener.clusterChanged(event);
 
         verify(mlTaskManager, never()).indexStatsCollectorJob(anyBoolean());
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
     }
 
-    public void testClusterChanged_WithPostV31DataNode_JobsStarted() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_2_0);
-        setupClusterState(dataNode, false);
+    public void testClusterChanged_MixedVersionCluster_IndexExists_RetentionJobStarted() {
+        // writing a job document into an existing index cannot strand a replica,
+        // so a mixed-version cluster must not block it
+        setupClusterState(true, createDataNode("new", Version.CURRENT), createDataNode("old", Version.V_3_1_0));
+        when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
 
-        when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         listener.clusterChanged(event);
 
-        verify(mlTaskManager).indexStatsCollectorJob(true);
+        verify(mlTaskManager).indexMemoryRetentionJob(24);
     }
 
-    public void testClusterChanged_IndexAlreadyPresent_JobNotStarted() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
-        setupClusterState(dataNode, true);
+    public void testClusterChanged_JobsDeferredUntilUpgradeCompletes() {
+        when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        // first event: upgrade in flight — deferred
+        setupClusterState(false, createDataNode("new", Version.CURRENT), createDataNode("old", Version.V_3_1_0));
+        listener.clusterChanged(event);
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
+
+        // second event: last old node upgraded — job created
+        setupClusterState(false, createDataNode("new", Version.CURRENT), createDataNode("old", Version.CURRENT));
+        listener.clusterChanged(event);
+        verify(mlTaskManager).indexMemoryRetentionJob(24);
+    }
+
+    public void testClusterChanged_IndexAlreadyPresent_StatsJobNotStarted() {
+        setupClusterState(true, createDataNode("n1", Version.CURRENT));
 
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
@@ -122,24 +143,36 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testClusterChanged_MemoryRetentionJobStarted() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
-        setupClusterState(dataNode, false);
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
         when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
 
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         listener.clusterChanged(event);
 
         verify(mlTaskManager).indexMemoryRetentionJob(24);
     }
 
+    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenRetentionDisabled() {
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
+        when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
+    }
+
     public void testClusterChanged_MemoryRetentionJobNotStarted_WhenMultiTenancyEnabled() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
-        setupClusterState(dataNode, false);
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
         when(clusterService.getSettings())
             .thenReturn(org.opensearch.common.settings.Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
 
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         listener.clusterChanged(event);
 
@@ -147,8 +180,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testClusterChanged_MemoryRetentionJobNotStarted_WhenAgenticMemoryDisabled() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
-        setupClusterState(dataNode, false);
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
         when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
 
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
@@ -158,10 +190,10 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
     }
 
-    private DiscoveryNode createDataNode(Version version) {
+    private DiscoveryNode createDataNode(String id, Version version) {
         return new DiscoveryNode(
-            "dataNode",
-            "dataNodeId",
+            id,
+            id + "Id",
             buildNewFakeTransportAddress(),
             Collections.emptyMap(),
             Collections.singleton(DiscoveryNodeRole.DATA_ROLE),
@@ -169,8 +201,12 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         );
     }
 
-    private void setupClusterState(DiscoveryNode node, boolean hasMLJobsIndex) {
-        DiscoveryNodes nodes = DiscoveryNodes.builder().add(node).build();
+    private void setupClusterState(boolean hasMLJobsIndex, DiscoveryNode... discoveryNodes) {
+        DiscoveryNodes.Builder builder = DiscoveryNodes.builder();
+        for (DiscoveryNode node : discoveryNodes) {
+            builder.add(node);
+        }
+        DiscoveryNodes nodes = builder.build();
 
         when(event.state()).thenReturn(clusterState);
         when(event.previousState()).thenReturn(clusterState);
