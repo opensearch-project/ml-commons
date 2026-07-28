@@ -20,6 +20,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.gateway.GatewayService;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -118,6 +119,22 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         } else if (delta.added()) {
             List<String> addedNodesIds = delta.addedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toList());
             mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodesIds, state.getNodes().getClusterManagerNodeId());
+        }
+
+        // The job-starting logic below reads and writes the .plugins-ml-jobs index. On a cluster restart this listener
+        // fires before the state is usable, so those reads/writes would fail and leave the one-shot
+        // startedMemoryRetentionJob / startedStatsJob flags stuck true with no retry until the next restart. Defer until
+        // the state is ready; clusterChanged fires again as startup progresses, with the flags still unset. Two gates:
+        // 1. cluster state not yet recovered -> a GET/index hits a "state not recovered" global block.
+        // 2. the jobs index exists (restart) but its primary shard is not yet allocated -> a GET hits
+        // NoShardAvailableActionException. (On a fresh cluster the index does not exist yet; the CREATE path seeds
+        // it, so we only wait when it already exists.)
+        if (state.blocks().hasGlobalBlock(GatewayService.STATE_NOT_RECOVERED_BLOCK)) {
+            return;
+        }
+        if (state.getMetadata().hasIndex(ML_JOBS_INDEX)
+            && (state.routingTable().index(ML_JOBS_INDEX) == null || !state.routingTable().index(ML_JOBS_INDEX).allPrimaryShardsActive())) {
+            return;
         }
 
         /*
