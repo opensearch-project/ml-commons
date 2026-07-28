@@ -150,7 +150,14 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                 && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
                 && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
                 && !this.startedMemoryRetentionJob) {
-                int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(clusterService.getSettings());
+                // Read the effective interval, honoring OpenSearch precedence (transient > persistent > opensearch.yml
+                // > default). clusterService.getSettings() holds only node bootstrap settings (opensearch.yml / CLI),
+                // frozen at construction; state.getMetadata().settings() holds the persistent/transient values set via
+                // PUT _cluster/settings. Overlaying metadata on the node settings lets dynamic cluster settings win
+                // while still honoring an opensearch.yml value. Reading only one source would drop the other and make
+                // reconcile (which actively upserts on mismatch) revert an operator's chosen interval on restart.
+                Settings effectiveSettings = Settings.builder().put(clusterService.getSettings()).put(settings).build();
+                int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(effectiveSettings);
                 // CREATE (conflict-swallowing) seeds the job doc; safe to run on any node.
                 mlTaskManager.indexMemoryRetentionJob(intervalHours);
                 // Reconcile a settings.yml / restart value onto the already-existing (write-once) doc. This upserts

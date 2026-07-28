@@ -227,6 +227,27 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager).reconcileMemoryRetentionJob(24);
     }
 
+    /**
+     * Regression guard: an interval set dynamically via {@code PUT _cluster/settings} lives in cluster-state metadata,
+     * NOT in the frozen node bootstrap settings returned by {@code clusterService.getSettings()}. The startup path must
+     * read the effective value (metadata overlaid on node settings); otherwise reconcile would upsert the default and
+     * silently revert the operator's persisted interval on restart.
+     */
+    public void testClusterChanged_MemoryRetentionReconcile_HonorsPersistedIntervalFromMetadata() {
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        setupElectedClusterManagerState(dataNode, false, true);
+        // Node bootstrap (opensearch.yml) has nothing; the interval was set via the cluster-settings API -> metadata.
+        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(metadata.settings()).thenReturn(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 1).build());
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager).indexMemoryRetentionJob(1);
+        verify(mlTaskManager).reconcileMemoryRetentionJob(1);
+    }
+
     public void testClusterChanged_MemoryRetentionReconcile_SkippedWhenNotElectedClusterManager() {
         DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
         setupElectedClusterManagerState(dataNode, false, false);

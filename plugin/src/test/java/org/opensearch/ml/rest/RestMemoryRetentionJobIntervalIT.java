@@ -35,17 +35,25 @@ public class RestMemoryRetentionJobIntervalIT extends MLCommonsRestTestCase {
     public void setup() throws IOException {
         // Agentic memory must be enabled for the retention job to be scheduled.
         updateClusterSettings("plugins.ml_commons.agentic_memory_enabled", true);
+        // Start from a known state. The base-class @After only wipes indices, so a persistent interval left over from
+        // an aborted local rerun would survive; clearing it guarantees the first PUT below is a real change (see below).
+        updateClusterSettings(INTERVAL_SETTING, (Object) null);
     }
 
     @Test
     public void testUpdateIntervalRescheduleReflectedInPersistedDoc() throws Exception {
-        // The retention job doc is created asynchronously when a 3.1+ data node is observed in the cluster state.
-        assertBusy(() -> assertEquals(24, getPersistedIntervalHours()), 30, TimeUnit.SECONDS);
+        // Drive the assertion entirely through the dynamic settings-update consumer (the fix under test). That
+        // consumer upserts the job doc and is NOT gated by the one-shot startup latch (startedMemoryRetentionJob), so
+        // it is robust in the shared integ cluster: a prior memory test may have already tripped that node-level latch
+        // and then had .plugins-ml-jobs wiped by the base class @After, which would leave the latch-gated
+        // lazy-startup path unable to recreate the doc. The consumer fires on a change from the last-applied value;
+        // setup() cleared the setting to the default, so each PUT below is a distinct change that fires the consumer.
+        updateClusterSettings(INTERVAL_SETTING, 2);
+        // The elected cluster manager upserts the job doc (creating .plugins-ml-jobs if needed); interval follows.
+        assertBusy(() -> assertEquals(2, getPersistedIntervalHours()), 30, TimeUnit.SECONDS);
 
-        // Live dynamic change: shrink the interval to 1 hour.
+        // Live dynamic change: shrink the interval to 1 hour. The persisted schedule interval should follow.
         updateClusterSettings(INTERVAL_SETTING, 1);
-
-        // The elected cluster manager upserts the job doc; the persisted schedule interval should follow.
         assertBusy(() -> assertEquals(1, getPersistedIntervalHours()), 30, TimeUnit.SECONDS);
     }
 
