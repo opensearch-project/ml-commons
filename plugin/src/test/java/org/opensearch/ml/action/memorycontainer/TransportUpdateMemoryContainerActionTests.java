@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateResponse;
@@ -261,6 +262,36 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception instanceof OpenSearchStatusException);
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
         assertTrue(exception.getMessage().contains("Internal server error"));
+    }
+
+    // Regression for BD01: updating a container that does not exist must surface the underlying 404 rather than
+    // being masked as a blanket 500. The get-container step fails with a status-carrying exception, which the
+    // failure handler must forward unchanged.
+    public void testDoExecuteWhenGetContainerFails_PreservesNotFoundStatus() {
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("updated-name").build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId("nonexistent-container-id")
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener
+                .onFailure(new OpenSearchStatusException("Memory container not found: nonexistent-container-id", RestStatus.NOT_FOUND));
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(exception));
+        assertTrue(exception.getMessage().contains("Memory container not found"));
     }
 
     public void testDoExecuteWhenAccessDenied() {
@@ -684,9 +715,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener).onFailure(captor.capture());
 
         Exception exception = captor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
-        assertTrue(exception.getMessage().contains("Internal server error"));
+        // A non-existent strategy id is a 404, and must surface as such instead of a masked 500.
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(exception));
+        assertTrue(exception.getMessage().contains("nonexistent_999"));
     }
 
     public void testUpdateStrategies_CannotChangeType() {
@@ -762,9 +793,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener).onFailure(captor.capture());
 
         Exception exception = captor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
-        assertTrue(exception.getMessage().contains("Internal server error"));
+        // Changing a strategy type is a client validation error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception));
+        assertTrue(exception.getMessage().contains("Cannot change strategy type"));
     }
 
     public void testUpdateStrategies_PartialFieldUpdate() {
@@ -1124,9 +1155,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
-        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
+        // Missing-model validation is a client error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertTrue(captor.getValue().getMessage().contains("Strategies require"));
     }
 
     public void testUpdateContainer_AddStrategyWithOnlyLlm_ShouldFail() {
@@ -1169,9 +1200,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
-        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
+        // Missing-model validation is a client error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertTrue(captor.getValue().getMessage().contains("Strategies require"));
     }
 
     public void testUpdateContainer_ChangeEmbeddingModel_ShouldFail() {
@@ -1228,9 +1259,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
-        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
+        // Changing embedding config once strategies exist is a client error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertTrue(captor.getValue().getMessage().contains("Cannot change embedding configuration"));
     }
 
     public void testUpdateContainer_SameEmbeddingValues_ShouldSucceed() {
@@ -2278,9 +2309,12 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         action.doExecute(task, request, listener);
 
-        // Verify failure - history index creation should fail
-        verify(listener).onFailure(any(Exception.class));
+        // Verify failure - history index creation should fail, and an unexpected RuntimeException must be
+        // sanitized to a generic 500 (no server-side detail leaked to the client).
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
         verify(listener, never()).onResponse(any());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(captor.getValue()));
     }
 
     public void testUpdateContainer_TransitionToStrategies_LongTermIndexCreationFails() {
@@ -2396,9 +2430,12 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         action.doExecute(task, request, listener);
 
-        // Verify failure - long-term index creation should fail
-        verify(listener).onFailure(any(Exception.class));
+        // Verify failure - long-term index creation should fail, and an unexpected RuntimeException must be
+        // sanitized to a generic 500 (no server-side detail leaked to the client).
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
         verify(listener, never()).onResponse(any());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(captor.getValue()));
     }
 
 }
