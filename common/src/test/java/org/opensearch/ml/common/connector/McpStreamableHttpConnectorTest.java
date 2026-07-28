@@ -332,8 +332,8 @@ public class McpStreamableHttpConnectorTest {
                 "last_updated_time": %d,
                 "client_config": {
                     "max_connection": 10,
-                    "connection_timeout": 30,
-                    "read_timeout": 30,
+                    "connection_timeout": 30000,
+                    "read_timeout": 30000,
                     "max_retry_times": 3,
                     "retry_delay_ms": 1000,
                     "retry_timeout": 60000,
