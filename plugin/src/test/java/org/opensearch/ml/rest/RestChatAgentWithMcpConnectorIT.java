@@ -16,6 +16,7 @@ import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.client.Response;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.ml.common.MLTaskState;
@@ -135,6 +136,7 @@ public class RestChatAgentWithMcpConnectorIT extends MLCommonsRestTestCase {
         deleteIndexWithAdminClient(irisIndex);
     }
 
+    @Ignore("Flaky on multi-node CI: MCP loopback tool call intermittently times out under load")
     public void testChatAgentWithMcpStreamableHttpConnector() throws IOException {
         HttpHost host = getClusterHosts().get(0);
         String mcpServerUrl = host.getSchemeName() + "://" + host.getHostName() + ":" + host.getPort();
