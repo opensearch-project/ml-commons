@@ -62,6 +62,12 @@ import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightConfigTransportAction;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightTransportAction;
 import org.opensearch.ml.action.IndexInsight.PutIndexInsightConfigTransportAction;
+import org.opensearch.ml.action.agenticsearch.AgenticSearchTemplateService;
+import org.opensearch.ml.action.agenticsearch.DeleteAgenticSearchTemplateTransportAction;
+import org.opensearch.ml.action.agenticsearch.GetAgenticSearchTemplateTransportAction;
+import org.opensearch.ml.action.agenticsearch.ListAgenticSearchTemplatesTransportAction;
+import org.opensearch.ml.action.agenticsearch.RegisterAgenticSearchTemplateTransportAction;
+import org.opensearch.ml.action.agenticsearch.UpdateAgenticSearchTemplateTransportAction;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
@@ -175,6 +181,11 @@ import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
+import org.opensearch.ml.common.transport.agenticsearch.MLDeleteAgenticSearchTemplateAction;
+import org.opensearch.ml.common.transport.agenticsearch.MLGetAgenticSearchTemplateAction;
+import org.opensearch.ml.common.transport.agenticsearch.MLListAgenticSearchTemplatesAction;
+import org.opensearch.ml.common.transport.agenticsearch.MLRegisterAgenticSearchTemplateAction;
+import org.opensearch.ml.common.transport.agenticsearch.MLUpdateAgenticSearchTemplateAction;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionAction;
 import org.opensearch.ml.common.transport.config.MLConfigGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
@@ -331,6 +342,7 @@ import org.opensearch.ml.rest.RestMLCreateControllerAction;
 import org.opensearch.ml.rest.RestMLCreateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLCreateSessionAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
+import org.opensearch.ml.rest.RestMLDeleteAgenticSearchTemplateAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteContextManagementTemplateAction;
 import org.opensearch.ml.rest.RestMLDeleteControllerAction;
@@ -344,6 +356,7 @@ import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLExecuteStreamAction;
 import org.opensearch.ml.rest.RestMLGetAgentAction;
+import org.opensearch.ml.rest.RestMLGetAgenticSearchTemplateAction;
 import org.opensearch.ml.rest.RestMLGetConfigAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetContextManagementTemplateAction;
@@ -357,6 +370,7 @@ import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
 import org.opensearch.ml.rest.RestMLHybridSearchMemoriesAction;
+import org.opensearch.ml.rest.RestMLListAgenticSearchTemplatesAction;
 import org.opensearch.ml.rest.RestMLListContextManagementTemplatesAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
@@ -364,6 +378,7 @@ import org.opensearch.ml.rest.RestMLPredictionStreamAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
 import org.opensearch.ml.rest.RestMLPutIndexInsightConfigAction;
 import org.opensearch.ml.rest.RestMLRegisterAgentAction;
+import org.opensearch.ml.rest.RestMLRegisterAgenticSearchTemplateAction;
 import org.opensearch.ml.rest.RestMLRegisterModelAction;
 import org.opensearch.ml.rest.RestMLRegisterModelGroupAction;
 import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
@@ -380,6 +395,7 @@ import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateAgentAction;
+import org.opensearch.ml.rest.RestMLUpdateAgenticSearchTemplateAction;
 import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
 import org.opensearch.ml.rest.RestMLUpdateContextManagementTemplateAction;
 import org.opensearch.ml.rest.RestMLUpdateControllerAction;
@@ -632,7 +648,12 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLUpdateContextManagementTemplateAction.INSTANCE, UpdateContextManagementTemplateTransportAction.class),
                 new ActionHandler<>(MLGetContextManagementTemplateAction.INSTANCE, GetContextManagementTemplateTransportAction.class),
                 new ActionHandler<>(MLListContextManagementTemplatesAction.INSTANCE, ListContextManagementTemplatesTransportAction.class),
-                new ActionHandler<>(MLDeleteContextManagementTemplateAction.INSTANCE, DeleteContextManagementTemplateTransportAction.class)
+                new ActionHandler<>(MLDeleteContextManagementTemplateAction.INSTANCE, DeleteContextManagementTemplateTransportAction.class),
+                new ActionHandler<>(MLRegisterAgenticSearchTemplateAction.INSTANCE, RegisterAgenticSearchTemplateTransportAction.class),
+                new ActionHandler<>(MLGetAgenticSearchTemplateAction.INSTANCE, GetAgenticSearchTemplateTransportAction.class),
+                new ActionHandler<>(MLUpdateAgenticSearchTemplateAction.INSTANCE, UpdateAgenticSearchTemplateTransportAction.class),
+                new ActionHandler<>(MLListAgenticSearchTemplatesAction.INSTANCE, ListAgenticSearchTemplatesTransportAction.class),
+                new ActionHandler<>(MLDeleteAgenticSearchTemplateAction.INSTANCE, DeleteAgenticSearchTemplateTransportAction.class)
             );
     }
 
@@ -811,6 +832,14 @@ public class MachineLearningPlugin extends Plugin
         ContextManagerFactory contextManagerFactory = new ContextManagerFactory(
             new org.opensearch.ml.common.contextmanager.ActivationRuleFactory(),
             client
+        );
+        // Agentic-search template param-schema service (register/derive/validate + CRUD).
+        AgenticSearchTemplateService agenticSearchTemplateService = new AgenticSearchTemplateService(
+            mlIndicesHandler,
+            client,
+            clusterService,
+            scriptService,
+            xContentRegistry
         );
 
         mlExecuteTaskRunner = new MLExecuteTaskRunner(
@@ -996,7 +1025,8 @@ public class MachineLearningPlugin extends Plugin
                 cmHandler,
                 sdkClient,
                 toolFactoryWrapper,
-                mcpToolsHelper
+                mcpToolsHelper,
+                agenticSearchTemplateService
             );
     }
 
@@ -1139,6 +1169,21 @@ public class MachineLearningPlugin extends Plugin
             new RestMLListContextManagementTemplatesAction(mlFeatureEnabledSetting);
         RestMLDeleteContextManagementTemplateAction restMLDeleteContextManagementTemplateAction =
             new RestMLDeleteContextManagementTemplateAction(mlFeatureEnabledSetting);
+        RestMLRegisterAgenticSearchTemplateAction restMLRegisterAgenticSearchTemplateAction = new RestMLRegisterAgenticSearchTemplateAction(
+            mlFeatureEnabledSetting
+        );
+        RestMLGetAgenticSearchTemplateAction restMLGetAgenticSearchTemplateAction = new RestMLGetAgenticSearchTemplateAction(
+            mlFeatureEnabledSetting
+        );
+        RestMLUpdateAgenticSearchTemplateAction restMLUpdateAgenticSearchTemplateAction = new RestMLUpdateAgenticSearchTemplateAction(
+            mlFeatureEnabledSetting
+        );
+        RestMLListAgenticSearchTemplatesAction restMLListAgenticSearchTemplatesAction = new RestMLListAgenticSearchTemplatesAction(
+            mlFeatureEnabledSetting
+        );
+        RestMLDeleteAgenticSearchTemplateAction restMLDeleteAgenticSearchTemplateAction = new RestMLDeleteAgenticSearchTemplateAction(
+            mlFeatureEnabledSetting
+        );
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -1223,7 +1268,12 @@ public class MachineLearningPlugin extends Plugin
                 restMLUpdateContextManagementTemplateAction,
                 restMLGetContextManagementTemplateAction,
                 restMLListContextManagementTemplatesAction,
-                restMLDeleteContextManagementTemplateAction
+                restMLDeleteContextManagementTemplateAction,
+                restMLRegisterAgenticSearchTemplateAction,
+                restMLGetAgenticSearchTemplateAction,
+                restMLUpdateAgenticSearchTemplateAction,
+                restMLListAgenticSearchTemplatesAction,
+                restMLDeleteAgenticSearchTemplateAction
             );
     }
 
