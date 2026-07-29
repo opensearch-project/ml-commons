@@ -265,6 +265,11 @@ public class AgentUtils {
             toolInfos.add(chatQuestionMessage);
         }
         parameters.put(TOOLS, String.join(", ", toolInfos));
+
+        // Setting ${parameters.tool_descriptions} / ${parameters.tool_names} values to empty string
+        // if not set explicitly.
+        parameters.put(TOOL_DESCRIPTIONS, parameters.getOrDefault(TOOL_DESCRIPTIONS, ""));
+        parameters.put(TOOL_NAMES, parameters.getOrDefault(TOOL_NAMES, ""));
         return prompt;
     }
 
