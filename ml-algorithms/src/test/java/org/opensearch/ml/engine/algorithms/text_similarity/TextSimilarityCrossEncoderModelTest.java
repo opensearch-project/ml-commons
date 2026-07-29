@@ -190,6 +190,32 @@ public class TextSimilarityCrossEncoderModelTest {
     }
 
     @Test
+    public void initModel_predict_ONNX_CrossEncoder_withoutTokenTypeIds() throws URISyntaxException {
+        model = MLModel
+            .builder()
+            .modelFormat(MLModelFormat.ONNX)
+            .name("test_model_name")
+            .modelId("test_model_id")
+            .algorithm(FunctionName.TEXT_SIMILARITY)
+            .version("1.0.0")
+            .modelState(MLModelState.TRAINED)
+            .build();
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyXLMRoberta-CE-onnx.zip").toURI()));
+
+        textSimilarityCrossEncoderModel.initModel(model, params, encryptor);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput) textSimilarityCrossEncoderModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
+            List<ModelTensor> mlModelTensors = mlModelOutputs.get(i).getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            assertEquals(1, mlModelTensors.get(0).getData().length);
+        }
+        textSimilarityCrossEncoderModel.close();
+    }
+
+    @Test
     public void initModel_predict_ONNX_CrossEncoder() throws URISyntaxException {
         model = MLModel
             .builder()
