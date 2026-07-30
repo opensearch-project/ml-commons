@@ -130,6 +130,12 @@ public class MemoryContainerConstants {
     public static final String DELETE_MEMORIES_BY_QUERY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_delete_by_query";
     public static final String SEMANTIC_SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/long-term/_semantic_search";
     public static final String HYBRID_SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/long-term/_hybrid_search";
+    // Retention dry-run: preview what the scheduled retention job would delete, without deleting.
+    public static final String RETENTION_DRY_RUN_PATH = BASE_MEMORY_CONTAINERS_PATH
+        + "/{"
+        + PARAMETER_MEMORY_CONTAINER_ID
+        + "}/_retention/_dry_run";
+    public static final String RETENTION_DRY_RUN_ALL_PATH = "/_plugins/_ml/memory/_retention/_dry_run";
 
     // Memory types are defined in MemoryType enum
     // Memory strategy types are defined in MemoryStrategyType enum
