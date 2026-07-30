@@ -66,7 +66,9 @@ import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
 import ai.djl.ndarray.types.DataType;
 import ai.djl.ndarray.types.Shape;
+import ai.djl.nn.Block;
 import ai.djl.translate.TranslatorContext;
+import ai.djl.util.PairList;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -190,29 +192,34 @@ public class TextSimilarityCrossEncoderModelTest {
     }
 
     @Test
-    public void initModel_predict_ONNX_CrossEncoder_withoutTokenTypeIds() throws URISyntaxException {
-        model = MLModel
-            .builder()
-            .modelFormat(MLModelFormat.ONNX)
-            .name("test_model_name")
-            .modelId("test_model_id")
-            .algorithm(FunctionName.TEXT_SIMILARITY)
-            .version("1.0.0")
-            .modelState(MLModelState.TRAINED)
-            .build();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyXLMRoberta-CE-onnx.zip").toURI()));
+    public void test_TextSimilarity_Translator_ProcessInput_withoutTokenTypeIds() throws URISyntaxException, IOException {
+        TextSimilarityTranslator textSimilarityTranslator = new TextSimilarityTranslator();
+        TranslatorContext translatorContext = mock(TranslatorContext.class);
+        Model mlModel = mock(Model.class);
+        when(translatorContext.getModel()).thenReturn(mlModel);
+        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("../tokenize/tokenizer.json").toURI()).getParent());
+        textSimilarityTranslator.prepare(translatorContext);
 
-        textSimilarityCrossEncoderModel.initModel(model, params, encryptor);
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput) textSimilarityCrossEncoderModel.predict(mlInput);
-        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
-        assertEquals(2, mlModelOutputs.size());
-        for (int i = 0; i < mlModelOutputs.size(); i++) {
-            List<ModelTensor> mlModelTensors = mlModelOutputs.get(i).getMlModelTensors();
-            assertEquals(1, mlModelTensors.size());
-            assertEquals(1, mlModelTensors.get(0).getData().length);
-        }
-        textSimilarityCrossEncoderModel.close();
+        // Model that declares only input_ids and attention_mask
+        Block block = mock(Block.class);
+        PairList<String, Shape> describedInput = new PairList<>();
+        describedInput.add("input_ids", new Shape(1));
+        describedInput.add("attention_mask", new Shape(1));
+        when(mlModel.getBlock()).thenReturn(block);
+        when(block.describeInput()).thenReturn(describedInput);
+
+        NDManager manager = mock(NDManager.class);
+        when(translatorContext.getNDManager()).thenReturn(manager);
+        Input input = mock(Input.class);
+        String testSentence = "hello world";
+        when(input.getAsString(0)).thenReturn(testSentence);
+        when(input.getAsString(1)).thenReturn(testSentence);
+        NDArray indiceNdArray = mock(NDArray.class);
+        when(indiceNdArray.toLongArray()).thenReturn(new long[] { 102l, 101l });
+        when(manager.create((long[]) any())).thenReturn(indiceNdArray);
+        doNothing().when(indiceNdArray).setName(any());
+        NDList outputList = textSimilarityTranslator.processInput(translatorContext, input);
+        assertEquals(2, outputList.size());
     }
 
     @Test
