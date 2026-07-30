@@ -73,6 +73,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
 import org.opensearch.ml.common.transport.memorycontainer.MemoryRetentionDryRunResult;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
@@ -150,9 +151,43 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
     @Override
     public void run() {
-        // The scheduled retention job is a single cluster-wide, system-context janitor. Under multi-tenancy it still
-        // scans the one global container registry (matchAllQuery) and cleans EVERY container regardless of tenant.
-        // Tenant isolation is achieved per-container, not per-run: each per-container search/delete is bounded by
+        // The scheduled path ignores the returned status (it is only logged inside triggerRun);
+        // the on-demand API path calls triggerRun() directly to surface the status to the caller.
+        // Both share the exact same guards and pipeline kickoff so behavior is identical. The
+        // scheduled path additionally swallows a synchronous kickoff failure (already logged and the
+        // in-progress guard already released inside triggerRun) exactly as it did before this method
+        // was refactored, so a fire-and-forget scheduled run never propagates.
+        try {
+            triggerRun();
+        } catch (Exception e) {
+            // Swallowed on purpose: preserves pre-refactor fire-and-forget scheduled semantics.
+            // triggerRun() has already error-logged and reset the in-progress guard before rethrowing.
+            log.trace("Scheduled memory retention run kickoff failed (already handled by triggerRun)", e);
+        }
+    }
+
+    /**
+     * Applies the retention job's gating (remote-metadata-store skip, retention_enabled, single-flight in-progress
+     * guard) and, when all pass, kicks off the full async retention pipeline via
+     * {@link #resolveContainersWithPolicies(Object[])} exactly as the scheduled run does. Returns
+     * promptly with a {@link TriggerStatus} describing the outcome; it does NOT block until the
+     * (fully async) delete pipeline completes. When {@link TriggerStatus#TRIGGERED} is returned the
+     * in-progress guard has been claimed and will be released by {@link #onJobComplete()} (or on a
+     * synchronous kickoff failure below); for every other status no guard is held and no state is
+     * mutated, so a caller can safely retry.
+     *
+     * <p>This is the single source of truth for both the scheduled {@link #run()} and the on-demand
+     * transport action, so the two can never diverge. The in-progress guard is a per-JVM
+     * {@link AtomicBoolean}: it serializes invocations on THIS node (the scheduler additionally holds a
+     * cluster-wide JobScheduler lock, but the on-demand path does not), so it does not by itself
+     * prevent a run on another node from overlapping.
+     *
+     * @return the job-level outcome of this invocation
+     */
+    public TriggerStatus triggerRun() {
+        // The retention job is a single cluster-wide, system-context janitor. Under multi-tenancy it still scans the
+        // one global container registry (matchAllQuery) and cleans EVERY container regardless of tenant. Tenant
+        // isolation is achieved per-container: each per-container search/delete is bounded by
         // termQuery(memory_container_id, ...), and container ids are globally unique with each mapping to exactly one
         // tenant, so filtering by container_id transitively confines every read/delete to that container's own tenant.
         // No tenant_id term filter is added (it would be redundant on sessions/working/history and outright wrong on
@@ -168,25 +203,27 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     "Memory retention job skipped: remote metadata store is configured; the container registry is not "
                         + "in the local cluster, so the retention job cannot enumerate containers. See RFC #4859."
                 );
-            return;
+            return TriggerStatus.REMOTE_METADATA_STORE;
         }
 
         if (!clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_ENABLED)) {
             log.info("Memory retention job disabled via cluster setting plugins.ml_commons.memory.retention_enabled=false");
-            return;
+            return TriggerStatus.RETENTION_DISABLED;
         }
 
         if (!isRunning.compareAndSet(false, true)) {
             log.warn("Memory retention job already in progress, skipping this invocation");
-            return;
+            return TriggerStatus.ALREADY_RUNNING;
         }
 
         try {
             log.info("Memory retention job started");
             resolveContainersWithPolicies(null);
+            return TriggerStatus.TRIGGERED;
         } catch (Exception e) {
             log.error("Unexpected error starting memory retention job", e);
             isRunning.set(false);
+            throw e;
         }
     }
 

@@ -18,6 +18,7 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -153,6 +154,148 @@ public class MemoryRetentionJobProcessorTests {
         MemoryRetentionJobProcessor instance1 = MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool);
         MemoryRetentionJobProcessor instance2 = MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool);
         assertSame(instance1, instance2);
+    }
+
+    @Test
+    public void testTriggerRunReturnsRemoteMetadataStore() {
+        // RFC #4859: multi-tenancy no longer gates the job (local-metadata MT runs tenant-isolated). The trigger
+        // skips only when a REMOTE metadata store is configured, returning REMOTE_METADATA_STORE.
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_metadata_type", "AWSOpenSearchService").build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
+
+        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus status = processor.triggerRun();
+
+        assertEquals(
+            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.REMOTE_METADATA_STORE,
+            status
+        );
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunReturnsRetentionDisabled() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", false)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
+
+        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus status = processor.triggerRun();
+
+        assertEquals(
+            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.RETENTION_DISABLED,
+            status
+        );
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunReturnsTriggeredThenAlreadyRunning() throws Exception {
+        // First trigger: kick off the pipeline but never let it complete, so isRunning stays true.
+        // We stub search to NOT invoke the listener, leaving the job "in progress".
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus first = processor.triggerRun();
+        assertEquals(org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED, first);
+
+        // Second trigger while the first is still in progress must be rejected without double-running.
+        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus second = processor.triggerRun();
+        assertEquals(
+            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.ALREADY_RUNNING,
+            second
+        );
+
+        // Only the first trigger initiated a container search.
+        verify(client, org.mockito.Mockito.times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunReturnsTriggeredAndCompletesGuardReleased() {
+        // Empty containers -> pipeline completes synchronously, isRunning is reset, so a second trigger works.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(
+            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
+            processor.triggerRun()
+        );
+        // Guard released on completion -> a subsequent trigger is TRIGGERED again, not ALREADY_RUNNING.
+        assertEquals(
+            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
+            processor.triggerRun()
+        );
+    }
+
+    @Test
+    public void testRunSwallowsSynchronousKickoffFailureAndReleasesGuard() {
+        // Make the very first container search throw synchronously on the calling thread, so
+        // resolveContainersWithPolicies(null) throws inside triggerRun()'s try block.
+        doThrow(new RuntimeException("synchronous kickoff boom")).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // run() (scheduled path) must NOT propagate the exception (fire-and-forget semantics).
+        processor.run();
+
+        // The guard must have been reset before the rethrow inside triggerRun(), so retention is not
+        // permanently wedged: switch search to succeed and confirm a subsequent trigger is TRIGGERED,
+        // not ALREADY_RUNNING.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(
+            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
+            processor.triggerRun()
+        );
+    }
+
+    @Test
+    public void testTriggerRunRethrowsSynchronousKickoffFailure() {
+        // The on-demand path relies on triggerRun() rethrowing (so the transport layer can surface a
+        // 500) while still having reset the guard first.
+        doThrow(new RuntimeException("synchronous kickoff boom")).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        try {
+            processor.triggerRun();
+            fail("triggerRun() should rethrow a synchronous kickoff failure");
+        } catch (RuntimeException expected) {
+            assertEquals("synchronous kickoff boom", expected.getMessage());
+        }
+
+        // Guard released despite the failure.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(
+            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
+            processor.triggerRun()
+        );
+    }
+
+    private java.util.Set<Setting<?>> gatingSettingsSet() {
+        return new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
     }
 
     @Test
