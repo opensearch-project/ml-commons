@@ -321,22 +321,34 @@ public class AgenticSearchTemplateService {
         return fields;
     }
 
+    /**
+     * Collect the mapping's leaf field names, skipping the {@code object}/{@code nested}
+     * containers on the way down.
+     *
+     * <p>Only leaves are valid targets for a field-selector param: a container like
+     * {@code spec} in {@code spec.os} cannot be sorted on or matched against, so
+     * including it would let the model pick a field that fails at query time.
+     */
     @SuppressWarnings("unchecked")
-    private static void collectFieldNames(Map<String, Object> properties, String prefix, List<String> out) {
+    static void collectFieldNames(Map<String, Object> properties, String prefix, List<String> out) {
         for (Map.Entry<String, Object> e : properties.entrySet()) {
             String name = prefix.isEmpty() ? e.getKey() : prefix + "." + e.getKey();
-            out.add(name);
             Object value = e.getValue();
-            if (value instanceof Map) {
-                Map<String, Object> field = (Map<String, Object>) value;
-                if (field.get("properties") instanceof Map) {
-                    collectFieldNames((Map<String, Object>) field.get("properties"), name, out);
-                }
-                // Expose a text field's keyword sub-field (used for exact/sort).
-                if (field.get("fields") instanceof Map) {
-                    for (String sub : ((Map<String, Object>) field.get("fields")).keySet()) {
-                        out.add(name + "." + sub);
-                    }
+            if (!(value instanceof Map)) {
+                out.add(name);
+                continue;
+            }
+            Map<String, Object> field = (Map<String, Object>) value;
+            if (field.get("properties") instanceof Map) {
+                // A container: recurse for its leaves and don't offer the container itself.
+                collectFieldNames((Map<String, Object>) field.get("properties"), name, out);
+            } else {
+                out.add(name);
+            }
+            // Expose a text field's keyword sub-field (used for exact/sort).
+            if (field.get("fields") instanceof Map) {
+                for (String sub : ((Map<String, Object>) field.get("fields")).keySet()) {
+                    out.add(name + "." + sub);
                 }
             }
         }
@@ -582,10 +594,13 @@ public class AgenticSearchTemplateService {
     }
 
     private AgenticSearchTemplate parse(BytesReference source) throws Exception {
-        XContentParser parser = MediaTypeRegistry.JSON
-            .xContent()
-            .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, source.streamInput());
-        return AgenticSearchTemplate.parse(parser);
+        try (
+            XContentParser parser = MediaTypeRegistry.JSON
+                .xContent()
+                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, source.streamInput())
+        ) {
+            return AgenticSearchTemplate.parse(parser);
+        }
     }
 
     /** Small carrier so the list transport action can build its paged response. */
