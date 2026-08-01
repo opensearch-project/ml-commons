@@ -97,6 +97,12 @@ GET /_plugins/_ml/tasks/<TASK_ID>
 The response includes the refreshed remote job state under `remote_job.state` (e.g.
 `JOB_STATE_PENDING`, `JOB_STATE_RUNNING`, `JOB_STATE_SUCCEEDED`, `JOB_STATE_CANCELLED`).
 
+The ML task's own state transitions to a terminal value (`COMPLETED`, `FAILED`, `EXPIRED`,
+`CANCELLED`) once the remote job finishes. This is derived from `remote_job.state` via the
+shared cluster settings `plugins.ml_commons.remote_job.status_field` and
+`plugins.ml_commons.remote_job.status_regex.*`, which recognize the Vertex `JOB_STATE_*`
+values by default — no per-connector configuration is required.
+
 ## 6. Cancel a job
 
 ```json
