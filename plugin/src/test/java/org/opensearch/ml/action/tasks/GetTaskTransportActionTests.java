@@ -152,12 +152,12 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         Settings settings = Settings
             .builder()
-            .putList(ML_COMMONS_REMOTE_JOB_STATUS_FIELD.getKey(), List.of("status", "TransformJobStatus"))
-            .put(ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX.getKey(), "(complete|completed)")
+            .putList(ML_COMMONS_REMOTE_JOB_STATUS_FIELD.getKey(), List.of("status", "TransformJobStatus", "state"))
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX.getKey(), "(complete|completed|JOB_STATE_SUCCEEDED)")
             .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX.getKey(), "(stopped|cancelled)")
             .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX.getKey(), "(stopping|cancelling)")
-            .put(ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX.getKey(), "(expired|timeout)")
-            .put(ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX.getKey(), "(failed)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX.getKey(), "(expired|timeout|JOB_STATE_EXPIRED)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX.getKey(), "(failed|JOB_STATE_FAILED)")
             .build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -480,6 +480,26 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     public void test_processTaskResponse_failed() {
         processTaskResponse("status", "failed", MLTaskState.FAILED);
+    }
+
+    // GCP Vertex AI batch jobs report status under the "state" field with JOB_STATE_* values.
+    // These verify the shared status settings recognize that vocabulary so a finished Vertex
+    // job reaches a terminal MLTask state (rather than being re-polled forever).
+    public void test_processTaskResponse_vertexSucceeded() {
+        processTaskResponse("state", "JOB_STATE_SUCCEEDED", MLTaskState.COMPLETED);
+    }
+
+    public void test_processTaskResponse_vertexFailed() {
+        processTaskResponse("state", "JOB_STATE_FAILED", MLTaskState.FAILED);
+    }
+
+    public void test_processTaskResponse_vertexExpired() {
+        processTaskResponse("state", "JOB_STATE_EXPIRED", MLTaskState.EXPIRED);
+    }
+
+    public void test_processTaskResponse_vertexCancelled() {
+        // No JOB_STATE_CANCELLED token needed: it substring-matches the cancelled regex.
+        processTaskResponse("state", "JOB_STATE_CANCELLED", MLTaskState.CANCELLED);
     }
 
     public void test_processTaskResponse_WrongStatusField() {

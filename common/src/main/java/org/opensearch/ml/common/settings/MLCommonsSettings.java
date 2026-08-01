@@ -412,7 +412,8 @@ public final class MLCommonsSettings {
                 .of(
                     "status", // openai, bedrock, cohere
                     "Status",
-                    "TransformJobStatus" // sagemaker
+                    "TransformJobStatus", // sagemaker
+                    "state" // google vertex ai (batchPredictionJobs)
                 ),
             Function.identity(),
             Setting.Property.NodeScope,
@@ -422,7 +423,7 @@ public final class MLCommonsSettings {
     public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX = Setting
         .simpleString(
             ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.completed",
-            "(complete|completed|partiallyCompleted)",
+            "(complete|completed|partiallyCompleted|JOB_STATE_SUCCEEDED)",
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -443,7 +444,7 @@ public final class MLCommonsSettings {
     public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX = Setting
         .simpleString(
             ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.expired",
-            "(expired|timeout)",
+            "(expired|timeout|JOB_STATE_EXPIRED)",
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -451,7 +452,7 @@ public final class MLCommonsSettings {
     public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX = Setting
         .simpleString(
             ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.failed",
-            "(failed)",
+            "(failed|JOB_STATE_FAILED)",
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
