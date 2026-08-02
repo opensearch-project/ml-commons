@@ -200,6 +200,28 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager).indexMemoryRetentionJob(24);
     }
 
+    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenRemoteMetadataStoreConfigured() {
+        // RFC #4859: with a remote metadata store (e.g. AWS OpenSearch Serverless / DynamoDB), the container registry
+        // is not in the local cluster, so the native-client retention job cannot enumerate it. It must NOT be scheduled.
+        // Local-metadata multi-tenancy remains supported (see testClusterChanged_MemoryRetentionJobStarted_WhenMultiTenancyEnabled).
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
+        when(clusterService.getSettings())
+            .thenReturn(
+                org.opensearch.common.settings.Settings
+                    .builder()
+                    .put("plugins.ml_commons.multi_tenancy_enabled", true)
+                    .put("plugins.ml_commons.remote_metadata_type", "AWSOpenSearchService")
+                    .build()
+            );
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
+    }
+
     public void testClusterChanged_MemoryRetentionJobNotStarted_WhenAgenticMemoryDisabled() {
         setupClusterState(false, createDataNode("n1", Version.CURRENT));
         when(clusterService.getSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);

@@ -5,12 +5,15 @@
 
 package org.opensearch.ml.common.settings;
 
+import static org.opensearch.remote.metadata.common.CommonValue.AWS_DYNAMO_DB;
+import static org.opensearch.remote.metadata.common.CommonValue.AWS_OPENSEARCH_SERVICE;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_GLOBAL_TENANT_ID_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_OPENSEARCH;
 
 import java.util.List;
 import java.util.function.Function;
@@ -18,6 +21,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
 
@@ -526,6 +530,18 @@ public final class MLCommonsSettings {
     /** This setting sets the remote metadata service name */
     public static final Setting<String> REMOTE_METADATA_SERVICE_NAME = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_SERVICE_NAME_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /**
+     * Whether cluster metadata (including the memory container registry) is stored in a REMOTE metadata store rather
+     * than the local cluster. Mirrors {@code SdkClientFactory}: any of {@code RemoteOpenSearch}, {@code AWSDynamoDB},
+     * or {@code AWSOpenSearchService} routes metadata to a remote store; empty/unrecognized falls back to the local
+     * cluster. Background jobs that scan local system indices with the native client (e.g. memory retention) find no
+     * metadata when the store is remote, so they must gate on this. See RFC #4859.
+     */
+    public static boolean isRemoteMetadataStore(Settings settings) {
+        String type = REMOTE_METADATA_TYPE.get(settings);
+        return REMOTE_OPENSEARCH.equals(type) || AWS_DYNAMO_DB.equals(type) || AWS_OPENSEARCH_SERVICE.equals(type);
+    }
 
     // Feature flag for enabling telemetry metric collection via metrics framework
     public static final Setting<Boolean> ML_COMMONS_METRIC_COLLECTION_ENABLED = Setting

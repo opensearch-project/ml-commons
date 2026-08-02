@@ -197,6 +197,35 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
+    public void testRunSkipsWhenRemoteMetadataStoreConfigured() {
+        // RFC #4859: when a REMOTE metadata store is configured (e.g. AWS OpenSearch Serverless / DynamoDB), the
+        // container registry lives outside the local cluster, so the native-client janitor cannot enumerate it and
+        // would silently clean nothing. The job must skip entirely (no registry scan) rather than run against an
+        // empty local registry. Local-metadata multi-tenancy is unaffected (see testRunExecutesWhenMultiTenancyEnabled).
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.remote_metadata_type", "AWSOpenSearchService")
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.REMOTE_METADATA_TYPE
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
+
+        processor.run();
+
+        // The job must NOT scan the container registry when metadata is stored remotely.
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
     public void testMultiTenancyTenantIsolationViaContainerIdFilter() {
         // RFC #4859 tenant-isolation guard: every per-container search/delete issued by a single cluster-wide run
         // MUST be scoped by termQuery(memory_container_id, <containerId>). Container ids are globally unique in the

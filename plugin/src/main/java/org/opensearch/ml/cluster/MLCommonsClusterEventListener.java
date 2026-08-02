@@ -82,13 +82,16 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
      * does not create the new {@code .plugins-ml-jobs} index before the cluster is ready for it. The retention job
      * schedules and runs under multi-tenancy too: it is a single cluster-wide, system-context janitor that cleans
      * every container across every tenant, with per-container memory_container_id filters providing tenant isolation.
-     * See RFC #4859.
+     * It is NOT scheduled when a remote metadata store is configured (e.g. AWS OpenSearch Serverless / DynamoDB),
+     * because the container registry then lives outside the local cluster and the native-client job cannot enumerate
+     * it; self-hosted (local metadata) multi-tenancy is fully supported. See RFC #4859.
      */
     private boolean shouldManageMemoryRetentionJob() {
         return clusterService.state().nodes().isLocalNodeElectedClusterManager()
             && jobsIndexReadyForWrite()
             && mlFeatureEnabledSetting.isAgenticMemoryEnabled()
-            && mlFeatureEnabledSetting.isMemoryRetentionEnabled();
+            && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && !MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings());
     }
 
     /**
@@ -166,9 +169,13 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                 this.startedStatsJob = true;
             }
 
+            // Skip when a remote metadata store is configured: the container registry lives outside the local
+            // cluster, so the native-client retention job cannot enumerate containers. Local-metadata
+            // multi-tenancy is fully supported. See RFC #4859.
             if (mlFeatureEnabledSetting.isAgenticMemoryEnabled()
                 && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
-                && !this.startedMemoryRetentionJob) {
+                && !this.startedMemoryRetentionJob
+                && !MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings())) {
                 // Read the effective interval, honoring OpenSearch precedence (transient > persistent > opensearch.yml
                 // > default). clusterService.getSettings() holds only node bootstrap settings (opensearch.yml / CLI),
                 // frozen at construction; state.getMetadata().settings() holds the persistent/transient values set via

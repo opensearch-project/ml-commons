@@ -26,7 +26,6 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -73,6 +72,7 @@ import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.memorycontainer.RetentionRule;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.transport.memorycontainer.MemoryRetentionDryRunResult;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
@@ -157,6 +157,20 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         // tenant, so filtering by container_id transitively confines every read/delete to that container's own tenant.
         // No tenant_id term filter is added (it would be redundant on sessions/working/history and outright wrong on
         // long_term, whose mapping has no tenant_id field). See RFC #4859.
+        //
+        // Exception: when metadata is stored in a REMOTE store (e.g. AWS OpenSearch Serverless / DynamoDB), the
+        // container registry lives remotely and this native-client scan of the local registry index would find zero
+        // containers and silently clean nothing. Skip in that mode rather than give a false impression of retention.
+        // Self-hosted multi-tenancy (local metadata) is fully supported and runs normally.
+        if (MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings())) {
+            log
+                .warn(
+                    "Memory retention job skipped: remote metadata store is configured; the container registry is not "
+                        + "in the local cluster, so the retention job cannot enumerate containers. See RFC #4859."
+                );
+            return;
+        }
+
         if (!clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_ENABLED)) {
             log.info("Memory retention job disabled via cluster setting plugins.ml_commons.memory.retention_enabled=false");
             return;
@@ -2022,13 +2036,13 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
             DryRunContext ctx = new DryRunContext(containerId, policySource, System.currentTimeMillis(), effective.policy, ttlDays);
 
-            // Multi-tenancy hard-gates the scheduled job off - run() returns before any deletion when MT is
-            // enabled - so nothing would ever be deleted in this deployment mode. Skip the read-only passes and
-            // report an honest zero rather than scanning indices for counts the job can't act on.
-            // NOTE(PR-B): retention runs under multi-tenancy in PR-B; this becomes an isRemoteMetadataStore()
-            // gate there, but the skip-to-zero behavior is unchanged.
-            if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
-                ctx.warnings.add("multi-tenancy is enabled; the scheduled retention job does not run, so nothing would be deleted");
+            // A remote metadata store hard-gates the scheduled job off - run() returns before any deletion when a
+            // remote metadata store is configured (see the isRemoteMetadataStore() gate in run()) - so nothing would
+            // ever be deleted in this deployment mode. Skip the read-only passes and report an honest zero rather than
+            // scanning indices for counts the job can't act on.
+            if (MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings())) {
+                ctx.warnings
+                    .add("a remote metadata store is configured; the scheduled retention job does not run, so nothing would be deleted");
                 listener.onResponse(buildDryRunResult(ctx));
                 return;
             }

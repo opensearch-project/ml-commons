@@ -528,10 +528,12 @@ public class MemoryRetentionDryRunTests {
         assertNoDeletes();
     }
 
-    private Settings.Builder gateSettings(boolean multiTenancy, boolean retentionEnabled) {
-        return Settings
-            .builder()
-            .put("plugins.ml_commons.multi_tenancy_enabled", multiTenancy)
+    private Settings.Builder gateSettings(boolean remoteMetadataStore, boolean retentionEnabled) {
+        Settings.Builder builder = Settings.builder();
+        if (remoteMetadataStore) {
+            builder.put("plugins.ml_commons.remote_metadata_type", "AWSOpenSearchService");
+        }
+        return builder
             .put("plugins.ml_commons.memory.retention_enabled", retentionEnabled)
             .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
             .put("plugins.ml_commons.memory.default_session_retention_days", -1)
@@ -572,16 +574,17 @@ public class MemoryRetentionDryRunTests {
     }
 
     @Test
-    public void testDryRunShortCircuitsWhenMultiTenancyEnabled() {
-        // MT enabled hard-gates the scheduled job off, so the dry-run must short-circuit to total=0 even when the
-        // policy WOULD evict data. The mock returns evictable sessions; if the passes ran total would be > 0.
+    public void testDryRunShortCircuitsWhenRemoteMetadataStore() {
+        // A remote metadata store hard-gates the scheduled job off, so the dry-run must short-circuit to total=0 even
+        // when the policy WOULD evict data. The mock returns evictable sessions; if the passes ran total would be > 0.
+        // The remote-metadata short-circuit returns before the retention-disabled check, so that warning is absent.
         applySettings(gateSettings(true, true).build());
         mockSessionsWouldEvict();
 
         MemoryRetentionDryRunResult result = run(sessionConfig(7, 5), null);
 
         assertEquals(0, result.getTotalWouldDelete());
-        assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("multi-tenancy is enabled")));
+        assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("a remote metadata store is configured")));
         assertFalse(result.getWarnings().stream().anyMatch(w -> w.contains("retention is disabled cluster-wide")));
         assertNotNull(result.getEffectivePolicy());
         assertNotNull(result.getPolicySource());
@@ -592,6 +595,7 @@ public class MemoryRetentionDryRunTests {
     public void testDryRunShortCircuitsWhenRetentionDisabled() {
         // retention_enabled=false gates the whole feature off, so the dry-run must short-circuit to total=0 even
         // when the policy WOULD evict data. The mock returns evictable sessions; if the passes ran total would be > 0.
+        // No remote metadata store here, so the run reaches the retention-disabled short-circuit.
         applySettings(gateSettings(false, false).build());
         mockSessionsWouldEvict();
 
