@@ -185,7 +185,9 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
     }
 
-    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenMultiTenancyEnabled() {
+    public void testClusterChanged_MemoryRetentionJobStarted_WhenMultiTenancyEnabled() {
+        // RFC #4859: the retention job is a single cluster-wide, system-context janitor with per-container tenant
+        // isolation, so it must be SCHEDULED even when multi-tenancy is enabled. Multi-tenancy no longer gates it.
         setupClusterState(false, createDataNode("n1", Version.CURRENT));
         when(clusterService.getSettings())
             .thenReturn(org.opensearch.common.settings.Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
@@ -195,7 +197,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
         listener.clusterChanged(event);
 
-        verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
+        verify(mlTaskManager).indexMemoryRetentionJob(24);
     }
 
     public void testClusterChanged_MemoryRetentionJobNotStarted_WhenAgenticMemoryDisabled() {
@@ -355,7 +357,10 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
     }
 
-    public void testSettingsUpdateConsumer_SkippedWhenMultiTenancyEnabled() {
+    public void testSettingsUpdateConsumer_UpsertsWhenMultiTenancyEnabled() {
+        // RFC #4859: multi-tenancy no longer gates the retention job, so a live interval change on the elected
+        // cluster manager must still upsert the shared job doc even when multi-tenancy is enabled. All nodes on
+        // CURRENT so the rolling-upgrade guard (jobsIndexReadyForWrite) passes and multi-tenancy is the only variable.
         DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerConsumerState(dataNode);
         when(clusterService.getSettings()).thenReturn(Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
@@ -364,7 +369,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
         clusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 2).build());
 
-        verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
+        verify(mlTaskManager).upsertMemoryRetentionJob(2);
     }
 
     public void testSettingsUpdateConsumer_SkippedWhenMixedVersionCluster() {

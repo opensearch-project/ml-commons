@@ -150,11 +150,13 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
     @Override
     public void run() {
-        if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
-            log.warn("Memory retention job skipped: multi-tenancy is enabled and native client lacks tenant routing");
-            return;
-        }
-
+        // The scheduled retention job is a single cluster-wide, system-context janitor. Under multi-tenancy it still
+        // scans the one global container registry (matchAllQuery) and cleans EVERY container regardless of tenant.
+        // Tenant isolation is achieved per-container, not per-run: each per-container search/delete is bounded by
+        // termQuery(memory_container_id, ...), and container ids are globally unique with each mapping to exactly one
+        // tenant, so filtering by container_id transitively confines every read/delete to that container's own tenant.
+        // No tenant_id term filter is added (it would be redundant on sessions/working/history and outright wrong on
+        // long_term, whose mapping has no tenant_id field). See RFC #4859.
         if (!clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_ENABLED)) {
             log.info("Memory retention job disabled via cluster setting plugins.ml_commons.memory.retention_enabled=false");
             return;

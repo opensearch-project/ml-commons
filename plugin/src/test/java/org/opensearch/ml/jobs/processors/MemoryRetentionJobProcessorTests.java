@@ -24,6 +24,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ORPHAN_SWEEP_BASELINE_TIME_FIELD;
 
 import java.lang.reflect.Field;
@@ -155,8 +156,16 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
-    public void testRunSkipsWhenMultiTenancyEnabled() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build();
+    public void testRunExecutesWhenMultiTenancyEnabled() {
+        // RFC #4859: the retention job is a single cluster-wide, system-context janitor. Multi-tenancy no longer
+        // gates it; it must schedule/run and scan the global container registry regardless of the MT setting.
+        // Tenant isolation is achieved per-container via the memory_container_id filter (see the isolation test),
+        // not by refusing to run under MT.
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .build();
         when(clusterService.getSettings()).thenReturn(settings);
         java.util.Set<Setting<?>> s = new java.util.HashSet<>(
             java.util.Arrays
@@ -174,10 +183,119 @@ public class MemoryRetentionJobProcessorTests {
         );
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
 
+        // Return empty containers
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
         processor.run();
 
-        // Should not search for containers when multi-tenancy is enabled
-        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        // The job must scan the global container registry even when multi-tenancy is enabled.
+        verify(client, atLeastOnce()).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testMultiTenancyTenantIsolationViaContainerIdFilter() {
+        // RFC #4859 tenant-isolation guard: every per-container search/delete issued by a single cluster-wide run
+        // MUST be scoped by termQuery(memory_container_id, <containerId>). Container ids are globally unique in the
+        // shared registry and each maps to exactly one tenant, so this transitively confines every physical-index
+        // read/delete to that container's own tenant. If any future per-container query drops the container_id term,
+        // it would leak/delete across tenants in the shared default index; this test fails in that case.
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
+
+        final String containerId = "tenant-a-container";
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            containerId,
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", 7, null)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        java.util.List<SearchRequest> perContainerSearches = new java.util.ArrayList<>();
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                // Record every non-registry (per-container) search and return expired sessions to drive deletes.
+                perContainerSearches.add(request);
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                SearchHit hit1 = createHitWithSource("expired-session-1", Map.of("last_updated_time", oldTimestamp));
+                SearchHits sessionHits = new SearchHits(new SearchHit[] { hit1 }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                SearchResponse sessionResponse = mock(SearchResponse.class);
+                when(sessionResponse.getHits()).thenReturn(sessionHits);
+                listener.onResponse(sessionResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        java.util.List<DeleteByQueryRequest> deleteByQueryRequests = new java.util.ArrayList<>();
+        BulkByScrollResponse cascadeResponse = mock(BulkByScrollResponse.class);
+        lenient().when(cascadeResponse.getDeleted()).thenReturn(1L);
+        doAnswer(invocation -> {
+            deleteByQueryRequests.add(invocation.getArgument(1));
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(cascadeResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(BulkRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // Every per-container search must be scoped by the container id term (never the registry index).
+        assertTrue("expected at least one per-container search", perContainerSearches.size() > 0);
+        for (SearchRequest req : perContainerSearches) {
+            String q = req.source().query().toString();
+            assertTrue("per-container search query must filter on memory_container_id: " + q, q.contains(MEMORY_CONTAINER_ID_FIELD));
+            assertTrue("per-container search query must reference container id " + containerId + ": " + q, q.contains(containerId));
+        }
+
+        // Every delete-by-query must likewise be scoped by the container id term.
+        assertTrue("expected at least one delete-by-query", deleteByQueryRequests.size() > 0);
+        for (DeleteByQueryRequest dbq : deleteByQueryRequests) {
+            String q = dbq.getSearchRequest().source().query().toString();
+            assertTrue("delete-by-query must filter on memory_container_id: " + q, q.contains(MEMORY_CONTAINER_ID_FIELD));
+            assertTrue("delete-by-query must reference container id " + containerId + ": " + q, q.contains(containerId));
+        }
     }
 
     @Test

@@ -77,17 +77,18 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     /**
      * Single-writer gate for memory-retention job writes that mutate the shared, fixed-id job document. Exactly one
      * node (the elected cluster manager) should ever upsert/reconcile, and only when agentic memory AND memory
-     * retention are enabled and multi-tenancy is disabled (mirroring the startup scheduling path exactly). The
-     * {@link #jobsIndexReadyForWrite()} check mirrors the startup loop's rolling-upgrade guard so a live setting
-     * change during a mixed-version upgrade does not create the new {@code .plugins-ml-jobs} index before the
-     * cluster is ready for it.
+     * retention are enabled (mirroring the startup scheduling path exactly). The {@link #jobsIndexReadyForWrite()}
+     * check mirrors the startup loop's rolling-upgrade guard so a live setting change during a mixed-version upgrade
+     * does not create the new {@code .plugins-ml-jobs} index before the cluster is ready for it. The retention job
+     * schedules and runs under multi-tenancy too: it is a single cluster-wide, system-context janitor that cleans
+     * every container across every tenant, with per-container memory_container_id filters providing tenant isolation.
+     * See RFC #4859.
      */
     private boolean shouldManageMemoryRetentionJob() {
         return clusterService.state().nodes().isLocalNodeElectedClusterManager()
             && jobsIndexReadyForWrite()
             && mlFeatureEnabledSetting.isAgenticMemoryEnabled()
-            && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
-            && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings());
+            && mlFeatureEnabledSetting.isMemoryRetentionEnabled();
     }
 
     /**
@@ -167,7 +168,6 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
 
             if (mlFeatureEnabledSetting.isAgenticMemoryEnabled()
                 && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
-                && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
                 && !this.startedMemoryRetentionJob) {
                 // Read the effective interval, honoring OpenSearch precedence (transient > persistent > opensearch.yml
                 // > default). clusterService.getSettings() holds only node bootstrap settings (opensearch.yml / CLI),
