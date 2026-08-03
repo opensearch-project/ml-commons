@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import javax.net.ssl.KeyManager;
@@ -22,6 +23,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -51,7 +54,7 @@ final class MLHttpClientCacheManager {
         HttpConnector connector,
         ConnectorClientConfig config,
         Client client,
-        java.util.function.Supplier<SdkAsyncHttpClient> clientFactory
+        Supplier<SdkAsyncHttpClient> clientFactory
     ) {
         String currentCacheKey = generateHttpClientCacheKey(connector, config);
 
@@ -97,7 +100,7 @@ final class MLHttpClientCacheManager {
      * Generate a cache key that includes all configuration parameters that affect HTTP client creation.
      * This ensures the client is recreated when credentials or SSL configuration changes.
      */
-    @com.google.common.annotations.VisibleForTesting
+    @VisibleForTesting
     String generateHttpClientCacheKey(HttpConnector connector, ConnectorClientConfig config) {
         StringBuilder keyBuilder = new StringBuilder();
 
