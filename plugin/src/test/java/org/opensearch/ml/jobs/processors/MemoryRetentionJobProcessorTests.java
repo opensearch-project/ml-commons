@@ -6,6 +6,7 @@
 package org.opensearch.ml.jobs.processors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -34,7 +35,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.search.TotalHits;
@@ -3548,5 +3551,192 @@ public class MemoryRetentionJobProcessorTests {
 
         assertNotNull("collectOldestDocIds should have completed synchronously", result.get());
         assertEquals("collectOldestDocIds must not collect more than the per-run cap", cap, result.get().size());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Guard-leak regression tests: the isRunning guard must always reset, even when a run fails on a
+    // thread that no ActionListener wraps, so retention can never silently wedge until node restart.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void testGuardResetsAfterMidRunThrowInScheduledContinuation() throws Exception {
+        // The primary leak vector: after a container with deletions, the chain resumes inside a
+        // threadPool.schedule() continuation that runs on the GENERIC pool, OUTSIDE any listener. A
+        // synchronous throw there (modeled here as the orphan-sweep search rejecting work) used to be
+        // swallowed by the executor, leaving isRunning stuck true forever. Emulate real executor
+        // isolation by swallowing the runnable's throw the way ThreadPool.schedule would, so this test
+        // reproduces the production leak rather than masking it behind the synchronous default mock.
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            try {
+                runnable.run();
+            } catch (Throwable ignored) {
+                // A real scheduled executor routes this to the uncaught-exception handler, not the caller.
+            }
+            return null;
+        }).when(threadPool).schedule(any(Runnable.class), any(TimeValue.class), anyString());
+
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            "container-time",
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", 7, null)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    // First container-index search returns one container with deletions, which drives
+                    // the chain into scheduleNext() and then into the scheduled orphan-sweep search.
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    // Second container-index search is the orphan sweep, reached inside the scheduled
+                    // continuation. Throw synchronously to simulate an unhandled mid-run failure.
+                    throw new RuntimeException("injected orphan-sweep failure inside scheduled continuation");
+                }
+            } else {
+                // Session search returns 3 expired sessions so container-0 reports deletions.
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                SearchHit hit1 = createHitWithSource("expired-session-1", Map.of("last_updated_time", oldTimestamp));
+                SearchHit hit2 = createHitWithSource("expired-session-2", Map.of("last_updated_time", oldTimestamp));
+                SearchHit hit3 = createHitWithSource("expired-session-3", Map.of("last_updated_time", oldTimestamp));
+                SearchHits sessionHits = new SearchHits(
+                    new SearchHit[] { hit1, hit2, hit3 },
+                    new TotalHits(3, TotalHits.Relation.EQUAL_TO),
+                    Float.NaN
+                );
+                SearchResponse sessionResponse = mock(SearchResponse.class);
+                when(sessionResponse.getHits()).thenReturn(sessionHits);
+                listener.onResponse(sessionResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse cascadeResponse = mock(BulkByScrollResponse.class);
+        lenient().when(cascadeResponse.getDeleted()).thenReturn(10L);
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(cascadeResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(BulkRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // The mid-run throw was reached (orphan-sweep search was attempted) ...
+        assertTrue("orphan-sweep search should have been attempted inside the continuation", containerSearchCount.get() >= 2);
+        // ... and despite it, the guard was released so the next scheduled run is not blocked.
+        assertFalse("isRunning must reset after a mid-run throw in the scheduled continuation", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared once the guard is released", Long.MIN_VALUE, runStartMillis(processor));
+
+        // Prove recovery end-to-end: a subsequent invocation is NOT skipped as "already in progress".
+        AtomicBoolean recoverySearched = new AtomicBoolean(false);
+        doAnswer(invocation -> {
+            recoverySearched.set(true);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        processor.run();
+        assertTrue("a fresh run after a leak must proceed, not skip", recoverySearched.get());
+        assertFalse("isRunning must be false after the recovering run completes", isRunningFlag(processor));
+    }
+
+    @Test
+    public void testGuardResetsWhenInitialSearchThrows() throws Exception {
+        // A synchronous throw from the very first search (kicked off directly inside run()) must be
+        // caught and reset the guard via the run() try/catch.
+        doAnswer(invocation -> { throw new RuntimeException("injected initial search failure"); })
+            .when(client)
+            .search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertFalse("isRunning must reset when the initial container search throws", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared", Long.MIN_VALUE, runStartMillis(processor));
+    }
+
+    @Test
+    public void testStuckGuardWatchdogClearsGuardAndNextRunRecovers() throws Exception {
+        // Simulate a previously leaked guard: isRunning stuck true, acquired longer ago than any real
+        // run could last. The watchdog in run() must CLEAR the guard and skip THIS invocation (it must
+        // not take over and start a competing run), then the NEXT invocation must proceed cleanly.
+        setIsRunning(processor, true);
+        setRunStartMillis(processor, System.currentTimeMillis() - stuckTimeoutMillis() - TimeUnit.HOURS.toMillis(1));
+
+        AtomicBoolean searched = new AtomicBoolean(false);
+        doAnswer(invocation -> {
+            searched.set(true);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // First invocation: detects the leak, clears the guard, and does NOT start a run.
+        processor.run();
+        assertFalse("watchdog must not start a competing run on the stuck-guard invocation", searched.get());
+        assertFalse("isRunning must be cleared by the watchdog", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared by the watchdog", Long.MIN_VALUE, runStartMillis(processor));
+
+        // Second invocation: guard is free, so this one runs normally.
+        processor.run();
+        assertTrue("the next scheduled run after a cleared leak must proceed", searched.get());
+        assertFalse("isRunning must be false after the recovering run completes", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared after recovery", Long.MIN_VALUE, runStartMillis(processor));
+    }
+
+    @Test
+    public void testRecentGuardIsNotStolenByWatchdog() throws Exception {
+        // A genuinely in-flight run (guard acquired just now) must still cause a concurrent invocation
+        // to skip — the watchdog must not steal a healthy run.
+        setIsRunning(processor, true);
+        setRunStartMillis(processor, System.currentTimeMillis());
+
+        processor.run();
+
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertTrue("a healthy in-flight guard must remain held", isRunningFlag(processor));
+    }
+
+    private boolean isRunningFlag(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("isRunning");
+        f.setAccessible(true);
+        return ((AtomicBoolean) f.get(p)).get();
+    }
+
+    private void setIsRunning(MemoryRetentionJobProcessor p, boolean value) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("isRunning");
+        f.setAccessible(true);
+        ((AtomicBoolean) f.get(p)).set(value);
+    }
+
+    private long runStartMillis(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("runStartMillis");
+        f.setAccessible(true);
+        return ((AtomicLong) f.get(p)).get();
+    }
+
+    private void setRunStartMillis(MemoryRetentionJobProcessor p, long value) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("runStartMillis");
+        f.setAccessible(true);
+        ((AtomicLong) f.get(p)).set(value);
+    }
+
+    private long stuckTimeoutMillis() throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("STUCK_GUARD_TIMEOUT_MILLIS");
+        f.setAccessible(true);
+        return f.getLong(null);
     }
 }
