@@ -33,7 +33,7 @@ import lombok.extern.log4j.Log4j2;
 /**
  * Triggers the memory retention job on demand. Delegates to the same
  * {@link MemoryRetentionJobProcessor} singleton the scheduler uses and invokes its
- * {@link MemoryRetentionJobProcessor#triggerRun()} guard-and-kickoff path, so behavior is identical
+ * {@link MemoryRetentionJobProcessor#triggerRun(org.opensearch.core.action.ActionListener)} guard-and-kickoff path, so behavior is identical
  * to a scheduled run. The pipeline is fully async; this action acknowledges the trigger promptly and
  * does not block until deletions complete.
  */
@@ -70,18 +70,27 @@ public class TransportExecuteMemoryRetentionAction extends HandledTransportActio
         }
 
         try {
-            // Reuse the scheduler's per-node singleton so the on-demand trigger and the scheduled run
-            // share the same in-progress guard ON THIS NODE. This dedupes the common cases (repeated
-            // triggers, or a trigger racing the scheduler, when both land on the same node). NOTE: the
-            // guard is a per-JVM AtomicBoolean and this action runs locally on the coordinating node
-            // WITHOUT the scheduler's cluster-wide LockService lock, so it does not prevent a trigger on
-            // one node from running concurrently with the scheduled run (or another trigger) on a
-            // different node. The pipeline tolerates this (deletes are idempotent, version conflicts are
-            // handled, orphan sweep is baseline-gated); cluster-wide mutual exclusion would require
-            // routing this path through LockService and is intentionally out of scope here.
+            // Reuse the scheduler's per-node singleton so the on-demand trigger and the scheduled run share
+            // the same in-progress guard ON THIS NODE and, crucially, the same cluster-wide JobScheduler
+            // LockService lock. triggerRun() acquires that lock (same lock index + doc id the scheduled run
+            // uses) and HOLDS it for the whole async delete pipeline, so an on-demand trigger on one node
+            // will report ALREADY_RUNNING rather than overlap a scheduled (or on-demand) run on another node.
+            // The call is async because lock acquisition is async; it reports the outcome via the listener.
             MemoryRetentionJobProcessor processor = MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool);
-            TriggerStatus status = processor.triggerRun();
-            actionListener.onResponse(new MLExecuteMemoryRetentionResponse(status, messageFor(status)));
+            processor
+                .triggerRun(
+                    ActionListener
+                        .wrap(status -> actionListener.onResponse(new MLExecuteMemoryRetentionResponse(status, messageFor(status))), e -> {
+                            log.error("Failed to trigger memory retention job on demand", e);
+                            actionListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "Failed to trigger memory retention job",
+                                        RestStatus.INTERNAL_SERVER_ERROR
+                                    )
+                                );
+                        })
+                );
         } catch (Exception e) {
             log.error("Failed to trigger memory retention job on demand", e);
             actionListener
@@ -97,6 +106,9 @@ public class TransportExecuteMemoryRetentionAction extends HandledTransportActio
                 return "Memory retention job is already in progress; this invocation was skipped to avoid double-running.";
             case RETENTION_DISABLED:
                 return "Memory retention is disabled (plugins.ml_commons.memory.retention_enabled=false); nothing was triggered.";
+            case REMOTE_METADATA_STORE:
+                return "Memory retention job cannot run while a remote metadata store is configured; "
+                    + "the container registry is not in the local cluster.";
             case MULTI_TENANCY_ENABLED:
                 return "Memory retention job cannot run while multi-tenancy is enabled; the native client lacks tenant routing.";
             default:

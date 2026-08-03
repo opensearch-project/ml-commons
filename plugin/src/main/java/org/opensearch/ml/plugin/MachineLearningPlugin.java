@@ -38,6 +38,9 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Inject;
+import org.opensearch.common.lifecycle.AbstractLifecycleComponent;
+import org.opensearch.common.lifecycle.LifecycleComponent;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.IndexScopedSettings;
 import org.opensearch.common.settings.Setting;
@@ -59,6 +62,7 @@ import org.opensearch.indices.analysis.PreBuiltCacheFactory;
 import org.opensearch.jobscheduler.spi.JobSchedulerExtension;
 import org.opensearch.jobscheduler.spi.ScheduledJobParser;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
+import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightConfigTransportAction;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightTransportAction;
 import org.opensearch.ml.action.IndexInsight.PutIndexInsightConfigTransportAction;
@@ -303,6 +307,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobRunner;
+import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationTransportAction;
@@ -1712,5 +1717,48 @@ public class MachineLearningPlugin extends Plugin
     @Override
     public ScheduledJobParser getJobParser() {
         return (parser, id, jobDocVersion) -> MLJobParameter.parse(parser);
+    }
+
+    @Override
+    public Collection<Class<? extends LifecycleComponent>> getGuiceServiceClasses() {
+        // Registers the holder so Guice constructs it and injects the JobScheduler LockService. The
+        // LockService impl lives in the job-scheduler plugin and is only reachable at runtime via this
+        // node-level binding (bound by JobSchedulerPluginModule); ml-commons compiles against the SPI
+        // interface only. This is the upstream-sanctioned way (used by security-analytics) for a guest
+        // plugin to obtain a LockService for use outside a scheduled job run.
+        return Collections.singletonList(GuiceHolder.class);
+    }
+
+    /**
+     * Guice service holder that captures the node's shared {@link LockService} and hands it to
+     * {@link MemoryRetentionJobProcessor}, so the on-demand retention trigger can acquire the SAME cluster-wide
+     * lock the scheduled run uses. Injection is the only supported way to reach the LockService implementation
+     * (which is provided at runtime by the job-scheduler plugin) from ml-commons code that is not itself a
+     * scheduled-job callback.
+     *
+     * <p>The LockService is wired via OPTIONAL METHOD injection, NOT constructor injection: a constructor
+     * parameter makes LockService a hard Guice binding, so on any harness where the job-scheduler plugin is not
+     * installed (e.g. integ-test clusters, some unit harnesses) node startup fails with an unsatisfied binding.
+     * An optional setter lets Guice skip the injection when no LockService binding exists, leaving the processor
+     * on its per-JVM {@link MemoryRetentionJobProcessor#isRunning} guard only. When job-scheduler IS present the
+     * setter fires at node start and the on-demand path gets the shared cluster-wide lock.
+     */
+    public static class GuiceHolder extends AbstractLifecycleComponent {
+
+        public GuiceHolder() {}
+
+        @Inject(optional = true)
+        public void setLockService(final LockService lockService) {
+            MemoryRetentionJobProcessor.setLockService(lockService);
+        }
+
+        @Override
+        protected void doStart() {}
+
+        @Override
+        protected void doStop() {}
+
+        @Override
+        protected void doClose() {}
     }
 }

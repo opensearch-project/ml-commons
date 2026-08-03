@@ -6,6 +6,8 @@
 package org.opensearch.ml.action.memorycontainer;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -95,8 +97,21 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
         MemoryRetentionJobProcessor.reset();
     }
 
+    /**
+     * Stub the async {@code triggerRun(ActionListener)} so it synchronously reports {@code status} to its
+     * listener, mirroring the fast (already-gated / lock-uncontended) path.
+     */
+    @SuppressWarnings("unchecked")
+    private void stubTriggerRunResponds(TriggerStatus status) {
+        doAnswer(invocation -> {
+            ActionListener<TriggerStatus> l = invocation.getArgument(0);
+            l.onResponse(status);
+            return null;
+        }).when(mockProcessor).triggerRun(any(ActionListener.class));
+    }
+
     public void testTriggeredSuccess() {
-        when(mockProcessor.triggerRun()).thenReturn(TriggerStatus.TRIGGERED);
+        stubTriggerRunResponds(TriggerStatus.TRIGGERED);
 
         action.doExecute(task, request, actionListener);
 
@@ -109,7 +124,7 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
     }
 
     public void testAlreadyRunning() {
-        when(mockProcessor.triggerRun()).thenReturn(TriggerStatus.ALREADY_RUNNING);
+        stubTriggerRunResponds(TriggerStatus.ALREADY_RUNNING);
 
         action.doExecute(task, request, actionListener);
 
@@ -120,7 +135,7 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
     }
 
     public void testRetentionDisabled() {
-        when(mockProcessor.triggerRun()).thenReturn(TriggerStatus.RETENTION_DISABLED);
+        stubTriggerRunResponds(TriggerStatus.RETENTION_DISABLED);
 
         action.doExecute(task, request, actionListener);
 
@@ -131,7 +146,7 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
     }
 
     public void testMultiTenancyEnabled() {
-        when(mockProcessor.triggerRun()).thenReturn(TriggerStatus.MULTI_TENANCY_ENABLED);
+        stubTriggerRunResponds(TriggerStatus.MULTI_TENANCY_ENABLED);
 
         action.doExecute(task, request, actionListener);
 
@@ -152,11 +167,32 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
         assertTrue(e instanceof OpenSearchStatusException);
         assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) e).status());
         // The processor must never be touched when the feature is off.
-        verify(mockProcessor, never()).triggerRun();
+        verify(mockProcessor, never()).triggerRun(any(ActionListener.class));
     }
 
+    @SuppressWarnings("unchecked")
     public void testProcessorFailureIsInternalServerError() {
-        when(mockProcessor.triggerRun()).thenThrow(new RuntimeException("kickoff failed"));
+        // Async failure: triggerRun reports onFailure to its listener (e.g. lock acquisition failed).
+        doAnswer(invocation -> {
+            ActionListener<TriggerStatus> l = invocation.getArgument(0);
+            l.onFailure(new RuntimeException("kickoff failed"));
+            return null;
+        }).when(mockProcessor).triggerRun(any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener, never()).onResponse(any());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        Exception e = exceptionCaptor.getValue();
+        assertTrue(e instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) e).status());
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testProcessorSynchronousThrowIsInternalServerError() {
+        // A synchronous throw from triggerRun (before it can invoke the listener) is caught by doExecute's
+        // try/catch and surfaced as a 500.
+        doThrow(new RuntimeException("synchronous boom")).when(mockProcessor).triggerRun(any(ActionListener.class));
 
         action.doExecute(task, request, actionListener);
 
@@ -170,7 +206,7 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
     public void testFromActionRequestConversion() {
         // Drive doExecute with a generic ActionRequest (not the concrete type) to exercise the
         // fromActionRequest path used by the transport layer for cross-node serialization.
-        when(mockProcessor.triggerRun()).thenReturn(TriggerStatus.TRIGGERED);
+        stubTriggerRunResponds(TriggerStatus.TRIGGERED);
         ActionRequest generic = mock(ActionRequest.class);
 
         action.doExecute(task, generic, actionListener);

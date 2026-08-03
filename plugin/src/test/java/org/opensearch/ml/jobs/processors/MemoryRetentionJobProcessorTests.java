@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.search.TotalHits;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -63,12 +64,16 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.jobscheduler.spi.LockModel;
+import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
 import org.opensearch.search.DocValueFormat;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.search.aggregations.bucket.composite.CompositeAggregation;
+import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -91,9 +96,16 @@ public class MemoryRetentionJobProcessorTests {
 
     private MemoryRetentionJobProcessor processor;
 
+    // A mock LockService wired into the processor for every test. By default acquiring the cluster-wide lock
+    // succeeds (returns a non-null LockModel), renewal echoes the lock, and release succeeds. Individual tests
+    // that exercise contention override acquireLockWithId to return null.
+    private LockService lockService;
+    private LockModel lockModel;
+
     @Before
     public void setUp() {
         MemoryRetentionJobProcessor.reset();
+        MemoryRetentionJobProcessor.setLockService(null);
 
         // Default settings: multi-tenancy disabled, throttle = 1 second
         Settings settings = Settings
@@ -146,7 +158,56 @@ public class MemoryRetentionJobProcessorTests {
             return null;
         }).when(threadPool).schedule(any(Runnable.class), any(TimeValue.class), anyString());
 
+        // Lock renewal scheduling: return a no-op cancellable and do NOT auto-run (renewal is periodic; running
+        // it inline would recurse). Tests that assert renewal drive it explicitly.
+        lenient()
+            .when(threadPool.scheduleWithFixedDelay(any(Runnable.class), any(TimeValue.class), anyString()))
+            .thenReturn(mock(Scheduler.Cancellable.class));
+
+        // Wire a mock cluster-wide LockService: acquire succeeds, renew echoes, release succeeds.
+        // LockModel is final and cannot be mocked, so use a real instance.
+        lockService = mock(LockService.class);
+        lockModel = new LockModel(".plugins-ml-jobs", "MEMORY_RETENTION", java.time.Instant.ofEpochMilli(0L), 120L, false);
+        lenient().doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        lenient().doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+        // Teardown deletes the lock by id (unconditional), not release(lockModel) — see finishRun().
+        lenient().doAnswer(invocation -> {
+            ActionListener<Boolean> l = invocation.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(lockService).deleteLock(anyString(), isA(ActionListener.class));
+        MemoryRetentionJobProcessor.setLockService(lockService);
+
         processor = MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool);
+    }
+
+    @After
+    public void tearDown() {
+        MemoryRetentionJobProcessor.setLockService(null);
+        MemoryRetentionJobProcessor.reset();
+    }
+
+    /**
+     * Invokes the async {@link MemoryRetentionJobProcessor#triggerRun(ActionListener)} and returns the
+     * synchronously-reported status. All stubs in these tests complete their listeners inline, so the status
+     * is always available by the time triggerRun returns.
+     */
+    private TriggerStatus triggerRunSync() {
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        AtomicReference<Exception> errorRef = new AtomicReference<>();
+        processor.triggerRun(ActionListener.wrap(statusRef::set, errorRef::set));
+        if (errorRef.get() != null) {
+            throw new RuntimeException(errorRef.get());
+        }
+        return statusRef.get();
     }
 
     @Test
@@ -164,13 +225,12 @@ public class MemoryRetentionJobProcessorTests {
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
 
-        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus status = processor.triggerRun();
+        TriggerStatus status = triggerRunSync();
 
-        assertEquals(
-            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.REMOTE_METADATA_STORE,
-            status
-        );
+        assertEquals(TriggerStatus.REMOTE_METADATA_STORE, status);
         verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        // Gating short-circuits before any lock is requested.
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
     }
 
     @Test
@@ -183,13 +243,11 @@ public class MemoryRetentionJobProcessorTests {
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
 
-        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus status = processor.triggerRun();
+        TriggerStatus status = triggerRunSync();
 
-        assertEquals(
-            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.RETENTION_DISABLED,
-            status
-        );
+        assertEquals(TriggerStatus.RETENTION_DISABLED, status);
         verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
     }
 
     @Test
@@ -198,18 +256,21 @@ public class MemoryRetentionJobProcessorTests {
         // We stub search to NOT invoke the listener, leaving the job "in progress".
         doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
-        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus first = processor.triggerRun();
-        assertEquals(org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED, first);
+        TriggerStatus first = triggerRunSync();
+        assertEquals(TriggerStatus.TRIGGERED, first);
 
         // Second trigger while the first is still in progress must be rejected without double-running.
-        org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus second = processor.triggerRun();
-        assertEquals(
-            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.ALREADY_RUNNING,
-            second
-        );
+        // The per-node isRunning guard short-circuits before a second lock acquisition is attempted.
+        TriggerStatus second = triggerRunSync();
+        assertEquals(TriggerStatus.ALREADY_RUNNING, second);
 
         // Only the first trigger initiated a container search.
         verify(client, org.mockito.Mockito.times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        // The cluster-wide lock was acquired exactly once (for the first, still-in-progress run) and never
+        // released, since that run never completed.
+        verify(lockService, org.mockito.Mockito.times(1))
+            .acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
     }
 
     @Test
@@ -221,53 +282,124 @@ public class MemoryRetentionJobProcessorTests {
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
-        assertEquals(
-            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
-            processor.triggerRun()
-        );
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
         // Guard released on completion -> a subsequent trigger is TRIGGERED again, not ALREADY_RUNNING.
-        assertEquals(
-            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
-            processor.triggerRun()
-        );
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+
+        // Each completed run releases the cluster-wide lock exactly once (two runs -> two deletes).
+        verify(lockService, org.mockito.Mockito.times(2)).deleteLock(anyString(), isA(ActionListener.class));
     }
 
     @Test
-    public void testRunSwallowsSynchronousKickoffFailureAndReleasesGuard() {
-        // Make the very first container search throw synchronously on the calling thread, so
-        // resolveContainersWithPolicies(null) throws inside triggerRun()'s try block.
-        doThrow(new RuntimeException("synchronous kickoff boom")).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+    public void testTriggerRunReturnsAlreadyRunningWhenLockHeldClusterWide() {
+        // Simulate another node (or the scheduler) already holding the cluster-wide lock: acquire yields null.
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(null);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
 
-        // run() (scheduled path) must NOT propagate the exception (fire-and-forget semantics).
-        processor.run();
+        assertEquals(TriggerStatus.ALREADY_RUNNING, triggerRunSync());
 
-        // The guard must have been reset before the rethrow inside triggerRun(), so retention is not
-        // permanently wedged: switch search to succeed and confirm a subsequent trigger is TRIGGERED,
-        // not ALREADY_RUNNING.
+        // No pipeline started, and the per-node guard was released so a later trigger can proceed.
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        // Confirm the guard is free: with the lock now acquirable again, a second trigger is TRIGGERED.
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testTriggerRunReportsFailureWhenLockAcquisitionFails() {
+        // Lock acquisition errors: the run must not start, the per-node guard must be released, and the
+        // failure must be reported to the listener (so the transport layer can surface a 500).
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onFailure(new RuntimeException("lock index unavailable"));
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        AtomicReference<Exception> errorRef = new AtomicReference<>();
+        processor.triggerRun(ActionListener.wrap(statusRef::set, errorRef::set));
+
+        assertNotNull(errorRef.get());
+        assertEquals(null, statusRef.get());
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // Guard released: a subsequent trigger (lock now acquirable) is TRIGGERED, not ALREADY_RUNNING.
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testTriggerRunRunsWithoutLockServiceWhenUnavailable() {
+        // No cluster-wide LockService wired (e.g. job-scheduler absent): the run degrades to per-node
+        // exclusion and still executes the pipeline.
+        MemoryRetentionJobProcessor.setLockService(null);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(emptySearchResponse());
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
-        assertEquals(
-            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
-            processor.triggerRun()
-        );
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+        verify(client, atLeastOnce()).search(any(SearchRequest.class), isA(ActionListener.class));
+        // Restore for tearDown symmetry / other assertions.
+        MemoryRetentionJobProcessor.setLockService(lockService);
     }
 
     @Test
-    public void testTriggerRunRethrowsSynchronousKickoffFailure() {
-        // The on-demand path relies on triggerRun() rethrowing (so the transport layer can surface a
-        // 500) while still having reset the guard first.
+    public void testRunSwallowsSynchronousKickoffFailureAndReleasesGuard() {
+        // Make the very first container search throw synchronously on the calling thread, so
+        // resolveContainersWithPolicies(null) throws inside kickOffPipeline()'s try block.
         doThrow(new RuntimeException("synchronous kickoff boom")).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
-        try {
-            processor.triggerRun();
-            fail("triggerRun() should rethrow a synchronous kickoff failure");
-        } catch (RuntimeException expected) {
-            assertEquals("synchronous kickoff boom", expected.getMessage());
-        }
+        // run() (scheduled path) must NOT propagate the exception (fire-and-forget semantics).
+        processor.run();
+
+        // The guard and lock must have been released before the failure was reported, so retention is not
+        // permanently wedged: switch search to succeed and confirm a subsequent trigger is TRIGGERED.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testTriggerRunReportsSynchronousKickoffFailure() {
+        // The on-demand path relies on triggerRun() reporting the failure via its listener (so the transport
+        // layer can surface a 500) while still having released the guard and lock first.
+        doThrow(new RuntimeException("synchronous kickoff boom")).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        AtomicReference<Exception> errorRef = new AtomicReference<>();
+        processor.triggerRun(ActionListener.wrap(statusRef::set, errorRef::set));
+
+        assertNotNull(errorRef.get());
+        assertEquals("synchronous kickoff boom", errorRef.get().getMessage());
+        // The lock acquired for this run must have been released (deleted by id) on the failure path.
+        verify(lockService, atLeastOnce()).deleteLock(anyString(), isA(ActionListener.class));
 
         // Guard released despite the failure.
         doAnswer(invocation -> {
@@ -275,10 +407,49 @@ public class MemoryRetentionJobProcessorTests {
             listener.onResponse(emptySearchResponse());
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-        assertEquals(
-            org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus.TRIGGERED,
-            processor.triggerRun()
-        );
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testSynchronousThrowOnContinuationSearchStillReleasesLockAndGuard() {
+        // Regression for the pipeline-continuation leak: the first container search returns a full page (so
+        // the pipeline continues into a SECOND search dispatch), and that second dispatch throws synchronously.
+        // The run must still tear down (delete the lock, reset the guard) rather than leaving the lock-renewal
+        // task alive to renew the cluster-wide lock forever.
+        AtomicInteger searchCalls = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            int n = searchCalls.incrementAndGet();
+            if (n == 1) {
+                // A full page (CONTAINER_PAGE_SIZE=100) of no-config containers: processContainer skips each
+                // (no config field), the chain runs to the end of the page and, because a full page implies
+                // more, re-enters resolveContainersWithPolicies -> second search dispatch.
+                SearchHit[] page = new SearchHit[100];
+                for (int i = 0; i < page.length; i++) {
+                    page[i] = createHitWithSource("c" + i, Map.of());
+                }
+                SearchResponse full = mock(SearchResponse.class);
+                when(full.getHits()).thenReturn(new SearchHits(page, new TotalHits(page.length, TotalHits.Relation.EQUAL_TO), Float.NaN));
+                ActionListener<SearchResponse> listener = invocation.getArgument(1);
+                listener.onResponse(full);
+                return null;
+            }
+            // Second (continuation) search dispatch throws synchronously on the calling thread.
+            throw new RuntimeException("synchronous continuation boom");
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // Scheduled path swallows; the point is the teardown side effects.
+        processor.run();
+
+        // Lock released (deleted) and guard freed: a subsequent empty-container trigger is TRIGGERED, not
+        // ALREADY_RUNNING, proving the run did not wedge.
+        verify(lockService, atLeastOnce()).deleteLock(anyString(), isA(ActionListener.class));
+        searchCalls.set(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
     }
 
     private java.util.Set<Setting<?>> gatingSettingsSet() {
