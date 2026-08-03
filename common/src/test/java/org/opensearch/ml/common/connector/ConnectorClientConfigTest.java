@@ -14,6 +14,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
 
@@ -78,6 +79,46 @@ public class ConnectorClientConfigTest {
         Assert.assertNull(readConfig.getRetryTimeoutSeconds());
         Assert.assertNull(readConfig.getMaxRetryTimes());
         Assert.assertNull(readConfig.getRetryBackoffPolicy());
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_onOrAfterMtlsVersionThenProcessMtlsOptions() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_9_0);
+        config.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(CommonValue.VERSION_3_9_0);
+        ConnectorClientConfig readConfig = ConnectorClientConfig.fromStream(input);
+
+        Assert.assertEquals(Boolean.TRUE, readConfig.getMutualTlsEnabled());
+        Assert.assertEquals("PEM", readConfig.getKeystoreType());
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_beforeMtlsVersionThenNotProcessMtlsOptions() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .maxConnections(10)
+            .skipSslVerification(true)
+            .mutualTlsEnabled(true)
+            .keystoreType("PEM")
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_8_0);
+        config.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(CommonValue.VERSION_3_8_0);
+        ConnectorClientConfig readConfig = ConnectorClientConfig.fromStream(input);
+
+        // Fields that predate the mTLS gate still round-trip
+        Assert.assertEquals(Integer.valueOf(10), readConfig.getMaxConnections());
+        Assert.assertEquals(Boolean.TRUE, readConfig.getSkipSslVerification());
+        // mTLS fields are not written to pre-3.9.0 nodes
+        Assert.assertNull(readConfig.getMutualTlsEnabled());
+        Assert.assertNull(readConfig.getKeystoreType());
     }
 
     @Test

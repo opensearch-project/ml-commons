@@ -17,8 +17,10 @@ import static org.opensearch.ml.common.connector.CertificateProcessor.CLIENT_KEY
 import static org.opensearch.ml.common.connector.CertificateProcessor.KEYSTORE_PASSWORD_FIELD;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -565,6 +567,44 @@ public class CertificateProcessorTest {
         assertNotNull("Trust managers should not be null", trustManagers);
         assertTrue("Key managers array should not be empty", keyManagers.length > 0);
         assertTrue("Trust managers array should not be empty", trustManagers.length > 0);
+    }
+
+    @Test
+    public void testBuildSSLContext_SingleLineBase64PemCertificates_Success() throws IOException {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+
+        // Base64-encoded PEM on a single line, i.e. the output of `base64 -w 0`.
+        credentials.put(CLIENT_CERT_PEM_FIELD, base64SingleLine(loadCertificateFromFile("test-client-cert.pem")));
+        credentials.put(CLIENT_KEY_PEM_FIELD, base64SingleLine(loadCertificateFromFile("test-client-key-pkcs8.pem")));
+        credentials.put(CA_CERT_PEM_FIELD, base64SingleLine(loadCertificateFromFile("test-ca-cert.pem")));
+
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
+        assertNotNull("SSL context should be created successfully with single-line base64 PEM certificates", result);
+        assertNotNull("SSL context should not be null", result.getSslContext());
+    }
+
+    @Test
+    public void testBuildSSLContext_LineWrappedBase64PemCertificates_Success() throws IOException {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+
+        // Base64-encoded PEM wrapped at 64 characters, i.e. the output of `openssl base64 -in cert.pem`.
+        // isBase64EncodedContent() strips whitespace before matching, so wrapped content is classified as
+        // base64 and must decode with the same whitespace tolerance.
+        credentials.put(CLIENT_CERT_PEM_FIELD, base64LineWrapped(loadCertificateFromFile("test-client-cert.pem")));
+        credentials.put(CLIENT_KEY_PEM_FIELD, base64LineWrapped(loadCertificateFromFile("test-client-key-pkcs8.pem")));
+        credentials.put(CA_CERT_PEM_FIELD, base64LineWrapped(loadCertificateFromFile("test-ca-cert.pem")));
+
+        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
+        assertNotNull("SSL context should be created successfully with line-wrapped base64 PEM certificates", result);
+        assertNotNull("SSL context should not be null", result.getSslContext());
+    }
+
+    private String base64SingleLine(String content) {
+        return Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String base64LineWrapped(String content) {
+        return Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(content.getBytes(StandardCharsets.UTF_8));
     }
 
     @Test

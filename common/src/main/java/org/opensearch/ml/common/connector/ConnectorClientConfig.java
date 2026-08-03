@@ -18,6 +18,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -52,7 +53,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     // Note: No default value for keystoreType to prevent field pollution in connector configs
     // CertificateProcessor.KeystoreType.from() falls back to PEM when the type is not set
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = Version.V_3_8_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = CommonValue.VERSION_3_9_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
