@@ -82,6 +82,11 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
+    public void testUnifiedAgentApiEnabledByDefault() {
+        assertTrue(MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED.getDefault(null));
+    }
+
+    @Test
     public void testAgenticMemorySettingProperties() {
         // Test setting key
         assertEquals("plugins.ml_commons.agentic_memory_enabled", MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey());
