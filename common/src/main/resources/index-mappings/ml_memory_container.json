@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 1
+    "schema_version": 3
   },
   "properties": {
     "name": {
@@ -20,6 +20,10 @@
       "format": "strict_date_time||epoch_millis"
     },
     "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "orphan_sweep_baseline_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
     },
@@ -75,6 +79,31 @@
         },
         "index_settings": {
           "type": "flat_object"
+        },
+        "retention_policy": {
+          "type": "object",
+          "properties": {
+            "sessions": {
+              "type": "object",
+              "properties": {
+                "retention_days": { "type": "integer" },
+                "max_count": { "type": "integer" }
+              }
+            },
+            "long-term": {
+              "type": "object",
+              "properties": {
+                "retention_days": { "type": "integer" },
+                "max_count": { "type": "integer" }
+              }
+            },
+            "history": {
+              "type": "object",
+              "properties": {
+                "max_count": { "type": "integer" }
+              }
+            }
+          }
         }
       }
     },

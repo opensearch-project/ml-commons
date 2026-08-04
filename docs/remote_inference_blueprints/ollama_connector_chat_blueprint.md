@@ -25,7 +25,8 @@ PUT /_cluster/settings
 PUT /_cluster/settings
 {
     "persistent": {
-      "plugins.ml_commons.connector.private_ip_enabled": true
+      "plugins.ml_commons.connector.private_ip_enabled": true,
+      "plugins.ml_commons.trusted_connector_private_endpoints_regex": ["^http://127\\.0\\.0\\.1:11434/.*$"]
     }
 }
 ```
@@ -52,7 +53,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://${parameters.endpoint}/v1/chat/completions",
+      "url": "http://${parameters.endpoint}/v1/chat/completions",
       "supports_structured_output": true,
       "headers": {
         "Authorization": "Bearer ${credential.openAI_key}"

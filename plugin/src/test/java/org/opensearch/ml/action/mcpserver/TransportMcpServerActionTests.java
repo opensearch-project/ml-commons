@@ -6,17 +6,16 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
-import static org.opensearch.ml.common.CommonValue.ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
-import static org.opensearch.ml.common.CommonValue.JSON_RPC_SERVER_NOT_READY_ERROR;
 import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.mockito.ArgumentCaptor;
@@ -26,14 +25,18 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.server.MLMcpServerRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.server.MLMcpServerResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
 
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.json.JsonMapper;
 
 public class TransportMcpServerActionTests extends OpenSearchTestCase {
 
@@ -47,10 +50,7 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
-    private McpStatelessServerHolder mcpStatelessServerHolder;
-
-    @Mock
-    private OpenSearchMcpStatelessServerTransportProvider transportProvider;
+    private McpToolsHelper mcpToolsHelper;
 
     @Mock
     private Task task;
@@ -63,7 +63,15 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
-        action = new TransportMcpServerAction(transportService, actionFilters, mlFeatureEnabledSetting, mcpStatelessServerHolder);
+        action = new TransportMcpServerAction(transportService, actionFilters, mlFeatureEnabledSetting, mcpToolsHelper);
+    }
+
+    private void mockTools(List<McpToolRegisterInput> tools) {
+        doAnswer(invocation -> {
+            ActionListener<List<McpToolRegisterInput>> l = invocation.getArgument(0);
+            l.onResponse(tools);
+            return null;
+        }).when(mcpToolsHelper).searchAllTools(any());
     }
 
     public void test_doExecute_mcpServerDisabled() {
@@ -73,164 +81,114 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, listener);
 
         verify(listener).onFailure(any(OpenSearchException.class));
-        verify(mcpStatelessServerHolder, never()).getMcpStatelessServerTransportProvider();
-    }
-
-    public void test_doExecute_transportProviderNotReady() {
-        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(null);
-        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\"}");
-
-        action.doExecute(task, request, listener);
-
-        ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
-        verify(listener).onResponse(responseCaptor.capture());
-        
-        MLMcpServerResponse response = responseCaptor.getValue();
-        assertFalse(response.getAcknowledgedResponse());
-        assertNull(response.getMcpResponse());
-        assertNotNull(response.getError());
-        assertEquals(JSON_RPC_SERVER_NOT_READY_ERROR, response.getError().get(ERROR_CODE_FIELD));
-        assertEquals("MCP transport provider not ready - server may not be properly initialized", response.getError().get(MESSAGE_FIELD));
+        verify(mcpToolsHelper, never()).searchAllTools(any());
     }
 
     public void test_doExecute_invalidJsonRpcMessage() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
         MLMcpServerRequest request = new MLMcpServerRequest("invalid json");
 
         action.doExecute(task, request, listener);
 
         ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
         verify(listener).onResponse(responseCaptor.capture());
-        
+
         MLMcpServerResponse response = responseCaptor.getValue();
         assertFalse(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
         assertEquals(JSON_RPC_PARSE_ERROR, response.getError().get(ERROR_CODE_FIELD));
         assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Parse error"));
+        verify(mcpToolsHelper, never()).searchAllTools(any());
     }
 
     public void test_doExecute_jsonRpcNotification() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
-        MLMcpServerRequest request = new MLMcpServerRequest(
-            "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}"
-        );
+        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}");
 
         action.doExecute(task, request, listener);
 
         ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
         verify(listener).onResponse(responseCaptor.capture());
-        
+
         MLMcpServerResponse response = responseCaptor.getValue();
         assertTrue(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNull(response.getError());
-        verify(transportProvider, never()).handleRequest(any());
+        verify(mcpToolsHelper, never()).searchAllTools(any());
     }
 
-    public void test_doExecute_jsonRpcRequestSuccess() {
+    public void test_doExecute_toolsListSuccess() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
-        
-        MLMcpServerRequest request = new MLMcpServerRequest(
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"
-        );
-
-        McpSchema.JSONRPCResponse jsonRpcResponse = new McpSchema.JSONRPCResponse("2.0", "1", "success", null);
-        
-        when(transportProvider.handleRequest(any(McpSchema.JSONRPCMessage.class)))
-            .thenReturn(Mono.just(jsonRpcResponse));
+        McpToolRegisterInput toolA = new McpToolRegisterInput("ToolA", "ListIndexTool", "desc", Map.of(), Map.of(), null, null);
+        McpToolRegisterInput toolB = new McpToolRegisterInput("ToolB", "ListIndexTool", "desc", Map.of(), Map.of(), null, null);
+        mockTools(List.of(toolA, toolB));
+        // Echo each loaded tool's name so the test pins that the response maps over the loaded list.
+        when(mcpToolsHelper.createToolSpecification(any()))
+            .thenAnswer(inv -> toolSpec(((McpToolRegisterInput) inv.getArgument(0)).getName()));
+        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}");
 
         action.doExecute(task, request, listener);
 
         ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
         verify(listener).onResponse(responseCaptor.capture());
-        
+
         MLMcpServerResponse response = responseCaptor.getValue();
         assertTrue(response.getAcknowledgedResponse());
         assertNotNull(response.getMcpResponse());
-        assertTrue(response.getMcpResponse().contains("jsonrpc"));
-        assertTrue(response.getMcpResponse().contains("success"));
+        assertTrue(response.getMcpResponse().contains("ToolA"));
+        assertTrue(response.getMcpResponse().contains("ToolB"));
         assertNull(response.getError());
     }
 
-    public void test_doExecute_responseSerializationError() {
+    public void test_doExecute_unbuildableToolSkipped() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
-        
-        MLMcpServerRequest request = new MLMcpServerRequest(
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"
-        );
-
-        Map<String, Object> circularData = new HashMap<>();
-        circularData.put("jsonrpc", "2.0");
-        circularData.put(ID_FIELD, 1);
-        circularData.put("result", circularData); // Circular reference
-        McpSchema.JSONRPCResponse jsonRpcResponse = new McpSchema.JSONRPCResponse("2.0", "1", circularData, null);
-        
-        when(transportProvider.handleRequest(any(McpSchema.JSONRPCMessage.class)))
-            .thenReturn(Mono.just(jsonRpcResponse));
+        McpToolRegisterInput good = new McpToolRegisterInput("GoodTool", "ListIndexTool", "desc", Map.of(), Map.of(), null, null);
+        McpToolRegisterInput bad = new McpToolRegisterInput("BadTool", "GoneType", "desc", Map.of(), Map.of(), null, null);
+        mockTools(List.of(good, bad));
+        when(mcpToolsHelper.createToolSpecification(good)).thenReturn(toolSpec("GoodTool"));
+        when(mcpToolsHelper.createToolSpecification(bad)).thenThrow(new RuntimeException("no factory for GoneType"));
+        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}");
 
         action.doExecute(task, request, listener);
 
         ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
         verify(listener).onResponse(responseCaptor.capture());
-        
+
         MLMcpServerResponse response = responseCaptor.getValue();
-        assertFalse(response.getAcknowledgedResponse());
-        assertNull(response.getMcpResponse());
-        assertNotNull(response.getError());
-        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get(ERROR_CODE_FIELD));
-        assertEquals(1, response.getError().get(ID_FIELD));
-        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Response serialization failed"));
+        assertTrue(response.getAcknowledgedResponse());
+        assertNotNull(response.getMcpResponse());
+        assertTrue(response.getMcpResponse().contains("GoodTool"));
+        assertFalse(response.getMcpResponse().contains("BadTool"));
+        assertNull(response.getError());
     }
 
-    public void test_doExecute_transportError() {
-        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
-        
-        MLMcpServerRequest request = new MLMcpServerRequest(
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"
+    private McpStatelessServerFeatures.AsyncToolSpecification toolSpec(String name) {
+        return new McpStatelessServerFeatures.AsyncToolSpecification(
+            McpSchema.Tool.builder().name(name).description("desc").inputSchema(JSON_MAPPER, "{}").build(),
+            (ctx, req) -> Mono.just(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent("ok")), false, null, Map.of()))
         );
-
-        when(transportProvider.handleRequest(any(McpSchema.JSONRPCMessage.class)))
-            .thenReturn(Mono.error(new RuntimeException("Transport error")));
-
-        action.doExecute(task, request, listener);
-
-        ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
-        verify(listener).onResponse(responseCaptor.capture());
-        
-        MLMcpServerResponse response = responseCaptor.getValue();
-        assertFalse(response.getAcknowledgedResponse());
-        assertNull(response.getMcpResponse());
-        assertNotNull(response.getError());
-        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get(ERROR_CODE_FIELD));
-        assertEquals(1, response.getError().get(ID_FIELD));
-        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Internal server error"));
     }
 
-    public void test_doExecute_generalException() {
+    private static final JacksonMcpJsonMapper JSON_MAPPER = new JacksonMcpJsonMapper(JsonMapper.shared());
+
+    public void test_doExecute_toolLoadError() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenThrow(new RuntimeException("General error"));
-        
-        MLMcpServerRequest request = new MLMcpServerRequest(
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"
-        );
+        doAnswer(invocation -> {
+            ActionListener<List<McpToolRegisterInput>> l = invocation.getArgument(0);
+            l.onFailure(new RuntimeException("search failed"));
+            return null;
+        }).when(mcpToolsHelper).searchAllTools(any());
+        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}");
 
         action.doExecute(task, request, listener);
 
         ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
         verify(listener).onResponse(responseCaptor.capture());
-        
+
         MLMcpServerResponse response = responseCaptor.getValue();
         assertFalse(response.getAcknowledgedResponse());
-        assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
         assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get(ERROR_CODE_FIELD));
-        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Internal server error"));
     }
 }

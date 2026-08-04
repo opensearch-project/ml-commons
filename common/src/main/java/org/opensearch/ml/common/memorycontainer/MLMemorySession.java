@@ -7,6 +7,7 @@ package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENTS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
@@ -15,6 +16,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FIELD;
 
 import java.io.IOException;
@@ -52,6 +54,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
     private Map<String, Object> additionalInfo;
     private Map<String, String> namespace;
     private String tenantId;
+    private Boolean pinned;
 
     public MLMemorySession(
         String ownerId,
@@ -63,7 +66,8 @@ public class MLMemorySession implements ToXContentObject, Writeable {
         Map<String, Object> agents,
         Map<String, Object> additionalInfo,
         Map<String, String> namespace,
-        String tenantId
+        String tenantId,
+        Boolean pinned
     ) {
         this.ownerId = ownerId;
         this.memoryContainerId = memoryContainerId;
@@ -75,6 +79,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
         this.additionalInfo = additionalInfo;
         this.namespace = namespace;
         this.tenantId = tenantId;
+        this.pinned = pinned;
     }
 
     public MLMemorySession(StreamInput in) throws IOException {
@@ -96,6 +101,9 @@ public class MLMemorySession implements ToXContentObject, Writeable {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
         }
         this.tenantId = in.readOptionalString();
+        if (in.getVersion().onOrAfter(VERSION_3_8_0)) {
+            this.pinned = in.readOptionalBoolean();
+        }
     }
 
     @Override
@@ -131,6 +139,9 @@ public class MLMemorySession implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalString(tenantId);
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
+            out.writeOptionalBoolean(pinned);
+        }
     }
 
     @Override
@@ -166,6 +177,9 @@ public class MLMemorySession implements ToXContentObject, Writeable {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (pinned != null) {
+            builder.field(PINNED_FIELD, pinned);
+        }
         builder.endObject();
         return builder;
     }
@@ -181,6 +195,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
         Map<String, Object> additionalInfo = null;
         Map<String, String> namespace = null;
         String tenantId = null;
+        Boolean pinned = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -218,6 +233,9 @@ public class MLMemorySession implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
                     break;
+                case PINNED_FIELD:
+                    pinned = parser.currentToken() == XContentParser.Token.VALUE_NULL ? null : parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -236,6 +254,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
             .additionalInfo(additionalInfo)
             .namespace(namespace)
             .tenantId(tenantId)
+            .pinned(pinned)
             .build();
     }
 

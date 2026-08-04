@@ -24,6 +24,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 
 public class MLMemorySessionTest {
@@ -126,7 +127,8 @@ public class MLMemorySessionTest {
             testAgents,
             testAdditionalInfo,
             testNamespace,
-            "tenant-456"
+            "tenant-456",
+            true
         );
 
         assertEquals("owner-123", session.getOwnerId());
@@ -138,11 +140,12 @@ public class MLMemorySessionTest {
         assertEquals(testAdditionalInfo, session.getAdditionalInfo());
         assertEquals(testNamespace, session.getNamespace());
         assertEquals("tenant-456", session.getTenantId());
+        assertEquals(true, session.getPinned());
     }
 
     @Test
     public void testConstructorWithNullFields() {
-        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null, null);
+        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null, null, null);
 
         assertNull(session.getOwnerId());
         assertNull(session.getSummary());
@@ -153,6 +156,7 @@ public class MLMemorySessionTest {
         assertNull(session.getAdditionalInfo());
         assertNull(session.getNamespace());
         assertNull(session.getTenantId());
+        assertNull(session.getPinned());
     }
 
     @Test
@@ -186,6 +190,7 @@ public class MLMemorySessionTest {
         assertEquals(sessionWithoutNamespace.getAdditionalInfo(), deserialized.getAdditionalInfo());
         assertEquals(sessionWithoutNamespace.getNamespace(), deserialized.getNamespace());
         assertEquals(sessionWithoutNamespace.getTenantId(), deserialized.getTenantId());
+        assertNull(deserialized.getPinned());
     }
 
     @Test
@@ -330,7 +335,7 @@ public class MLMemorySessionTest {
 
     @Test
     public void testSettersAndGetters() {
-        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null, null);
+        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null, null, null);
 
         // Test setters
         session.setOwnerId("new-owner");
@@ -720,5 +725,103 @@ public class MLMemorySessionTest {
         assertNull(emptySession.getAdditionalInfo());
         assertNull(emptySession.getNamespace());
         assertNull(emptySession.getTenantId());
+        assertNull(emptySession.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldXContentRoundTrip() throws IOException {
+        MLMemorySession pinnedSession = MLMemorySession.builder().ownerId("owner-123").pinned(true).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        pinnedSession.toXContent(builder, EMPTY_PARAMS);
+        String jsonString = TestHelper.xContentBuilderToString(builder);
+
+        assert jsonString.contains("\"pinned\":true");
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLMemorySession parsed = MLMemorySession.parse(parser);
+        assertEquals(true, parsed.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldStreamRoundTrip() throws IOException {
+        MLMemorySession pinnedSession = MLMemorySession.builder().ownerId("owner-123").pinned(true).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        pinnedSession.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLMemorySession deserialized = new MLMemorySession(in);
+
+        assertEquals(true, deserialized.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldDefaultIsNull() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        builder.startObject();
+        builder.field("owner_id", "owner-123");
+        builder.endObject();
+
+        String jsonString = TestHelper.xContentBuilderToString(builder);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLMemorySession parsed = MLMemorySession.parse(parser);
+        assertNull(parsed.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldFalse() throws IOException {
+        MLMemorySession unpinnedSession = MLMemorySession.builder().ownerId("owner-123").pinned(false).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        unpinnedSession.toXContent(builder, EMPTY_PARAMS);
+        String jsonString = TestHelper.xContentBuilderToString(builder);
+
+        assert jsonString.contains("\"pinned\":false");
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
+        parser.nextToken();
+
+        MLMemorySession parsed = MLMemorySession.parse(parser);
+        assertEquals(false, parsed.getPinned());
+    }
+
+    @Test
+    public void testPinnedFieldStreamRoundTripNull() throws IOException {
+        MLMemorySession session = MLMemorySession.builder().ownerId("owner-123").pinned(null).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        session.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        MLMemorySession deserialized = new MLMemorySession(in);
+
+        assertNull(deserialized.getPinned());
+    }
+
+    @Test
+    public void testBackwardCompatStreamFromOldNode() throws IOException {
+        MLMemorySession session = MLMemorySession.builder().ownerId("owner-123").pinned(true).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_5_0);
+        session.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_5_0);
+        MLMemorySession deserialized = new MLMemorySession(in);
+
+        assertEquals("owner-123", deserialized.getOwnerId());
+        assertNull(deserialized.getPinned());
     }
 }

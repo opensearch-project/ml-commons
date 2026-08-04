@@ -76,7 +76,7 @@ opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
     classname 'org.opensearch.ml.plugin.MachineLearningPlugin'
-    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true']
+    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true', 'transport-grpc;optional=true']
 }
 
 configurations {
@@ -90,6 +90,7 @@ dependencies {
     implementation project(':opensearch-ml-algorithms')
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
+    implementation project(':opensearch-ml-grpc')
 
     implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
     implementation group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
@@ -104,6 +105,7 @@ dependencies {
     zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
     compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
     compileOnly group: 'org.opensearch', name:'opensearch-security-spi', version:"${opensearch_build}"
+    compileOnly "org.opensearch.plugin:transport-grpc-spi:${opensearch_version}"
     opensearchPlugin "org.opensearch.plugin:opensearch-job-scheduler:${opensearch_build}@zip"
     opensearchPlugin "org.opensearch.plugin:opensearch-security:${opensearch_build}@zip"
 
@@ -133,6 +135,16 @@ dependencies {
 
     // https://mvnrepository.com/artifact/io.projectreactor/reactor-test
     testImplementation("io.projectreactor:reactor-test:3.5.20")
+
+    // gRPC client + generated ML service stubs for end-to-end streaming integration tests.
+    testImplementation "org.opensearch:protobufs:${versions.opensearchprotobufs}"
+    testImplementation "io.grpc:grpc-api:${versions.grpc}"
+    testImplementation "io.grpc:grpc-core:${versions.grpc}"
+    testImplementation "io.grpc:grpc-netty-shaded:${versions.grpc}"
+    testImplementation "io.grpc:grpc-protobuf:${versions.grpc}"
+    testImplementation "io.grpc:grpc-protobuf-lite:${versions.grpc}"
+    testImplementation "io.grpc:grpc-stub:${versions.grpc}"
+    testImplementation "io.perfmark:perfmark-api:0.27.0"
 }
 
 publishing {
@@ -203,7 +215,7 @@ test {
     // Unit tests don't run inside OpenSearch, so we add bc-fips directly to the test classpath.
     if (FipsBuildParams.isInFipsMode()) {
         classpath += configurations.detachedConfiguration(
-            dependencies.create("org.bouncycastle:bc-fips:2.1.2")
+            dependencies.create("org.bouncycastle:bc-fips:2.1.3")
         )
     }
 }
@@ -299,6 +311,14 @@ def securityPluginFile = resolvePluginFile("opensearch-security")
 testClusters.integTest {
     testDistribution = "ARCHIVE"
     if (_numNodes > 1) numberOfNodes = _numNodes
+
+    // gRPC setup - enable with -Dgrpc=true
+    if (System.getProperty("grpc") == "true") {
+        setting 'aux.transport.types', '[transport-grpc]'
+        setting 'aux.transport.transport-grpc.port', '9400-9500'
+        setting 'grpc.host', '["127.0.0.1"]'
+        setting 'grpc.publish_host', '["127.0.0.1"]'
+    }
 
     // Streaming setup - enable with -Dstreaming=true
     if (System.getProperty("streaming") == "true") {

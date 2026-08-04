@@ -22,6 +22,11 @@ public class MemoryContainerConstants {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
+    // Epoch-millis timestamp stamped on a container the first time the retention orphan sweep processes it.
+    // The sweep defers all orphan deletion until orphan_ttl_days after this baseline, so working memory that
+    // predates retention activation (e.g. written before an upgrade, or via paths that create no session doc)
+    // gets one full grace window before it can ever be classified as orphaned and deleted.
+    public static final String ORPHAN_SWEEP_BASELINE_TIME_FIELD = "orphan_sweep_baseline_time";
 
     // Field names for MemoryConfiguration
     public static final String DISABLE_HISTORY_FIELD = "disable_history";
@@ -147,6 +152,14 @@ public class MemoryContainerConstants {
     public static final String BACKEND_ROLE_INVALID_CHARACTERS_ERROR =
         "Backend role contains invalid characters. Only alphanumeric characters and :+=,.@-_/ are allowed: %s";
     public static final String BACKEND_ROLE_EMPTY_ERROR = "Backend role cannot be empty or blank";
+
+    // Pinned field
+    public static final String PINNED_FIELD = "pinned";
+
+    // Retention policy field names
+    public static final String RETENTION_POLICY_FIELD = "retention_policy";
+    public static final String RETENTION_DAYS_FIELD = "retention_days";
+    public static final String MAX_COUNT_FIELD = "max_count";
 
     // Model validation error messages
     public static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model with ID %s not found";
