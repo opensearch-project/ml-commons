@@ -380,11 +380,6 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     }
 
     private void applyDefaultRetentionPolicy(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
-        int sessionRetentionDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS);
-        int sessionMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT);
-        int longTermMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT);
-        int historyMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT);
-
         Map<MemoryType, RetentionRule> defaultPolicy = computeDefaultRetentionPolicy();
         if (defaultPolicy == null) {
             log
@@ -398,14 +393,19 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
         config.setRetentionPolicy(defaultPolicy);
 
+        // Derive the logged interval/counts from the computed policy rather than re-reading cluster settings
+        // (computeDefaultRetentionPolicy already read them). A null rule/value means that type has no default.
+        RetentionRule sessionsRule = defaultPolicy.get(MemoryType.SESSIONS);
+        RetentionRule longTermRule = defaultPolicy.get(MemoryType.LONG_TERM);
+        RetentionRule historyRule = defaultPolicy.get(MemoryType.HISTORY);
         log
             .info(
                 "[MemoryRetentionJob] container={} auto-applying default retention policy: sessions={}/{}d, long-term={}, history={}",
                 containerId,
-                sessionMaxCount,
-                sessionRetentionDays,
-                longTermMaxCount,
-                historyMaxCount
+                sessionsRule != null ? sessionsRule.getMaxCount() : null,
+                sessionsRule != null ? sessionsRule.getRetentionDays() : null,
+                longTermRule != null ? longTermRule.getMaxCount() : null,
+                historyRule != null ? historyRule.getMaxCount() : null
             );
 
         try {
@@ -1929,26 +1929,40 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     // =====================================================================================================
 
     /**
-     * Resolves the effective retention policy for a dry-run and reports its source. Mutates {@code config}'s
-     * retention policy to the effective one (backfilling cluster defaults in-memory for the "default" case,
-     * exactly as the real job would persist before evaluating). Returns one of the
-     * {@code MemoryRetentionDryRunResult.POLICY_SOURCE_*} constants.
+     * The effective retention policy for a dry-run: the policy map that would actually be evaluated plus the
+     * {@code MemoryRetentionDryRunResult.POLICY_SOURCE_*} constant describing where it came from. The dry-run is
+     * read-only, so this is computed locally and never written back onto the caller-owned {@link MemoryConfiguration}.
+     */
+    static final class EffectivePolicy {
+        final String source;
+        final Map<MemoryType, RetentionRule> policy;
+
+        EffectivePolicy(String source, Map<MemoryType, RetentionRule> policy) {
+            this.source = source;
+            this.policy = policy;
+        }
+    }
+
+    /**
+     * Resolves the effective retention policy for a dry-run and reports its source. Does NOT mutate {@code config}:
+     * for the "default" case it backfills cluster defaults into a LOCAL map (exactly the policy the real job would
+     * persist before evaluating) and returns it, leaving the caller's configuration untouched. The returned
+     * {@link EffectivePolicy#source} is one of the {@code MemoryRetentionDryRunResult.POLICY_SOURCE_*} constants.
      */
     @VisibleForTesting
-    String resolveEffectivePolicyForDryRun(MemoryConfiguration config) {
+    EffectivePolicy resolveEffectivePolicyForDryRun(MemoryConfiguration config) {
         Map<MemoryType, RetentionRule> stored = config.getRetentionPolicy();
         if (stored != null && !stored.isEmpty()) {
-            return MemoryRetentionDryRunResult.POLICY_SOURCE_STORED;
+            return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_STORED, stored);
         }
         if (config.isRetentionPolicyExplicitlyNull()) {
-            return MemoryRetentionDryRunResult.POLICY_SOURCE_NONE;
+            return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_NONE, stored);
         }
         Map<MemoryType, RetentionRule> defaults = computeDefaultRetentionPolicy();
         if (defaults == null) {
-            return MemoryRetentionDryRunResult.POLICY_SOURCE_NONE;
+            return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_NONE, stored);
         }
-        config.setRetentionPolicy(defaults);
-        return MemoryRetentionDryRunResult.POLICY_SOURCE_DEFAULT;
+        return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_DEFAULT, defaults);
     }
 
     /** Mutable accumulator threaded through the dry-run pass chain. */
@@ -2001,13 +2015,14 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         ActionListener<MemoryRetentionDryRunResult> listener
     ) {
         try {
-            String policySource = resolveEffectivePolicyForDryRun(config);
+            EffectivePolicy effective = resolveEffectivePolicyForDryRun(config);
+            String policySource = effective.source;
             int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
             DryRunContext ctx = new DryRunContext(
                 containerId,
                 policySource,
                 System.currentTimeMillis(),
-                config.getRetentionPolicy(),
+                effective.policy,
                 ttlDays
             );
 
@@ -2087,7 +2102,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
     private void dryRunSessions(MemoryConfiguration config, DryRunContext ctx, ActionListener<Void> listener) {
         String sessionIndex = config.getIndexName(MemoryType.SESSIONS);
-        Map<MemoryType, RetentionRule> policy = config.getRetentionPolicy();
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
         RetentionRule rule = policy == null ? null : policy.get(MemoryType.SESSIONS);
         if (sessionIndex == null || rule == null) {
             listener.onResponse(null);
@@ -2137,7 +2152,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
     private void dryRunLongTerm(MemoryConfiguration config, DryRunContext ctx, ActionListener<Void> listener) {
         String longTermIndex = config.getIndexName(MemoryType.LONG_TERM);
-        Map<MemoryType, RetentionRule> policy = config.getRetentionPolicy();
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
         RetentionRule rule = policy == null ? null : policy.get(MemoryType.LONG_TERM);
         if (longTermIndex == null || rule == null) {
             listener.onResponse(null);
@@ -2179,7 +2194,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
     private void dryRunHistory(MemoryConfiguration config, DryRunContext ctx, ActionListener<Void> listener) {
         String historyIndex = config.getIndexName(MemoryType.HISTORY);
-        Map<MemoryType, RetentionRule> policy = config.getRetentionPolicy();
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
         RetentionRule rule = policy == null ? null : policy.get(MemoryType.HISTORY);
         // History supports max_count only; retention_days is rejected by validation.
         if (historyIndex == null || rule == null || rule.getMaxCount() == null) {
@@ -2269,7 +2284,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         ActionListener<Void> listener
     ) {
         String sessionsIndex = config.getIndexName(MemoryType.SESSIONS);
-        Map<MemoryType, RetentionRule> policy = config.getRetentionPolicy();
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
         boolean hasPolicy = policy != null && !policy.isEmpty();
         // Orphan sweep only runs for session-backed containers that have a retention policy, and only after the
         // sweep's first-observation grace window has elapsed (mirrors resolveOrphanSweepContainers + baseline gate).

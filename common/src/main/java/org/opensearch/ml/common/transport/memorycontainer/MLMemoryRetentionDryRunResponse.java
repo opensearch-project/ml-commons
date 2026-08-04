@@ -34,32 +34,39 @@ public class MLMemoryRetentionDryRunResponse extends ActionResponse implements T
 
     private final List<MemoryRetentionDryRunResult> results;
     private final boolean clusterWide;
+    private final int skippedCount;
 
-    public MLMemoryRetentionDryRunResponse(List<MemoryRetentionDryRunResult> results, boolean clusterWide) {
+    public MLMemoryRetentionDryRunResponse(List<MemoryRetentionDryRunResult> results, boolean clusterWide, int skippedCount) {
         this.results = results;
         this.clusterWide = clusterWide;
+        this.skippedCount = skippedCount;
     }
 
     public MLMemoryRetentionDryRunResponse(StreamInput in) throws IOException {
         super(in);
         this.results = in.readList(MemoryRetentionDryRunResult::new);
         this.clusterWide = in.readBoolean();
+        this.skippedCount = in.readVInt();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeList(results);
         out.writeBoolean(clusterWide);
+        out.writeVInt(skippedCount);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         if (clusterWide) {
-            builder.startArray();
+            builder.startObject();
+            builder.field("skipped_count", skippedCount);
+            builder.startArray("results");
             for (MemoryRetentionDryRunResult result : results) {
                 result.toXContent(builder, params);
             }
             builder.endArray();
+            builder.endObject();
             return builder;
         }
         // Single-container dry-run: render the sole result as a bare object.

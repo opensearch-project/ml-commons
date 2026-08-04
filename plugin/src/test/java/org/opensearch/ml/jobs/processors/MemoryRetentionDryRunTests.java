@@ -609,7 +609,7 @@ public class MemoryRetentionDryRunTests {
     @Test
     public void testResolveEffectivePolicyStored() {
         MemoryConfiguration config = sessionConfig(7, 5);
-        assertEquals("stored", processor.resolveEffectivePolicyForDryRun(config));
+        assertEquals("stored", processor.resolveEffectivePolicyForDryRun(config).source);
     }
 
     @Test

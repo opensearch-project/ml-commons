@@ -159,7 +159,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
                         baseline,
                         ActionListener
                             .wrap(
-                                result -> wrapped.onResponse(new MLMemoryRetentionDryRunResponse(List.of(result), false)),
+                                result -> wrapped.onResponse(new MLMemoryRetentionDryRunResponse(List.of(result), false, 0)),
                                 wrapped::onFailure
                             )
                     );
@@ -184,9 +184,12 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         ActionListener<MLMemoryRetentionDryRunResponse> actionListener
     ) {
         List<MemoryRetentionDryRunResult> results = new ArrayList<>();
+        // Mutable skipped-container counter threaded through the page/hit chain alongside 'results'. Incremented
+        // whenever a container is dropped from the results (parse failure or evaluation failure).
+        int[] skipped = new int[] { 0 };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLMemoryRetentionDryRunResponse> wrapped = ActionListener.runBefore(actionListener, context::restore);
-            searchContainerPage(processor, user, tenantId, null, results, wrapped);
+            searchContainerPage(processor, user, tenantId, null, results, skipped, wrapped);
         } catch (Exception e) {
             log.error("Failed to run cluster-wide retention dry-run", e);
             actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
@@ -199,6 +202,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         String tenantId,
         Object[] searchAfter,
         List<MemoryRetentionDryRunResult> results,
+        int[] skipped,
         ActionListener<MLMemoryRetentionDryRunResponse> listener
     ) {
         SearchRequest request = new SearchRequest(ML_MEMORY_CONTAINER_INDEX);
@@ -216,15 +220,15 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         client.search(request, ActionListener.wrap(response -> {
             SearchHit[] hits = response.getHits().getHits();
             if (hits.length == 0) {
-                listener.onResponse(new MLMemoryRetentionDryRunResponse(results, true));
+                listener.onResponse(new MLMemoryRetentionDryRunResponse(results, true, skipped[0]));
                 return;
             }
             Object[] nextPageSort = hits.length == CONTAINER_PAGE_SIZE ? hits[hits.length - 1].getSortValues() : null;
-            processHitChain(processor, user, tenantId, hits, 0, nextPageSort, results, listener);
+            processHitChain(processor, user, tenantId, hits, 0, nextPageSort, results, skipped, listener);
         }, e -> {
             if (ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
                 // No container index yet: nothing to evaluate, return an empty array rather than an error.
-                listener.onResponse(new MLMemoryRetentionDryRunResponse(results, true));
+                listener.onResponse(new MLMemoryRetentionDryRunResponse(results, true, skipped[0]));
             } else {
                 log.error("Failed to search memory containers for cluster-wide retention dry-run", e);
                 listener.onFailure(RestActionUtils.wrapAsStatusException(e));
@@ -240,13 +244,14 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         int index,
         Object[] nextPageSort,
         List<MemoryRetentionDryRunResult> results,
+        int[] skipped,
         ActionListener<MLMemoryRetentionDryRunResponse> listener
     ) {
         if (index >= hits.length) {
             if (nextPageSort != null) {
-                searchContainerPage(processor, user, tenantId, nextPageSort, results, listener);
+                searchContainerPage(processor, user, tenantId, nextPageSort, results, skipped, listener);
             } else {
-                listener.onResponse(new MLMemoryRetentionDryRunResponse(results, true));
+                listener.onResponse(new MLMemoryRetentionDryRunResponse(results, true, skipped[0]));
             }
             return;
         }
@@ -258,7 +263,8 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
             container = parseContainer(hit.getSourceAsString());
         } catch (Exception e) {
             log.warn("Skipping container {} in retention dry-run: failed to parse", containerId, e);
-            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, listener);
+            skipped[0]++;
+            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, skipped, listener);
             return;
         }
 
@@ -266,17 +272,18 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         // per-container isolation. A mismatched tenant or denied access simply excludes the container.
         boolean tenantOk = tenantId == null || container.getTenantId() == null || tenantId.equals(container.getTenantId());
         if (!tenantOk || !memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
-            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, listener);
+            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, skipped, listener);
             return;
         }
 
         Long baseline = extractOrphanBaseline(hit.getSourceAsMap());
         processor.dryRunContainer(container.getConfiguration(), containerId, baseline, ActionListener.wrap(result -> {
             results.add(result);
-            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, listener);
+            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, skipped, listener);
         }, e -> {
             log.warn("Skipping container {} in retention dry-run: evaluation failed", containerId, e);
-            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, listener);
+            skipped[0]++;
+            processHitChain(processor, user, tenantId, hits, index + 1, nextPageSort, results, skipped, listener);
         }));
     }
 

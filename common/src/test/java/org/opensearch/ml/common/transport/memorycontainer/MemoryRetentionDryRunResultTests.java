@@ -149,37 +149,41 @@ public class MemoryRetentionDryRunResultTests {
 
     @Test
     public void testResponseSingleRendersObject() throws IOException {
-        MLMemoryRetentionDryRunResponse response = new MLMemoryRetentionDryRunResponse(List.of(sampleResult()), false);
+        MLMemoryRetentionDryRunResponse response = new MLMemoryRetentionDryRunResponse(List.of(sampleResult()), false, 0);
         String json = toJson(response);
         // Single container: bare object, not an array
         assertTrue(json.startsWith("{"));
         assertTrue(json.contains("\"container_id\":\"agent-customer-support-abc123\""));
+        // Single-container branch does not surface skipped_count
+        assertTrue(!json.contains("skipped_count"));
     }
 
     @Test
     public void testResponseClusterWideRendersArray() throws IOException {
-        MLMemoryRetentionDryRunResponse response = new MLMemoryRetentionDryRunResponse(List.of(sampleResult()), true);
+        MLMemoryRetentionDryRunResponse response = new MLMemoryRetentionDryRunResponse(List.of(sampleResult()), true, 2);
         String json = toJson(response);
-        // Cluster-wide: array even with a single element
-        assertTrue(json.startsWith("["));
-        assertTrue(json.endsWith("]"));
+        // Cluster-wide: object wrapping a skipped_count and a results array (even with a single element)
+        assertTrue(json.startsWith("{"));
+        assertTrue(json.contains("\"skipped_count\":2"));
+        assertTrue(json.contains("\"results\":["));
     }
 
     @Test
     public void testResponseStreamRoundTrip() throws IOException {
-        MLMemoryRetentionDryRunResponse original = new MLMemoryRetentionDryRunResponse(List.of(sampleResult(), sampleResult()), true);
+        MLMemoryRetentionDryRunResponse original = new MLMemoryRetentionDryRunResponse(List.of(sampleResult(), sampleResult()), true, 3);
         BytesStreamOutput out = new BytesStreamOutput();
         original.writeTo(out);
         StreamInput in = out.bytes().streamInput();
         MLMemoryRetentionDryRunResponse parsed = new MLMemoryRetentionDryRunResponse(in);
         assertEquals(2, parsed.getResults().size());
         assertTrue(parsed.isClusterWide());
+        assertEquals(3, parsed.getSkippedCount());
         assertEquals("agent-customer-support-abc123", parsed.getResults().get(0).getContainerId());
     }
 
     @Test
     public void testResponseFromActionResponseSame() {
-        MLMemoryRetentionDryRunResponse response = new MLMemoryRetentionDryRunResponse(List.of(sampleResult()), false);
+        MLMemoryRetentionDryRunResponse response = new MLMemoryRetentionDryRunResponse(List.of(sampleResult()), false, 0);
         assertEquals(response, MLMemoryRetentionDryRunResponse.fromActionResponse(response));
     }
 
