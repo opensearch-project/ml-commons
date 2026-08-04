@@ -12,8 +12,8 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.input.MLInput;
 
 /**
- * Maps an input dataset type to its batching handler. An input type without a registered handler is
- * not batched, and lookups for it return null.
+ * Maps an input dataset type to its batching handler. Lookups for an input type without a registered
+ * handler return null, and such a request is rejected if the model has batch_inference_config set.
  */
 public class BatchableInputRegistry {
 

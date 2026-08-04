@@ -29,54 +29,72 @@ public class BatchInferenceConfigTest {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Test
-    public void defaultsAppliedWhenFieldsOmitted() {
-        BatchInferenceConfig config = BatchInferenceConfig.builder().build();
-        assertEquals(BatchInferenceConfig.DEFAULT_MAX_ITEMS_PER_REQUEST, config.getMaxItemsPerRequest());
-        assertEquals(BatchInferenceConfig.DISABLED_MAX_BYTES_PER_REQUEST, config.getMaxBytesPerRequest());
+    public void rejectsBothLimitsOmitted() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("must enable at least one limit");
+        BatchInferenceConfig.builder().build();
+    }
+
+    @Test
+    public void rejectsBothLimitsExplicitlyDisabled() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("must enable at least one limit");
+        BatchInferenceConfig.builder().maxItemsPerRequest(-1).maxBytesPerRequest(-1L).build();
+    }
+
+    @Test
+    public void itemLimitOnlyIsValid() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(96).build();
+        assertEquals(96, config.getMaxItemsPerRequest());
+        assertEquals(BatchInferenceConfig.NO_LIMIT, config.getMaxBytesPerRequest());
+        assertTrue(config.isItemLimitEnabled());
         assertFalse(config.isByteLimitEnabled());
     }
 
     @Test
-    public void byteLimitEnabledWhenPositive() {
-        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(96).maxBytesPerRequest(4_000_000L).build();
-        assertEquals(96, config.getMaxItemsPerRequest());
+    public void byteLimitOnlyIsValid() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxBytesPerRequest(4_000_000L).build();
+        assertEquals(BatchInferenceConfig.NO_LIMIT, config.getMaxItemsPerRequest());
         assertEquals(4_000_000L, config.getMaxBytesPerRequest());
+        assertFalse(config.isItemLimitEnabled());
         assertTrue(config.isByteLimitEnabled());
     }
 
     @Test
-    public void rejectsNonPositiveItemLimit() {
+    public void bothLimitsEnabledIsValid() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(96).maxBytesPerRequest(4_000_000L).build();
+        assertEquals(96, config.getMaxItemsPerRequest());
+        assertEquals(4_000_000L, config.getMaxBytesPerRequest());
+        assertTrue(config.isItemLimitEnabled());
+        assertTrue(config.isByteLimitEnabled());
+    }
+
+    @Test
+    public void rejectsNonPositiveItemLimitOtherThanNoLimit() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("max_items_per_request");
         BatchInferenceConfig.builder().maxItemsPerRequest(0).build();
     }
 
     @Test
-    public void rejectsInvalidByteLimit() {
+    public void rejectsNonPositiveByteLimitOtherThanNoLimit() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("max_bytes_per_request");
         BatchInferenceConfig.builder().maxBytesPerRequest(0L).build();
     }
 
     @Test
-    public void disabledByteLimitIsValid() {
-        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(10).maxBytesPerRequest(-1L).build();
-        assertFalse(config.isByteLimitEnabled());
-        assertEquals(-1L, config.getMaxBytesPerRequest());
-    }
-
-    @Test
-    public void rejectsNegativeByteLimitOtherThanDisabled() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("max_bytes_per_request");
-        BatchInferenceConfig.builder().maxBytesPerRequest(-2L).build();
-    }
-
-    @Test
-    public void rejectsNegativeItemLimit() {
+    public void rejectsNegativeItemLimitOtherThanNoLimit() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("max_items_per_request");
         BatchInferenceConfig.builder().maxItemsPerRequest(-5).build();
+    }
+
+    @Test
+    public void rejectsNegativeByteLimitOtherThanNoLimit() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("max_bytes_per_request");
+        BatchInferenceConfig.builder().maxItemsPerRequest(10).maxBytesPerRequest(-2L).build();
     }
 
     @Test
@@ -86,7 +104,17 @@ public class BatchInferenceConfigTest {
         original.writeTo(out);
         BatchInferenceConfig restored = new BatchInferenceConfig(out.bytes().streamInput());
         assertEquals(7, restored.getMaxItemsPerRequest());
-        assertEquals(BatchInferenceConfig.DISABLED_MAX_BYTES_PER_REQUEST, restored.getMaxBytesPerRequest());
+        assertEquals(BatchInferenceConfig.NO_LIMIT, restored.getMaxBytesPerRequest());
+    }
+
+    @Test
+    public void streamRoundTripWithDisabledItemLimit() throws IOException {
+        BatchInferenceConfig original = BatchInferenceConfig.builder().maxBytesPerRequest(2048L).build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        original.writeTo(out);
+        BatchInferenceConfig restored = new BatchInferenceConfig(out.bytes().streamInput());
+        assertEquals(BatchInferenceConfig.NO_LIMIT, restored.getMaxItemsPerRequest());
+        assertEquals(2048L, restored.getMaxBytesPerRequest());
     }
 
     @Test
@@ -114,5 +142,17 @@ public class BatchInferenceConfigTest {
         BatchInferenceConfig parsed = BatchInferenceConfig.parse(parser);
         assertEquals(96, parsed.getMaxItemsPerRequest());
         assertEquals(2048L, parsed.getMaxBytesPerRequest());
+    }
+
+    @Test
+    public void parsesOmittedItemLimitAsDisabled() throws IOException {
+        String json = "{\"max_bytes_per_request\":4096}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        BatchInferenceConfig parsed = BatchInferenceConfig.parse(parser);
+        assertEquals(BatchInferenceConfig.NO_LIMIT, parsed.getMaxItemsPerRequest());
+        assertEquals(4096L, parsed.getMaxBytesPerRequest());
     }
 }

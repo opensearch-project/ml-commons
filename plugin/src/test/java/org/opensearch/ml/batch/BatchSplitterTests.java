@@ -16,16 +16,16 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 
-public class SizeBasedBatchSplitterTests {
+public class BatchSplitterTests {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private SizeBasedBatchSplitter splitter;
+    private BatchSplitter splitter;
 
     @Before
     public void setUp() {
-        splitter = new SizeBasedBatchSplitter();
+        splitter = new BatchSplitter();
     }
 
     private List<BatchItem> items(long... byteSizes) {

@@ -6,6 +6,9 @@
 package org.opensearch.ml.batch;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -88,22 +91,61 @@ public class TextDocsBatchableInputTests {
         assertEquals(1, ((ModelTensorOutput) merged).getMlModelOutputs().get(0).getMlModelTensors().size());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void toItemsRejectsNonTextDocsInput() {
+    @Test
+    public void combineCarriesOverStatusCodeSharedByEverySubBatch() {
+        MLOutput first = tensorOutput(200, "t0");
+        MLOutput second = tensorOutput(200, "t1");
+        MLOutput merged = handler.combine(ImmutableList.of(first, second));
+
+        ModelTensors group = ((ModelTensorOutput) merged).getMlModelOutputs().get(0);
+        assertEquals(Integer.valueOf(200), group.getStatusCode());
+        assertEquals(2, group.getMlModelTensors().size());
+    }
+
+    @Test
+    public void combineKeepsStatusCodeNullWhenNoSubBatchReportedOne() {
+        MLOutput merged = handler.combine(ImmutableList.of(tensorOutput("t0"), tensorOutput("t1")));
+        assertNull(((ModelTensorOutput) merged).getMlModelOutputs().get(0).getStatusCode());
+    }
+
+    @Test
+    public void combineRejectsConflictingStatusCodes() {
+        MLOutput ok = tensorOutput(200, "t0");
+        MLOutput partial = tensorOutput(206, "t1");
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> handler.combine(ImmutableList.of(ok, partial)));
+        assertTrue(error.getMessage().contains("status_code"));
+    }
+
+    @Test
+    public void toItemsRejectsNonTextDocsInputAndNamesTheTypeReceived() {
         MLInput input = MLInput
             .builder()
             .algorithm(FunctionName.TEXT_SIMILARITY)
             .inputDataset(new TextSimilarityInputDataSet("q", ImmutableList.of("d")))
             .build();
-        handler.toItems(input);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> handler.toItems(input));
+        assertTrue(error.getMessage().contains(TextSimilarityInputDataSet.class.getSimpleName()));
+    }
+
+    @Test
+    public void toItemsRejectsNullInputWithoutThrowingNpe() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> handler.toItems(null));
+        assertTrue(error.getMessage().contains("null"));
     }
 
     /** One model call's output: a single ModelTensors group with one tensor per doc. */
     private MLOutput tensorOutput(String... names) {
+        return tensorOutput(null, names);
+    }
+
+    private MLOutput tensorOutput(Integer statusCode, String... names) {
         List<ModelTensor> tensors = new java.util.ArrayList<>();
         for (String name : names) {
             tensors.add(ModelTensor.builder().name(name).build());
         }
-        return ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(ModelTensors.builder().mlModelTensors(tensors).build())).build();
+        ModelTensors group = ModelTensors.builder().mlModelTensors(tensors).build();
+        group.setStatusCode(statusCode);
+        return ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(group)).build();
     }
 }

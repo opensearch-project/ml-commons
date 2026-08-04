@@ -8,7 +8,9 @@ package org.opensearch.ml.batch;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
@@ -34,6 +36,13 @@ public class TextDocsBatchableInput implements BatchableInput {
         return items;
     }
 
+    /**
+     * Rebuilds a sub-batch as a text-docs input: only the documents change, and the rest of the request
+     * is copied unchanged, such as the algorithm parameters and the result filter. Copying is safe only
+     * while those fields mean the same thing for every document, applying to the request as a whole
+     * rather than to a document at a particular position. A field whose meaning depends on where a
+     * document sits in the list cannot be copied this way, and would have to be split and remapped here.
+     */
     @Override
     public MLInput merge(MLInput source, List<BatchItem> items) {
         List<String> docs = new ArrayList<>(items.size());
@@ -50,6 +59,8 @@ public class TextDocsBatchableInput implements BatchableInput {
         // reassembled response identical to an un-split call, flatten every sub-batch's results back
         // into one group, preserving the original input order.
         List<ModelTensor> tensors = new ArrayList<>();
+        Integer commonStatusCode = null;
+        boolean statusCodeSeen = false;
         for (MLOutput output : orderedOutputs) {
             List<ModelTensors> groups = asTensorOutput(output).getMlModelOutputs();
             if (groups == null) {
@@ -59,17 +70,36 @@ public class TextDocsBatchableInput implements BatchableInput {
                 if (group.getMlModelTensors() != null) {
                     tensors.addAll(group.getMlModelTensors());
                 }
+                Integer statusCode = group.getStatusCode();
+                if (!statusCodeSeen) {
+                    commonStatusCode = statusCode;
+                    statusCodeSeen = true;
+                } else if (!Objects.equals(commonStatusCode, statusCode)) {
+                    throw new IllegalStateException(
+                        "Expected every sub-batch output to report the same "
+                            + ModelTensors.STATUS_CODE_FIELD
+                            + ", but got both "
+                            + commonStatusCode
+                            + " and "
+                            + statusCode
+                            + ", so the sub-batch results cannot be merged into one response"
+                    );
+                }
             }
         }
         ModelTensors combined = ModelTensors.builder().mlModelTensors(tensors).build();
+        combined.setStatusCode(commonStatusCode);
         return ModelTensorOutput.builder().mlModelOutputs(List.of(combined)).build();
     }
 
     private TextDocsInputDataSet asTextDocs(MLInput input) {
-        if (input == null || !(input.getInputDataset() instanceof TextDocsInputDataSet)) {
-            throw new IllegalArgumentException("TextDocsBatchableInput requires a TextDocsInputDataSet");
+        MLInputDataset dataset = input == null ? null : input.getInputDataset();
+        if (!(dataset instanceof TextDocsInputDataSet)) {
+            throw new IllegalArgumentException(
+                "Expected TextDocsInputDataSet but got " + (dataset == null ? "null" : dataset.getClass().getSimpleName())
+            );
         }
-        return (TextDocsInputDataSet) input.getInputDataset();
+        return (TextDocsInputDataSet) dataset;
     }
 
     private ModelTensorOutput asTensorOutput(MLOutput output) {

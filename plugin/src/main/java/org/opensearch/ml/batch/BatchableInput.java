@@ -11,8 +11,9 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 
 /**
- * Per-input-type strategy that keeps the splitter generic over input type. An input type with no
- * registered handler is not batched.
+ * Per-input-type strategy for turning one request into several and reassembling the results, so that
+ * the splitter and the executor never need to know what kind of data they are moving. An input type can
+ * only be split if it has an implementation registered in BatchableInputRegistry.
  */
 public interface BatchableInput {
 

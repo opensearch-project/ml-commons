@@ -11,11 +11,12 @@ import java.util.List;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 
 /**
- * Greedily packs ordered items into sub-batches that respect the count and (optional) byte ceilings.
+ * Greedily packs ordered items into sub-batches that respect the count and byte ceilings, either of
+ * which may be disabled.
  * Preserves order, never drops an item, and gives an over-sized item its own sub-batch rather than
  * splitting it.
  */
-public class SizeBasedBatchSplitter {
+public class BatchSplitter {
 
     public List<List<BatchItem>> split(List<BatchItem> items, BatchInferenceConfig config) {
         if (items == null || items.isEmpty()) {
@@ -25,6 +26,7 @@ public class SizeBasedBatchSplitter {
             throw new IllegalArgumentException("BatchInferenceConfig must not be null");
         }
 
+        boolean itemLimitEnabled = config.isItemLimitEnabled();
         int maxItems = config.getMaxItemsPerRequest();
         boolean byteLimitEnabled = config.isByteLimitEnabled();
         long maxBytes = config.getMaxBytesPerRequest();
@@ -34,7 +36,7 @@ public class SizeBasedBatchSplitter {
         long currentBytes = 0L;
 
         for (BatchItem item : items) {
-            boolean wouldExceedCount = current.size() + 1 > maxItems;
+            boolean wouldExceedCount = itemLimitEnabled && current.size() + 1 > maxItems;
             boolean wouldExceedBytes = byteLimitEnabled && !current.isEmpty() && currentBytes + item.getByteSize() > maxBytes;
 
             // The !current.isEmpty() guard lets a single over-sized item stand alone instead of being dropped.

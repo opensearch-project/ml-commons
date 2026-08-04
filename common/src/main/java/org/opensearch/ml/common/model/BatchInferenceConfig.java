@@ -21,7 +21,7 @@ import lombok.Getter;
 
 /**
  * Size limits used to split a predict request into per-call sub-batches: max_items_per_request
- * (count ceiling) and max_bytes_per_request (UTF-8 byte ceiling, -1 to disable).
+ * (count ceiling) and max_bytes_per_request (UTF-8 byte ceiling), either of which can be -1 to disable.
  */
 @Getter
 public class BatchInferenceConfig implements ToXContentObject, Writeable {
@@ -29,17 +29,15 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
     public static final String MAX_ITEMS_PER_REQUEST_FIELD = "max_items_per_request";
     public static final String MAX_BYTES_PER_REQUEST_FIELD = "max_bytes_per_request";
 
-    // Default when the field is omitted; callers should set their model's documented batch limit.
-    public static final int DEFAULT_MAX_ITEMS_PER_REQUEST = 512;
-    public static final long DISABLED_MAX_BYTES_PER_REQUEST = -1L;
+    public static final int NO_LIMIT = -1;
 
     private final int maxItemsPerRequest;
     private final long maxBytesPerRequest;
 
     @Builder(toBuilder = true)
     public BatchInferenceConfig(Integer maxItemsPerRequest, Long maxBytesPerRequest) {
-        this.maxItemsPerRequest = maxItemsPerRequest == null ? DEFAULT_MAX_ITEMS_PER_REQUEST : maxItemsPerRequest;
-        this.maxBytesPerRequest = maxBytesPerRequest == null ? DISABLED_MAX_BYTES_PER_REQUEST : maxBytesPerRequest;
+        this.maxItemsPerRequest = maxItemsPerRequest == null ? NO_LIMIT : maxItemsPerRequest;
+        this.maxBytesPerRequest = maxBytesPerRequest == null ? NO_LIMIT : maxBytesPerRequest;
         validate();
     }
 
@@ -49,22 +47,34 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
     }
 
     private void validate() {
-        if (maxItemsPerRequest < 1) {
-            throw new IllegalArgumentException(MAX_ITEMS_PER_REQUEST_FIELD + " must be a positive integer, but got " + maxItemsPerRequest);
-        }
-        if (maxBytesPerRequest < 1 && maxBytesPerRequest != DISABLED_MAX_BYTES_PER_REQUEST) {
+        validateLimit(MAX_ITEMS_PER_REQUEST_FIELD, maxItemsPerRequest);
+        validateLimit(MAX_BYTES_PER_REQUEST_FIELD, maxBytesPerRequest);
+        if (!isItemLimitEnabled() && !isByteLimitEnabled()) {
             throw new IllegalArgumentException(
-                MAX_BYTES_PER_REQUEST_FIELD
-                    + " must be a positive value or "
-                    + DISABLED_MAX_BYTES_PER_REQUEST
-                    + " (disabled), but got "
-                    + maxBytesPerRequest
+                "batch_inference_config must enable at least one limit, but both "
+                    + MAX_ITEMS_PER_REQUEST_FIELD
+                    + " and "
+                    + MAX_BYTES_PER_REQUEST_FIELD
+                    + " are "
+                    + NO_LIMIT
+                    + " (disabled). Set one of them to a positive value, or remove batch_inference_config "
+                    + "to leave requests unsplit."
             );
         }
     }
 
+    private void validateLimit(String fieldName, long value) {
+        if (value < 1 && value != NO_LIMIT) {
+            throw new IllegalArgumentException(fieldName + " must be a positive value or " + NO_LIMIT + " (disabled), but got " + value);
+        }
+    }
+
+    public boolean isItemLimitEnabled() {
+        return maxItemsPerRequest != NO_LIMIT;
+    }
+
     public boolean isByteLimitEnabled() {
-        return maxBytesPerRequest != DISABLED_MAX_BYTES_PER_REQUEST;
+        return maxBytesPerRequest != NO_LIMIT;
     }
 
     @Override

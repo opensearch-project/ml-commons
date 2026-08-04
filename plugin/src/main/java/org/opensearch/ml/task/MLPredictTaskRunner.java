@@ -45,8 +45,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.batch.BatchInferenceExecutor;
+import org.opensearch.ml.batch.BatchSplitter;
 import org.opensearch.ml.batch.BatchableInputRegistry;
-import org.opensearch.ml.batch.SizeBasedBatchSplitter;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -141,7 +141,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlEngine = mlEngine;
         this.batchInferenceExecutor = new BatchInferenceExecutor(
             new BatchableInputRegistry(),
-            new SizeBasedBatchSplitter(),
+            new BatchSplitter(),
             threadPool,
             REMOTE_PREDICT_THREAD_POOL
         );
@@ -430,7 +430,16 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             return null;
         }
         MLModel cachedModel = mlModelManager.getModelInfo(modelId);
-        return cachedModel == null ? null : cachedModel.getBatchInferenceConfig();
+        if (cachedModel == null) {
+            log
+                .warn(
+                    "No cached model metadata for model {} while running predict, so batch inference limits cannot be "
+                        + "applied to this request",
+                    modelId
+                );
+            return null;
+        }
+        return cachedModel.getBatchInferenceConfig();
     }
 
     private void predict(
@@ -610,10 +619,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         // size-bounded sub-batches, run each against the model, and merge the results in input order.
                         // Output validation and task completion still run once, on the merged response. Requests that
                         // are not configured for batching, or already fit within the limits, take the single-call path.
-                        BatchInferenceConfig batchInferenceConfig = getBatchInferenceConfig(modelId);
-                        boolean applyBatching = !mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)
-                            && batchInferenceExecutor.shouldBatch(mlInput, batchInferenceConfig);
-                        if (applyBatching) {
+                        if (mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)) {
+                            predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
+                        } else {
+                            BatchInferenceConfig batchInferenceConfig = getBatchInferenceConfig(modelId);
                             final Predictable batchPredictor = predictor;
                             batchInferenceExecutor
                                 .execute(
@@ -631,8 +640,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                             trackPredictDurationListener::onFailure
                                         )
                                 );
-                        } else {
-                            predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
                         }
                     } else {
                         // long startTime = System.nanoTime();

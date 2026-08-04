@@ -49,7 +49,7 @@ public class BatchInferenceExecutorTests {
             task.run();
             return null;
         }).when(threadPool).schedule(any(Runnable.class), any(), any(String.class));
-        executor = new BatchInferenceExecutor(new BatchableInputRegistry(), new SizeBasedBatchSplitter(), threadPool, "test-pool");
+        executor = new BatchInferenceExecutor(new BatchableInputRegistry(), new BatchSplitter(), threadPool, "test-pool");
     }
 
     private MLInput textInput(String... docs) {
@@ -83,20 +83,36 @@ public class BatchInferenceExecutorTests {
     }
 
     @Test
-    public void shouldBatchFalseWhenConfigNull() {
-        assertFalse(executor.shouldBatch(textInput("a", "b"), null));
+    public void passesThroughWhenConfigNull() {
+        MLInput input = textInput("a", "b");
+        AtomicReference<MLInput> seen = new AtomicReference<>();
+        AtomicReference<MLOutput> result = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            seen.set(subInput);
+            listener.onResponse(outputFor(subInput));
+        };
+
+        executor.execute(input, null, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+
+        assertSame(input, seen.get()); // no config -> original input, no rebuild
+        assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
     }
 
     @Test
-    public void shouldBatchFalseWhenUnderLimits() {
+    public void doesNotResplitWhenAlreadyUnderLimits() {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(10).build();
-        assertFalse(executor.shouldBatch(textInput("a", "b"), config));
-    }
+        MLInput input = textInput("a", "b");
+        AtomicInteger invocations = new AtomicInteger(0);
+        AtomicReference<MLOutput> result = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            invocations.incrementAndGet();
+            listener.onResponse(outputFor(subInput));
+        };
 
-    @Test
-    public void shouldBatchTrueWhenSplitNeeded() {
-        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(2).build();
-        assertTrue(executor.shouldBatch(textInput("a", "b", "c"), config));
+        executor.execute(input, config, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+
+        assertEquals(1, invocations.get()); // single call, split computed exactly once
+        assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
     }
 
     @Test
@@ -185,6 +201,32 @@ public class BatchInferenceExecutorTests {
     public void throttleExhaustsRetriesAndFails() {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         AtomicReference<Exception> failure = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("bad")) {
+                listener.onFailure(new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS));
+            } else {
+                listener.onResponse(outputFor(subInput));
+            }
+        };
+
+        executor
+            .execute(
+                textInput("a", "bad"),
+                config,
+                invoker,
+                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
+            );
+
+        assertTrue(failure.get() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) failure.get()).status());
+    }
+
+    @Test
+    public void allSubBatchesThrottleAndFailWithTheOriginalStatus() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        AtomicInteger completions = new AtomicInteger(0);
         SingleBatchInvoker invoker = (subInput, listener) -> listener
             .onFailure(new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS));
 
@@ -193,11 +235,16 @@ public class BatchInferenceExecutorTests {
                 textInput("a", "b"),
                 config,
                 invoker,
-                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
+                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, e -> {
+                    completions.incrementAndGet();
+                    failure.set(e);
+                })
             );
 
+        assertEquals("listener must be completed exactly once", 1, completions.get());
         assertTrue(failure.get() instanceof OpenSearchStatusException);
         assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) failure.get()).status());
+        assertEquals(0, failure.get().getSuppressed().length);
     }
 
     @Test
@@ -224,23 +271,120 @@ public class BatchInferenceExecutorTests {
     }
 
     @Test
-    public void passesThroughWhenInputTypeNotBatchable() {
+    public void failsWhenInputTypeNotBatchable() {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         MLInput input = MLInput
             .builder()
             .algorithm(FunctionName.TEXT_SIMILARITY)
             .inputDataset(new org.opensearch.ml.common.dataset.TextSimilarityInputDataSet("q", ImmutableList.of("d1", "d2")))
             .build();
-        AtomicReference<MLInput> seen = new AtomicReference<>();
-        MLOutput dummy = ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of()).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> { throw new AssertionError("invoker should not be called"); };
+
+        executor
+            .execute(input, config, invoker, ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set));
+
+        assertTrue(failure.get() instanceof IllegalArgumentException);
+    }
+
+    @Test
+    public void firstSubBatchFailureWinsAndLaterFailuresAreDropped() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        AtomicInteger completions = new AtomicInteger(0);
         SingleBatchInvoker invoker = (subInput, listener) -> {
-            seen.set(subInput);
-            listener.onResponse(dummy);
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("bad1")) {
+                listener.onFailure(new OpenSearchStatusException("first failure", RestStatus.BAD_REQUEST));
+            } else if (docs.contains("bad2")) {
+                listener.onFailure(new OpenSearchStatusException("second failure", RestStatus.NOT_FOUND));
+            } else {
+                listener.onResponse(outputFor(subInput));
+            }
         };
 
-        executor.execute(input, config, invoker, ActionListener.wrap(r -> {}, e -> { throw new AssertionError(e); }));
+        executor.execute(textInput("bad1", "ok", "bad2"), config, invoker, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed");
+        }, e -> {
+            completions.incrementAndGet();
+            failure.set(e);
+        }));
 
-        assertSame(input, seen.get()); // not batchable -> original input passed straight through
+        assertEquals("listener must be completed exactly once", 1, completions.get());
+        assertEquals("first failure", failure.get().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failure.get()).status());
+    }
+
+    @Test
+    public void singleSubBatchFailureIsReportedAsIs() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("bad")) {
+                listener.onFailure(new OpenSearchStatusException("bad input", RestStatus.BAD_REQUEST));
+            } else {
+                listener.onResponse(outputFor(subInput));
+            }
+        };
+
+        executor
+            .execute(
+                textInput("ok", "bad"),
+                config,
+                invoker,
+                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
+            );
+
+        assertTrue(failure.get() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failure.get()).status());
+    }
+
+    @Test
+    public void successSettlingBeforeFailureDoesNotCombinePartialResults() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("bad")) {
+                listener.onFailure(new OpenSearchStatusException("bad input", RestStatus.BAD_REQUEST));
+            } else {
+                listener.onResponse(outputFor(subInput));
+            }
+        };
+
+        // "ok" settles first (dispatched first, in list order); "bad" settles last.
+        executor.execute(textInput("ok", "bad"), config, invoker, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed, not combined a partial result");
+        }, failure::set));
+
+        assertTrue(failure.get() instanceof OpenSearchStatusException);
+    }
+
+    @Test
+    public void successSettlingAfterFailureDoesNotCompleteTheRequestAgain() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        AtomicInteger completions = new AtomicInteger(0);
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("bad")) {
+                listener.onFailure(new OpenSearchStatusException("bad input", RestStatus.BAD_REQUEST));
+            } else {
+                listener.onResponse(outputFor(subInput));
+            }
+        };
+
+        // "bad" settles first (dispatched first, in list order); "ok" succeeds afterwards.
+        executor.execute(textInput("bad", "ok"), config, invoker, ActionListener.wrap(r -> {
+            throw new AssertionError("must not respond after the request already failed");
+        }, e -> {
+            completions.incrementAndGet();
+            failure.set(e);
+        }));
+
+        assertEquals("listener must be completed exactly once", 1, completions.get());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failure.get()).status());
     }
 
     @Test

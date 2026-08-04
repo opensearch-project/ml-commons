@@ -7,7 +7,6 @@ package org.opensearch.ml.batch;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
@@ -33,14 +32,17 @@ public class BatchInferenceExecutor {
     static final int MAX_RETRIES = 3;
     static final long[] BACKOFF_MS = { 1000L, 2000L, 4000L };
 
+    private static final int FAILED = -1;
+    private static final int COMPLETED = 0;
+
     private final BatchableInputRegistry registry;
-    private final SizeBasedBatchSplitter splitter;
+    private final BatchSplitter splitter;
     private final ThreadPool threadPool;
     private final String scheduleExecutorName;
 
     public BatchInferenceExecutor(
         BatchableInputRegistry registry,
-        SizeBasedBatchSplitter splitter,
+        BatchSplitter splitter,
         ThreadPool threadPool,
         String scheduleExecutorName
     ) {
@@ -51,24 +53,28 @@ public class BatchInferenceExecutor {
     }
 
     /**
-     * True only when there is a config, a handler for the input type, and the request needs more than
-     * one sub-batch. Otherwise the caller should invoke the model directly.
+     * Splits into sub-batches only when there is a config, a handler for the input type, and the request
+     * needs more than one sub-batch. A request runs as a single call when the model has no config or
+     * already fits within the limits, and fails when the model has a config but the input type has no
+     * handler, rather than being sent unsplit.
      */
-    public boolean shouldBatch(MLInput input, BatchInferenceConfig config) {
-        if (config == null) {
-            return false;
-        }
-        BatchableInput handler = registry.get(input);
-        if (handler == null) {
-            return false;
-        }
-        return splitter.split(handler.toItems(input), config).size() > 1;
-    }
-
     public void execute(MLInput input, BatchInferenceConfig config, SingleBatchInvoker invoker, ActionListener<MLOutput> listener) {
+        if (config == null) {
+            invoker.invoke(input, listener);
+            return;
+        }
+
         final BatchableInput handler = registry.get(input);
         if (handler == null) {
-            invoker.invoke(input, listener);
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "This model has batch_inference_config set, so its predict requests must be splittable, but input type "
+                            + (input == null || input.getInputDataset() == null ? "null" : input.getInputDataset().getInputDataType())
+                            + " does not support batch inference. Send a supported input type, or remove "
+                            + "batch_inference_config from the model to run requests unsplit."
+                    )
+                );
             return;
         }
 
@@ -85,6 +91,16 @@ public class BatchInferenceExecutor {
             return;
         }
 
+        dispatchBatches(input, handler, batches, invoker, listener);
+    }
+
+    private void dispatchBatches(
+        MLInput input,
+        BatchableInput handler,
+        List<List<BatchItem>> batches,
+        SingleBatchInvoker invoker,
+        ActionListener<MLOutput> listener
+    ) {
         final int total = batches.size();
         if (log.isDebugEnabled()) {
             int items = 0;
@@ -93,28 +109,58 @@ public class BatchInferenceExecutor {
             }
             log.debug("Size-based batching: split {} items into {} sub-batches", items, total);
         }
+
         final AtomicReferenceArray<MLOutput> results = new AtomicReferenceArray<>(total);
-        final AtomicInteger remaining = new AtomicInteger(total);
-        final AtomicBoolean completed = new AtomicBoolean(false);
+        // Positive: sub-batches still in flight. COMPLETED: all succeeded. FAILED: already failed.
+        final AtomicInteger state = new AtomicInteger(total);
 
         for (int i = 0; i < total; i++) {
             final int index = i;
             final MLInput subInput = handler.merge(input, batches.get(i));
             final ActionListener<MLOutput> subListener = ActionListener.wrap(output -> {
                 results.set(index, output);
-                if (remaining.decrementAndGet() == 0 && completed.compareAndSet(false, true)) {
-                    try {
-                        listener.onResponse(handler.combine(toList(results)));
-                    } catch (Exception combineError) {
-                        listener.onFailure(combineError);
-                    }
-                }
-            }, error -> {
-                if (completed.compareAndSet(false, true)) {
-                    listener.onFailure(error);
-                }
-            });
+                onSubBatchSuccess(state, results, handler, listener);
+            }, error -> onSubBatchFailure(state, error, listener));
             invokeWithRetry(invoker, subInput, 0, subListener);
+        }
+    }
+
+    private void onSubBatchSuccess(
+        AtomicInteger state,
+        AtomicReferenceArray<MLOutput> results,
+        BatchableInput handler,
+        ActionListener<MLOutput> listener
+    ) {
+        while (true) {
+            int current = state.get();
+            if (current <= 0) {
+                return;
+            }
+            int remaining = current - 1;
+            if (state.compareAndSet(current, remaining)) {
+                if (remaining != COMPLETED) {
+                    return;
+                }
+                try {
+                    listener.onResponse(handler.combine(toList(results)));
+                } catch (Exception outputMergeError) {
+                    listener.onFailure(outputMergeError);
+                }
+                return;
+            }
+        }
+    }
+
+    private void onSubBatchFailure(AtomicInteger state, Exception error, ActionListener<MLOutput> listener) {
+        while (true) {
+            int current = state.get();
+            if (current <= 0) {
+                return;
+            }
+            if (state.compareAndSet(current, FAILED)) {
+                listener.onFailure(error);
+                return;
+            }
         }
     }
 
