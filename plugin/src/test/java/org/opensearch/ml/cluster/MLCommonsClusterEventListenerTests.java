@@ -210,7 +210,9 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testClusterChanged_MemoryRetentionJob_NonDefaultInterval() {
-        setupClusterState(false, createDataNode("dataNode", Version.V_3_1_0));
+        // Healthy, fully-upgraded cluster (all nodes on CURRENT): the startup deferral guard (noOlderNodes) is
+        // satisfied so the CREATE path runs. A pre-CURRENT node here would trip the rolling-upgrade deferral.
+        setupClusterState(false, createDataNode("dataNode", Version.CURRENT));
         when(clusterService.getSettings())
             .thenReturn(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 1).build());
 
@@ -223,7 +225,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testClusterChanged_MemoryRetentionReconcile_OnElectedClusterManager() {
-        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerState(dataNode, false, true);
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
@@ -242,7 +244,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
      * silently revert the operator's persisted interval on restart.
      */
     public void testClusterChanged_MemoryRetentionReconcile_HonorsPersistedIntervalFromMetadata() {
-        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerState(dataNode, false, true);
         // Node bootstrap (opensearch.yml) has nothing; the interval was set via the cluster-settings API -> metadata.
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
@@ -257,7 +259,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testClusterChanged_MemoryRetentionReconcile_SkippedWhenNotElectedClusterManager() {
-        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerState(dataNode, false, false);
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
@@ -305,7 +307,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
     public void testClusterChanged_ProceedsWhenJobsIndexAbsent() {
         // A fresh cluster has no jobs index yet; the shard-active gate must be skipped so the CREATE path can seed it.
-        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerState(dataNode, false, true);
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
