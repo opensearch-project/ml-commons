@@ -143,6 +143,7 @@ public class RestMemoryRetentionDryRunIT extends MLCommonsRestTestCase {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testClusterWideDryRunReturnsArrayIncludingCreatedContainer() throws IOException {
         String containerId = createContainer(
             "{ \"name\": \"dryrun_all_it_"
@@ -150,12 +151,17 @@ public class RestMemoryRetentionDryRunIT extends MLCommonsRestTestCase {
                 + "\", \"configuration\": { \"retention_policy\": { \"sessions\": { \"max_count\": 3 } } } }"
         );
 
-        List<Map<String, Object>> results = dryRunClusterWide();
+        Map<String, Object> response = dryRunClusterWide();
+        List<Map<String, Object>> results = (List<Map<String, Object>>) response.get("results");
+        assertNotNull("cluster-wide dry-run should wrap results in a \"results\" array", results);
         assertFalse("cluster-wide dry-run should return a non-empty array", results.isEmpty());
         assertTrue(
             "cluster-wide dry-run should include the created container",
             results.stream().anyMatch(r -> containerId.equals(r.get("container_id")))
         );
+        // fix #3: the cluster-wide response surfaces a skipped_count for containers dropped during evaluation.
+        assertNotNull("cluster-wide dry-run should surface a skipped_count field", response.get("skipped_count"));
+        assertEquals("no containers should be skipped in this happy-path scenario", 0, ((Number) response.get("skipped_count")).intValue());
     }
 
     @Test
@@ -254,11 +260,11 @@ public class RestMemoryRetentionDryRunIT extends MLCommonsRestTestCase {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> dryRunClusterWide() throws IOException {
+    private Map<String, Object> dryRunClusterWide() throws IOException {
         Response response = TestHelper.makeRequest(client(), "POST", CLUSTER_WIDE_DRY_RUN_PATH, null, "", null);
         assertEquals(200, response.getStatusLine().getStatusCode());
         String body = TestHelper.httpEntityToString(response.getEntity());
-        return StringUtils.gson.fromJson(body, List.class);
+        return StringUtils.gson.fromJson(body, Map.class);
     }
 
     @SuppressWarnings("unchecked")

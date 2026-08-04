@@ -240,6 +240,29 @@ public class TransportMemoryRetentionDryRunActionTests extends OpenSearchTestCas
         assertEquals(0, responseCaptor.getValue().getResults().size());
     }
 
+    public void testClusterWideSkipsUnparseableContainerReportsSkippedCount() {
+        // A container whose stored source cannot be parsed is dropped from the results and counted in skipped_count.
+        SearchHit badHit = new SearchHit(0, "bad-container", null, null);
+        badHit.sourceRef(new org.opensearch.core.common.bytes.BytesArray("not-json"));
+        SearchResponse r = mock(SearchResponse.class);
+        SearchHits hits = new SearchHits(new SearchHit[] { badHit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(r.getHits()).thenReturn(hits);
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(r);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().build();
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(responseCaptor.capture());
+        MLMemoryRetentionDryRunResponse response = responseCaptor.getValue();
+        assertTrue(response.isClusterWide());
+        assertEquals(0, response.getResults().size());
+        assertEquals(1, response.getSkippedCount());
+    }
+
     public void testClusterWideIndexNotFoundReturnsEmptyArray() {
         doAnswer(inv -> {
             ActionListener<SearchResponse> l = inv.getArgument(1);
