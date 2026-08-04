@@ -2018,13 +2018,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             EffectivePolicy effective = resolveEffectivePolicyForDryRun(config);
             String policySource = effective.source;
             int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
-            DryRunContext ctx = new DryRunContext(
-                containerId,
-                policySource,
-                System.currentTimeMillis(),
-                effective.policy,
-                ttlDays
-            );
+            DryRunContext ctx = new DryRunContext(containerId, policySource, System.currentTimeMillis(), effective.policy, ttlDays);
 
             if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
                 ctx.warnings.add("multi-tenancy is enabled; the scheduled retention job does not run, so nothing would be deleted");
