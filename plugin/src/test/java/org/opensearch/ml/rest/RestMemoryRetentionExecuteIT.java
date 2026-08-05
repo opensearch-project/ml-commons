@@ -17,7 +17,7 @@ import org.opensearch.client.ResponseException;
 import org.opensearch.ml.utils.TestHelper;
 
 /**
- * Integration tests for the on-demand retention execute endpoint {@code POST /_plugins/_ml/memory/_retention/_execute},
+ * Integration tests for the on-demand retention execute endpoint {@code POST /_plugins/_ml/memory_containers/_retention/_execute},
  * which previously had zero IT coverage.
  *
  * <p>The highest-value test ({@link #testExecuteEvictsExpiredSessions()}) is a true end-to-end eviction: it uses a
@@ -29,7 +29,7 @@ public class RestMemoryRetentionExecuteIT extends MLCommonsRestTestCase {
 
     private static final String CREATE_PATH = "/_plugins/_ml/memory_containers/_create";
     private static final String CONTAINER_PATH = "/_plugins/_ml/memory_containers/";
-    private static final String EXECUTE_PATH = "/_plugins/_ml/memory/_retention/_execute";
+    private static final String EXECUTE_PATH = "/_plugins/_ml/memory_containers/_retention/_execute";
 
     @Before
     public void setup() throws IOException {

@@ -112,7 +112,7 @@ public class MemoryContainerConstants {
     public static final String BASE_MEMORY_CONTAINERS_PATH = "/_plugins/_ml/memory_containers";
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     // Cluster-wide on-demand trigger for the memory retention job (runs the real, per-policy delete pipeline).
-    public static final String EXECUTE_MEMORY_RETENTION_PATH = "/_plugins/_ml/memory/_retention/_execute";
+    public static final String EXECUTE_MEMORY_RETENTION_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_retention/_execute";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String PARAMETER_DELETE_ALL_MEMORIES = "delete_all_memories";
     public static final String PARAMETER_DELETE_MEMORIES = "delete_memories";

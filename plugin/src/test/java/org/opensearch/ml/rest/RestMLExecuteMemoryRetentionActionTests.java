@@ -99,7 +99,7 @@ public class RestMLExecuteMemoryRetentionActionTests extends OpenSearchTestCase 
         assertEquals(1, routes.size());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/memory/_retention/_execute", route.getPath());
+        assertEquals("/_plugins/_ml/memory_containers/_retention/_execute", route.getPath());
     }
 
     public void testGetRequestMultiTenancyDisabled() throws IOException {
@@ -116,7 +116,7 @@ public class RestMLExecuteMemoryRetentionActionTests extends OpenSearchTestCase 
         headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList("tenant-77"));
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath("/_plugins/_ml/memory/_retention/_execute")
+            .withPath("/_plugins/_ml/memory_containers/_retention/_execute")
             .withHeaders(headers)
             .build();
 
@@ -151,7 +151,7 @@ public class RestMLExecuteMemoryRetentionActionTests extends OpenSearchTestCase 
     private RestRequest createRestRequest() {
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath("/_plugins/_ml/memory/_retention/_execute")
+            .withPath("/_plugins/_ml/memory_containers/_retention/_execute")
             .build();
     }
 }
