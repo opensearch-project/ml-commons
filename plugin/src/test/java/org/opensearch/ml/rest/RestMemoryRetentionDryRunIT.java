@@ -20,7 +20,7 @@ import org.opensearch.ml.utils.TestHelper;
  * Integration tests for the retention dry-run endpoints, which previously had zero IT coverage:
  * <ul>
  *   <li>{@code POST /_plugins/_ml/memory_containers/{id}/_retention/_dry_run} (single container)</li>
- *   <li>{@code POST /_plugins/_ml/memory/_retention/_dry_run} (cluster-wide array)</li>
+ *   <li>{@code POST /_plugins/_ml/memory_containers/_retention/_dry_run} (cluster-wide array)</li>
  * </ul>
  *
  * <p>All tests use BARE containers ({@code "configuration": {}}) so sessions can be created without any
@@ -34,7 +34,7 @@ public class RestMemoryRetentionDryRunIT extends MLCommonsRestTestCase {
 
     private static final String CREATE_PATH = "/_plugins/_ml/memory_containers/_create";
     private static final String CONTAINER_PATH = "/_plugins/_ml/memory_containers/";
-    private static final String CLUSTER_WIDE_DRY_RUN_PATH = "/_plugins/_ml/memory/_retention/_dry_run";
+    private static final String CLUSTER_WIDE_DRY_RUN_PATH = "/_plugins/_ml/memory_containers/_retention/_dry_run";
     private static final String DEFAULT_SESSION_MAX_COUNT_SETTING = "plugins.ml_commons.memory.default_session_max_count";
 
     @Before

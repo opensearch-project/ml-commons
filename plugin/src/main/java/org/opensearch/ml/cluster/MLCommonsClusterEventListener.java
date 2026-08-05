@@ -76,29 +76,32 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
 
     /**
      * Single-writer gate for memory-retention job writes that mutate the shared, fixed-id job document. Exactly one
-     * node (the elected cluster manager) should ever upsert/reconcile, and only when agentic memory is enabled and
-     * multi-tenancy is disabled (mirroring the startup scheduling path). The 3.1+ data-node check mirrors the startup
-     * loop's rolling-upgrade guard so a live setting change during a mixed-version upgrade does not create the new
-     * {@code .plugins-ml-jobs} index before the cluster is ready for it.
+     * node (the elected cluster manager) should ever upsert/reconcile, and only when agentic memory AND memory
+     * retention are enabled and multi-tenancy is disabled (mirroring the startup scheduling path exactly). The
+     * {@link #jobsIndexReadyForWrite()} check mirrors the startup loop's rolling-upgrade guard so a live setting
+     * change during a mixed-version upgrade does not create the new {@code .plugins-ml-jobs} index before the
+     * cluster is ready for it.
      */
     private boolean shouldManageMemoryRetentionJob() {
         return clusterService.state().nodes().isLocalNodeElectedClusterManager()
-            && hasDataNodeOnOrAfterV31()
+            && jobsIndexReadyForWrite()
             && mlFeatureEnabledSetting.isAgenticMemoryEnabled()
+            && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
             && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings());
     }
 
     /**
-     * Whether the cluster contains at least one data node running 3.1 or later. The new {@code .plugins-ml-jobs} index
-     * and its jobs must not be written until this holds, to avoid issues during blue/green and rolling upgrades.
+     * Rolling-upgrade guard shared by the startup scheduling path and the live interval-change consumer. It is safe to
+     * write the {@code .plugins-ml-jobs} job document only when:
+     *   - the index already exists (writing a document to an existing index cannot strand a replica), or
+     *   - every node in the cluster is on at least this node's version, so a newly created index's replicas are
+     *     allocatable anywhere.
+     * While a rolling upgrade is in flight neither holds, so the write is deferred rather than creating the index
+     * with stranded replicas (which leaves the cluster yellow until enough nodes are upgraded).
      */
-    private boolean hasDataNodeOnOrAfterV31() {
-        for (DiscoveryNode node : clusterService.state().nodes()) {
-            if (node.isDataNode() && node.getVersion().onOrAfter(Version.V_3_1_0)) {
-                return true;
-            }
-        }
-        return false;
+    private boolean jobsIndexReadyForWrite() {
+        ClusterState state = clusterService.state();
+        return state.getMetadata().hasIndex(ML_JOBS_INDEX) || state.nodes().getMinNodeVersion().onOrAfter(Version.CURRENT);
     }
 
     @Override
@@ -152,8 +155,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
          * old node leaves, the resulting cluster state change re-runs this listener and the jobs are created then.
          */
         boolean jobsIndexExists = state.getMetadata().hasIndex(ML_JOBS_INDEX);
-        boolean noOlderNodes = state.nodes().getMinNodeVersion().onOrAfter(Version.CURRENT);
-        if (jobsIndexExists || noOlderNodes) {
+        if (jobsIndexReadyForWrite()) {
             if (mlFeatureEnabledSetting.isMetricCollectionEnabled()
                 && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()
                 && !jobsIndexExists

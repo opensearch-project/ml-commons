@@ -135,7 +135,7 @@ public class MemoryContainerConstants {
         + "/{"
         + PARAMETER_MEMORY_CONTAINER_ID
         + "}/_retention/_dry_run";
-    public static final String RETENTION_DRY_RUN_ALL_PATH = "/_plugins/_ml/memory/_retention/_dry_run";
+    public static final String RETENTION_DRY_RUN_ALL_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_retention/_dry_run";
 
     // Memory types are defined in MemoryType enum
     // Memory strategy types are defined in MemoryStrategyType enum

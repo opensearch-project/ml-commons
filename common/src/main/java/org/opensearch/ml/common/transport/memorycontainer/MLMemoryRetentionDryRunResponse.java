@@ -35,11 +35,27 @@ public class MLMemoryRetentionDryRunResponse extends ActionResponse implements T
     private final List<MemoryRetentionDryRunResult> results;
     private final boolean clusterWide;
     private final int skippedCount;
+    // Cluster-wide only: true when the evaluated container count hit MAX_CONTAINERS_PER_DRY_RUN and remaining
+    // containers were not evaluated. 'warning' carries a human-readable explanation of the cap when truncated.
+    private final boolean truncated;
+    private final String warning;
 
     public MLMemoryRetentionDryRunResponse(List<MemoryRetentionDryRunResult> results, boolean clusterWide, int skippedCount) {
+        this(results, clusterWide, skippedCount, false, null);
+    }
+
+    public MLMemoryRetentionDryRunResponse(
+        List<MemoryRetentionDryRunResult> results,
+        boolean clusterWide,
+        int skippedCount,
+        boolean truncated,
+        String warning
+    ) {
         this.results = results;
         this.clusterWide = clusterWide;
         this.skippedCount = skippedCount;
+        this.truncated = truncated;
+        this.warning = warning;
     }
 
     public MLMemoryRetentionDryRunResponse(StreamInput in) throws IOException {
@@ -47,6 +63,10 @@ public class MLMemoryRetentionDryRunResponse extends ActionResponse implements T
         this.results = in.readList(MemoryRetentionDryRunResult::new);
         this.clusterWide = in.readBoolean();
         this.skippedCount = in.readVInt();
+        // Appended for wire-compat: older senders never wrote these, but this PR introduces the response, so all
+        // peers speak this layout. Read in the same order they are written.
+        this.truncated = in.readBoolean();
+        this.warning = in.readOptionalString();
     }
 
     @Override
@@ -54,6 +74,8 @@ public class MLMemoryRetentionDryRunResponse extends ActionResponse implements T
         out.writeList(results);
         out.writeBoolean(clusterWide);
         out.writeVInt(skippedCount);
+        out.writeBoolean(truncated);
+        out.writeOptionalString(warning);
     }
 
     @Override
@@ -61,6 +83,10 @@ public class MLMemoryRetentionDryRunResponse extends ActionResponse implements T
         if (clusterWide) {
             builder.startObject();
             builder.field("skipped_count", skippedCount);
+            builder.field("truncated", truncated);
+            if (warning != null) {
+                builder.field("warning", warning);
+            }
             builder.startArray("results");
             for (MemoryRetentionDryRunResult result : results) {
                 result.toXContent(builder, params);

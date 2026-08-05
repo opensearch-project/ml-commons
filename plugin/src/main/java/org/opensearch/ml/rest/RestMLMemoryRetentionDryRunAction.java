@@ -32,7 +32,7 @@ import com.google.common.collect.ImmutableList;
  * REST handler for the retention dry-run. Two routes:
  * <ul>
  *   <li>POST {@code /_plugins/_ml/memory_containers/{memory_container_id}/_retention/_dry_run} — one container</li>
- *   <li>POST {@code /_plugins/_ml/memory/_retention/_dry_run} — all containers (cluster-wide array)</li>
+ *   <li>POST {@code /_plugins/_ml/memory_containers/_retention/_dry_run} — all containers (cluster-wide array)</li>
  * </ul>
  */
 public class RestMLMemoryRetentionDryRunAction extends BaseRestHandler {

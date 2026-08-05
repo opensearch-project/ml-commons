@@ -85,7 +85,7 @@ public class RestMLMemoryRetentionDryRunActionTests extends OpenSearchTestCase {
         assertEquals(RestRequest.Method.POST, routes.get(0).getMethod());
         assertEquals("/_plugins/_ml/memory_containers/{memory_container_id}/_retention/_dry_run", routes.get(0).getPath());
         assertEquals(RestRequest.Method.POST, routes.get(1).getMethod());
-        assertEquals("/_plugins/_ml/memory/_retention/_dry_run", routes.get(1).getPath());
+        assertEquals("/_plugins/_ml/memory_containers/_retention/_dry_run", routes.get(1).getPath());
     }
 
     public void testGetRequestSingleContainer() throws IOException {
@@ -107,7 +107,7 @@ public class RestMLMemoryRetentionDryRunActionTests extends OpenSearchTestCase {
     public void testGetRequestClusterWide() throws IOException {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath("/_plugins/_ml/memory/_retention/_dry_run")
+            .withPath("/_plugins/_ml/memory_containers/_retention/_dry_run")
             .build();
 
         MLMemoryRetentionDryRunRequest dryRunRequest = action.getRequest(request);
@@ -154,7 +154,7 @@ public class RestMLMemoryRetentionDryRunActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath("/_plugins/_ml/memory/_retention/_dry_run")
+            .withPath("/_plugins/_ml/memory_containers/_retention/_dry_run")
             .build();
 
         expectThrows(OpenSearchStatusException.class, () -> action.handleRequest(request, new FakeRestChannelHelper().channel(), client));
