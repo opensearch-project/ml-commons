@@ -95,4 +95,40 @@ public class AgenticSearchTemplateFieldNamesTests {
 
         assertEquals(List.of("weird"), collect(props));
     }
+
+    // A body with a field-selector param (sort_by), a *_field param, and a value param
+    // whose name ends in _by (created_by). Only the field selectors should get the enum.
+    private static final String BODY = "{\"query\":{\"bool\":{\"filter\":["
+        + "{{#created_by}}{\"term\":{\"created_by\":\"{{created_by}}\"}}{{/created_by}}"
+        + "{{#group_field}},{\"term\":{\"{{group_field}}\":\"x\"}}{{/group_field}}]}},"
+        + "\"sort\":[{{#sort_by}}{\"{{sort_by}}\":\"desc\"}{{/sort_by}}]}";
+
+    @Test
+    public void deriveSchema_scopesFieldSelectorsToMappingFields() {
+        AgenticSearchTemplateService service = new AgenticSearchTemplateService(null, null, null, null, null);
+        Map<String, Object> schema = service.deriveSchema(BODY, List.of("price", "brand", "created_at"));
+
+        assertEquals(List.of("price", "brand", "created_at"), enumOf(schema, "sort_by"));
+        assertEquals(List.of("price", "brand", "created_at"), enumOf(schema, "group_field"));
+    }
+
+    @Test
+    public void deriveSchema_leavesValueParamEndingInByUnscoped() {
+        AgenticSearchTemplateService service = new AgenticSearchTemplateService(null, null, null, null, null);
+        Map<String, Object> schema = service.deriveSchema(BODY, List.of("price", "brand", "created_at"));
+
+        // created_by is a filter value, not a field selector; it must not be given the
+        // field-name enum (which would force the model to fill it with a field name).
+        assertFalse(specOf(schema, "created_by").containsKey("enum"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> specOf(Map<String, Object> schema, String param) {
+        return (Map<String, Object>) schema.get(param);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> enumOf(Map<String, Object> schema, String param) {
+        return (List<String>) specOf(schema, param).get("enum");
+    }
 }

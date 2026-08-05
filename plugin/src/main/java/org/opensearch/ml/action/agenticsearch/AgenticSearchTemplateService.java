@@ -70,13 +70,8 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class AgenticSearchTemplateService {
 
-    private static final int DEFAULT_MAX_TEMPLATES = 1000;
     private static final String INDEX = CommonValue.ML_AGENTIC_SEARCH_TEMPLATES_INDEX;
     private static final String NOT_FOUND_ERROR = "Agentic search template not found: ";
-    // param-schema entry keys shared with the analyzer.
-    private static final String TYPE_KEY = "type";
-    private static final String ENUM_KEY = "enum";
-    private static final String SOURCE_KEY = "source";
 
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
@@ -188,18 +183,20 @@ public class AgenticSearchTemplateService {
             // Field-selector params (e.g. sort_by, *_field): scope them to the mapping's
             // field names so the model can only target an existing field. Only for
             // string-typed params that don't already carry an enum.
-            if (targetsAField(name) && MustacheTemplateAnalyzer.TYPE_STRING.equals(spec.get(TYPE_KEY)) && !spec.containsKey(ENUM_KEY)) {
-                spec.put(ENUM_KEY, new ArrayList<>(mappingFields));
-                spec.put(SOURCE_KEY, "mapping");
+            if (targetsAField(name)
+                && MustacheTemplateAnalyzer.TYPE_STRING.equals(spec.get(MustacheTemplateAnalyzer.TYPE_KEY))
+                && !spec.containsKey(MustacheTemplateAnalyzer.ENUM_KEY)) {
+                spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(mappingFields));
+                spec.put(MustacheTemplateAnalyzer.SOURCE_KEY, MustacheTemplateAnalyzer.SOURCE_MAPPING);
             }
         }
         return schema;
     }
 
-    /** Heuristic: a param that selects a field (name ends with _field/_by or is "field"). */
+    /** Heuristic: a param that selects a field (named "field", "sort_by", or ending in _field). */
     private static boolean targetsAField(String name) {
         String n = name.toLowerCase(java.util.Locale.ROOT);
-        return n.equals("field") || n.endsWith("_field") || n.endsWith("_by") || n.equals("sort_by");
+        return n.equals("field") || n.equals("sort_by") || n.endsWith("_field");
     }
 
     /**
@@ -254,11 +251,11 @@ public class AgenticSearchTemplateService {
     }
 
     private static Object sampleValue(Map<String, Object> spec) {
-        Object enumValues = spec.get(ENUM_KEY);
+        Object enumValues = spec.get(MustacheTemplateAnalyzer.ENUM_KEY);
         if (enumValues instanceof List && !((List<?>) enumValues).isEmpty()) {
             return ((List<?>) enumValues).get(0);
         }
-        String type = String.valueOf(spec.get(TYPE_KEY));
+        String type = String.valueOf(spec.get(MustacheTemplateAnalyzer.TYPE_KEY));
         switch (type) {
             case MustacheTemplateAnalyzer.TYPE_NUMBER:
                 return 1;
@@ -444,15 +441,20 @@ public class AgenticSearchTemplateService {
         try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> wrapped = ActionListener.runBefore(listener, ctx::restore);
             if (patch.getParamSchema() == null || patch.getParamSchema().isEmpty()) {
-                writeTemplatePatch(templateId, patch, wrapped);
+                // No schema to validate, so no read is needed before the write.
+                writeTemplatePatch(templateId, patch, null, null, wrapped);
                 return;
             }
-            // Validate the merged schema against the live body before persisting.
+            // A schema edit is validated against the merge of the stored schema and the
+            // patch, so gate the write on the read's seqNo/primaryTerm to avoid validating
+            // against stale content and overwriting a concurrent edit.
             client.get(new GetRequest(INDEX, templateId), ActionListener.wrap(response -> {
                 if (!response.isExists()) {
                     wrapped.onFailure(new OpenSearchStatusException(NOT_FOUND_ERROR + templateId, RestStatus.NOT_FOUND));
                     return;
                 }
+                final long seqNo = response.getSeqNo();
+                final long primaryTerm = response.getPrimaryTerm();
                 final Map<String, Object> merged;
                 try {
                     merged = mergeParamSchema(parse(response.getSourceAsBytesRef()).getParamSchema(), patch.getParamSchema());
@@ -468,7 +470,7 @@ public class AgenticSearchTemplateService {
                         wrapped.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.BAD_REQUEST));
                         return;
                     }
-                    writeTemplatePatch(templateId, patch, wrapped);
+                    writeTemplatePatch(templateId, patch, seqNo, primaryTerm, wrapped);
                 }, wrapped::onFailure));
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
@@ -482,12 +484,27 @@ public class AgenticSearchTemplateService {
         }
     }
 
-    private void writeTemplatePatch(String templateId, AgenticSearchTemplate patch, ActionListener<UpdateResponse> listener) {
+    /**
+     * Persist a partial edit via a doc-merge update. When {@code seqNo} and
+     * {@code primaryTerm} are non-null the write is gated on them so a concurrent
+     * modification since the read fails with a version conflict; callers that do not read
+     * first pass null for both.
+     */
+    private void writeTemplatePatch(
+        String templateId,
+        AgenticSearchTemplate patch,
+        Long seqNo,
+        Long primaryTerm,
+        ActionListener<UpdateResponse> listener
+    ) {
         patch.setLastUpdatedTime(Instant.now());
         try {
             UpdateRequest updateRequest = new UpdateRequest(INDEX, templateId)
                 .doc(patch.toXContent(jsonXContent.contentBuilder(), ToXContentObject.EMPTY_PARAMS))
                 .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            if (seqNo != null && primaryTerm != null) {
+                updateRequest.setIfSeqNo(seqNo).setIfPrimaryTerm(primaryTerm);
+            }
             client.update(updateRequest, ActionListener.wrap(listener::onResponse, e -> {
                 if (e instanceof org.opensearch.index.engine.DocumentMissingException || e instanceof IndexNotFoundException) {
                     listener.onFailure(new OpenSearchStatusException(NOT_FOUND_ERROR + templateId, RestStatus.NOT_FOUND));
@@ -546,7 +563,7 @@ public class AgenticSearchTemplateService {
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> spec = (Map<String, Object>) e.getValue();
-            Object type = spec.get(TYPE_KEY);
+            Object type = spec.get(MustacheTemplateAnalyzer.TYPE_KEY);
             if (!(type instanceof String) || ((String) type).isEmpty()) {
                 throw new IllegalArgumentException("param '" + name + "' must declare a non-empty string 'type'");
             }
@@ -554,7 +571,7 @@ public class AgenticSearchTemplateService {
             if (required != null && !(required instanceof Boolean)) {
                 throw new IllegalArgumentException("param '" + name + "' has a non-boolean 'required'");
             }
-            Object enumValues = spec.get(ENUM_KEY);
+            Object enumValues = spec.get(MustacheTemplateAnalyzer.ENUM_KEY);
             if (enumValues == null) {
                 continue;
             }

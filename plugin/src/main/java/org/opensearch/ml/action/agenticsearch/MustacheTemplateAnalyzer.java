@@ -27,6 +27,7 @@ import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplate;
  * backstops any miss. The rule table:
  *
  * <table>
+ *   <caption>Mustache tag to derived param type and required-ness</caption>
  *   <tr><td>bare {@code {{x}}} at root</td><td>required scalar</td></tr>
  *   <tr><td>{@code {{#x}}..{{/x}}} where x is never a plain value</td><td>boolean (section guard)</td></tr>
  *   <tr><td>{@code {{x}}{{^x}}default{{/x}}}</td><td>optional, with default</td></tr>
@@ -38,16 +39,21 @@ import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplate;
  */
 public class MustacheTemplateAnalyzer {
 
-    /** param-schema entry keys, matching what the agent server reads. */
+    // param-schema entry keys, shared with AgenticSearchTemplateService.
     static final String TYPE_KEY = "type";
     static final String REQUIRED_KEY = "required";
     static final String DESCRIPTION_KEY = "description";
+    static final String ENUM_KEY = "enum";
+    static final String SOURCE_KEY = "source";
 
     // Structural types we can infer from the body alone.
     static final String TYPE_STRING = "string";
     static final String TYPE_NUMBER = "number";
     static final String TYPE_BOOLEAN = "boolean";
     static final String TYPE_ARRAY = "array";
+
+    // Value of SOURCE_KEY for an enum derived from the index mapping.
+    static final String SOURCE_MAPPING = "mapping";
 
     private MustacheTemplateAnalyzer() {}
 
