@@ -24,10 +24,14 @@ import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptResponse;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
+import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
@@ -45,6 +49,8 @@ import org.opensearch.script.Script;
 import org.opensearch.script.ScriptService;
 import org.opensearch.script.StoredScriptSource;
 import org.opensearch.script.TemplateScript;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.AdminClient;
@@ -243,7 +249,221 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         verify(listener).onResponse(updateResponse);
     }
 
+    // ---- get ---------------------------------------------------------------
+
+    @Test
+    public void getTemplate_success_parsesStoredDoc() {
+        stubGet(TEMPLATE_DOC, true);
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.getTemplate("tmpl", listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("tmpl", captor.getValue().getTemplateId());
+    }
+
+    @Test
+    public void getTemplate_notFound_failsNotFound() {
+        stubGet(null, false);
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.getTemplate("missing", listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "not found");
+    }
+
+    @Test
+    public void getTemplate_indexNotFound_failsNotFound() {
+        stubGetFailure(new IndexNotFoundException("idx"));
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.getTemplate("tmpl", listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "not found");
+    }
+
+    @Test
+    public void getTemplate_otherException_propagates() {
+        stubGetFailure(new RuntimeException("boom"));
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.getTemplate("tmpl", listener);
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertEquals("boom", ex.getValue().getMessage());
+    }
+
+    // ---- list --------------------------------------------------------------
+
+    @Test
+    public void listTemplates_success_returnsParsedTemplatesAndTotal() {
+        stubSearch(new BytesArray(TEMPLATE_DOC), 5L);
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplateService.MLListResult> listener = mock(ActionListener.class);
+        service.listTemplates(0, 10, listener);
+
+        ArgumentCaptor<AgenticSearchTemplateService.MLListResult> captor = ArgumentCaptor
+            .forClass(AgenticSearchTemplateService.MLListResult.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(1, captor.getValue().templates.size());
+        assertEquals(5L, captor.getValue().total);
+        assertEquals("tmpl", captor.getValue().templates.get(0).getTemplateId());
+    }
+
+    @Test
+    public void listTemplates_indexNotFound_returnsEmpty() {
+        stubSearchFailure(new IndexNotFoundException("idx"));
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplateService.MLListResult> listener = mock(ActionListener.class);
+        service.listTemplates(0, 10, listener);
+
+        ArgumentCaptor<AgenticSearchTemplateService.MLListResult> captor = ArgumentCaptor
+            .forClass(AgenticSearchTemplateService.MLListResult.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().templates.isEmpty());
+        assertEquals(0L, captor.getValue().total);
+    }
+
+    @Test
+    public void listTemplates_otherException_propagates() {
+        stubSearchFailure(new RuntimeException("search boom"));
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplateService.MLListResult> listener = mock(ActionListener.class);
+        service.listTemplates(0, 10, listener);
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertEquals("search boom", ex.getValue().getMessage());
+    }
+
+    // ---- delete ------------------------------------------------------------
+
+    @Test
+    public void deleteTemplate_deleted_returnsTrue() {
+        stubDelete(DeleteResponse.Result.DELETED, null);
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        service.deleteTemplate("tmpl", listener);
+        verify(listener).onResponse(true);
+    }
+
+    @Test
+    public void deleteTemplate_notFoundResult_failsNotFound() {
+        stubDelete(DeleteResponse.Result.NOT_FOUND, null);
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        service.deleteTemplate("tmpl", listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "not found");
+    }
+
+    @Test
+    public void deleteTemplate_indexNotFound_failsNotFound() {
+        stubDelete(null, new IndexNotFoundException("idx"));
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        service.deleteTemplate("tmpl", listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "not found");
+    }
+
+    @Test
+    public void deleteTemplate_otherException_propagates() {
+        stubDelete(null, new RuntimeException("del boom"));
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        service.deleteTemplate("tmpl", listener);
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertEquals("del boom", ex.getValue().getMessage());
+    }
+
+    // ---- update: not-found -------------------------------------------------
+
+    @Test
+    public void update_noParamSchema_documentMissing_failsNotFound() {
+        AgenticSearchTemplate patch = AgenticSearchTemplate.builder().templateId("tmpl").description("d").build();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<UpdateResponse> l = inv.getArgument(1);
+            l.onFailure(new org.opensearch.index.engine.DocumentMissingException(null, "tmpl"));
+            return null;
+        }).when(client).update(any(UpdateRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        service.updateTemplate("tmpl", patch, listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "not found");
+    }
+
     // ---- helpers -----------------------------------------------------------
+
+    // A stored template doc as persisted in the system index (parsed by get/list).
+    private static final String TEMPLATE_DOC = "{\"template_id\":\"tmpl\",\"index_binding\":\"my-index\","
+        + "\"param_schema\":{\"lex_query\":{\"type\":\"string\",\"required\":true}}}";
+
+    private void stubGet(String source, boolean exists) {
+        GetResponse response = mock(GetResponse.class);
+        when(response.isExists()).thenReturn(exists);
+        if (source != null) {
+            when(response.getSourceAsBytesRef()).thenReturn(new BytesArray(source));
+        }
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<GetResponse> l = inv.getArgument(1);
+            l.onResponse(response);
+            return null;
+        }).when(client).get(any(GetRequest.class), any());
+    }
+
+    private void stubGetFailure(Exception e) {
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<GetResponse> l = inv.getArgument(1);
+            l.onFailure(e);
+            return null;
+        }).when(client).get(any(GetRequest.class), any());
+    }
+
+    private void stubSearch(BytesArray hitSource, long total) {
+        SearchResponse response = mock(SearchResponse.class);
+        SearchHit hit = new SearchHit(1);
+        hit.sourceRef(hitSource);
+        SearchHits hits = new SearchHits(
+            new SearchHit[] { hit },
+            new org.apache.lucene.search.TotalHits(total, org.apache.lucene.search.TotalHits.Relation.EQUAL_TO),
+            1.0f
+        );
+        when(response.getHits()).thenReturn(hits);
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+    }
+
+    private void stubSearchFailure(Exception e) {
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onFailure(e);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+    }
+
+    private void stubDelete(DeleteResponse.Result result, Exception failure) {
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<DeleteResponse> l = inv.getArgument(1);
+            if (failure != null) {
+                l.onFailure(failure);
+            } else {
+                DeleteResponse response = mock(DeleteResponse.class);
+                when(response.getResult()).thenReturn(result);
+                l.onResponse(response);
+            }
+            return null;
+        }).when(client).delete(any(DeleteRequest.class), any());
+    }
+
+    private static void assertStatus(ActionListener<?> listener, RestStatus expected, String messageSubstring) {
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof org.opensearch.OpenSearchStatusException);
+        assertEquals(expected, ((org.opensearch.OpenSearchStatusException) ex.getValue()).status());
+        assertTrue(ex.getValue().getMessage().contains(messageSubstring));
+    }
 
     /** Stub the script-compile chain so pre-flight rendering returns a fixed legal body. */
     private void stubRenderSucceeds() {
