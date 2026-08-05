@@ -35,6 +35,9 @@ public class RestMemoryRetentionJobIntervalIT extends MLCommonsRestTestCase {
     public void setup() throws IOException {
         // Agentic memory must be enabled for the retention job to be scheduled.
         updateClusterSettings("plugins.ml_commons.agentic_memory_enabled", true);
+        // Memory retention must also be enabled: the interval-change consumer (and the startup scheduling path) gate
+        // on isMemoryRetentionEnabled(), which defaults to false. Without this the consumer never upserts the job doc.
+        updateClusterSettings("plugins.ml_commons.memory.retention_enabled", true);
         // Start from a known state. The base-class @After only wipes indices, so a persistent interval left over from
         // an aborted local rerun would survive; clearing it guarantees the first PUT below is a real change (see below).
         updateClusterSettings(INTERVAL_SETTING, (Object) null);

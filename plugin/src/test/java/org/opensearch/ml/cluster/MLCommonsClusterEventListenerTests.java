@@ -320,17 +320,13 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testSettingsUpdateConsumer_UpsertsOnElectedClusterManager() {
-        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
-        DiscoveryNodes nodes = DiscoveryNodes
-            .builder()
-            .add(dataNode)
-            .localNodeId(dataNode.getId())
-            .clusterManagerNodeId(dataNode.getId())
-            .build();
-        when(clusterState.nodes()).thenReturn(nodes);
-        when(clusterService.state()).thenReturn(clusterState);
+        // All nodes on CURRENT (no mixed-version upgrade in flight), elected cluster manager, agentic memory AND
+        // retention enabled, multi-tenancy off -> the live interval change upserts the persisted job document.
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
+        setupElectedClusterManagerConsumerState(dataNode);
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         clusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 2).build());
 
@@ -349,7 +345,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testSettingsUpdateConsumer_SkippedWhenAgenticMemoryDisabled() {
-        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerConsumerState(dataNode);
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
@@ -360,23 +356,41 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     }
 
     public void testSettingsUpdateConsumer_SkippedWhenMultiTenancyEnabled() {
-        DiscoveryNode dataNode = createDataNode("dataNode", Version.V_3_1_0);
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerConsumerState(dataNode);
         when(clusterService.getSettings()).thenReturn(Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         clusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 2).build());
 
         verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
     }
 
-    public void testSettingsUpdateConsumer_SkippedWhenNoDataNodeOnOrAfterV31() {
-        // Elected cluster manager, agentic memory on, multi-tenancy off, but the only data node is pre-3.1 (mixed-version
-        // rolling upgrade). The consumer must not write the new jobs index yet, mirroring the startup path's guard.
-        DiscoveryNode preV31DataNode = createDataNode("dataNode", Version.V_3_0_0);
-        setupElectedClusterManagerConsumerState(preV31DataNode);
+    public void testSettingsUpdateConsumer_SkippedWhenMixedVersionCluster() {
+        // Elected cluster manager, agentic memory AND retention on, multi-tenancy off, jobs index absent, but a data
+        // node OLDER than current is present (mixed-version rolling upgrade). jobsIndexReadyForWrite() must be false so
+        // the consumer does not create the new jobs index yet, mirroring the startup path's rolling-upgrade guard.
+        // Retention is explicitly enabled so the version guard (not the feature flag) is what blocks the upsert.
+        DiscoveryNode olderDataNode = createDataNode("dataNode", Version.V_3_0_0);
+        setupElectedClusterManagerConsumerState(olderDataNode);
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        clusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 2).build());
+
+        verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
+    }
+
+    public void testSettingsUpdateConsumer_SkippedWhenRetentionDisabled() {
+        // Elected cluster manager, all nodes on CURRENT, agentic memory on, multi-tenancy off, but memory retention is
+        // DISABLED. The consumer gates on isMemoryRetentionEnabled() (matching the startup path), so no upsert fires.
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
+        setupElectedClusterManagerConsumerState(dataNode);
+        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
 
         clusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 2).build());
 
@@ -387,6 +401,10 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(node).localNodeId(node.getId()).clusterManagerNodeId(node.getId()).build();
         when(clusterState.nodes()).thenReturn(nodes);
         when(clusterService.state()).thenReturn(clusterState);
+        // shouldManageMemoryRetentionJob() -> jobsIndexReadyForWrite() reads getMetadata().hasIndex(ML_JOBS_INDEX);
+        // stub it so the version-based rolling-upgrade guard governs (index absent -> falls back to minNodeVersion check).
+        when(clusterState.getMetadata()).thenReturn(metadata);
+        when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(false);
     }
 
     private DiscoveryNode createDataNode(String id, Version version) {

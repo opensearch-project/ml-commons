@@ -14,6 +14,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -22,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.ClusterState;
@@ -41,6 +44,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLMemoryRetentionDryRu
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryRetentionDryRunResponse;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
+import org.opensearch.search.DocValueFormat;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
@@ -276,6 +280,80 @@ public class TransportMemoryRetentionDryRunActionTests extends OpenSearchTestCas
         verify(listener).onResponse(responseCaptor.capture());
         assertTrue(responseCaptor.getValue().isClusterWide());
         assertEquals(0, responseCaptor.getValue().getResults().size());
+    }
+
+    public void testClusterWideTruncatesAtContainerCap() {
+        // Finding #2: the cluster-wide scan is bounded at MAX_CONTAINERS_PER_DRY_RUN. Simulate an effectively unbounded
+        // supply of containers by having every container-index page return a full page (CONTAINER_PAGE_SIZE hits) with
+        // distinct search-after sort values. The drain must stop after exactly the cap and flag the response truncated
+        // with a warning, rather than silently dropping the remaining containers or scanning them all.
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        AtomicInteger nextContainerOffset = new AtomicInteger(0);
+        doAnswer(inv -> {
+            SearchRequest req = inv.getArgument(0);
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            if (req.indices().length > 0 && ".plugins-ml-am-memory-container".equals(req.indices()[0])) {
+                // Container listing page: always a full page so nextPageSort is non-null (more pages remain).
+                int base = nextContainerOffset.getAndAdd(100);
+                SearchHit[] pageHits = new SearchHit[100];
+                for (int i = 0; i < 100; i++) {
+                    String id = "container-" + (base + i);
+                    SearchHit hit = new SearchHit(base + i, id, null, null);
+                    hit.sourceRef(new org.opensearch.core.common.bytes.BytesArray(CONTAINER_JSON));
+                    hit.sortValues(new Object[] { id }, new DocValueFormat[] { DocValueFormat.RAW });
+                    pageHits[i] = hit;
+                }
+                SearchResponse resp = mock(SearchResponse.class);
+                SearchHits hits = new SearchHits(pageHits, new TotalHits(100000, TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO), Float.NaN);
+                when(resp.getHits()).thenReturn(hits);
+                l.onResponse(resp);
+            } else {
+                // Per-container counting search: no matches.
+                l.onResponse(emptyCount());
+            }
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().build();
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(responseCaptor.capture());
+        MLMemoryRetentionDryRunResponse response = responseCaptor.getValue();
+        assertTrue(response.isClusterWide());
+        assertEquals(TransportMemoryRetentionDryRunAction.MAX_CONTAINERS_PER_DRY_RUN, response.getResults().size());
+        assertTrue("response should be flagged truncated when the container cap is hit", response.isTruncated());
+        assertNotNull("a truncation warning must be surfaced", response.getWarning());
+        assertTrue(response.getWarning().contains(String.valueOf(TransportMemoryRetentionDryRunAction.MAX_CONTAINERS_PER_DRY_RUN)));
+    }
+
+    public void testClusterWideMultiTenancyDoesNotLeakNullTenantContainer() {
+        // Finding #4: with multi-tenancy enabled, a container whose stored tenantId is null (pre-multi-tenancy stamp)
+        // must NOT be returned to a caller scoped to a concrete tenant. Objects.equals(tenantId, null) is false, so the
+        // container is silently skipped (not evaluated, not returned) — matching the single-container isolation path.
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        // CONTAINER_JSON carries no tenant_id -> container.getTenantId() == null.
+        SearchHit hit = new SearchHit(0, "null-tenant-container", null, null);
+        hit.sourceRef(new org.opensearch.core.common.bytes.BytesArray(CONTAINER_JSON));
+        hit.sortValues(new Object[] { "null-tenant-container" }, new DocValueFormat[] { DocValueFormat.RAW });
+        SearchResponse page = mock(SearchResponse.class);
+        SearchHits hits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(page.getHits()).thenReturn(hits);
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(page);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().tenantId("tenant-1").build();
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(responseCaptor.capture());
+        MLMemoryRetentionDryRunResponse response = responseCaptor.getValue();
+        assertTrue(response.isClusterWide());
+        assertEquals("null-tenant container must not leak to a concrete-tenant caller", 0, response.getResults().size());
+        // Tenant filtering is a silent skip, not a parse/eval failure, so it is not counted in skipped_count.
+        assertEquals(0, response.getSkippedCount());
     }
 
     private SearchResponse emptyCount() {
