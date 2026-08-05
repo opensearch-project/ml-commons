@@ -361,6 +361,19 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    // This setting enables/disables the agentic search template CRUD APIs (register/get/update/delete/list).
+    // Disabled by default pending security review of the new APIs.
+    public static final Setting<Boolean> ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "agentic_search_template_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_DISABLED_MESSAGE =
+        "The agentic search template APIs are not enabled. To enable, please update the setting "
+            + ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.getKey();
+
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "connector.private_ip_enabled",

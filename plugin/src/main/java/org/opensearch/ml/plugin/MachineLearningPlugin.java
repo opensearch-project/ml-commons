@@ -1490,6 +1490,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                 MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,

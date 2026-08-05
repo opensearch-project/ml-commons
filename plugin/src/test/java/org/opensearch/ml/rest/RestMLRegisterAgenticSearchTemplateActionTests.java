@@ -44,6 +44,7 @@ public class RestMLRegisterAgenticSearchTemplateActionTests extends OpenSearchTe
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgenticSearchTemplateEnabled()).thenReturn(true);
         restAction = new RestMLRegisterAgenticSearchTemplateAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -94,6 +95,13 @@ public class RestMLRegisterAgenticSearchTemplateActionTests extends OpenSearchTe
         RestRequest request = bodyRequest("{\"template_name\":\"t\",\"index\":\"i\"}");
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> restAction.getRequest(request));
         assertEquals("Agent framework is disabled", e.getMessage());
+    }
+
+    public void testGetRequestAgenticSearchTemplateDisabled() throws Exception {
+        when(mlFeatureEnabledSetting.isAgenticSearchTemplateEnabled()).thenReturn(false);
+        RestRequest request = bodyRequest("{\"template_name\":\"t\",\"index\":\"i\"}");
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> restAction.getRequest(request));
+        assertTrue(e.getMessage().contains("agentic search template APIs are not enabled"));
     }
 
     private RestRequest bodyRequest(String json) {

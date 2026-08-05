@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TEMPLATE_ID;
 
@@ -58,6 +59,9 @@ public class RestMLDeleteAgenticSearchTemplateAction extends BaseRestHandler {
     MLDeleteAgenticSearchTemplateRequest getRequest(RestRequest request) {
         if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
             throw new IllegalStateException("Agent framework is disabled");
+        }
+        if (!mlFeatureEnabledSetting.isAgenticSearchTemplateEnabled()) {
+            throw new IllegalStateException(ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_DISABLED_MESSAGE);
         }
         String templateId = request.param(PARAMETER_TEMPLATE_ID);
         if (templateId == null || templateId.trim().isEmpty()) {

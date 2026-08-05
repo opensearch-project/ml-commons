@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.io.IOException;
@@ -63,6 +64,9 @@ public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
     MLRegisterAgenticSearchTemplateRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
             throw new IllegalStateException("Agent framework is disabled");
+        }
+        if (!mlFeatureEnabledSetting.isAgenticSearchTemplateEnabled()) {
+            throw new IllegalStateException(ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_DISABLED_MESSAGE);
         }
         if (!request.hasContent()) {
             throw new IllegalArgumentException("Request body is required");
