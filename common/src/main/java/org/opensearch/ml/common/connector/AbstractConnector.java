@@ -248,6 +248,10 @@ public abstract class AbstractConnector implements Connector {
         ActionListener<Boolean> listener
     ) {
         if (credential == null || credential.isEmpty()) {
+            // Credential-less connectors (e.g. google_cloud ADC/Workload Identity, MCP) still get an
+            // empty (non-null) decryptedCredential so downstream accessors read an empty map rather
+            // than NPE on a null.
+            this.decryptedCredential = new HashMap<>();
             this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
             listener.onResponse(true);
             return;

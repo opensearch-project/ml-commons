@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.supportedProtocols;
 
 import org.junit.Rule;
@@ -15,6 +16,14 @@ public class ConnectorProtocolsTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
+
+    // Authoritative literal guard: asserts the exact supported-protocol list so an accidental
+    // add/remove/reorder is caught. Other tests may build messages from supportedProtocols();
+    // this one intentionally does not, so it is not tautological.
+    @Test
+    public void supportedProtocols_exactList() {
+        assertEquals("[aws_sigv4, http, google_cloud, mcp_sse, mcp_streamable_http]", supportedProtocols());
+    }
 
     @Test
     public void validateProtocol_Null() {

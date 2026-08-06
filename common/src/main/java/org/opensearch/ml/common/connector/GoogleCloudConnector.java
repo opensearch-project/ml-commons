@@ -92,7 +92,12 @@ public class GoogleCloudConnector extends HttpConnector {
 
     public GoogleCloudConnector(String protocol, StreamInput input) throws IOException {
         super(protocol, input);
-        // Validation skipped for StreamInput deserialization (mirrors AwsConnector).
+        // Validation is intentionally skipped on this wire-deserialization path (mirrors AwsConnector):
+        // a connector arriving over the transport layer was already validated at creation time via the
+        // builder / XContent constructors, so re-validating a decrypted-then-reserialized copy is
+        // unnecessary and could reject an otherwise-valid connector. The validating StreamInput
+        // constructor above is used for the create/clone paths; this protocol-prefixed one is the
+        // node-to-node deserialization path (see Connector.createConnector / fromStream dispatch).
     }
 
     private boolean isAdcMode() {
