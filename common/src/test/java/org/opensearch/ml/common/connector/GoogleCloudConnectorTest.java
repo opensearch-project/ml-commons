@@ -122,6 +122,25 @@ public class GoogleCloudConnectorTest {
     }
 
     @Test
+    public void decrypt_AdcMode_LeavesNonNullDecryptedCredential() {
+        // ADC mode has no credential; decrypt() must still leave a non-null (empty) decryptedCredential
+        // so the SA-key accessors read an empty map (return null) instead of throwing NPE.
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(GoogleCloudConnector.AUTH_MODE_FIELD, GoogleCloudConnector.AUTH_MODE_ADC);
+        GoogleCloudConnector connector = GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(parameters)
+            .build();
+
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
+
+        Assert.assertNull(connector.getPrivateKey());
+        Assert.assertNull(connector.getClientEmail());
+        Assert.assertEquals(GoogleCloudConnector.DEFAULT_TOKEN_URI, connector.getTokenUri());
+    }
+
+    @Test
     public void streamInput_RoundTrip() throws IOException {
         Map<String, String> credential = new HashMap<>();
         credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
