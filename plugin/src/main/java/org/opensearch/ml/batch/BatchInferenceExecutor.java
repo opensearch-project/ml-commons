@@ -6,50 +6,61 @@
 package org.opensearch.ml.batch;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.Predictable;
+import org.opensearch.transport.TransportChannel;
 
 import lombok.extern.log4j.Log4j2;
 
 /**
  * Splits one predict request into size-bounded sub-batches, runs them concurrently, and reassembles
- * the outputs in input order. Throttling (429) and unavailable (503) errors are retried per sub-batch
- * with exponential backoff; any other error fails the whole request. The request completes once.
+ * the outputs in input order. Every sub-batch is waited for; if any failed, the request fails and
+ * reports all of their errors. The request completes once.
  */
 @Log4j2
 public class BatchInferenceExecutor {
 
-    static final int MAX_RETRIES = 3;
-    static final long[] BACKOFF_MS = { 1000L, 2000L, 4000L };
-
-    private static final int FAILED = -1;
-    private static final int COMPLETED = 0;
-
     private final BatchableInputRegistry registry;
     private final BatchSplitter splitter;
-    private final ThreadPool threadPool;
-    private final String scheduleExecutorName;
 
-    public BatchInferenceExecutor(
-        BatchableInputRegistry registry,
-        BatchSplitter splitter,
-        ThreadPool threadPool,
-        String scheduleExecutorName
-    ) {
+    public BatchInferenceExecutor(BatchableInputRegistry registry, BatchSplitter splitter) {
         this.registry = registry;
         this.splitter = splitter;
-        this.threadPool = threadPool;
-        this.scheduleExecutorName = scheduleExecutorName;
+    }
+
+    /**
+     * Runs the request against a predictor, adapting it to the invoker this executor works with, so
+     * callers do not have to wire up the per-sub-batch call themselves.
+     */
+    public void execute(
+        MLInput input,
+        BatchInferenceConfig config,
+        Predictable predictor,
+        TransportChannel channel,
+        ActionListener<MLTaskResponse> listener
+    ) {
+        execute(
+            input,
+            config,
+            (subInput, subListener) -> predictor
+                .asyncPredict(
+                    subInput,
+                    ActionListener.wrap(resp -> subListener.onResponse(resp.getOutput()), subListener::onFailure),
+                    channel
+                ),
+            ActionListener.wrap(merged -> listener.onResponse(new MLTaskResponse(merged)), listener::onFailure)
+        );
     }
 
     /**
@@ -86,11 +97,6 @@ public class BatchInferenceExecutor {
             return;
         }
 
-        if (batches.size() == 1) {
-            invoker.invoke(input, listener);
-            return;
-        }
-
         dispatchBatches(input, handler, batches, invoker, listener);
     }
 
@@ -102,6 +108,12 @@ public class BatchInferenceExecutor {
         ActionListener<MLOutput> listener
     ) {
         final int total = batches.size();
+        if (total == 1) {
+            // Already within the limits, so send the original request untouched.
+            invoker.invoke(input, listener);
+            return;
+        }
+
         if (log.isDebugEnabled()) {
             int items = 0;
             for (List<BatchItem> b : batches) {
@@ -111,57 +123,73 @@ public class BatchInferenceExecutor {
         }
 
         final AtomicReferenceArray<MLOutput> results = new AtomicReferenceArray<>(total);
-        // Positive: sub-batches still in flight. COMPLETED: all succeeded. FAILED: already failed.
-        final AtomicInteger state = new AtomicInteger(total);
+        final List<Exception> failures = Collections.synchronizedList(new ArrayList<>());
+        // Decremented once per sub-batch, on success and on failure alike, so exactly one callback sees
+        // zero and completes the listener.
+        final AtomicInteger remaining = new AtomicInteger(total);
 
         for (int i = 0; i < total; i++) {
             final int index = i;
-            final MLInput subInput = handler.merge(input, batches.get(i));
+            final List<BatchItem> batch = batches.get(i);
             final ActionListener<MLOutput> subListener = ActionListener.wrap(output -> {
                 results.set(index, output);
-                onSubBatchSuccess(state, results, handler, listener);
-            }, error -> onSubBatchFailure(state, error, listener));
-            invokeWithRetry(invoker, subInput, 0, subListener);
+                if (remaining.decrementAndGet() == 0) {
+                    complete(failures, results, handler, listener);
+                }
+            }, error -> {
+                failures.add(error);
+                if (remaining.decrementAndGet() == 0) {
+                    complete(failures, results, handler, listener);
+                }
+            });
+            try {
+                invoker.invoke(handler.merge(input, batch), subListener);
+            } catch (Exception dispatchError) {
+                // Report a sub-batch that failed before its listener was reachable through the same
+                // listener, so every sub-batch still settles exactly once and the counter can reach zero.
+                subListener.onFailure(dispatchError);
+            }
         }
     }
 
-    private void onSubBatchSuccess(
-        AtomicInteger state,
+    private void complete(
+        List<Exception> failures,
         AtomicReferenceArray<MLOutput> results,
         BatchableInput handler,
         ActionListener<MLOutput> listener
     ) {
-        while (true) {
-            int current = state.get();
-            if (current <= 0) {
-                return;
+        if (failures.isEmpty()) {
+            try {
+                listener.onResponse(handler.combine(toList(results)));
+            } catch (Exception outputMergeError) {
+                listener.onFailure(outputMergeError);
             }
-            int remaining = current - 1;
-            if (state.compareAndSet(current, remaining)) {
-                if (remaining != COMPLETED) {
-                    return;
-                }
-                try {
-                    listener.onResponse(handler.combine(toList(results)));
-                } catch (Exception outputMergeError) {
-                    listener.onFailure(outputMergeError);
-                }
-                return;
-            }
+            return;
         }
+        listener.onFailure(asSingleFailure(failures));
     }
 
-    private void onSubBatchFailure(AtomicInteger state, Exception error, ActionListener<MLOutput> listener) {
-        while (true) {
-            int current = state.get();
-            if (current <= 0) {
-                return;
-            }
-            if (state.compareAndSet(current, FAILED)) {
-                listener.onFailure(error);
-                return;
-            }
+    /**
+     * A lone failure is reported as-is so its type and status survive, for example a 429 staying a 429.
+     * Several failures are summarized in one exception with each original attached as a suppressed
+     * exception, so none of them is silently dropped.
+     */
+    private Exception asSingleFailure(List<Exception> failures) {
+        if (failures.size() == 1) {
+            return failures.get(0);
         }
+        StringBuilder message = new StringBuilder().append(failures.size()).append(" of the sub-batches failed: ");
+        for (int i = 0; i < failures.size(); i++) {
+            if (i > 0) {
+                message.append("; ");
+            }
+            message.append(failures.get(i).getMessage());
+        }
+        Exception combined = new OpenSearchStatusException(message.toString(), RestStatus.INTERNAL_SERVER_ERROR);
+        for (Exception failure : failures) {
+            combined.addSuppressed(failure);
+        }
+        return combined;
     }
 
     private List<MLOutput> toList(AtomicReferenceArray<MLOutput> array) {
@@ -170,33 +198,5 @@ public class BatchInferenceExecutor {
             ordered.add(array.get(i));
         }
         return ordered;
-    }
-
-    private void invokeWithRetry(SingleBatchInvoker invoker, MLInput subInput, int attempt, ActionListener<MLOutput> listener) {
-        invoker.invoke(subInput, ActionListener.wrap(listener::onResponse, error -> {
-            if (attempt < MAX_RETRIES && isRetryable(error)) {
-                long backoff = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)];
-                try {
-                    threadPool
-                        .schedule(
-                            () -> invokeWithRetry(invoker, subInput, attempt + 1, listener),
-                            TimeValue.timeValueMillis(backoff),
-                            scheduleExecutorName
-                        );
-                } catch (Exception scheduleError) {
-                    listener.onFailure(scheduleError);
-                }
-            } else {
-                listener.onFailure(error);
-            }
-        }));
-    }
-
-    static boolean isRetryable(Exception e) {
-        if (e instanceof OpenSearchStatusException) {
-            RestStatus status = ((OpenSearchStatusException) e).status();
-            return status == RestStatus.TOO_MANY_REQUESTS || status == RestStatus.SERVICE_UNAVAILABLE;
-        }
-        return false;
     }
 }

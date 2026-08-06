@@ -6,12 +6,8 @@
 package org.opensearch.ml.batch;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,25 +27,16 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
 
 public class BatchInferenceExecutorTests {
 
     private BatchInferenceExecutor executor;
-    private ThreadPool threadPool;
 
     @Before
     public void setUp() {
-        threadPool = mock(ThreadPool.class);
-        // Run scheduled retries immediately so backoff does not slow the test.
-        doAnswer(invocation -> {
-            Runnable task = invocation.getArgument(0);
-            task.run();
-            return null;
-        }).when(threadPool).schedule(any(Runnable.class), any(), any(String.class));
-        executor = new BatchInferenceExecutor(new BatchableInputRegistry(), new BatchSplitter(), threadPool, "test-pool");
+        executor = new BatchInferenceExecutor(new BatchableInputRegistry(), new BatchSplitter());
     }
 
     private MLInput textInput(String... docs) {
@@ -172,63 +159,69 @@ public class BatchInferenceExecutorTests {
     }
 
     @Test
-    public void retriesOnThrottleThenSucceeds() {
+    public void everySubBatchIsInvokedExactlyOnceWithoutRetrying() {
+        // Retrying transient errors is the connector's job, so a failure here is reported straight away
+        // rather than attempted again.
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
-        AtomicReference<MLOutput> result = new AtomicReference<>();
-        AtomicInteger attemptsForBad = new AtomicInteger(0);
-        SingleBatchInvoker invoker = (subInput, listener) -> {
-            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
-            if (docs.contains("flaky") && attemptsForBad.getAndIncrement() < 2) {
-                listener.onFailure(new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS));
-            } else {
-                listener.onResponse(outputFor(subInput));
-            }
-        };
-
-        executor
-            .execute(
-                textInput("a", "flaky", "b"),
-                config,
-                invoker,
-                ActionListener.wrap(result::set, e -> { throw new AssertionError(e); })
-            );
-
-        assertEquals(3, attemptsForBad.get()); // 2 failures + 1 success
-        assertEquals(ImmutableList.of("a", "flaky", "b"), resultNames(result.get()));
-    }
-
-    @Test
-    public void throttleExhaustsRetriesAndFails() {
-        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicInteger attempts = new AtomicInteger(0);
         AtomicReference<Exception> failure = new AtomicReference<>();
-        SingleBatchInvoker invoker = (subInput, listener) -> {
-            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
-            if (docs.contains("bad")) {
-                listener.onFailure(new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS));
-            } else {
-                listener.onResponse(outputFor(subInput));
-            }
+        SingleBatchInvoker throttling = (subInput, listener) -> {
+            attempts.incrementAndGet();
+            listener.onFailure(new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS));
         };
 
         executor
             .execute(
-                textInput("a", "bad"),
+                textInput("a", "b"),
                 config,
-                invoker,
+                throttling,
                 ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
             );
 
-        assertTrue(failure.get() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) failure.get()).status());
+        assertEquals("2 sub-batches, one attempt each", 2, attempts.get());
+        assertEquals(2, failure.get().getSuppressed().length);
     }
 
     @Test
-    public void allSubBatchesThrottleAndFailWithTheOriginalStatus() {
+    public void invokerThrowingSynchronouslyIsTreatedAsThatSubBatchFailing() {
+        // An invoker may throw before it ever calls its listener. That still has to count as the sub-batch
+        // settling, or the completion counter would never reach zero and the request would hang. One
+        // sub-batch throws, the other succeeds, so the request fails once with the thrown error.
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         AtomicReference<Exception> failure = new AtomicReference<>();
         AtomicInteger completions = new AtomicInteger(0);
-        SingleBatchInvoker invoker = (subInput, listener) -> listener
-            .onFailure(new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS));
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("boom")) {
+                throw new IllegalStateException("dispatch failed");
+            }
+            listener.onResponse(outputFor(subInput));
+        };
+
+        executor
+            .execute(
+                textInput("ok", "boom"),
+                config,
+                invoker,
+                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, e -> {
+                    completions.incrementAndGet();
+                    failure.set(e);
+                })
+            );
+
+        assertEquals("listener must be completed exactly once", 1, completions.get());
+        assertTrue(failure.get() instanceof IllegalStateException);
+        assertEquals("dispatch failed", failure.get().getMessage());
+    }
+
+    @Test
+    public void everyInvokerThrowingSynchronouslyStillCompletesOnceWithAllErrors() {
+        // If every sub-batch throws synchronously, the counter still reaches zero exactly once and all of
+        // the thrown errors are reported together.
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        AtomicInteger completions = new AtomicInteger(0);
+        SingleBatchInvoker invoker = (subInput, listener) -> { throw new IllegalStateException("dispatch failed"); };
 
         executor
             .execute(
@@ -242,9 +235,7 @@ public class BatchInferenceExecutorTests {
             );
 
         assertEquals("listener must be completed exactly once", 1, completions.get());
-        assertTrue(failure.get() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) failure.get()).status());
-        assertEquals(0, failure.get().getSuppressed().length);
+        assertEquals(2, failure.get().getSuppressed().length);
     }
 
     @Test
@@ -265,8 +256,7 @@ public class BatchInferenceExecutorTests {
                 ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
             );
 
-        assertTrue(failure.get() instanceof RuntimeException);
-        // 2 sub-batches, each attempted exactly once (no retries for a non-retryable error)
+        // 2 sub-batches, each attempted exactly once
         assertEquals(2, attempts.get());
     }
 
@@ -288,7 +278,7 @@ public class BatchInferenceExecutorTests {
     }
 
     @Test
-    public void firstSubBatchFailureWinsAndLaterFailuresAreDropped() {
+    public void multipleSubBatchFailuresAreAllReported() {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         AtomicReference<Exception> failure = new AtomicReference<>();
         AtomicInteger completions = new AtomicInteger(0);
@@ -311,8 +301,10 @@ public class BatchInferenceExecutorTests {
         }));
 
         assertEquals("listener must be completed exactly once", 1, completions.get());
-        assertEquals("first failure", failure.get().getMessage());
-        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failure.get()).status());
+        Exception error = failure.get();
+        assertTrue(error.getMessage().contains("first failure"));
+        assertTrue(error.getMessage().contains("second failure"));
+        assertEquals(2, error.getSuppressed().length);
     }
 
     @Test
@@ -338,10 +330,13 @@ public class BatchInferenceExecutorTests {
 
         assertTrue(failure.get() instanceof OpenSearchStatusException);
         assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failure.get()).status());
+        assertEquals("a lone failure must not be wrapped", 0, failure.get().getSuppressed().length);
     }
 
     @Test
     public void successSettlingBeforeFailureDoesNotCombinePartialResults() {
+        // A success settling before a later failure must not let combine() run over an outputs array
+        // that still has a null slot for the failed sub-batch.
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         AtomicReference<Exception> failure = new AtomicReference<>();
         SingleBatchInvoker invoker = (subInput, listener) -> {
@@ -362,7 +357,7 @@ public class BatchInferenceExecutorTests {
     }
 
     @Test
-    public void successSettlingAfterFailureDoesNotCompleteTheRequestAgain() {
+    public void successSettlingAfterFailureStillCompletesExactlyOnce() {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         AtomicReference<Exception> failure = new AtomicReference<>();
         AtomicInteger completions = new AtomicInteger(0);
@@ -377,7 +372,7 @@ public class BatchInferenceExecutorTests {
 
         // "bad" settles first (dispatched first, in list order); "ok" succeeds afterwards.
         executor.execute(textInput("bad", "ok"), config, invoker, ActionListener.wrap(r -> {
-            throw new AssertionError("must not respond after the request already failed");
+            throw new AssertionError("must not respond when a sub-batch failed");
         }, e -> {
             completions.incrementAndGet();
             failure.set(e);
@@ -385,13 +380,5 @@ public class BatchInferenceExecutorTests {
 
         assertEquals("listener must be completed exactly once", 1, completions.get());
         assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failure.get()).status());
-    }
-
-    @Test
-    public void isRetryableClassification() {
-        assertTrue(BatchInferenceExecutor.isRetryable(new OpenSearchStatusException("t", RestStatus.TOO_MANY_REQUESTS)));
-        assertTrue(BatchInferenceExecutor.isRetryable(new OpenSearchStatusException("u", RestStatus.SERVICE_UNAVAILABLE)));
-        assertFalse(BatchInferenceExecutor.isRetryable(new OpenSearchStatusException("b", RestStatus.BAD_REQUEST)));
-        assertFalse(BatchInferenceExecutor.isRetryable(new RuntimeException("x")));
     }
 }

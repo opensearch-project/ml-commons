@@ -139,12 +139,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
-        this.batchInferenceExecutor = new BatchInferenceExecutor(
-            new BatchableInputRegistry(),
-            new BatchSplitter(),
-            threadPool,
-            REMOTE_PREDICT_THREAD_POOL
-        );
+        this.batchInferenceExecutor = new BatchInferenceExecutor(new BatchableInputRegistry(), new BatchSplitter());
         autoDeploymentEnabled = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
             .getClusterSettings()
@@ -622,24 +617,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         if (mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)) {
                             predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
                         } else {
-                            BatchInferenceConfig batchInferenceConfig = getBatchInferenceConfig(modelId);
-                            final Predictable batchPredictor = predictor;
                             batchInferenceExecutor
-                                .execute(
-                                    mlInput,
-                                    batchInferenceConfig,
-                                    (subInput, subListener) -> batchPredictor
-                                        .asyncPredict(
-                                            subInput,
-                                            ActionListener.wrap(resp -> subListener.onResponse(resp.getOutput()), subListener::onFailure),
-                                            channel
-                                        ),
-                                    ActionListener
-                                        .wrap(
-                                            merged -> trackPredictDurationListener.onResponse(new MLTaskResponse(merged)),
-                                            trackPredictDurationListener::onFailure
-                                        )
-                                );
+                                .execute(mlInput, getBatchInferenceConfig(modelId), predictor, channel, trackPredictDurationListener);
                         }
                     } else {
                         // long startTime = System.nanoTime();

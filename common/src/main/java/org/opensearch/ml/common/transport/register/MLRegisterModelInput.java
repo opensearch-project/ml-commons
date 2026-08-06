@@ -10,7 +10,7 @@ import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
@@ -252,7 +252,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? in.readOptionalString() : null;
-        if (streamInputVersion.onOrAfter(VERSION_3_8_0) && in.readBoolean()) {
+        if (streamInputVersion.onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
             this.batchInferenceConfig = new BatchInferenceConfig(in);
         }
     }
@@ -342,7 +342,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             out.writeOptionalString(provisionedBy);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_3_8_0)) {
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
             if (batchInferenceConfig != null) {
                 out.writeBoolean(true);
                 batchInferenceConfig.writeTo(out);

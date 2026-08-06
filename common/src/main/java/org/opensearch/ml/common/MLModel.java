@@ -11,7 +11,7 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
@@ -425,7 +425,7 @@ public class MLModel implements ToXContentObject {
             }
             this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
             this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
-            if (streamInputVersion.onOrAfter(VERSION_3_8_0) && input.readBoolean()) {
+            if (streamInputVersion.onOrAfter(VERSION_3_9_0) && input.readBoolean()) {
                 this.batchInferenceConfig = new BatchInferenceConfig(input);
             }
         }
@@ -518,7 +518,7 @@ public class MLModel implements ToXContentObject {
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             out.writeOptionalString(provisionedBy);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_3_8_0)) {
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
             if (batchInferenceConfig != null) {
                 out.writeBoolean(true);
                 batchInferenceConfig.writeTo(out);
