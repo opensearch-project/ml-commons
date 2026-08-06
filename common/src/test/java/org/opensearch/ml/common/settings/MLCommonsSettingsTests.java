@@ -311,4 +311,27 @@ public class MLCommonsSettingsTests {
         MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(), 0.11).build());
     }
+
+    @Test
+    public void testValidateRegexSafety_optionalGroupWithInnerQuantifier_success() {
+        List<String> validRegex = List.of("^https?://api\\.example\\.com(:\\d+)?/.*$");
+        List<String> result = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), validRegex).build());
+        assertEquals(validRegex, result);
+    }
+
+    @Test
+    public void testValidateRegexSafety_boundedQuantifier_success() {
+        List<String> validRegex = List.of("^https?://api\\.example\\.com(:\\d{1,5})?/.*$");
+        List<String> result = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), validRegex).build());
+        assertEquals(validRegex, result);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testValidateRegexSafety_nestedUnboundedQuantifier_throwsException() {
+        List<String> invalidRegex = List.of("^https://host(:\\d+)*/.*$");
+        MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex).build());
+    }
 }
