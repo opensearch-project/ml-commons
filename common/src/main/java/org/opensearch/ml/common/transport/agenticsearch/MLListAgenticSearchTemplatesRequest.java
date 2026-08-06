@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.transport.agenticsearch;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -45,7 +47,14 @@ public class MLListAgenticSearchTemplatesRequest extends ActionRequest {
 
     @Override
     public ActionRequestValidationException validate() {
-        return null;
+        ActionRequestValidationException exception = null;
+        if (from < 0) {
+            exception = addValidationError("Parameter 'from' must be non-negative", exception);
+        }
+        if (size <= 0 || size > 1000) {
+            exception = addValidationError("Parameter 'size' must be between 1 and 1000", exception);
+        }
+        return exception;
     }
 
     @Override

@@ -56,7 +56,7 @@ public class MLUpdateAgenticSearchTemplateRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (templateId == null || templateId.trim().isEmpty()) {
-            exception = addValidationError("Template name cannot be null or empty", exception);
+            exception = addValidationError("Template id cannot be null or empty", exception);
         }
         if (template == null) {
             exception = addValidationError("Update body cannot be null", exception);

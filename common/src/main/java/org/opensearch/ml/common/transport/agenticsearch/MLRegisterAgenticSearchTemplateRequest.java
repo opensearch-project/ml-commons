@@ -27,9 +27,11 @@ import lombok.experimental.FieldDefaults;
 
 /**
  * Register a search template for filling. Per the design (§4.5) the customer sends
- * only the link — the {@code _scripts} template name, the target index, and a
- * description — and registration derives the param-schema. So this request carries
- * no schema; it is produced server-side from the template body + index mapping.
+ * only the link — the {@code template_id} (the existing {@code _scripts} template id),
+ * the target index, and a description — and registration derives the param-schema. So
+ * this request carries no schema; it is produced server-side from the template body +
+ * index mapping. The {@code templateId} is the single identifier: it is the stored
+ * script id, the system-index doc id, and what get/update/delete address.
  */
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
@@ -58,7 +60,7 @@ public class MLRegisterAgenticSearchTemplateRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (templateId == null || templateId.trim().isEmpty()) {
-            exception = addValidationError("Template name cannot be null or empty", exception);
+            exception = addValidationError("Template id cannot be null or empty", exception);
         }
         if (index == null || index.trim().isEmpty()) {
             exception = addValidationError("Index cannot be null or empty", exception);

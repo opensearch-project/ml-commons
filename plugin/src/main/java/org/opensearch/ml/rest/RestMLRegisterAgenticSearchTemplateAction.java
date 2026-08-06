@@ -27,13 +27,14 @@ import com.google.common.collect.ImmutableList;
 
 /**
  * {@code POST /_plugins/_ml/agentic_search_templates} — register a search template
- * for filling. The customer sends only the link (§4.5): {@code template_name},
- * {@code index}, and an optional {@code description}; the server derives + stores
- * the param-schema and echoes back the {@code template_id}.
+ * for filling. The customer sends only the link (§4.5): {@code template_id} (the
+ * existing {@code _scripts} template id), {@code index}, and an optional {@code
+ * description}; the server derives + stores the param-schema under the same id. The
+ * {@code template_id} is the single identifier used by get/update/delete as well.
  */
 public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
     private static final String ACTION_NAME = "ml_register_agentic_search_template_action";
-    private static final String TEMPLATE_NAME_FIELD = "template_name";
+    private static final String TEMPLATE_ID_FIELD = "template_id";
     private static final String INDEX_FIELD = "index";
     private static final String DESCRIPTION_FIELD = "description";
 
@@ -72,7 +73,7 @@ public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
             throw new IllegalArgumentException("Request body is required");
         }
 
-        String templateName = null;
+        String templateId = null;
         String index = null;
         String description = null;
 
@@ -82,8 +83,8 @@ public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
             String field = parser.currentName();
             parser.nextToken();
             switch (field) {
-                case TEMPLATE_NAME_FIELD:
-                    templateName = parser.text();
+                case TEMPLATE_ID_FIELD:
+                    templateId = parser.text();
                     break;
                 case INDEX_FIELD:
                     index = parser.text();
@@ -97,12 +98,12 @@ public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
             }
         }
 
-        if (templateName == null || templateName.trim().isEmpty()) {
-            throw new IllegalArgumentException("'template_name' is required");
+        if (templateId == null || templateId.trim().isEmpty()) {
+            throw new IllegalArgumentException("'template_id' is required");
         }
         if (index == null || index.trim().isEmpty()) {
             throw new IllegalArgumentException("'index' is required");
         }
-        return new MLRegisterAgenticSearchTemplateRequest(templateName, index, description);
+        return new MLRegisterAgenticSearchTemplateRequest(templateId, index, description);
     }
 }

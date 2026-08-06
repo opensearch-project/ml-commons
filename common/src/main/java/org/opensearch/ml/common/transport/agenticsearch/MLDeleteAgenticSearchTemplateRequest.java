@@ -46,7 +46,7 @@ public class MLDeleteAgenticSearchTemplateRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (templateId == null || templateId.trim().isEmpty()) {
-            exception = addValidationError("Template name cannot be null or empty", exception);
+            exception = addValidationError("Template id cannot be null or empty", exception);
         }
         return exception;
     }
