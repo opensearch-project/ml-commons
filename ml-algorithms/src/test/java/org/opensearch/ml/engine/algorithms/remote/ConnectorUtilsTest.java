@@ -394,6 +394,10 @@ public class ConnectorUtilsTest {
     }
 
     private Connector vertexBatchConnector() {
+        return vertexBatchConnector("v1");
+    }
+
+    private Connector vertexBatchConnector(String apiVersion) {
         return HttpConnector
             .builder()
             .name("test")
@@ -410,7 +414,9 @@ public class ConnectorUtilsTest {
                                 .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                                 .method("POST")
                                 .url(
-                                    "https://${parameters.location}-aiplatform.googleapis.com/v1/projects/${parameters.project_id}/locations/${parameters.location}/batchPredictionJobs"
+                                    "https://${parameters.location}-aiplatform.googleapis.com/"
+                                        + apiVersion
+                                        + "/projects/${parameters.project_id}/locations/${parameters.location}/batchPredictionJobs"
                                 )
                                 .requestBody("{\\\"displayName\\\":\\\"${parameters.job_name}\\\"}")
                                 .build()
@@ -437,6 +443,18 @@ public class ConnectorUtilsTest {
         assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
         assertEquals("POST", result.getMethod());
         assertEquals("https://us-central1-aiplatform.googleapis.com/v1/${parameters.name}:cancel", result.getUrl());
+        assertNull(result.getRequestBody());
+    }
+
+    @Test
+    public void testGetTask_createBatchStatusActionForVertexAI_v1beta1() {
+        // Vertex also publishes batchPredictionJobs under /v1beta1/; the derived status URL must
+        // preserve that version segment rather than reject it.
+        ConnectorAction result = ConnectorUtils.createConnectorAction(vertexBatchConnector("v1beta1"), BATCH_PREDICT_STATUS);
+
+        assertEquals(ConnectorAction.ActionType.BATCH_PREDICT_STATUS, result.getActionType());
+        assertEquals("GET", result.getMethod());
+        assertEquals("https://us-central1-aiplatform.googleapis.com/v1beta1/${parameters.name}", result.getUrl());
         assertNull(result.getRequestBody());
     }
 

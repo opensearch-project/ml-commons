@@ -37,6 +37,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 
 import lombok.Builder;
 import lombok.Data;
@@ -121,8 +122,14 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 throw new IllegalArgumentException("Connector protocol is null");
             }
             boolean isMcpConnector = (protocol.equals(MCP_SSE) || protocol.equals(MCP_STREAMABLE_HTTP));
-            // google_cloud connectors may omit credentials when using ADC / Workload Identity.
-            boolean allowsEmptyCredential = isMcpConnector || protocol.equals(GOOGLE_CLOUD);
+            // A google_cloud connector may omit credentials ONLY in ADC / Workload Identity mode
+            // (auth_mode=adc). A service-account-key google_cloud connector must still supply a
+            // credential — relaxing for all google_cloud would let an SA connector with a missing
+            // credential slip past here and fail later.
+            boolean isGoogleCloudAdc = protocol.equals(GOOGLE_CLOUD)
+                && parameters != null
+                && GoogleCloudConnector.AUTH_MODE_ADC.equalsIgnoreCase(parameters.get(GoogleCloudConnector.AUTH_MODE_FIELD));
+            boolean allowsEmptyCredential = isMcpConnector || isGoogleCloudAdc;
             if ((credential == null || credential.isEmpty()) && !allowsEmptyCredential) {
                 throw new IllegalArgumentException("Connector credential is null or empty list");
             }
