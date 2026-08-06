@@ -79,7 +79,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(outputFor(subInput));
         };
 
-        executor.execute(input, null, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+        executor.doExecute(input, null, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
 
         assertSame(input, seen.get()); // no config -> original input, no rebuild
         assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
@@ -96,7 +96,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(outputFor(subInput));
         };
 
-        executor.execute(input, config, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+        executor.doExecute(input, config, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
 
         assertEquals(1, invocations.get()); // single call, split computed exactly once
         assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
@@ -112,7 +112,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(outputFor(subInput));
         };
 
-        executor.execute(textInput("a", "b", "c", "d", "e"), config, counting, ActionListener.wrap(result::set, e -> {
+        executor.doExecute(textInput("a", "b", "c", "d", "e"), config, counting, ActionListener.wrap(result::set, e -> {
             throw new AssertionError(e);
         }));
 
@@ -131,7 +131,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(outputFor(subInput));
         };
 
-        executor.execute(input, config, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+        executor.doExecute(input, config, invoker, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
 
         assertSame(input, seen.get()); // original input, no rebuild
         assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
@@ -150,7 +150,7 @@ public class BatchInferenceExecutorTests {
             }
         };
 
-        executor.execute(textInput("ok", "bad", "ok2"), config, invoker, ActionListener.wrap(r -> {
+        executor.doExecute(textInput("ok", "bad", "ok2"), config, invoker, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, failure::set));
 
@@ -171,7 +171,7 @@ public class BatchInferenceExecutorTests {
         };
 
         executor
-            .execute(
+            .doExecute(
                 textInput("a", "b"),
                 config,
                 throttling,
@@ -199,7 +199,7 @@ public class BatchInferenceExecutorTests {
         };
 
         executor
-            .execute(
+            .doExecute(
                 textInput("ok", "boom"),
                 config,
                 invoker,
@@ -224,7 +224,7 @@ public class BatchInferenceExecutorTests {
         SingleBatchInvoker invoker = (subInput, listener) -> { throw new IllegalStateException("dispatch failed"); };
 
         executor
-            .execute(
+            .doExecute(
                 textInput("a", "b"),
                 config,
                 invoker,
@@ -253,16 +253,12 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(group)).build());
         };
 
-        executor
-            .execute(
-                textInput("a", "b"),
-                config,
-                invoker,
-                ActionListener.wrap(r -> { throw new AssertionError("should have failed on merge"); }, e -> {
-                    completions.incrementAndGet();
-                    failure.set(e);
-                })
-            );
+        executor.doExecute(textInput("a", "b"), config, invoker, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed on merge");
+        }, e -> {
+            completions.incrementAndGet();
+            failure.set(e);
+        }));
 
         assertEquals("listener must be completed exactly once", 1, completions.get());
         assertTrue(failure.get() instanceof IllegalStateException);
@@ -279,7 +275,7 @@ public class BatchInferenceExecutorTests {
         };
 
         executor
-            .execute(
+            .doExecute(
                 textInput("a", "b"),
                 config,
                 invoker,
@@ -302,7 +298,7 @@ public class BatchInferenceExecutorTests {
         SingleBatchInvoker invoker = (subInput, listener) -> { throw new AssertionError("invoker should not be called"); };
 
         executor
-            .execute(input, config, invoker, ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set));
+            .doExecute(input, config, invoker, ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set));
 
         assertTrue(failure.get() instanceof IllegalArgumentException);
     }
@@ -323,7 +319,7 @@ public class BatchInferenceExecutorTests {
             }
         };
 
-        executor.execute(textInput("bad1", "ok", "bad2"), config, invoker, ActionListener.wrap(r -> {
+        executor.doExecute(textInput("bad1", "ok", "bad2"), config, invoker, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, e -> {
             completions.incrementAndGet();
@@ -335,6 +331,70 @@ public class BatchInferenceExecutorTests {
         assertTrue(error.getMessage().contains("first failure"));
         assertTrue(error.getMessage().contains("second failure"));
         assertEquals(2, error.getSuppressed().length);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) error).status());
+    }
+
+    @Test
+    public void combinedFailureEscalatesWhenAnySubBatchHitAServerError() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("forbidden")) {
+                listener.onFailure(new OpenSearchStatusException("forbidden", RestStatus.FORBIDDEN));
+            } else {
+                listener.onFailure(new OpenSearchStatusException("upstream down", RestStatus.BAD_GATEWAY));
+            }
+        };
+
+        executor.doExecute(textInput("forbidden", "down"), config, invoker, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed");
+        }, failure::set));
+
+        assertEquals(RestStatus.BAD_GATEWAY, ((OpenSearchStatusException) failure.get()).status());
+    }
+
+    @Test
+    public void combinedFailureStatusDoesNotDependOnSettlementOrder() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        List<ActionListener<MLOutput>> deferred = new ArrayList<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            if (docs.contains("first")) {
+                deferred.add(listener);
+            } else {
+                listener.onFailure(new OpenSearchStatusException("too many requests", RestStatus.TOO_MANY_REQUESTS));
+            }
+        };
+
+        executor.doExecute(textInput("first", "second"), config, invoker, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed");
+        }, failure::set));
+
+        deferred.get(0).onFailure(new OpenSearchStatusException("forbidden", RestStatus.FORBIDDEN));
+
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) failure.get()).status());
+    }
+
+    @Test
+    public void combinedFailureKeepsTheStatusEverySubBatchShares() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        SingleBatchInvoker invoker = (subInput, listener) -> listener
+            .onFailure(new OpenSearchStatusException("forbidden", RestStatus.FORBIDDEN));
+
+        executor
+            .doExecute(
+                textInput("a", "b"),
+                config,
+                invoker,
+                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
+            );
+
+        Exception error = failure.get();
+        assertEquals(2, error.getSuppressed().length);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) error).status());
     }
 
     @Test
@@ -351,7 +411,7 @@ public class BatchInferenceExecutorTests {
         };
 
         executor
-            .execute(
+            .doExecute(
                 textInput("ok", "bad"),
                 config,
                 invoker,
@@ -379,7 +439,7 @@ public class BatchInferenceExecutorTests {
         };
 
         // "ok" settles first (dispatched first, in list order); "bad" settles last.
-        executor.execute(textInput("ok", "bad"), config, invoker, ActionListener.wrap(r -> {
+        executor.doExecute(textInput("ok", "bad"), config, invoker, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed, not combined a partial result");
         }, failure::set));
 
@@ -401,7 +461,7 @@ public class BatchInferenceExecutorTests {
         };
 
         // "bad" settles first (dispatched first, in list order); "ok" succeeds afterwards.
-        executor.execute(textInput("bad", "ok"), config, invoker, ActionListener.wrap(r -> {
+        executor.doExecute(textInput("bad", "ok"), config, invoker, ActionListener.wrap(r -> {
             throw new AssertionError("must not respond when a sub-batch failed");
         }, e -> {
             completions.incrementAndGet();

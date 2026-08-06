@@ -6,11 +6,11 @@
 package org.opensearch.ml.batch;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -50,15 +50,10 @@ public class BatchInferenceExecutor {
         TransportChannel channel,
         ActionListener<MLTaskResponse> listener
     ) {
-        execute(
+        doExecute(
             input,
             config,
-            (subInput, subListener) -> predictor
-                .asyncPredict(
-                    subInput,
-                    ActionListener.wrap(resp -> subListener.onResponse(resp.getOutput()), subListener::onFailure),
-                    channel
-                ),
+            SingleBatchInvoker.forPredictor(predictor, channel),
             ActionListener.wrap(merged -> listener.onResponse(new MLTaskResponse(merged)), listener::onFailure)
         );
     }
@@ -69,7 +64,7 @@ public class BatchInferenceExecutor {
      * already fits within the limits, and fails when the model has a config but the input type has no
      * handler, rather than being sent unsplit.
      */
-    public void execute(MLInput input, BatchInferenceConfig config, SingleBatchInvoker invoker, ActionListener<MLOutput> listener) {
+    public void doExecute(MLInput input, BatchInferenceConfig config, SingleBatchInvoker invoker, ActionListener<MLOutput> listener) {
         if (config == null) {
             invoker.invoke(input, listener);
             return;
@@ -123,7 +118,7 @@ public class BatchInferenceExecutor {
         }
 
         final AtomicReferenceArray<MLOutput> results = new AtomicReferenceArray<>(total);
-        final List<Exception> failures = Collections.synchronizedList(new ArrayList<>());
+        final AtomicReferenceArray<Exception> failures = new AtomicReferenceArray<>(total);
         // Decremented once per sub-batch, on success and on failure alike, so exactly one callback sees
         // zero and completes the listener.
         final AtomicInteger remaining = new AtomicInteger(total);
@@ -141,7 +136,7 @@ public class BatchInferenceExecutor {
                 }
             }, error -> {
                 try {
-                    failures.add(error);
+                    failures.set(index, error);
                 } finally {
                     if (remaining.decrementAndGet() == 0) {
                         complete(failures, results, handler, listener);
@@ -159,12 +154,13 @@ public class BatchInferenceExecutor {
     }
 
     private void complete(
-        List<Exception> failures,
+        AtomicReferenceArray<Exception> failures,
         AtomicReferenceArray<MLOutput> results,
         BatchableInput handler,
         ActionListener<MLOutput> listener
     ) {
-        if (failures.isEmpty()) {
+        List<Exception> failed = collectFailures(failures);
+        if (failed.isEmpty()) {
             MLOutput merged;
             try {
                 merged = handler.combine(toList(results));
@@ -177,11 +173,22 @@ public class BatchInferenceExecutor {
         }
         Exception failure;
         try {
-            failure = asSingleFailure(failures);
+            failure = asSingleFailure(failed);
         } catch (Exception completionError) {
             failure = completionError;
         }
         listener.onFailure(failure);
+    }
+
+    private List<Exception> collectFailures(AtomicReferenceArray<Exception> failures) {
+        List<Exception> ordered = new ArrayList<>();
+        for (int i = 0; i < failures.length(); i++) {
+            Exception failure = failures.get(i);
+            if (failure != null) {
+                ordered.add(failure);
+            }
+        }
+        return ordered;
     }
 
     /**
@@ -200,11 +207,22 @@ public class BatchInferenceExecutor {
             }
             message.append(failures.get(i).getMessage());
         }
-        Exception combined = new OpenSearchStatusException(message.toString(), RestStatus.INTERNAL_SERVER_ERROR);
+        Exception combined = new OpenSearchStatusException(message.toString(), combinedStatus(failures));
         for (Exception failure : failures) {
             combined.addSuppressed(failure);
         }
         return combined;
+    }
+
+    private RestStatus combinedStatus(List<Exception> failures) {
+        RestStatus status = ExceptionsHelper.status(failures.get(0));
+        for (Exception failure : failures) {
+            RestStatus candidate = ExceptionsHelper.status(failure);
+            if (candidate.getStatus() >= 500) {
+                status = candidate;
+            }
+        }
+        return status;
     }
 
     private List<MLOutput> toList(AtomicReferenceArray<MLOutput> array) {
