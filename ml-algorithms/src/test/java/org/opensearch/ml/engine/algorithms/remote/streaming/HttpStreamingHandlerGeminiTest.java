@@ -38,6 +38,12 @@ public class HttpStreamingHandlerGeminiTest {
         "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"1\\n2\\n3\"}]},\"finishReason\":\"STOP\"}],"
             + "\"modelVersion\":\"gemini-2.5-flash\"}";
 
+    // A prompt blocked by safety filters: promptFeedback.blockReason set, no candidates and no
+    // finishReason. Vertex emits this as the sole frame before closing the stream.
+    private static final String GEMINI_PROMPT_BLOCKED_CHUNK =
+        "{\"promptFeedback\":{\"blockReason\":\"SAFETY\",\"safetyRatings\":[{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\","
+            + "\"probability\":\"HIGH\",\"blocked\":true}]},\"modelVersion\":\"gemini-2.5-flash\"}";
+
     private HttpStreamingHandler.HTTPEventSourceListener listener;
     private StreamPredictActionListener<MLTaskResponse, ?> streamListener;
 
@@ -86,6 +92,24 @@ public class HttpStreamingHandlerGeminiTest {
     public void onEvent_malformedChunk_isIgnored() {
         listener.onEvent(null, null, null, "not json");
         org.mockito.Mockito.verifyNoInteractions(streamListener);
+    }
+
+    @Test
+    public void onEvent_promptBlocked_terminatesStream() {
+        // A safety-blocked prompt carries no candidates and no finishReason. Without explicit
+        // handling the completion sentinel is never sent and the client hangs. The handler must
+        // detect promptFeedback.blockReason and terminate the stream.
+        listener.onEvent(null, null, null, GEMINI_PROMPT_BLOCKED_CHUNK);
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        ArgumentCaptor<Boolean> isLastCaptor = ArgumentCaptor.forClass(Boolean.class);
+        org.mockito.Mockito.verify(streamListener).onStreamResponse(responseCaptor.capture(), isLastCaptor.capture());
+
+        // A single completion sentinel: empty content, is_last=true.
+        assertTrue(isLastCaptor.getValue());
+        Map<String, ?> dataMap = extractDataMap(responseCaptor.getValue());
+        assertEquals("", dataMap.get("content"));
+        assertEquals(true, dataMap.get("is_last"));
     }
 
     @SuppressWarnings("unchecked")
