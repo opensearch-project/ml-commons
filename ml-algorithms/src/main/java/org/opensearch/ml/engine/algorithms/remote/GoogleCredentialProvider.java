@@ -60,10 +60,18 @@ public class GoogleCredentialProvider {
     }
 
     /**
+     * The single valid host for the OAuth2 token-mint endpoint. This is the only Google surface
+     * that legitimately receives the signed JWT during a service-account token exchange.
+     */
+    private static final String OAUTH2_TOKEN_HOST = "oauth2.googleapis.com";
+
+    /**
      * Validate the OAuth2 token endpoint before it is used to refresh tokens. token_uri is a
      * user-controlled connector credential; without this guard an administrator could point it at
-     * an internal address and have the node POST the signed JWT there (SSRF). Restrict it to
-     * Google's token hosts over HTTPS.
+     * an internal address and have the node POST the signed JWT there (SSRF). Service-account key
+     * exchange only ever targets {@value #OAUTH2_TOKEN_HOST}, so restrict token_uri to exactly that
+     * host over HTTPS rather than any *.googleapis.com surface. (ADC/Workload Identity does not use
+     * this path -- it resolves credentials via {@link GoogleCredentials#getApplicationDefault()}.)
      */
     static URI validateTokenUri(String tokenUri) {
         URI uri;
@@ -77,12 +85,8 @@ public class GoogleCredentialProvider {
         if (!"https".equalsIgnoreCase(scheme) || host == null) {
             throw new IllegalArgumentException("token_uri must be an https Google endpoint, got: " + tokenUri);
         }
-        String lowerHost = host.toLowerCase(java.util.Locale.ROOT);
-        boolean allowed = lowerHost.equals("oauth2.googleapis.com")
-            || lowerHost.equals("googleapis.com")
-            || lowerHost.endsWith(".googleapis.com");
-        if (!allowed) {
-            throw new IllegalArgumentException("token_uri host is not an allowed Google endpoint: " + host);
+        if (!OAUTH2_TOKEN_HOST.equals(host.toLowerCase(java.util.Locale.ROOT))) {
+            throw new IllegalArgumentException("token_uri host must be " + OAUTH2_TOKEN_HOST + ", got: " + host);
         }
         return uri;
     }
