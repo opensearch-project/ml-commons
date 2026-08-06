@@ -260,7 +260,7 @@ public class MachineLearningPluginTests {
         Settings settings = Settings.EMPTY;
         Collection<SystemIndexDescriptor> descriptors = plugin.getSystemIndexDescriptors(settings);
         assertNotNull(descriptors);
-        assertEquals(15, descriptors.size()); // Plugin defines 15 system indices
+        assertEquals(16, descriptors.size()); // Plugin defines 16 system indices
 
         // Verify we have system index descriptors
         assertFalse(descriptors.isEmpty());
