@@ -239,6 +239,36 @@ public class BatchInferenceExecutorTests {
     }
 
     @Test
+    public void outputMergeFailureIsReportedOnceAndDoesNotHang() {
+        // Every sub-batch succeeds, but with conflicting status codes so merging them throws. That error
+        // must be surfaced to the caller exactly once rather than escaping and leaving the caller hanging.
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        AtomicInteger completions = new AtomicInteger(0);
+        SingleBatchInvoker invoker = (subInput, listener) -> {
+            List<String> docs = ((TextDocsInputDataSet) subInput.getInputDataset()).getDocs();
+            int statusCode = docs.contains("a") ? 200 : 206;
+            ModelTensors group = ModelTensors.builder().mlModelTensors(new ArrayList<>()).build();
+            group.setStatusCode(statusCode);
+            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(group)).build());
+        };
+
+        executor
+            .execute(
+                textInput("a", "b"),
+                config,
+                invoker,
+                ActionListener.wrap(r -> { throw new AssertionError("should have failed on merge"); }, e -> {
+                    completions.incrementAndGet();
+                    failure.set(e);
+                })
+            );
+
+        assertEquals("listener must be completed exactly once", 1, completions.get());
+        assertTrue(failure.get() instanceof IllegalStateException);
+    }
+
+    @Test
     public void nonRetryableErrorFailsWithoutRetry() {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         AtomicInteger attempts = new AtomicInteger(0);

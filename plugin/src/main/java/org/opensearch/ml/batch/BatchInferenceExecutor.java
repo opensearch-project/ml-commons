@@ -132,14 +132,20 @@ public class BatchInferenceExecutor {
             final int index = i;
             final List<BatchItem> batch = batches.get(i);
             final ActionListener<MLOutput> subListener = ActionListener.wrap(output -> {
-                results.set(index, output);
-                if (remaining.decrementAndGet() == 0) {
-                    complete(failures, results, handler, listener);
+                try {
+                    results.set(index, output);
+                } finally {
+                    if (remaining.decrementAndGet() == 0) {
+                        complete(failures, results, handler, listener);
+                    }
                 }
             }, error -> {
-                failures.add(error);
-                if (remaining.decrementAndGet() == 0) {
-                    complete(failures, results, handler, listener);
+                try {
+                    failures.add(error);
+                } finally {
+                    if (remaining.decrementAndGet() == 0) {
+                        complete(failures, results, handler, listener);
+                    }
                 }
             });
             try {
@@ -159,14 +165,23 @@ public class BatchInferenceExecutor {
         ActionListener<MLOutput> listener
     ) {
         if (failures.isEmpty()) {
+            MLOutput merged;
             try {
-                listener.onResponse(handler.combine(toList(results)));
+                merged = handler.combine(toList(results));
             } catch (Exception outputMergeError) {
                 listener.onFailure(outputMergeError);
+                return;
             }
+            listener.onResponse(merged);
             return;
         }
-        listener.onFailure(asSingleFailure(failures));
+        Exception failure;
+        try {
+            failure = asSingleFailure(failures);
+        } catch (Exception completionError) {
+            failure = completionError;
+        }
+        listener.onFailure(failure);
     }
 
     /**
