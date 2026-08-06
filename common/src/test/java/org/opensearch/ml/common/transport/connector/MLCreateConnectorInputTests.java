@@ -289,8 +289,8 @@ public class MLCreateConnectorInputTests {
     }
 
     @Test
-    public void constructorMLCreateConnectorInput_GoogleCloudWithEmptyCredential_ShouldNotThrow() {
-        // google_cloud connectors may omit credentials when using ADC / Workload Identity.
+    public void constructorMLCreateConnectorInput_GoogleCloudAdcWithEmptyCredential_ShouldNotThrow() {
+        // A google_cloud connector may omit credentials ONLY in ADC mode (auth_mode=adc).
         MLCreateConnectorInput connector = MLCreateConnectorInput
             .builder()
             .name(TEST_CONNECTOR_NAME)
@@ -308,6 +308,28 @@ public class MLCreateConnectorInputTests {
         assertNotNull(connector);
         assertEquals(GOOGLE_CLOUD, connector.getProtocol());
         assertTrue(connector.getCredential().isEmpty());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_GoogleCloudNonAdcWithEmptyCredential_ShouldThrow() {
+        // Without auth_mode=adc, a google_cloud connector (service-account-key mode) must still
+        // supply a credential — the empty-credential relaxation is ADC-scoped, not blanket.
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(GOOGLE_CLOUD)
+                .parameters(Map.of("location", "us-central1"))
+                .credential(Map.of())
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Connector credential is null or empty list", exception.getMessage());
     }
 
     @Test

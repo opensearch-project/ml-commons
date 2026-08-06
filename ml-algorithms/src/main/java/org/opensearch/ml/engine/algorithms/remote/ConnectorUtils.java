@@ -34,6 +34,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -79,6 +81,8 @@ public class ConnectorUtils {
     private static final AwsV4HttpSigner signer;
     public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
     public static final String BEDROCK_NOVA_MODEL = "amazon.nova-2-multimodal-embeddings-v1:0";
+    // Matches the Vertex AI API version segment, e.g. "/v1/" or "/v1beta1/", including the trailing slash.
+    private static final Pattern VERTEX_API_VERSION_PATTERN = Pattern.compile("/v1(beta\\d+)?/");
 
     static {
         signer = AwsV4HttpSigner.create();
@@ -477,15 +481,18 @@ public class ConnectorUtils {
             case VERTEX_AI:
                 // Vertex batch responses carry a full resource name
                 // (projects/<num>/locations/<loc>/batchPredictionJobs/<id>). Status/cancel are
-                // addressed as {host}/v1/{name}[:cancel], so build from the endpoint's base URL.
-                int v1Index = predictEndpoint.indexOf("/v1/");
-                if (v1Index < 0) {
+                // addressed as {host}/<version>/{name}[:cancel], so build from the endpoint's base
+                // URL. Vertex publishes batchPredictionJobs under both /v1/ and /v1beta1/ (more
+                // generally /v1beta<N>/), so match either version segment.
+                Matcher vertexVersionMatcher = VERTEX_API_VERSION_PATTERN.matcher(predictEndpoint);
+                if (!vertexVersionMatcher.find()) {
                     throw new IllegalArgumentException(
-                        "Vertex AI batch_predict endpoint must contain a '/v1/' path segment to derive the status/cancel URL, got: "
+                        "Vertex AI batch_predict endpoint must contain a '/v1/' or '/v1beta<N>/' path segment to "
+                            + "derive the status/cancel URL, got: "
                             + predictEndpoint
                     );
                 }
-                String vertexBaseUrl = predictEndpoint.substring(0, v1Index + "/v1/".length());
+                String vertexBaseUrl = predictEndpoint.substring(0, vertexVersionMatcher.end());
                 url = isCancelAction ? vertexBaseUrl + "${parameters.name}:cancel" : vertexBaseUrl + "${parameters.name}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
