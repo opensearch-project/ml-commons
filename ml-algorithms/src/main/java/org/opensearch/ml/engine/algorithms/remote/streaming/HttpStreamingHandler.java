@@ -253,6 +253,16 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             try {
                 Map<String, Object> dataMap = gson.fromJson(data, Map.class);
 
+                // A prompt rejected by Vertex safety filters carries a promptFeedback.blockReason
+                // with no candidates and no finishReason. Without terminating here the completion
+                // sentinel below never fires and the client hangs waiting on the stream.
+                String blockReason = extractPath(dataMap, "$.promptFeedback.blockReason");
+                if (blockReason != null) {
+                    log.warn("Vertex blocked the prompt before generation. blockReason={}", blockReason);
+                    sendCompletionResponse(isStreamClosed, streamActionListener);
+                    return;
+                }
+
                 String content = extractPath(dataMap, "$.candidates[0].content.parts[0].text");
                 if (content != null && !content.isEmpty()) {
                     if (!firstTokenReceived.get()) {
@@ -266,6 +276,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                                 tenantId,
                                 timeToFirstToken
                             );
+                        AgentUtils.logTimeToFirstToken(modelId, tenantId, timeToFirstToken);
                         firstTokenReceived.set(true);
                     }
                     sendContentResponse(content, false, streamActionListener);
