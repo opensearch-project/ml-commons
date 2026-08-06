@@ -46,15 +46,23 @@ public class GoogleCredentialProviderTest {
     }
 
     @Test
-    public void validateTokenUri_acceptsGoogleEndpoints() {
+    public void validateTokenUri_acceptsOauth2Endpoint() {
         assertEquals(
             URI.create("https://oauth2.googleapis.com/token"),
             GoogleCredentialProvider.validateTokenUri("https://oauth2.googleapis.com/token")
         );
-        assertEquals(
-            URI.create("https://us-central1-aiplatform.googleapis.com/token"),
-            GoogleCredentialProvider.validateTokenUri("https://us-central1-aiplatform.googleapis.com/token")
-        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validateTokenUri_rejectsOtherGoogleApisHost() {
+        // token_uri is the OAuth2 token-mint endpoint; only oauth2.googleapis.com is a valid host.
+        // Other *.googleapis.com surfaces (e.g. aiplatform) must not receive the signed JWT.
+        GoogleCredentialProvider.validateTokenUri("https://us-central1-aiplatform.googleapis.com/token");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validateTokenUri_rejectsBareGoogleApisHost() {
+        GoogleCredentialProvider.validateTokenUri("https://googleapis.com/token");
     }
 
     @Test(expected = IllegalArgumentException.class)

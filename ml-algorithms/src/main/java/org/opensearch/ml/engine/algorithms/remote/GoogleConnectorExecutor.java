@@ -92,9 +92,10 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private StreamTransportService streamTransportService;
 
-    // Lazily built from the connector; injectable for tests.
+    // Lazily built from the connector; injectable for tests. volatile + double-checked locking so
+    // concurrent predicts don't race to build (and publish a partially-constructed) provider.
     @Setter
-    private GoogleCredentialProvider credentialProvider;
+    private volatile GoogleCredentialProvider credentialProvider;
 
     public GoogleConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -107,10 +108,17 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
     }
 
     GoogleCredentialProvider credentialProvider() {
-        if (credentialProvider == null) {
-            credentialProvider = GoogleCredentialProvider.fromConnector(connector);
+        GoogleCredentialProvider local = credentialProvider;
+        if (local == null) {
+            synchronized (this) {
+                local = credentialProvider;
+                if (local == null) {
+                    local = GoogleCredentialProvider.fromConnector(connector);
+                    credentialProvider = local;
+                }
+            }
         }
-        return credentialProvider;
+        return local;
     }
 
     @SuppressWarnings("removal")
