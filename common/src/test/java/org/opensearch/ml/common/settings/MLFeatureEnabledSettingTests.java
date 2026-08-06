@@ -50,11 +50,13 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                     MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
+                    MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -210,6 +212,36 @@ public class MLFeatureEnabledSettingTests {
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
         assertFalse(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Retention is opt-in: the kill switch defaults to false so nothing is deleted until an operator turns it on.
+        assertFalse(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.memory.retention_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionDynamicUpdate() {
+        // Default is false; construct disabled, then dynamically flip the kill switch on (a real change from the default).
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMemoryRetentionEnabled());
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_enabled", true).build());
+
+        assertTrue(setting.isMemoryRetentionEnabled());
     }
 
     @Test

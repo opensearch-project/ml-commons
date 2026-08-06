@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 13
+    "schema_version": 14
   },
   "properties": {
     "algorithm": {
@@ -64,6 +64,9 @@
       "type": "boolean"
     },
     "tenant_id": {
+      "type": "keyword"
+    },
+    "provisioned_by": {
       "type": "keyword"
     },
     "model_config": {

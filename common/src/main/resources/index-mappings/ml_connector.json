@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 4
+    "schema_version": 5
   },
   "properties": {
     "name": {
@@ -31,6 +31,9 @@
       "type": "flat_object"
     },
     "tenant_id": {
+      "type": "keyword"
+    },
+    "provisioned_by": {
       "type": "keyword"
     },
     "actions": {

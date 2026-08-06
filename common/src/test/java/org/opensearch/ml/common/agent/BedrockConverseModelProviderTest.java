@@ -76,6 +76,159 @@ public class BedrockConverseModelProviderTest {
         assertEquals(modelId, awsConnector.getParameters().get("model"));
         assertNotNull(awsConnector.getActions());
         assertEquals(1, awsConnector.getActions().size());
+        // Verify request body template contains inferenceConfig
+        String requestBody = awsConnector.getActions().get(0).getRequestBody();
+        assertTrue(requestBody.contains("inferenceConfig"));
+        assertTrue(requestBody.contains("${parameters.max_tokens:-4096}"));
+        assertTrue(requestBody.contains("${parameters.temperature_field:-}"));
+        // Verify temperature_field is set as a connector parameter (default when no top_p)
+        assertEquals(", \"temperature\": 1.0", awsConnector.getParameters().get("temperature_field"));
+    }
+
+    @Test
+    public void testCreateConnector_WithTemperature_SubstitutesToValidJson() {
+        // Arrange
+        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
+        modelParameters.put("max_tokens", "10");
+        modelParameters.put("temperature", "0.5");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert — perform actual template substitution like production code does
+        AwsConnector awsConnector = (AwsConnector) connector;
+        String requestBody = awsConnector.getActions().get(0).getRequestBody();
+        Map<String, String> params = new HashMap<>(awsConnector.getParameters());
+        params.put("system_prompt", "You are helpful.");
+        params.put("body", "{\"role\":\"user\",\"content\":[{\"text\":\"hi\"}]}");
+        org.apache.commons.text.StringSubstitutor sub = new org.apache.commons.text.StringSubstitutor(params, "${parameters.", "}");
+        sub.setEnableUndefinedVariableException(false);
+        String resolved = sub.replace(requestBody);
+
+        // Parse and verify inferenceConfig
+        assertTrue(resolved.contains("\"inferenceConfig\""));
+        assertTrue(resolved.contains("\"maxTokens\": 10"));
+        assertTrue(resolved.contains("\"temperature\": 0.5"));
+        assertFalse(resolved.contains("topP"));
+    }
+
+    @Test
+    public void testCreateConnector_WithTopPOnly_SubstitutesToValidJson() {
+        // Arrange — top_p without temperature (mutex behavior)
+        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
+        modelParameters.put("max_tokens", "50");
+        modelParameters.put("top_p", "0.9");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        AwsConnector awsConnector = (AwsConnector) connector;
+        assertNotNull(awsConnector.getParameters().get("top_p_field"));
+        assertNull(awsConnector.getParameters().get("temperature_field"));
+
+        // Perform substitution and verify temperature is NOT present (mutex)
+        String requestBody = awsConnector.getActions().get(0).getRequestBody();
+        Map<String, String> params = new HashMap<>(awsConnector.getParameters());
+        params.put("system_prompt", "You are helpful.");
+        params.put("body", "{\"role\":\"user\",\"content\":[{\"text\":\"hi\"}]}");
+        org.apache.commons.text.StringSubstitutor sub = new org.apache.commons.text.StringSubstitutor(params, "${parameters.", "}");
+        sub.setEnableUndefinedVariableException(false);
+        String resolved = sub.replace(requestBody);
+
+        assertTrue(resolved.contains("\"maxTokens\": 50"));
+        assertTrue(resolved.contains("\"topP\": 0.9"));
+        assertFalse(resolved.contains("\"temperature\""));
+    }
+
+    @Test
+    public void testCreateConnector_WithBothTopPAndTemperature_TopPWins() {
+        // Arrange — when both are provided, top_p takes priority, temperature is dropped
+        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
+        modelParameters.put("max_tokens", "10");
+        modelParameters.put("temperature", "0.5");
+        modelParameters.put("top_p", "0.9");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert — temperature_field should NOT be set (top_p overrides)
+        AwsConnector awsConnector = (AwsConnector) connector;
+        assertNotNull(awsConnector.getParameters().get("top_p_field"));
+        assertNull(awsConnector.getParameters().get("temperature_field"));
+
+        // Verify resolved JSON has topP but not temperature
+        String requestBody = awsConnector.getActions().get(0).getRequestBody();
+        Map<String, String> params = new HashMap<>(awsConnector.getParameters());
+        params.put("system_prompt", "You are helpful.");
+        params.put("body", "{\"role\":\"user\",\"content\":[{\"text\":\"hi\"}]}");
+        org.apache.commons.text.StringSubstitutor sub = new org.apache.commons.text.StringSubstitutor(params, "${parameters.", "}");
+        sub.setEnableUndefinedVariableException(false);
+        String resolved = sub.replace(requestBody);
+
+        assertTrue(resolved.contains("\"topP\": 0.9"));
+        assertFalse(resolved.contains("\"temperature\""));
+    }
+
+    @Test
+    public void testCreateConnector_WithoutTopP_NoTopPField() {
+        // Arrange
+        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
+        modelParameters.put("max_tokens", "100");
+
+        // Act
+        Connector connector = provider.createConnector(modelId, credential, modelParameters);
+
+        // Assert
+        AwsConnector awsConnector = (AwsConnector) connector;
+        assertNull(awsConnector.getParameters().get("top_p_field"));
+        // temperature_field should be set with default
+        assertEquals(", \"temperature\": 1.0", awsConnector.getParameters().get("temperature_field"));
+    }
+
+    @Test
+    public void testCreateConnector_InvalidNumericParameter_ThrowsException() {
+        // Arrange
+        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("top_p", "0.9\", \"malicious\": \"value");
+
+        // Act & Assert
+        try {
+            provider.createConnector(modelId, credential, modelParameters);
+            fail("Should throw IllegalArgumentException for invalid numeric parameter");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("top_p"));
+            assertTrue(e.getMessage().contains("must be a valid number"));
+        }
     }
 
     @Test

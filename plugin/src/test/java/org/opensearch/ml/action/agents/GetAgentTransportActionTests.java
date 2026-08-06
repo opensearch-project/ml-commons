@@ -339,7 +339,8 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             isHidden,
             null, // contextManagementName
             null, // contextManagement
-            tenantId
+            tenantId,
+            null
         );
 
         XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
@@ -454,6 +455,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             Instant.EPOCH,
             "test",
             false,
+            null,
             null,
             null,
             null

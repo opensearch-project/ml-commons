@@ -119,52 +119,53 @@ public class MemoryProcessingService {
                 isOverride ? "strategy-override" : "container-config"
             );
 
-        Map<String, String> stringParameters = new HashMap<>();
-
-        // Determine default prompt based on strategy type
-        String defaultPrompt;
-        MemoryStrategyType type = strategy.getType();
-        if (type == MemoryStrategyType.USER_PREFERENCE) {
-            defaultPrompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
-        } else if (type == MemoryStrategyType.SUMMARY) {
-            defaultPrompt = SUMMARY_FACTS_EXTRACTION_PROMPT;
-        } else {
-            defaultPrompt = SEMANTIC_FACTS_EXTRACTION_PROMPT;
-        }
-
-        if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
-            stringParameters.put("system_prompt", defaultPrompt);
-        } else {
-            Object customPrompt = strategy.getStrategyConfig().get("system_prompt");
-            if (customPrompt == null || customPrompt.toString().isBlank()) {
-                stringParameters.put("system_prompt", defaultPrompt);
-            } else if (!validatePromptFormat(customPrompt.toString())) {
-                log.error("Invalid custom prompt format - must specify JSON response format with 'facts' array");
-                listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
-                return;
-            } else {
-                stringParameters.put("system_prompt", customPrompt.toString()); // use custom strategy
-            }
-        }
-
-        try {
-            // Always add JSON enforcement message for fact extraction
-            String enforcementMsg = (strategy.getType() == MemoryStrategyType.USER_PREFERENCE)
-                ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
-                : JSON_ENFORCEMENT_MESSAGE;
-            MessageInput enforcementMessage = getMessageInput(enforcementMsg);
-            // Create mutable copy to avoid UnsupportedOperationException
-            List<MessageInput> mutableMessages = new ArrayList<>(messages);
-            mutableMessages.add(enforcementMessage);
-            String conversationJson = serializeMessagesToJson(mutableMessages);
-            String userPrompt = "Analyze the following conversation and extract information:\n```json\n" + conversationJson + "\n```";
-            stringParameters.put("user_prompt", userPrompt);
-        } catch (Exception e) {
-            log.error("Failed to build messages JSON", e);
-            listener.onResponse(new ArrayList<>());
+        String systemPrompt = resolveSystemPrompt(strategy, listener);
+        if (systemPrompt == null) {
             return;
         }
 
+        Map<String, String> stringParameters = new HashMap<>();
+        stringParameters.put("system_prompt", systemPrompt);
+
+        memoryContainerHelper.getStructuredOutputParameters(llmModelId, ActionListener.wrap(structuredOutputParams -> {
+            String structuredOutputResultPath = null;
+            try {
+                if (!structuredOutputParams.isEmpty()) {
+                    Map<String, String> params = new HashMap<>(structuredOutputParams);
+                    structuredOutputResultPath = params.remove("_structured_output_result_path");
+                    stringParameters.putAll(params);
+                    stringParameters.put("user_prompt", buildUserPrompt(serializeMessagesToJson(messages)));
+                } else {
+                    stringParameters.put("user_prompt", buildUserPromptWithEnforcement(messages, strategy.getType()));
+                }
+            } catch (Exception e) {
+                log.error("Failed to build messages JSON", e);
+                listener.onResponse(new ArrayList<>());
+                return;
+            }
+            sendFactExtractionRequest(tenantId, llmModelId, stringParameters, structuredOutputResultPath, strategy, memoryConfig, listener);
+        }, e -> {
+            log.warn("Unexpected error fetching structured output parameters, falling back to prompt enforcement", e);
+            try {
+                stringParameters.put("user_prompt", buildUserPromptWithEnforcement(messages, strategy.getType()));
+            } catch (Exception buildEx) {
+                log.error("Failed to build messages JSON", buildEx);
+                listener.onResponse(new ArrayList<>());
+                return;
+            }
+            sendFactExtractionRequest(tenantId, llmModelId, stringParameters, null, strategy, memoryConfig, listener);
+        }));
+    }
+
+    private void sendFactExtractionRequest(
+        String tenantId,
+        String llmModelId,
+        Map<String, String> stringParameters,
+        String structuredOutputResultPath,
+        MemoryStrategy strategy,
+        MemoryConfiguration memoryConfig,
+        ActionListener<List<String>> listener
+    ) {
         MLInput mlInput = MLInput
             .builder()
             .algorithm(FunctionName.REMOTE)
@@ -181,12 +182,10 @@ public class MemoryProcessingService {
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
             try {
                 log.debug("Received LLM response, parsing facts...");
-                MLOutput mlOutput = response.getOutput();
-                List<String> facts = parseFactsFromLLMResponse(strategy, memoryConfig, mlOutput);
+                List<String> facts = parseFactsFromLLMResponse(strategy, memoryConfig, structuredOutputResultPath, response.getOutput());
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
-                // Preserve client errors (4XX) with their detailed messages
                 if (e instanceof OpenSearchException) {
                     OpenSearchException osException = (OpenSearchException) e;
                     if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
@@ -194,7 +193,6 @@ public class MemoryProcessingService {
                         return;
                     }
                 }
-                // Wrap server errors and unexpected exceptions
                 log.error("Failed to parse facts from LLM response", e);
                 listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }
@@ -202,6 +200,44 @@ public class MemoryProcessingService {
             log.error("Failed to call LLM for fact extraction", e);
             listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }));
+    }
+
+    private String resolveSystemPrompt(MemoryStrategy strategy, ActionListener<List<String>> listener) {
+        String defaultPrompt = getDefaultPromptForStrategy(strategy.getType());
+        if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
+            return defaultPrompt;
+        }
+        Object customPrompt = strategy.getStrategyConfig().get("system_prompt");
+        if (customPrompt == null || customPrompt.toString().isBlank()) {
+            return defaultPrompt;
+        }
+        if (!validatePromptFormat(customPrompt.toString())) {
+            log.error("Invalid custom prompt format - must specify JSON response format with 'facts' array");
+            listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
+            return null;
+        }
+        return customPrompt.toString();
+    }
+
+    private String getDefaultPromptForStrategy(MemoryStrategyType type) {
+        if (type == MemoryStrategyType.USER_PREFERENCE)
+            return USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+        if (type == MemoryStrategyType.SUMMARY)
+            return SUMMARY_FACTS_EXTRACTION_PROMPT;
+        return SEMANTIC_FACTS_EXTRACTION_PROMPT;
+    }
+
+    private String buildUserPromptWithEnforcement(List<MessageInput> messages, MemoryStrategyType type) throws IOException {
+        String enforcementMsg = (type == MemoryStrategyType.USER_PREFERENCE)
+            ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
+            : JSON_ENFORCEMENT_MESSAGE;
+        List<MessageInput> mutableMessages = new ArrayList<>(messages);
+        mutableMessages.add(getMessageInput(enforcementMsg));
+        return buildUserPrompt(serializeMessagesToJson(mutableMessages));
+    }
+
+    private String buildUserPrompt(String conversationJson) {
+        return "Analyze the following conversation and extract information:\n```json\n" + conversationJson + "\n```";
     }
 
     private static MessageInput getMessageInput(String userPrompt) {
@@ -308,7 +344,12 @@ public class MemoryProcessingService {
         }
     }
 
-    private List<String> parseFactsFromLLMResponse(MemoryStrategy strategy, MemoryConfiguration memoryConfig, MLOutput mlOutput) {
+    private List<String> parseFactsFromLLMResponse(
+        MemoryStrategy strategy,
+        MemoryConfiguration memoryConfig,
+        String structuredOutputResultPath,
+        MLOutput mlOutput
+    ) {
         List<String> facts = new ArrayList<>();
 
         if (!(mlOutput instanceof ModelTensorOutput)) {
@@ -330,7 +371,9 @@ public class MemoryProcessingService {
 
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
-            String llmResultPath = memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
+            String llmResultPath = structuredOutputResultPath != null
+                ? structuredOutputResultPath
+                : memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
             try {
                 Object filterdResult = JsonPath.read(dataMap, llmResultPath);
                 String llmResult = null;

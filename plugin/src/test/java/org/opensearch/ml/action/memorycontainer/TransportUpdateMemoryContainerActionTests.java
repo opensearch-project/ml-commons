@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateResponse;
@@ -39,6 +41,8 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerRequest;
@@ -97,6 +101,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
         // Setup thread context
         when(client.threadPool()).thenReturn(threadPool);
@@ -141,6 +146,37 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         Exception exception = captor.getValue();
         assertTrue(exception instanceof OpenSearchStatusException);
         assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exception).status());
+    }
+
+    public void testDoExecuteWithRetentionDisabledRejectsRetentionPolicyUpdate() {
+        // Retention feature disabled, but update request carries a non-empty retention_policy
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        Map<MemoryType, RetentionRule> retentionPolicy = new EnumMap<>(MemoryType.class);
+        retentionPolicy.put(MemoryType.SESSIONS, RetentionRule.builder().retentionDays(30).build());
+        MemoryConfiguration updateConfig = MemoryConfiguration.builder().retentionPolicy(retentionPolicy).build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().configuration(updateConfig).build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId("container-id")
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exception).status());
+        assertEquals(
+            "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting plugins.ml_commons.memory.retention_enabled",
+            exception.getMessage()
+        );
     }
 
     public void testDoExecuteSuccess() {
@@ -226,6 +262,36 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception instanceof OpenSearchStatusException);
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
         assertTrue(exception.getMessage().contains("Internal server error"));
+    }
+
+    // Regression for BD01: updating a container that does not exist must surface the underlying 404 rather than
+    // being masked as a blanket 500. The get-container step fails with a status-carrying exception, which the
+    // failure handler must forward unchanged.
+    public void testDoExecuteWhenGetContainerFails_PreservesNotFoundStatus() {
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("updated-name").build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId("nonexistent-container-id")
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener
+                .onFailure(new OpenSearchStatusException("Memory container not found: nonexistent-container-id", RestStatus.NOT_FOUND));
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(exception));
+        assertTrue(exception.getMessage().contains("Memory container not found"));
     }
 
     public void testDoExecuteWhenAccessDenied() {
@@ -411,6 +477,89 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener).onResponse(updateResponse);
     }
 
+    public void testUpdateStrategiesAndRetentionTogether_RetentionNotDropped() {
+        String containerId = "test-container-id";
+
+        List<MemoryStrategy> existingStrategies = new ArrayList<>();
+        existingStrategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("llm-123")
+            .embeddingModelId("embedding-model-123")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(384)
+            .strategies(existingStrategies)
+            .build();
+
+        // Update BOTH strategies and retention_policy in one request — retention must survive the strategy-rebuild branch.
+        MemoryStrategy updateStrategy = MemoryStrategy.builder().id("semantic_123").enabled(false).build();
+        Map<MemoryType, RetentionRule> retentionPolicy = new EnumMap<>(MemoryType.class);
+        retentionPolicy.put(MemoryType.SESSIONS, RetentionRule.builder().retentionDays(30).build());
+        MemoryConfiguration updateConfig = MemoryConfiguration
+            .builder()
+            .strategies(Arrays.asList(updateStrategy))
+            .retentionPolicy(retentionPolicy)
+            .build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().configuration(updateConfig).build();
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(updateResponse);
+        // The merged config (mutated in place) must retain the retention_policy sent alongside strategies.
+        assertNotNull("retention_policy must not be dropped on a combined strategy+retention update", config.getRetentionPolicy());
+        assertTrue(config.getRetentionPolicy().containsKey(MemoryType.SESSIONS));
+        assertEquals(30, config.getRetentionPolicy().get(MemoryType.SESSIONS).getRetentionDays().intValue());
+    }
+
     public void testUpdateStrategies_AddNewStrategy() {
         String containerId = "test-container-id";
 
@@ -566,9 +715,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener).onFailure(captor.capture());
 
         Exception exception = captor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
-        assertTrue(exception.getMessage().contains("Internal server error"));
+        // A non-existent strategy id is a 404, and must surface as such instead of a masked 500.
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(exception));
+        assertTrue(exception.getMessage().contains("nonexistent_999"));
     }
 
     public void testUpdateStrategies_CannotChangeType() {
@@ -644,9 +793,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener).onFailure(captor.capture());
 
         Exception exception = captor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
-        assertTrue(exception.getMessage().contains("Internal server error"));
+        // Changing a strategy type is a client validation error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception));
+        assertTrue(exception.getMessage().contains("Cannot change strategy type"));
     }
 
     public void testUpdateStrategies_PartialFieldUpdate() {
@@ -1006,9 +1155,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
-        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
+        // Missing-model validation is a client error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertTrue(captor.getValue().getMessage().contains("Strategies require"));
     }
 
     public void testUpdateContainer_AddStrategyWithOnlyLlm_ShouldFail() {
@@ -1051,9 +1200,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
-        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
+        // Missing-model validation is a client error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertTrue(captor.getValue().getMessage().contains("Strategies require"));
     }
 
     public void testUpdateContainer_ChangeEmbeddingModel_ShouldFail() {
@@ -1110,9 +1259,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
-        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
+        // Changing embedding config once strategies exist is a client error -> 400, not a masked 500.
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertTrue(captor.getValue().getMessage().contains("Cannot change embedding configuration"));
     }
 
     public void testUpdateContainer_SameEmbeddingValues_ShouldSucceed() {
@@ -2160,9 +2309,12 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         action.doExecute(task, request, listener);
 
-        // Verify failure - history index creation should fail
-        verify(listener).onFailure(any(Exception.class));
+        // Verify failure - history index creation should fail, and an unexpected RuntimeException must be
+        // sanitized to a generic 500 (no server-side detail leaked to the client).
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
         verify(listener, never()).onResponse(any());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(captor.getValue()));
     }
 
     public void testUpdateContainer_TransitionToStrategies_LongTermIndexCreationFails() {
@@ -2278,9 +2430,12 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         action.doExecute(task, request, listener);
 
-        // Verify failure - long-term index creation should fail
-        verify(listener).onFailure(any(Exception.class));
+        // Verify failure - long-term index creation should fail, and an unexpected RuntimeException must be
+        // sanitized to a generic 500 (no server-side detail leaked to the client).
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
         verify(listener, never()).onResponse(any());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(captor.getValue()));
     }
 
 }

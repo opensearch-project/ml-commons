@@ -23,6 +23,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
@@ -32,6 +33,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
 
 import java.util.Set;
@@ -84,13 +86,15 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_EXECUTE_TOOL_ENABLED,
                             ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                             ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
+                            ML_COMMONS_MEMORY_RETENTION_ENABLED,
                             ML_COMMONS_MCP_CONNECTOR_ENABLED,
                             ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                             ML_COMMONS_STREAM_ENABLED,
                             ML_COMMONS_MAX_JSON_SIZE,
                             ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
                             ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
-                            ML_COMMONS_AG_UI_ENABLED
+                            ML_COMMONS_AG_UI_ENABLED,
+                            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
                         )
                 )
             );

@@ -9,7 +9,12 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
@@ -17,6 +22,10 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
@@ -53,10 +62,13 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -76,15 +88,36 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MemoryContainerHelper {
 
+    // URL host/path tokens used to identify LLM providers for structured output schema selection.
+    // Each constant is a single host label or path segment — matched with exact equality after
+    // splitting on '.' (host) or '/' (path), so "my-openai-proxy.internal" does not match "openai".
+    // Keeping them as named constants makes the precedence order in schemaForUrl explicit.
+    private static final String URL_TOKEN_GOOGLEAPIS = "googleapis";
+    private static final String URL_TOKEN_COHERE = "cohere";
+    private static final String URL_TOKEN_V2_PATH_SEGMENT = "v2";
+    private static final String URL_TOKEN_OPENAI = "openai";
+    private static final String URL_TOKEN_DEEPSEEK = "deepseek";
+    // Multi-segment path — used with path.contains() on a query-stripped path, which is safe.
+    private static final String URL_TOKEN_OPENAI_COMPAT_PATH = "/v1/chat/completions";
+    private static final String URL_TOKEN_AMAZONAWS = "amazonaws";
+    private static final String URL_TOKEN_CONVERSE_SEGMENT = "converse";
+
+    // Captures (1) host and (2) path from a URL, stopping before '?' or '#'.
+    // Handles connector template URLs such as https://${parameters.endpoint}/openai/...
+    // where the host may be a placeholder — in that case path matching takes over.
+    private static final Pattern URL_PARTS = Pattern.compile("^[^:]+://([^/?#]*)(/?[^?#]*)");
+
     Client client;
     SdkClient sdkClient;
     NamedXContentRegistry xContentRegistry;
+    MLModelManager modelManager;
 
     @Inject
-    public MemoryContainerHelper(Client client, SdkClient sdkClient, NamedXContentRegistry xContentRegistry) {
+    public MemoryContainerHelper(Client client, SdkClient sdkClient, NamedXContentRegistry xContentRegistry, MLModelManager modelManager) {
         this.client = client;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
+        this.modelManager = modelManager;
     }
 
     /**
@@ -495,6 +528,125 @@ public class MemoryContainerHelper {
             log.error("Failed to search for containers with prefix: " + indexPrefix, e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Resolves the structured output injection parameters for the given model asynchronously.
+     * Looks up the model's connector, checks its PREDICT action's {@code supports_structured_output}
+     * flag, then derives the provider from the connector URL to select the correct injection
+     * parameter and schema constant. Returns an empty map if the connector does not support native
+     * structured output or if the lookup fails; callers should fall back to prompt enforcement.
+     */
+    public void getStructuredOutputParameters(String modelId, ActionListener<Map<String, String>> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            modelManager.getModel(modelId, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
+                Connector connector = mlModel.getConnector();
+                if (connector != null) {
+                    listener.onResponse(schemaForConnector(connector));
+                } else if (mlModel.getConnectorId() != null) {
+                    // getConnector stashes its own ThreadContext internally, so this secondary
+                    // async call is safe even though the outer stashed context has already been
+                    // restored by the runBefore above.
+                    modelManager
+                        .getConnector(
+                            mlModel.getConnectorId(),
+                            null,
+                            ActionListener.wrap(c -> listener.onResponse(schemaForConnector(c)), e -> {
+                                log.warn("Failed to fetch connector {} for structured output detection", mlModel.getConnectorId(), e);
+                                listener.onResponse(Map.of());
+                            })
+                        );
+                } else {
+                    listener.onResponse(Map.of());
+                }
+            }, e -> {
+                log.warn("Failed to fetch model {} for structured output detection, falling back to prompt enforcement", modelId, e);
+                listener.onResponse(Map.of());
+            }), context::restore));
+        }
+    }
+
+    private Map<String, String> schemaForConnector(Connector connector) {
+        if (connector.getActions() == null) {
+            return Map.of();
+        }
+        // first matching PREDICT action wins; assumes one PREDICT per connector for fact extraction
+        return connector
+            .getActions()
+            .stream()
+            .filter(a -> ConnectorAction.ActionType.PREDICT.equals(a.getActionType()) && a.isSupportsStructuredOutput())
+            .findFirst()
+            .map(a -> schemaForUrl(a.getUrl()))
+            .orElse(Map.of());
+    }
+
+    private Map<String, String> schemaForUrl(String url) {
+        if (url == null) {
+            return Map.of();
+        }
+        Matcher m = URL_PARTS.matcher(url);
+        if (!m.find()) {
+            return Map.of();
+        }
+        // Match against host and path only — never against query string, credentials, or fragment —
+        // so a query parameter or anchor containing a provider name can't cause a false match.
+        // hostHasSegment / pathHasSegment use exact label/segment equality after splitting on
+        // '.' or '/', so "my-openai-proxy.internal" does not match the "openai" token.
+        String host = m.group(1).toLowerCase(Locale.ROOT);
+        String path = m.group(2).toLowerCase(Locale.ROOT);
+
+        // Bedrock Converse: tool use forces constrained decoding via extract_facts.
+        // The tool response arrives at content[0].toolUse.input, so a result path override is included.
+        if (hostHasSegment(host, URL_TOKEN_AMAZONAWS) && pathHasSegment(path, URL_TOKEN_CONVERSE_SEGMENT)) {
+            return Map
+                .of(
+                    "_toolConfig_json",
+                    FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON,
+                    "_structured_output_result_path",
+                    BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH
+                );
+        }
+        if (hostHasSegment(host, URL_TOKEN_GOOGLEAPIS)) {
+            return Map.of("_generationConfig_additions_json", FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON);
+        }
+        // Cohere structured output (json_schema type) requires the v2 Chat API (/v2/chat).
+        // The legacy /v1/chat endpoint only supports json_object and ignores json_schema.
+        if (hostHasSegment(host, URL_TOKEN_COHERE) && pathHasSegment(path, URL_TOKEN_V2_PATH_SEGMENT)) {
+            return Map.of("_response_format_json", FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON);
+        }
+        // hostHasSegment(host, URL_TOKEN_OPENAI) catches api.openai.com and similar.
+        // pathHasSegment(path, URL_TOKEN_OPENAI) is specifically for Azure, whose connector URL uses
+        // a template host (${parameters.endpoint}), so "openai" only appears in the path
+        // (/openai/deployments/...) rather than the host.
+        // URL_TOKEN_OPENAI_COMPAT_PATH ("/v1/chat/completions") catches Ollama, vLLM, LM Studio,
+        // and other OpenAI-compatible servers whose hostnames contain neither "openai" nor "deepseek".
+        // supports_structured_output must be explicitly set to true on the connector action
+        // (requires admin access), so an unintended match only results in an extra response_format
+        // field being sent. Note: if the upstream provider rejects the extra field with a 4xx,
+        // that surfaces as a failed predict call, not a silent fallback.
+        if (hostHasSegment(host, URL_TOKEN_OPENAI)
+            || pathHasSegment(path, URL_TOKEN_OPENAI)
+            || hostHasSegment(host, URL_TOKEN_DEEPSEEK)
+            || path.contains(URL_TOKEN_OPENAI_COMPAT_PATH)) {
+            return Map.of("_response_format_json", FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON);
+        }
+        return Map.of();
+    }
+
+    private static boolean hostHasSegment(String host, String segment) {
+        for (String label : host.split("\\.", -1)) {
+            if (label.equals(segment))
+                return true;
+        }
+        return false;
+    }
+
+    private static boolean pathHasSegment(String path, String segment) {
+        for (String seg : path.split("/", -1)) {
+            if (seg.equals(segment))
+                return true;
+        }
+        return false;
     }
 
     /**

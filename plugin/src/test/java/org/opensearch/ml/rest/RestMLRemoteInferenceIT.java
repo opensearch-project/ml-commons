@@ -6,7 +6,12 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -14,6 +19,7 @@ import java.util.function.Consumer;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -25,6 +31,8 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
+import com.google.gson.Gson;
+import com.sun.net.httpserver.HttpServer;
 
 public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
@@ -1109,5 +1117,125 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         String taskId = (String) responseMap.get("task_id");
         logger.info("task ID created: {}", taskId);
         return taskId;
+    }
+
+    @Test
+    public void testRuntimeParameterSubstitutionInHeaders() throws IOException, InterruptedException {
+        Assume
+            .assumeFalse(
+                "Containerized node cannot reach the test-JVM loopback echo server",
+                "docker-cluster".equals(System.getProperty("tests.clustername"))
+            );
+
+        HttpServer echoServer = startHeaderEchoServer();
+        try {
+            String endpoint = "127.0.0.1:" + echoServer.getAddress().getPort();
+            updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^http://127\\.0\\.0\\.1:.*$"));
+            updateClusterSettings("plugins.ml_commons.connector.private_ip_enabled", true);
+
+            String connectorWithDynamicHeaders = "{\n"
+                + "\"name\": \"Test Connector with Dynamic Headers\",\n"
+                + "\"description\": \"Connector to test runtime parameter substitution\",\n"
+                + "\"version\": 1,\n"
+                + "\"protocol\": \"http\",\n"
+                + "\"parameters\": {\n"
+                + "    \"endpoint\": \""
+                + endpoint
+                + "\",\n"
+                + "    \"model\": \"test-model\"\n"
+                + "  },\n"
+                + "\"credential\": {"
+                + "    \"test_api_key\": \"test\"\n"
+                + "  },\n"
+                + "\"actions\": [\n"
+                + "    {\n"
+                + "      \"action_type\": \"predict\",\n"
+                + "      \"method\": \"POST\",\n"
+                + "      \"url\": \"http://${parameters.endpoint}/post\",\n"
+                + "      \"headers\": {\n"
+                + "        \"X-Custom-Request\": \"${parameters.request_id}\",\n"
+                + "        \"X-Model\": \"${parameters.model}\"\n"
+                + "      },\n"
+                + "      \"request_body\": \"{\\\"input\\\": \\\"${parameters.input}\\\"}\"\n"
+                + "    }\n"
+                + "  ]\n"
+                + "}";
+
+            Response response = createConnector(connectorWithDynamicHeaders);
+            Map responseMap = parseResponseToMap(response);
+            String connectorId = (String) responseMap.get("connector_id");
+            assertNotNull(connectorId);
+
+            response = registerRemoteModel("Test Model with Dynamic Headers", connectorId);
+            responseMap = parseResponseToMap(response);
+            String taskId = (String) responseMap.get("task_id");
+            waitForTask(taskId, MLTaskState.COMPLETED);
+
+            response = getTask(taskId);
+            responseMap = parseResponseToMap(response);
+            String modelId = (String) responseMap.get("model_id");
+
+            response = deployRemoteModel(modelId);
+            responseMap = parseResponseToMap(response);
+            taskId = (String) responseMap.get("task_id");
+            waitForTask(taskId, MLTaskState.COMPLETED);
+
+            String predictInput = "{\n"
+                + "  \"parameters\": {\n"
+                + "      \"request_id\": \"req-integration-test-12345\",\n"
+                + "      \"input\": \"test input\"\n"
+                + "  }\n"
+                + "}";
+
+            response = predictRemoteModel(modelId, predictInput);
+            responseMap = parseResponseToMap(response);
+
+            List inferenceResults = (List) responseMap.get("inference_results");
+            assertNotNull(inferenceResults);
+            assertFalse(inferenceResults.isEmpty());
+
+            Map result = (Map) inferenceResults.get(0);
+            List output = (List) result.get("output");
+            assertNotNull(output);
+
+            Map outputData = (Map) output.get(0);
+            Map dataAsMap = (Map) outputData.get("dataAsMap");
+            assertNotNull(dataAsMap);
+
+            Map headers = (Map) dataAsMap.get("headers");
+            assertNotNull("echo response should contain headers", headers);
+
+            String requestId = (String) headers.get("x-custom-request");
+            String model = (String) headers.get("x-model");
+
+            assertEquals("req-integration-test-12345", requestId);
+            assertEquals("test-model", model);
+        } finally {
+            echoServer.stop(0);
+            updateClusterSettings("plugins.ml_commons.connector.private_ip_enabled", null);
+            updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", null);
+        }
+    }
+
+    /**
+     * Loopback HTTP server that echoes request headers as JSON, replacing the flaky httpbin.org
+     * dependency. Responds to POST /post with {"headers": {"name": "value", ...}}.
+     */
+    private HttpServer startHeaderEchoServer() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        server.createContext("/post", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            Map<String, String> echoedHeaders = new HashMap<>();
+            for (String name : exchange.getRequestHeaders().keySet()) {
+                echoedHeaders.put(name.toLowerCase(Locale.ROOT), exchange.getRequestHeaders().getFirst(name));
+            }
+            byte[] body = new Gson().toJson(Map.of("headers", echoedHeaders)).getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        return server;
     }
 }

@@ -8,6 +8,9 @@ package org.opensearch.ml.common.httpclient;
 import static org.opensearch.secure_sm.AccessController.doPrivileged;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.SdkHttpConfigurationOption;
@@ -24,7 +27,15 @@ public class MLHttpClientFactory {
         int maxConnections,
         boolean connectorPrivateIpEnabled
     ) {
-        return getAsyncHttpClient(connectionTimeout, readTimeout, maxConnections, connectorPrivateIpEnabled, false);
+        return getAsyncHttpClient(
+            connectionTimeout,
+            readTimeout,
+            maxConnections,
+            connectorPrivateIpEnabled,
+            Collections.emptyList(),
+            Collections.emptyList(),
+            false
+        );
     }
 
     public static SdkAsyncHttpClient getAsyncHttpClient(
@@ -32,6 +43,8 @@ public class MLHttpClientFactory {
         Duration readTimeout,
         int maxConnections,
         boolean connectorPrivateIpEnabled,
+        List<Pattern> connectorTrustedPrivateEndpoints,
+        List<Pattern> connectorRestrictedIpPatterns,
         boolean skipSslVerification
     ) {
         return doPrivileged(() -> {
@@ -58,7 +71,12 @@ public class MLHttpClientFactory {
                 .buildWithDefaults(
                     AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, skipSslVerification).build()
                 );
-            return new MLValidatableAsyncHttpClient(delegate, connectorPrivateIpEnabled);
+            return new MLValidatableAsyncHttpClient(
+                delegate,
+                connectorPrivateIpEnabled,
+                connectorTrustedPrivateEndpoints,
+                connectorRestrictedIpPatterns
+            );
         });
     }
 }

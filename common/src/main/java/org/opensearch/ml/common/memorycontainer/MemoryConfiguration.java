@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_HISTORY_FIELD;
@@ -23,6 +24,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_PREFIX_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RETENTION_POLICY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
@@ -32,6 +34,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,7 +65,6 @@ import lombok.extern.log4j.Log4j2;
  */
 @Getter
 @Setter
-@Builder
 @EqualsAndHashCode
 @Log4j2
 public class MemoryConfiguration implements ToXContentObject, Writeable {
@@ -71,21 +73,23 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private String embeddingModelId;
     private String llmId;
     private Integer dimension;
-    @Builder.Default
-    private Integer maxInferSize = MAX_INFER_SIZE_DEFAULT_VALUE;
+    private Integer maxInferSize;
     private List<MemoryStrategy> strategies;
-    @Builder.Default
-    private Map<String, Map<String, Object>> indexSettings = new HashMap<>();
-    @Builder.Default
-    private Map<String, Object> parameters = new HashMap<>();
-    @Builder.Default
-    private boolean disableHistory = false;
-    @Builder.Default
-    private boolean disableSession = false;
-    @Builder.Default
-    private boolean useSystemIndex = true;
+    private Map<String, Map<String, Object>> indexSettings;
+    private Map<String, Object> parameters;
+    private boolean disableHistory;
+    private boolean disableSession;
+    private boolean useSystemIndex;
     private String tenantId;
+    private Map<MemoryType, RetentionRule> retentionPolicy;
+    /**
+     * True when the user explicitly set "retention_policy": null (opt-out of retention).
+     * Persisted as an explicit null field in toXContent() so the opt-out round-trips through
+     * the container index and survives partial-update merges; distinct from field absence.
+     */
+    private boolean retentionPolicyExplicitlyNull = false;
 
+    @Builder
     public MemoryConfiguration(
         String indexPrefix,
         FunctionName embeddingModelType,
@@ -96,16 +100,23 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         List<MemoryStrategy> strategies,
         Map<String, Map<String, Object>> indexSettings,
         Map<String, Object> parameters,
-        boolean disableHistory,
-        boolean disableSession,
-        boolean useSystemIndex,
-        String tenantId
+        Boolean disableHistory,
+        Boolean disableSession,
+        Boolean useSystemIndex,
+        String tenantId,
+        Map<MemoryType, RetentionRule> retentionPolicy
     ) {
+        // Apply defaults for Boolean parameters
+        boolean effectiveUseSystemIndex = (useSystemIndex != null) ? useSystemIndex : true;
+        boolean effectiveDisableHistory = (disableHistory != null) ? disableHistory : false;
+        boolean effectiveDisableSession = (disableSession != null) ? disableSession : false;
+
         // Validate first
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
+        validateRetentionPolicy(retentionPolicy);
 
         // Assign values after validation
-        this.indexPrefix = buildIndexPrefix(indexPrefix, useSystemIndex);
+        this.indexPrefix = buildIndexPrefix(indexPrefix, effectiveUseSystemIndex);
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmId = llmId;
@@ -123,10 +134,11 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (parameters != null && !parameters.isEmpty()) {
             this.parameters.putAll(parameters);
         }
-        this.disableHistory = disableHistory;
-        this.disableSession = disableSession;
-        this.useSystemIndex = useSystemIndex;
+        this.disableHistory = effectiveDisableHistory;
+        this.disableSession = effectiveDisableSession;
+        this.useSystemIndex = effectiveUseSystemIndex;
         this.tenantId = tenantId;
+        this.retentionPolicy = retentionPolicy;
     }
 
     private String buildIndexPrefix(String indexPrefix, boolean useSystemIndex) {
@@ -168,6 +180,18 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.disableSession = input.readBoolean();
         this.useSystemIndex = input.readBoolean();
         this.tenantId = input.readOptionalString();
+        if (input.getVersion().onOrAfter(VERSION_3_8_0)) {
+            if (input.readBoolean()) {
+                int size = input.readVInt();
+                this.retentionPolicy = new EnumMap<>(MemoryType.class);
+                for (int i = 0; i < size; i++) {
+                    MemoryType key = input.readEnum(MemoryType.class);
+                    RetentionRule value = new RetentionRule(input);
+                    this.retentionPolicy.put(key, value);
+                }
+            }
+            this.retentionPolicyExplicitlyNull = input.readBoolean();
+        }
     }
 
     @Override
@@ -200,6 +224,19 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         out.writeBoolean(disableSession);
         out.writeBoolean(useSystemIndex);
         out.writeOptionalString(tenantId);
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
+            if (retentionPolicy != null && !retentionPolicy.isEmpty()) {
+                out.writeBoolean(true);
+                out.writeVInt(retentionPolicy.size());
+                for (Map.Entry<MemoryType, RetentionRule> entry : retentionPolicy.entrySet()) {
+                    out.writeEnum(entry.getKey());
+                    entry.getValue().writeTo(out);
+                }
+            } else {
+                out.writeBoolean(false);
+            }
+            out.writeBoolean(retentionPolicyExplicitlyNull);
+        }
     }
 
     @Override
@@ -250,6 +287,19 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (retentionPolicy != null && !retentionPolicy.isEmpty()) {
+            builder.startObject(RETENTION_POLICY_FIELD);
+            for (Map.Entry<MemoryType, RetentionRule> entry : retentionPolicy.entrySet()) {
+                builder.field(entry.getKey().getValue());
+                entry.getValue().toXContent(builder, params);
+            }
+            builder.endObject();
+        } else if (retentionPolicyExplicitlyNull) {
+            // Emit an explicit null so the UpdateRequest.doc() partial merge removes the stored policy
+            // (mirrors the dimension/SPARSE_ENCODING pattern above). Gated on the wipe flag so a plain
+            // policy-less container never gains a spurious retention_policy: null field.
+            builder.nullField(RETENTION_POLICY_FIELD);
+        }
         builder.endObject();
         return builder;
     }
@@ -268,6 +318,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         boolean disableSession = false;
         boolean useSystemIndex = true;
         String tenantId = null;
+        Map<MemoryType, RetentionRule> retentionPolicy = null;
+        boolean retentionPolicyIsExplicitlyNull = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -319,6 +371,14 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 case USE_SYSTEM_INDEX_FIELD:
                     useSystemIndex = parser.booleanValue();
                     break;
+                case RETENTION_POLICY_FIELD:
+                    if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                        retentionPolicy = null;
+                        retentionPolicyIsExplicitlyNull = true;
+                    } else {
+                        retentionPolicy = parseRetentionPolicy(parser);
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -326,7 +386,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
 
         // Note: validation is already called in the constructor
-        return MemoryConfiguration
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
             .indexPrefix(indexPrefix)
             .embeddingModelType(embeddingModelType)
@@ -341,7 +401,42 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .disableSession(disableSession)
             .useSystemIndex(useSystemIndex)
             .tenantId(tenantId)
+            .retentionPolicy(retentionPolicy)
             .build();
+        config.setRetentionPolicyExplicitlyNull(retentionPolicyIsExplicitlyNull);
+        return config;
+    }
+
+    private static Map<MemoryType, RetentionRule> parseRetentionPolicy(XContentParser parser) throws IOException {
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        Map<MemoryType, RetentionRule> policy = new EnumMap<>(MemoryType.class);
+
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String key = parser.currentName();
+            parser.nextToken();
+
+            if (key.equals(MemoryType.WORKING.getValue())) {
+                throw new IllegalArgumentException(
+                    "Working memory retention cannot be configured directly. Working memory is deleted when its parent session expires."
+                        + " To control message lifetime, configure retention on \"sessions\" instead."
+                );
+            }
+
+            if (!MemoryType.isValid(key)) {
+                throw new IllegalArgumentException("unknown memory type: " + key);
+            }
+
+            MemoryType memoryType = MemoryType.fromString(key);
+            RetentionRule rule = RetentionRule.parse(parser);
+
+            if (memoryType == MemoryType.HISTORY && rule.getRetentionDays() != null) {
+                throw new IllegalArgumentException("retention_days is not supported for history memory type");
+            }
+
+            policy.put(memoryType, rule);
+        }
+
+        return policy;
     }
 
     public String getFinalMemoryIndexPrefix() {
@@ -415,6 +510,29 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private static void validateInputs(FunctionName embeddingModelType, String embeddingModelId, Integer dimension, Integer maxInferSize) {
         validateEmbeddingConfiguration(embeddingModelType, embeddingModelId, dimension);
         validateMaxInferSize(maxInferSize);
+    }
+
+    /**
+     * Validates retention policy constraints.
+     * Ensures WORKING memory type is not configured directly and HISTORY does not have retention_days.
+     *
+     * @param retentionPolicy the retention policy map to validate
+     * @throws IllegalArgumentException if the policy violates constraints
+     */
+    private static void validateRetentionPolicy(Map<MemoryType, RetentionRule> retentionPolicy) {
+        if (retentionPolicy == null || retentionPolicy.isEmpty()) {
+            return;
+        }
+        if (retentionPolicy.containsKey(MemoryType.WORKING)) {
+            throw new IllegalArgumentException(
+                "Working memory retention cannot be configured directly. Working memory is deleted when its parent session expires."
+                    + " To control message lifetime, configure retention on \"sessions\" instead."
+            );
+        }
+        RetentionRule historyRule = retentionPolicy.get(MemoryType.HISTORY);
+        if (historyRule != null && historyRule.getRetentionDays() != null) {
+            throw new IllegalArgumentException("retention_days is not supported for history memory type");
+        }
     }
 
     /**
@@ -534,6 +652,42 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         } else if (updateContent.getDimension() != null) {
             // Only update dimension for TEXT_EMBEDDING if provided
             this.dimension = updateContent.getDimension();
+        }
+        // Merge retention policy with field-level semantics within each type
+        if (updateContent.isRetentionPolicyExplicitlyNull()) {
+            this.retentionPolicy = null;
+            // Carry the wipe intent onto this config so toXContent() emits an explicit null and the
+            // partial-document merge (UpdateRequest.doc()) removes the stored policy.
+            this.retentionPolicyExplicitlyNull = true;
+        } else if (updateContent.getRetentionPolicy() != null) {
+            this.retentionPolicyExplicitlyNull = false;
+            validateRetentionPolicy(updateContent.getRetentionPolicy());
+            if (this.retentionPolicy == null) {
+                this.retentionPolicy = new EnumMap<>(MemoryType.class);
+            }
+            for (Map.Entry<MemoryType, RetentionRule> entry : updateContent.getRetentionPolicy().entrySet()) {
+                MemoryType type = entry.getKey();
+                RetentionRule incoming = entry.getValue();
+                RetentionRule existing = this.retentionPolicy.get(type);
+
+                if (existing == null) {
+                    // No existing rule for this type: use incoming as-is
+                    this.retentionPolicy.put(type, incoming);
+                } else {
+                    // Field-level merge: only override fields that were explicitly set in the request
+                    Integer mergedDays = incoming.isRetentionDaysExplicitlySet()
+                        ? incoming.getRetentionDays()
+                        : existing.getRetentionDays();
+                    Integer mergedCount = incoming.isMaxCountExplicitlySet() ? incoming.getMaxCount() : existing.getMaxCount();
+                    // Carry the explicit-set flags through the merge so toXContent() emits
+                    // explicit nulls for cleared fields and the partial-update doc merge
+                    // removes them from storage
+                    boolean mergedDaysExplicitlySet = incoming.isRetentionDaysExplicitlySet() || existing.isRetentionDaysExplicitlySet();
+                    boolean mergedCountExplicitlySet = incoming.isMaxCountExplicitlySet() || existing.isMaxCountExplicitlySet();
+                    this.retentionPolicy
+                        .put(type, new RetentionRule(mergedDays, mergedCount, mergedDaysExplicitlySet, mergedCountExplicitlySet));
+                }
+            }
         }
         // Note: indexPrefix and other structural fields are intentionally not updated
         // as they would require index recreation

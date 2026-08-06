@@ -99,6 +99,7 @@ public class MLAgentGetResponseTest {
             false,
             null,
             null,
+            null,
             null
         );
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
@@ -131,6 +132,7 @@ public class MLAgentGetResponseTest {
             null,
             "test",
             false,
+            null,
             null,
             null,
             null

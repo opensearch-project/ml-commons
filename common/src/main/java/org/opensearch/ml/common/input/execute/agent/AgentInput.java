@@ -602,7 +602,7 @@ public class AgentInput implements Writeable {
         try {
             sourceType = SourceType.valueOf(type.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid source type. Supported types: BYTES, URL", e);
+            throw new IllegalArgumentException("Invalid source type. Supported types: BASE64, URL", e);
         }
 
         ImageContent imageContent = new ImageContent();
@@ -639,7 +639,7 @@ public class AgentInput implements Writeable {
         try {
             sourceType = SourceType.valueOf(type.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid source type. Supported types: BYTES, URL", e);
+            throw new IllegalArgumentException("Invalid source type. Supported types: BASE64, URL", e);
         }
 
         VideoContent videoContent = new VideoContent();
@@ -676,7 +676,7 @@ public class AgentInput implements Writeable {
         try {
             sourceType = SourceType.valueOf(type.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid source type. Supported types: BYTES, URL", e);
+            throw new IllegalArgumentException("Invalid source type. Supported types: BASE64, URL", e);
         }
 
         DocumentContent documentContent = new DocumentContent();

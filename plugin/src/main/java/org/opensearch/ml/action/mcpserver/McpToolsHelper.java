@@ -27,6 +27,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
@@ -165,6 +166,10 @@ public class McpToolsHelper {
                     restoreListener.onResponse(mcpTools);
                 }
             }, e -> {
+                if (e instanceof IndexNotFoundException) {
+                    restoreListener.onResponse(new ArrayList<>());
+                    return;
+                }
                 String errMsg = String.format(Locale.ROOT, "Failed to search mcp tools index with error: %s", e.getMessage());
                 log.error(errMsg, e);
                 restoreListener.onFailure(new OpenSearchException(errMsg));

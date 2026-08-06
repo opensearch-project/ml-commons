@@ -259,6 +259,106 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         assertEquals(numHits, passages.size());
     }
 
+    public void testProcessResponseSystemPromptAndUserInstructionsOverride() throws Exception {
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_SYSTEM_PROMPT, "processor-level-system-prompt");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_USER_INSTRUCTIONS, "processor-level-user-instructions");
+
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
+            client,
+            mlFeatureEnabledSetting
+        ).create(null, "tag", "desc", true, config, null);
+
+        ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
+        List<Interaction> chatHistory = List
+            .of(
+                new Interaction(
+                    "0",
+                    Instant.now(),
+                    Instant.now(),
+                    "1",
+                    "question",
+                    "",
+                    "answer",
+                    "foo",
+                    Collections.singletonMap("meta data", "some meta")
+                )
+            );
+
+        doAnswer(invocation -> {
+            ((ActionListener<List<Interaction>>) invocation.getArguments()[2]).onResponse(chatHistory);
+            return null;
+        }).when(memoryClient).getInteractions(any(), anyInt(), any());
+
+        processor.setMemoryClient(memoryClient);
+
+        SearchRequest request = new SearchRequest();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "llm_model",
+            "You are kind.",
+            "query-level-system-prompt",
+            "query-level-user-instructions",
+            null,
+            null,
+            null,
+            null
+        );
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(params);
+        request.source(sourceBuilder);
+        sourceBuilder.ext(List.of(extBuilder));
+
+        int numHits = 3;
+        SearchHit[] hitsArray = new SearchHit[numHits];
+        for (int i = 0; i < numHits; i++) {
+            XContentBuilder sourceContent = JsonXContent
+                .contentBuilder()
+                .startObject()
+                .field("_id", String.valueOf(i))
+                .field("text", "passage" + i)
+                .endObject();
+            hitsArray[i] = new SearchHit(i, "doc" + i, Map.of(), Map.of());
+            hitsArray[i].sourceRef(BytesReference.bytes(sourceContent));
+        }
+
+        SearchHits searchHits = new SearchHits(hitsArray, null, 1.0f);
+        SearchResponseSections internal = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        SearchResponse response = new SearchResponse(internal, null, 1, 1, 0, 1, null, null, null);
+
+        Llm llm = mock(Llm.class);
+        ChatCompletionOutput output = mock(ChatCompletionOutput.class);
+        doAnswer(invocation -> {
+            ((ActionListener<ChatCompletionOutput>) invocation.getArguments()[1]).onResponse(output);
+            return null;
+        }).when(llm).doChatCompletion(any(), any());
+        when(output.getAnswers()).thenReturn(List.of("foo"));
+
+        processor.setLlm(llm);
+
+        ArgumentCaptor<ChatCompletionInput> captor = ArgumentCaptor.forClass(ChatCompletionInput.class);
+
+        processor
+            .processResponseAsync(
+                request,
+                response,
+                null,
+                ActionListener.wrap(r -> { assertTrue(r instanceof GenerativeSearchResponse); }, e -> {
+                    fail(e.getMessage());
+                })
+            );
+
+        verify(llm).doChatCompletion(captor.capture(), any());
+        ChatCompletionInput input = captor.getValue();
+
+        assertEquals("query-level-system-prompt", input.getSystemPrompt());
+        assertEquals("query-level-user-instructions", input.getUserInstructions());
+    }
+
     public void testProcessResponseWithErrorFromLlm() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();

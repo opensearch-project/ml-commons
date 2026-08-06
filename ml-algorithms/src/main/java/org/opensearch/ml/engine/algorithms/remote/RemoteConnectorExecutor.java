@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
@@ -188,6 +189,10 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
 
     default void setConnectorPrivateIpEnabled(boolean connectorPrivateIpEnabled) {}
 
+    default void setConnectorTrustedPrivateEndpoints(List<Pattern> connectorTrustedPrivateEndpoints) {}
+
+    default void setConnectorRestrictedIpPatterns(List<Pattern> connectorRestrictedIpPatterns) {}
+
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 
     default void setClusterService(ClusterService clusterService) {}
@@ -197,6 +202,8 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
     default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
 
     default void setMlGuard(MLGuard mlGuard) {}
+
+    default void setTrustedConnectorEndpointsRegex(List<String> trustedConnectorEndpointsRegex) {}
 
     default void preparePayloadAndInvoke(
         String action,
@@ -412,7 +419,7 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
         public boolean shouldRetry(Exception e) {
             Throwable cause = ExceptionsHelper.unwrapCause(e);
             Integer maxRetryTimes = args.connectionExecutor.getConnectorClientConfig().getMaxRetryTimes();
-            boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException;
+            boolean shouldRetry = isRetryable(cause);
             if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
                 shouldRetry = false;
             }
@@ -422,6 +429,22 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
                     .debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes), e);
             }
             return shouldRetry;
+        }
+
+        private static boolean isRetryable(Throwable cause) {
+            // AWS header-based throttling.
+            if (cause instanceof RemoteConnectorThrottlingException) {
+                return true;
+            }
+            // Transient HTTP failures from any remote service: 429 and 5xx.
+            if (cause instanceof OpenSearchStatusException) {
+                RestStatus status = ((OpenSearchStatusException) cause).status();
+                if (status == null) {
+                    return false;
+                }
+                return status == RestStatus.TOO_MANY_REQUESTS || status.getStatus() >= 500;
+            }
+            return false;
         }
     }
 

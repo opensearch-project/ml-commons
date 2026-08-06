@@ -64,6 +64,12 @@ public class MemoryProcessingServiceAdditionalTests {
         MockitoAnnotations.openMocks(this);
         memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
+        // Default: no structured output params (prompt enforcement fallback).
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> listener = invocation.getArgument(1);
+            listener.onResponse(Map.of());
+            return null;
+        }).when(memoryContainerHelper).getStructuredOutputParameters(any(), any());
         // Mock the getLlmResultPath to return the default path
         when(memoryContainerHelper.getLlmResultPath(any(), any())).thenReturn("$.content[0].text");
     }

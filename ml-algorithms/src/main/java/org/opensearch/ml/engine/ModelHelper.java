@@ -13,6 +13,8 @@ import static org.opensearch.ml.engine.utils.FileUtils.splitFileIntoChunks;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -22,6 +24,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -52,6 +57,12 @@ public class ModelHelper {
     public static final String TOKENIZER_FILE_NAME = "tokenizer.json";
     public static final String PYTORCH_ENGINE = "PyTorch";
     public static final String ONNX_ENGINE = "OnnxRuntime";
+    private static final Set<String> DISALLOWED_MODEL_FILE_EXTENSIONS = Set.of(".jar", ".class", ".so", ".dylib", ".dll");
+    private static final Set<String> CLASS_LOADING_SERVING_PROPERTIES = Set.of("blockfactory", "translatorfactory", "translator");
+    private static final Set<String> NON_CLASS_SERVING_PROPERTIES = Set.of("application");
+    private static final Pattern FULLY_QUALIFIED_CLASS_NAME = Pattern.compile("^([a-zA-Z_$][\\w$]*\\.)+[A-Z][\\w$]*$");
+    private static final String ALLOWED_CLASS_PREFIX = "ai.djl.";
+    private static final String SERVING_PROPERTIES_FILE_NAME = "serving.properties";
     private final MLEngine mlEngine;
 
     public ModelHelper(MLEngine mlEngine) {
@@ -311,7 +322,15 @@ public class ModelHelper {
         try (ZipFile zipFile = new ZipFile(modelZipFilePath)) {
             Enumeration zipEntries = zipFile.entries();
             while (zipEntries.hasMoreElements()) {
-                String fileName = ((ZipEntry) zipEntries.nextElement()).getName();
+                ZipEntry zipEntry = (ZipEntry) zipEntries.nextElement();
+                String fileName = zipEntry.getName();
+                verifyNoExecutableFile(fileName);
+                String baseName = fileName.replace('\\', '/');
+                if (baseName.substring(baseName.lastIndexOf('/') + 1).equalsIgnoreCase(SERVING_PROPERTIES_FILE_NAME)) {
+                    try (InputStream in = zipFile.getInputStream(zipEntry)) {
+                        verifyServingProperties(in);
+                    }
+                }
                 hasPtFile = hasModelFile(modelFormat, MLModelFormat.TORCH_SCRIPT, PYTORCH_FILE_EXTENSION, hasPtFile, fileName);
                 hasOnnxFile = hasModelFile(modelFormat, MLModelFormat.ONNX, ONNX_FILE_EXTENSION, hasOnnxFile, fileName);
                 if (fileName.equals(TOKENIZER_FILE_NAME)) {
@@ -346,6 +365,60 @@ public class ModelHelper {
             return true;
         }
         return hasModelFile;
+    }
+
+    private static void verifyNoExecutableFile(String fileName) {
+        String lowerName = fileName.toLowerCase(Locale.ROOT);
+        for (String extension : DISALLOWED_MODEL_FILE_EXTENSIONS) {
+            if (lowerName.endsWith(extension)) {
+                throw new IllegalArgumentException("Model archive contains a disallowed executable file: " + fileName);
+            }
+        }
+    }
+
+    private static void verifyServingProperties(InputStream servingProperties) throws IOException {
+        Properties properties = new Properties();
+        properties.load(servingProperties);
+        for (String key : properties.stringPropertyNames()) {
+            String normalizedKey = key.trim().toLowerCase(Locale.ROOT);
+            if (NON_CLASS_SERVING_PROPERTIES.contains(normalizedKey)) {
+                continue;
+            }
+            String value = properties.getProperty(key).trim();
+            boolean isClassLoadingKey = CLASS_LOADING_SERVING_PROPERTIES.contains(normalizedKey);
+            boolean looksLikeClassName = FULLY_QUALIFIED_CLASS_NAME.matcher(value).matches();
+            if (!isClassLoadingKey && !looksLikeClassName) {
+                continue;
+            }
+            if (!value.isEmpty() && !value.startsWith(ALLOWED_CLASS_PREFIX)) {
+                throw new IllegalArgumentException(
+                    "serving.properties key '" + key + "' references a non-DJL class '" + value + "', which is not allowed"
+                );
+            }
+        }
+    }
+
+    /**
+     * Validate an unzipped model directory before DJL loads it. Rejects archives that
+     * carry executable files or a serving.properties that points DJL at a non-DJL class.
+     */
+    public static void verifyModelDirSafety(Path modelDir) throws IOException {
+        File[] files = modelDir.toFile().listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (file.isDirectory()) {
+                verifyModelDirSafety(file.toPath());
+                continue;
+            }
+            verifyNoExecutableFile(file.getName());
+            if (file.getName().equalsIgnoreCase(SERVING_PROPERTIES_FILE_NAME)) {
+                try (InputStream in = Files.newInputStream(file.toPath())) {
+                    verifyServingProperties(in);
+                }
+            }
+        }
     }
 
     public void deleteFileCache(String modelId) {

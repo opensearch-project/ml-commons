@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 4
+    "schema_version": 5
   },
   "properties": {
     "name": {
@@ -34,6 +34,9 @@
       "type": "boolean"
     },
     "tenant_id": {
+      "type": "keyword"
+    },
+    "provisioned_by": {
       "type": "keyword"
     },
     "created_time": {

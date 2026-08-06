@@ -66,7 +66,7 @@ A connector consists of 7 parts
     * use "aws_sigv4" for any AWS services which supports SigV4. For example, Amazon Sagemaker
 5. `credential`: map<string, string>,  all variables in this block will be encrypted with "AES/GCM/NoPadding" symmetric encryption algorithm. The encryption key will be generated when the cluster first start and persisted in system index. User has no way to read/set that encryption key.  Credentials can only be used by `headers` of action.
 6. `parameters`: map<string, object>. all variables in this block will be overridable in predict request. In predict request, user can provide same name parameter to override the default parameter value defined in connector.  Parameters can be used by `url` , `headers` and `request_body` of action.
-7. `actions`: list,  it contains a list of action. For one action, it consists of 7 parts:
+7. `actions`: list,  it contains a list of action. For one action, it consists of the following parts:
     * `action_type`: string,  we only support predict in 2.9
     * `method`: string, http method, we only support POST and GET in 2.9
     * `url`:  string, remote service url. User can use ${parameters.<key>} to use variables defined in parameters.
@@ -74,6 +74,7 @@ A connector consists of 7 parts
     * `request_body`: string, http request body template, User can use `${parameters.<key>}` to use variables defined in `parameters`.
     * `pre_process_function`: string: painless script, pre-process the input data. We have built-in pre-process functions for cohere and openAI embedding models connector.pre_process.cohere.embedding and connector.pre_process.openai.embedding. You can also writer your own functions.
     * `post_process_function`: string: painless script, post-process the model output data. We have built-in post-process functions for cohere and openAI embedding models connector.post_process.cohere.embedding and connector.post_process.openai.embedding. You can also writer your own functions.
+    * `supports_structured_output`: boolean (default `false`). When `true`, agentic memory will inject provider-specific JSON schema parameters into fact-extraction requests so the provider enforces output structure at the token level. Supported for OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere v2, and Google Gemini/Vertex AI connectors. For unsupported providers the flag is ignored and no schema parameters are injected; fact extraction falls back to being enforced at the prompting level.
 
 ## connector settings
 ### connector access control

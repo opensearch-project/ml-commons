@@ -3,6 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+pluginManagement {
+    repositories {
+        maven { url "https://ci.opensearch.org/maven2/" }
+        maven { url "https://ci.opensearch.org/m2/" }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
 rootProject.name = 'opensearch-ml'
 
 include 'client'
@@ -19,3 +28,5 @@ include 'search-processors'
 project(":search-processors").name = rootProject.name + "-search-processors"
 include 'memory'
 project(":memory").name = rootProject.name + "-memory"
+include 'grpc'
+project(":grpc").name = rootProject.name + "-grpc"

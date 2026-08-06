@@ -201,6 +201,18 @@ public class MLUpdateConnectorRequestTests {
     }
 
     @Test
+    public void validate_Exception_NullConnectorId_AndUnsafeName() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput.builder().name("<script>bad</script>").updateConnector(true).build();
+        MLUpdateConnectorRequest request = MLUpdateConnectorRequest.builder().updateContent(unsafeInput).build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: ML connector id can't be null;2: Model connector name " + SAFE_INPUT_DESCRIPTION + ";",
+            exception.getMessage()
+        );
+    }
+
+    @Test
     public void validate_Exception_UnsafeConnectorDescription() {
         MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
             .builder()

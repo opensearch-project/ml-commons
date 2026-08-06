@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRU
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -29,7 +30,9 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -97,6 +100,12 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
+        if (mlCreateConnectorInput.getActions() != null) {
+            for (ConnectorAction action : mlCreateConnectorInput.getActions()) {
+                Map<String, String> headers = action.getHeaders();
+                AbstractConnector.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
+            }
+        }
         if (mlCreateConnectorInput.getProtocol() != null
             && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
             && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {

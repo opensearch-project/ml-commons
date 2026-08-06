@@ -563,6 +563,93 @@ public class MLCreateConnectorInputTests {
         assertEquals("https://test.com", connector.getUrl());
     }
 
+    // ---- provisioned_by tests ----
+
+    @Test
+    public void builder_WithProvisionedBy() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", input.getProvisionedBy());
+    }
+
+    @Test
+    public void builder_WithoutProvisionedBy_DefaultsToNull() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .build();
+        assertNull(input.getProvisionedBy());
+    }
+
+    @Test
+    public void toXContent_WithProvisionedBy() throws Exception {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"provisioned_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void parse_WithProvisionedBy() throws Exception {
+        String json =
+            "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"key\":\"val\"},\"provisioned_by\":\"flow-framework\"}";
+        testParseFromJsonString(json, parsedInput -> assertEquals("flow-framework", parsedInput.getProvisionedBy()));
+    }
+
+    @Test
+    public void readInputStream_WithProvisionedBy() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertEquals("flow-framework", deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void readInputStream_ProvisionedBy_OldVersion_IsNull() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNull(deserialized.getProvisionedBy());
+    }
+
     // Helper method to create XContentParser from a JSON string
     private XContentParser createParser(String jsonString) throws IOException {
         XContentParser parser = XContentType.JSON

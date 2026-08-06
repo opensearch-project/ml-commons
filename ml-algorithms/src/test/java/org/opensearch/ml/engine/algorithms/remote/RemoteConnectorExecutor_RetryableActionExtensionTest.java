@@ -16,6 +16,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.bulk.BackoffPolicy;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
@@ -106,6 +107,34 @@ public class RemoteConnectorExecutor_RetryableActionExtensionTest {
             shouldRetry = retryableAction.shouldRetry(exception.get());
         } while (shouldRetry && ++attempt < TEST_ATTEMPT_LIMIT);
         return attempt;
+    }
+
+    @Test
+    public void test_ShouldRetry_OnTooManyRequests() {
+        var attempts = retryAttempts(-1, () -> new OpenSearchStatusException("rate limited", RestStatus.TOO_MANY_REQUESTS));
+
+        assertThat(attempts, equalTo(TEST_ATTEMPT_LIMIT));
+    }
+
+    @Test
+    public void test_ShouldRetry_OnServerError() {
+        var attempts = retryAttempts(-1, () -> new OpenSearchStatusException("server error", RestStatus.SERVICE_UNAVAILABLE));
+
+        assertThat(attempts, equalTo(TEST_ATTEMPT_LIMIT));
+    }
+
+    @Test
+    public void test_ShouldNotRetry_OnClientError() {
+        var attempts = retryAttempts(-1, () -> new OpenSearchStatusException("bad request", RestStatus.BAD_REQUEST));
+
+        assertThat(attempts, equalTo(0));
+    }
+
+    @Test
+    public void test_ShouldNotRetry_WhenStatusIsNull() {
+        var attempts = retryAttempts(-1, () -> new OpenSearchStatusException("unknown status", RestStatus.fromCode(799)));
+
+        assertThat(attempts, equalTo(0));
     }
 
     private RemoteConnectorThrottlingException createThrottleException() {

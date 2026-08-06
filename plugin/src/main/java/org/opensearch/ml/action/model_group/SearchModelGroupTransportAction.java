@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
@@ -128,9 +129,13 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
     }
 
     private void search(String tenantId, SearchRequest request, ActionListener<SearchResponse> listener) {
+        String[] indices = request.indices();
+        if (indices == null || indices.length == 0) {
+            indices = new String[] { ML_MODEL_GROUP_INDEX };
+        }
         SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
             .builder()
-            .indices(request.indices())
+            .indices(indices)
             .searchSourceBuilder(request.source())
             .tenantId(tenantId)
             .build();

@@ -60,7 +60,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY_TEMPLATE = "{\"system\": [{\"text\": \"${parameters.system_prompt}\"}], "
         + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
-        + "${parameters.tool_configs:-} }";
+        + "${parameters.tool_configs:-}, "
+        + "\"inferenceConfig\": {\"maxTokens\": ${parameters.max_tokens:-4096}"
+        + "${parameters.temperature_field:-}${parameters.top_p_field:-}}"
+        + " }";
 
     // Body templates for different input types
     private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_text}\"}]}";
@@ -91,6 +94,19 @@ public class BedrockConverseModelProvider extends ModelProvider {
         // Override with any provided model parameters
         if (modelParameters != null) {
             parameters.putAll(modelParameters);
+            boolean hasTopP = modelParameters.containsKey("top_p");
+            boolean hasTemperature = modelParameters.containsKey("temperature");
+            // Bedrock Converse uses either temperature or topP, not both.
+            // When top_p is set, temperature is omitted to avoid a Bedrock rejection.
+            if (hasTopP) {
+                String topPValue = validateNumericParameter(modelParameters.get("top_p"), "top_p");
+                parameters.put("top_p_field", ", \"topP\": " + topPValue);
+            } else {
+                String tempValue = validateNumericParameter(modelParameters.getOrDefault("temperature", "1.0"), "temperature");
+                parameters.put("temperature_field", ", \"temperature\": " + tempValue);
+            }
+        } else {
+            parameters.put("temperature_field", ", \"temperature\": 1.0");
         }
 
         Map<String, String> headers = new HashMap<>();

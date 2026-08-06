@@ -31,6 +31,8 @@ import static org.opensearch.ml.engine.helper.MLTestHelper.endecryptConnectorCre
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -42,6 +44,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -121,6 +124,8 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
         when(scriptService.compile(any(), any()))
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
     }
@@ -175,6 +180,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -274,6 +280,10 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setConnectorPrivateIpEnabled(false);
+        executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
+        executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         executor.setClient(client);
@@ -524,6 +534,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -812,6 +823,10 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         endecryptConnectorCredentials(connector, encryptor, true);
         endecryptConnectorCredentials(connector, encryptor, false);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setConnectorPrivateIpEnabled(false);
+        executor.setConnectorTrustedPrivateEndpoints(Collections.emptyList());
+        executor.setConnectorRestrictedIpPatterns(Collections.emptyList());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         ExecutorService executorService = mock(ExecutorService.class);
@@ -1068,7 +1083,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -1090,6 +1105,8 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
@@ -1111,7 +1128,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -1133,6 +1150,8 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
@@ -1154,7 +1173,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             mockedFactory
                 .when(
                     () -> MLHttpClientFactory
-                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), anyBoolean())
+                        .getAsyncHttpClient(any(Duration.class), any(Duration.class), anyInt(), anyBoolean(), any(), any(), anyBoolean())
                 )
                 .thenReturn(mockClient);
 
@@ -1176,11 +1195,144 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
                             any(Duration.class),
                             anyInt(),
                             anyBoolean(),
+                            any(),
+                            any(),
                             sslVerificationCaptor.capture()
                         )
                 );
             // Assert that skipSslVerification defaults to false when null
             assertFalse("SSL verification should be enabled when null", sslVerificationCaptor.getValue());
         }
+    }
+
+    @Test
+    public void invokeRemoteService_predictTimeUrlOverride_blocked() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://${parameters.endpoint}/model/converse")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock", "endpoint", "bedrock-runtime.us-west-2.amazonaws.com");
+
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("aws_sigv4")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .build();
+
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"));
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Attacker tries to override endpoint
+        Map<String, String> overrideParams = new HashMap<>();
+        overrideParams.put("endpoint", "attacker.example.com/anything?");
+        overrideParams.put("input", "hello");
+
+        ActionListener<Tuple<Integer, ModelTensors>> tupleActionListener = mock(ActionListener.class);
+        executor
+            .invokeRemoteService(
+                PREDICT.name(),
+                createMLInput(overrideParams),
+                overrideParams,
+                "{\"input\": \"hello\"}",
+                new ExecutionContext(0),
+                tupleActionListener
+            );
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        Mockito.verify(tupleActionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Connector URL is not matching the trusted connector endpoint regex", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void invokeRemoteService_predictTimeUrlOverride_allowedHost_passesValidation() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://${parameters.endpoint}/model/converse")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+
+        Map<String, String> credential = ImmutableMap
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptCredentials(List.of("test_key"), null, encryptor),
+                SECRET_KEY_FIELD,
+                encryptCredentials(List.of("test_secret_key"), null, encryptor)
+            );
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock", "endpoint", "bedrock-runtime.us-west-2.amazonaws.com");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("aws_sigv4")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, null))
+            .build();
+
+        endecryptConnectorCredentials(connector, encryptor, false);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"));
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, String> validParams = new HashMap<>();
+        validParams.put("endpoint", "bedrock-runtime.us-west-2.amazonaws.com");
+        validParams.put("input", "hello");
+
+        ActionListener<Tuple<Integer, ModelTensors>> tupleActionListener = mock(ActionListener.class);
+        executor
+            .invokeRemoteService(
+                PREDICT.name(),
+                createMLInput(validParams),
+                validParams,
+                "{\"input\": \"hello\"}",
+                new ExecutionContext(0),
+                tupleActionListener
+            );
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(tupleActionListener, Mockito.atMost(1)).onFailure(captor.capture());
+        for (Exception e : captor.getAllValues()) {
+            assertFalse(
+                "Validator must not reject a resolved URL that matches the allowlist",
+                "Connector URL is not matching the trusted connector endpoint regex".equals(e.getMessage())
+            );
+        }
+    }
+
+    private MLInput createMLInput(Map<String, String> parameters) {
+        return MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
+            .build();
     }
 }

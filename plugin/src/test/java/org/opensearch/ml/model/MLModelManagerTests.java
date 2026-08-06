@@ -24,15 +24,19 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_RESTRICTED_IP_PATTERNS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
@@ -51,6 +55,7 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.copyFile;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -218,6 +223,11 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_MAX_BATCH_INFERENCE_TASKS.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_BATCH_INGESTION_TASKS.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_BATCH_INGESTION_BULK_SIZE.getKey(), 100).build();
+        settings = Settings
+            .builder()
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX.getKey(), Collections.emptyList())
+            .build();
+        settings = Settings.builder().putList(ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS.getKey(), Collections.emptyList()).build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MAX_MODELS_PER_NODE,
@@ -226,7 +236,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
             ML_COMMONS_MAX_BATCH_INFERENCE_TASKS,
             ML_COMMONS_MAX_BATCH_INGESTION_TASKS,
-            ML_COMMONS_BATCH_INGESTION_BULK_SIZE
+            ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
+            ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX,
+            ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null, clusterApplierService));
         xContentRegistry = NamedXContentRegistry.EMPTY;
@@ -1295,6 +1307,22 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelCacheHelper).addModelInferenceDuration(modelIdCaptor.capture(), durationCaptor.capture());
         assert modelIdCaptor.getValue().equals(modelId);
         assert durationCaptor.getValue() > 0;
+    }
+
+    @Test
+    public void testSetUpParameterMap_includesSecurityPatterns() throws Exception {
+        String modelId = "test-model-id";
+        String tenantId = "test-tenant";
+
+        Method method = MLModelManager.class.getDeclaredMethod("setUpParameterMap", String.class, String.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = (Map<String, Object>) method.invoke(modelManager, modelId, tenantId);
+
+        assertNotNull(params);
+        assertTrue(params.containsKey(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS));
+        assertTrue(params.containsKey(CONNECTOR_RESTRICTED_IP_PATTERNS));
     }
 
     private void setupForModelMeta() {

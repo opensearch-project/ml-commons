@@ -110,6 +110,15 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
+    @Override
+    public void tearDown() throws Exception {
+        try {
+            ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+        } finally {
+            super.tearDown();
+        }
+    }
+
     public void setupModelGroup(String owner, String access, List<String> backendRoles) throws IOException {
         getResponse = modelGroupBuilder(backendRoles, access, owner);
         doAnswer(invocation -> {

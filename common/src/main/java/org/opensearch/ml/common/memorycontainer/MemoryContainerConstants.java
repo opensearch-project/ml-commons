@@ -22,6 +22,11 @@ public class MemoryContainerConstants {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
+    // Epoch-millis timestamp stamped on a container the first time the retention orphan sweep processes it.
+    // The sweep defers all orphan deletion until orphan_ttl_days after this baseline, so working memory that
+    // predates retention activation (e.g. written before an upgrade, or via paths that create no session doc)
+    // gets one full grace window before it can ever be classified as orphaned and deleted.
+    public static final String ORPHAN_SWEEP_BASELINE_TIME_FIELD = "orphan_sweep_baseline_time";
 
     // Field names for MemoryConfiguration
     public static final String DISABLE_HISTORY_FIELD = "disable_history";
@@ -148,6 +153,14 @@ public class MemoryContainerConstants {
         "Backend role contains invalid characters. Only alphanumeric characters and :+=,.@-_/ are allowed: %s";
     public static final String BACKEND_ROLE_EMPTY_ERROR = "Backend role cannot be empty or blank";
 
+    // Pinned field
+    public static final String PINNED_FIELD = "pinned";
+
+    // Retention policy field names
+    public static final String RETENTION_POLICY_FIELD = "retention_policy";
+    public static final String RETENTION_DAYS_FIELD = "retention_days";
+    public static final String MAX_COUNT_FIELD = "max_count";
+
     // Model validation error messages
     public static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model with ID %s not found";
     public static final String LLM_MODEL_NOT_REMOTE_ERROR = "LLM model must be a REMOTE model, found: %s";
@@ -196,9 +209,107 @@ public class MemoryContainerConstants {
         """
             Respond NOW with ONE LINE of valid JSON ONLY exactly as {"facts":["fact1","fact2",...]}. No extra text, no code fences, no newlines or tabs, no spaces after commas or colons.""";
 
+    // Stable prefix of JSON_ENFORCEMENT_MESSAGE with no JSON-special characters.
+    // Use this in assertions instead of parsing the full message out of a serialized JSON string.
+    public static final String JSON_ENFORCEMENT_SENTINEL = "Respond NOW with ONE LINE of valid JSON ONLY";
+
     // JSON enforcement message for user preference extraction
     public static final String USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE = """
         Return ONLY ONE LINE of valid JSON exactly as {"facts":["<fact sentence>"]}. Begin with { and end with }. No extra text.""";
+
+    // Provider-specific structured output schemas for constrained decoding.
+    // Each constant is the value for the corresponding _xxx_json injection parameter in HttpConnector.
+    // The full MemoryContainerHelper.getStructuredOutputParameters() implementation selects the right
+    // constant and parameter name based on the model's connector URL.
+
+    // OpenAI, Azure OpenAI, Ollama (OpenAI-compatible), DeepSeek — value for _response_format_json
+    public static final String FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON = """
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "facts_extraction",
+                "strict": true,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "facts": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        }
+                    },
+                    "required": ["facts"],
+                    "additionalProperties": false
+                }
+            }
+        }""";
+
+    // Cohere Chat API v2 (/v2/chat) — value for _response_format_json.
+    // Uses type "json_schema" (Cohere v2 structured output). Requires the connector to point at
+    // the /v2/chat endpoint; the legacy /v1/chat endpoint does not support json_schema enforcement.
+    public static final String FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON = """
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "type": "object",
+                "properties": {
+                    "facts": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["facts"],
+                "additionalProperties": false
+            }
+        }""";
+
+    // Google Gemini / Vertex AI — value for _generationConfig_additions_json.
+    // These keys are merged into the existing generationConfig object in the request payload.
+    public static final String FACTS_EXTRACTION_GEMINI_GENERATION_CONFIG_JSON = """
+        {
+            "responseMimeType": "application/json",
+            "responseSchema": {
+                "type": "object",
+                "properties": {
+                    "facts": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["facts"],
+                "additionalProperties": false
+            }
+        }""";
+
+    // Amazon Bedrock Converse — value for _toolConfig_json.
+    // Forces the model to call the extract_facts tool, returning facts as a structured JSON object
+    // at output.message.content[0].toolUse.input rather than the normal content[0].text path.
+    public static final String FACTS_EXTRACTION_BEDROCK_CONVERSE_TOOL_CONFIG_JSON = """
+        {
+            "tools": [{
+                "toolSpec": {
+                    "name": "extract_facts",
+                    "description": "Extract factual statements from the conversation",
+                    "inputSchema": {
+                        "json": {
+                            "type": "object",
+                            "properties": {
+                                "facts": {
+                                    "type": "array",
+                                    "items": {"type": "string"}
+                                }
+                            },
+                            "required": ["facts"],
+                            "additionalProperties": false
+                        }
+                    }
+                }
+            }],
+            "toolChoice": {"tool": {"name": "extract_facts"}}
+        }""";
+
+    // JsonPath to the facts object in a Bedrock Converse tool-use response.
+    // Used by MemoryProcessingService when structured output is active for Bedrock connectors.
+    public static final String BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH = "$.output.message.content[0].toolUse.input";
 
     public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
         """

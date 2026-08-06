@@ -76,7 +76,9 @@ POST /_plugins/_ml/models/_register
 
 ## 3. Create LLM for Fact Extraction
 
-Register a Bedrock Claude model for fact extraction:
+Register a Bedrock Claude model for fact extraction using the Converse API:
+
+> **Note:** `supports_structured_output: true` enables tool-use constrained decoding for agentic memory fact extraction. When the memory pipeline runs, it injects a `toolConfig` into the Bedrock Converse request, forcing the model to call the `extract_facts` tool and return structured JSON.
 
 ```
 POST /_plugins/_ml/models/_register
@@ -86,16 +88,13 @@ POST /_plugins/_ml/models/_register
   "description": "LLM model for memory processing",
   "connector": {
     "name": "Amazon Bedrock Connector: LLM",
-    "description": "The connector to bedrock Claude 3.7 sonnet model",
+    "description": "The connector to bedrock Claude model via Converse API",
     "version": 1,
     "protocol": "aws_sigv4",
     "parameters": {
       "region": "your_aws_region",
       "service_name": "bedrock",
-      "max_tokens": 8000,
-      "temperature": 1,
-      "anthropic_version": "bedrock-2023-05-31",
-      "model": "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+      "model": "anthropic.claude-sonnet-4-5-20251101-v1:0"
     },
     "credential": {
       "access_key": "your_aws_access_key",
@@ -105,9 +104,10 @@ POST /_plugins/_ml/models/_register
     "actions": [{
       "action_type": "predict",
       "method": "POST",
+      "supports_structured_output": true,
       "headers": {"content-type": "application/json"},
-      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
-      "request_body": "{ \"system\": \"${parameters.system_prompt}\", \"anthropic_version\": \"${parameters.anthropic_version}\", \"max_tokens\": ${parameters.max_tokens}, \"temperature\": ${parameters.temperature}, \"messages\": ${parameters.messages} }"
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse",
+      "request_body": "{\"system\":[{\"text\":\"${parameters.system_prompt}\"}],\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.user_prompt}\"}]}]}"
     }]
   }
 }
