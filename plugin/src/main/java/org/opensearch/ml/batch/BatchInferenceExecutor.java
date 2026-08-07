@@ -40,8 +40,10 @@ public class BatchInferenceExecutor {
     }
 
     /**
-     * Runs the request against a predictor, adapting it to the invoker this executor works with, so
-     * callers do not have to wire up the per-sub-batch call themselves.
+     * Splits into sub-batches only when there is a config, a handler for the input type, and the request
+     * needs more than one sub-batch. A request runs as a single call when the model has no config or
+     * already fits within the limits, and fails when the model has a config but the input type has no
+     * handler, rather than being sent unsplit.
      */
     public void execute(
         MLInput input,
@@ -50,27 +52,12 @@ public class BatchInferenceExecutor {
         TransportChannel channel,
         ActionListener<MLTaskResponse> listener
     ) {
-        doExecute(
-            input,
-            config,
-            SingleBatchInvoker.forPredictor(predictor, channel),
-            ActionListener.wrap(merged -> listener.onResponse(new MLTaskResponse(merged)), listener::onFailure)
-        );
-    }
-
-    /**
-     * Splits into sub-batches only when there is a config, a handler for the input type, and the request
-     * needs more than one sub-batch. A request runs as a single call when the model has no config or
-     * already fits within the limits, and fails when the model has a config but the input type has no
-     * handler, rather than being sent unsplit.
-     */
-    public void doExecute(MLInput input, BatchInferenceConfig config, SingleBatchInvoker invoker, ActionListener<MLOutput> listener) {
         if (config == null) {
-            invoker.invoke(input, listener);
+            predictor.asyncPredict(input, listener, channel);
             return;
         }
 
-        final BatchableInput handler = registry.get(input);
+        BatchableInput handler = registry.get(input);
         if (handler == null) {
             listener
                 .onFailure(
@@ -84,7 +71,7 @@ public class BatchInferenceExecutor {
             return;
         }
 
-        final List<List<BatchItem>> batches;
+        List<List<BatchItem>> batches;
         try {
             batches = splitter.split(handler.toItems(input), config);
         } catch (Exception e) {
@@ -92,23 +79,23 @@ public class BatchInferenceExecutor {
             return;
         }
 
-        dispatchBatches(input, handler, batches, invoker, listener);
+        if (batches.size() == 1) {
+            predictor.asyncPredict(input, listener, channel);
+            return;
+        }
+
+        dispatchBatches(input, handler, batches, predictor, channel, listener);
     }
 
     private void dispatchBatches(
         MLInput input,
         BatchableInput handler,
         List<List<BatchItem>> batches,
-        SingleBatchInvoker invoker,
-        ActionListener<MLOutput> listener
+        Predictable predictor,
+        TransportChannel channel,
+        ActionListener<MLTaskResponse> listener
     ) {
-        final int total = batches.size();
-        if (total == 1) {
-            // Already within the limits, so send the original request untouched.
-            invoker.invoke(input, listener);
-            return;
-        }
-
+        int total = batches.size();
         if (log.isDebugEnabled()) {
             int items = 0;
             for (List<BatchItem> b : batches) {
@@ -117,18 +104,18 @@ public class BatchInferenceExecutor {
             log.debug("Size-based batching: split {} items into {} sub-batches", items, total);
         }
 
-        final AtomicReferenceArray<MLOutput> results = new AtomicReferenceArray<>(total);
-        final AtomicReferenceArray<Exception> failures = new AtomicReferenceArray<>(total);
+        AtomicReferenceArray<MLOutput> results = new AtomicReferenceArray<>(total);
+        AtomicReferenceArray<Exception> failures = new AtomicReferenceArray<>(total);
         // Decremented once per sub-batch, on success and on failure alike, so exactly one callback sees
         // zero and completes the listener.
-        final AtomicInteger remaining = new AtomicInteger(total);
+        AtomicInteger remaining = new AtomicInteger(total);
 
         for (int i = 0; i < total; i++) {
-            final int index = i;
-            final List<BatchItem> batch = batches.get(i);
-            final ActionListener<MLOutput> subListener = ActionListener.wrap(output -> {
+            int index = i;
+            List<BatchItem> batch = batches.get(i);
+            ActionListener<MLTaskResponse> subListener = ActionListener.wrap(response -> {
                 try {
-                    results.set(index, output);
+                    results.set(index, response.getOutput());
                 } finally {
                     if (remaining.decrementAndGet() == 0) {
                         complete(failures, results, handler, listener);
@@ -144,7 +131,8 @@ public class BatchInferenceExecutor {
                 }
             });
             try {
-                invoker.invoke(handler.merge(input, batch), subListener);
+                MLInput subInput = handler.merge(input, batch);
+                predictor.asyncPredict(subInput, subListener, channel);
             } catch (Exception dispatchError) {
                 // Report a sub-batch that failed before its listener was reachable through the same
                 // listener, so every sub-batch still settles exactly once and the counter can reach zero.
@@ -157,7 +145,7 @@ public class BatchInferenceExecutor {
         AtomicReferenceArray<Exception> failures,
         AtomicReferenceArray<MLOutput> results,
         BatchableInput handler,
-        ActionListener<MLOutput> listener
+        ActionListener<MLTaskResponse> listener
     ) {
         List<Exception> failed = collectFailures(failures);
         if (failed.isEmpty()) {
@@ -168,7 +156,7 @@ public class BatchInferenceExecutor {
                 listener.onFailure(outputMergeError);
                 return;
             }
-            listener.onResponse(merged);
+            listener.onResponse(new MLTaskResponse(merged));
             return;
         }
         Exception failure;

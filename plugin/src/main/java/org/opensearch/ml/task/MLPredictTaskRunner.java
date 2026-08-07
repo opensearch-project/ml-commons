@@ -610,10 +610,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName));
-                        // If the model defines batch inference limits and the request exceeds them, split it into
-                        // size-bounded sub-batches, run each against the model, and merge the results in input order.
-                        // Output validation and task completion still run once, on the merged response. Requests that
-                        // are not configured for batching, or already fit within the limits, take the single-call path.
+                        // If it is offline batch inference, call the model directly. If it is an online predict request,
+                        // go through the batchInferenceExecutor, which splits it when the model defines batch inference limits.
                         if (mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)) {
                             predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
                         } else {
