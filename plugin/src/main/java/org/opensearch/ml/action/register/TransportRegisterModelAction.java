@@ -60,6 +60,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -170,6 +171,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, registerModelInput.getTenantId(), listener)) {
             return;
         }
+        MLResourceIdUtils.validateCustomModelId(registerModelInput.getModelId());
         if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }

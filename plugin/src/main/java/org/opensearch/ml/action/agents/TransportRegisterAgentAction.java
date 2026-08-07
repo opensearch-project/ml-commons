@@ -42,6 +42,7 @@ import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -91,6 +92,8 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
+
+        MLResourceIdUtils.validateCustomDocumentId(mlAgent.getAgentId(), "agent id");
 
         if (mlAgent.getMemory() != null
             && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(mlAgent.getMemory().getType())
@@ -216,6 +219,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             .createdTime(now)
             .lastUpdateTime(now)
             .isHidden(isHiddenAgent)
+            .agentId(null)
             .build();
 
         registerAgentToIndex(
@@ -226,30 +230,35 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void registerAgentToIndex(MLAgent mlAgent, String tenantId, ActionListener<MLRegisterAgentResponse> listener) {
+        String agentId = mlAgent.getAgentId();
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    sdkClient
-                        .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()
-                        )
-                        .whenComplete((r, throwable) -> {
-                            context.restore();
-                            if (throwable != null) {
-                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                log.error("Failed to index ML agent", cause);
-                                listener.onFailure(cause);
-                            } else {
-                                try {
-                                    IndexResponse indexResponse = r.indexResponse();
-                                    log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
-                                    MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
-                                    listener.onResponse(response);
-                                } catch (Exception e) {
-                                    listener.onFailure(e);
-                                }
+                    PutDataObjectRequest.Builder putRequestBuilder = PutDataObjectRequest
+                        .builder()
+                        .index(ML_AGENT_INDEX)
+                        .tenantId(tenantId)
+                        .dataObject(mlAgent);
+                    if (agentId != null) {
+                        putRequestBuilder.id(agentId).overwriteIfExists(false);
+                    }
+                    sdkClient.putDataObjectAsync(putRequestBuilder.build()).whenComplete((r, throwable) -> {
+                        context.restore();
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to index ML agent", cause);
+                            listener.onFailure(MLResourceIdUtils.toDocumentAlreadyExistsException(agentId, "agent id", cause));
+                        } else {
+                            try {
+                                IndexResponse indexResponse = r.indexResponse();
+                                log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
+                                MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
+                                listener.onResponse(response);
+                            } catch (Exception e) {
+                                listener.onFailure(e);
                             }
-                        });
+                        }
+                    });
                 } catch (Exception e) {
                     log.error("Failed to index ML agent", e);
                     listener.onFailure(e);

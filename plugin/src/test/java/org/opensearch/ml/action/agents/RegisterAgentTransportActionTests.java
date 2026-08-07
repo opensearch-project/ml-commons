@@ -17,6 +17,7 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD;
 
 import java.io.IOException;
@@ -24,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -31,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -41,7 +44,9 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -51,6 +56,8 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -608,5 +615,148 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Model registration failed", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void doExecute_invalidCustomAgentId_startsWithUnderscore() {
+        assertInvalidAgentId("_invalid", "agent id must not start with '_'");
+    }
+
+    @Test
+    public void doExecute_invalidCustomAgentId_startsWithSpecialCharacter() {
+        assertInvalidAgentId(
+            "$invalid",
+            "agent id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    @Test
+    public void doExecute_invalidCustomAgentId_containsSpaces() {
+        assertInvalidAgentId(
+            "agent id",
+            "agent id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    @Test
+    public void doExecute_invalidCustomAgentId_tooLong() {
+        assertInvalidAgentId(
+            "a".repeat(MAX_DOCUMENT_ID_LENGTH + 1),
+            "agent id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH
+        );
+    }
+
+    private void assertInvalidAgentId(String agentId, String expectedMessage) {
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .agentId(agentId)
+            .build();
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> transportRegisterAgentAction.doExecute(task, request, actionListener)
+        );
+        assertEquals(expectedMessage, e.getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_usesCustomAgentId() {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        TransportRegisterAgentAction action = new TransportRegisterAgentAction(
+            transportService,
+            actionFilters,
+            client,
+            mockSdkClient,
+            mlIndicesHandler,
+            clusterService,
+            mlFeatureEnabledSetting,
+            contextManagementTemplateService
+        );
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .agentId("my-agent")
+            .build();
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
+        IndexResponse customIndexResponse = new IndexResponse(new ShardId(ML_AGENT_INDEX, "_na_", 0), "my-agent", 1, 0, 2, true);
+        when(putResponse.indexResponse()).thenReturn(customIndexResponse);
+        when(putResponse.id()).thenReturn("my-agent");
+
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        when(mockSdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(CompletableFuture.completedFuture(putResponse));
+
+        action.doExecute(task, new MLRegisterAgentRequest(mlAgent), actionListener);
+
+        verify(mockSdkClient).putDataObjectAsync(putRequestCaptor.capture());
+        assertEquals("my-agent", putRequestCaptor.getValue().id());
+        ArgumentCaptor<MLRegisterAgentResponse> responseCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals("my-agent", responseCaptor.getValue().getAgentId());
+    }
+
+    @Test
+    public void test_execute_registerAgent_duplicateCustomAgentId() {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        TransportRegisterAgentAction action = new TransportRegisterAgentAction(
+            transportService,
+            actionFilters,
+            client,
+            mockSdkClient,
+            mlIndicesHandler,
+            clusterService,
+            mlFeatureEnabledSetting,
+            contextManagementTemplateService
+        );
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .agentId("my-agent")
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId(ML_AGENT_INDEX, "_na_", 0),
+            "my-agent",
+            "document already exists"
+        );
+        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
+        future.completeExceptionally(conflict);
+        when(mockSdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, new MLRegisterAgentRequest(mlAgent), actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("agent id 'my-agent' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
     }
 }

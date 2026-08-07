@@ -8,9 +8,11 @@ package org.opensearch.ml.common.transport.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLE_EMPTY_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLE_INVALID_CHARACTERS_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLE_INVALID_LENGTH_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -38,11 +41,14 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     public static final String DESCRIPTION_FIELD = "description";
     public static final String MEMORY_CONFIG_FIELD = "configuration";
 
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_MEMORY_CONTAINER_ID = VERSION_3_9_0;
+
     private String name;
     private String description;
     private MemoryConfiguration configuration;
     private String tenantId;
     private List<String> backendRoles;
+    private String memoryContainerId;
 
     @Builder(toBuilder = true)
     public MLCreateMemoryContainerInput(
@@ -50,7 +56,8 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         String description,
         MemoryConfiguration configuration,
         String tenantId,
-        List<String> backendRoles
+        List<String> backendRoles,
+        String memoryContainerId
     ) {
         if (name == null) {
             throw new IllegalArgumentException("name is null");
@@ -65,9 +72,11 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         this.tenantId = tenantId;
         validateBackendRoles(backendRoles);
         this.backendRoles = backendRoles;
+        this.memoryContainerId = memoryContainerId;
     }
 
     public MLCreateMemoryContainerInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         this.name = in.readString();
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
@@ -79,10 +88,14 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         if (in.readBoolean()) {
             backendRoles = in.readStringList();
         }
+        this.memoryContainerId = streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_MEMORY_CONTAINER_ID)
+            ? in.readOptionalString()
+            : null;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(name);
         out.writeOptionalString(description);
         if (configuration != null) {
@@ -97,6 +110,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             out.writeStringCollection(backendRoles);
         } else {
             out.writeBoolean(false);
+        }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_MEMORY_CONTAINER_ID)) {
+            out.writeOptionalString(memoryContainerId);
         }
     }
 
@@ -115,6 +131,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         }
         if (!CollectionUtils.isEmpty(backendRoles)) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
+        }
+        if (memoryContainerId != null) {
+            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         builder.endObject();
         return builder;
@@ -162,6 +181,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         MemoryConfiguration configuration = null;
         String tenantId = null;
         List<String> backendRoles = null;
+        String memoryContainerId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -169,6 +189,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             parser.nextToken();
 
             switch (fieldName) {
+                case MEMORY_CONTAINER_ID_FIELD:
+                    memoryContainerId = parser.text();
+                    break;
                 case NAME_FIELD:
                     name = parser.text();
                     break;
@@ -201,6 +224,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             .configuration(configuration)
             .tenantId(tenantId)
             .backendRoles(backendRoles)
+            .memoryContainerId(memoryContainerId)
             .build();
     }
 }

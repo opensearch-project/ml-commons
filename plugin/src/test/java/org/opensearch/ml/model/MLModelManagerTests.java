@@ -68,6 +68,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
@@ -83,8 +84,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
@@ -106,6 +109,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
@@ -140,6 +144,8 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.script.ScriptService;
@@ -627,6 +633,180 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
         verify(modelManager).deployModelAfterRegistering(any(), anyString());
 
+    }
+
+    @Test
+    public void testRegisterModelMeta_UsesCustomModelId() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            "test-model",
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "custom-model-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onResponse(new IndexResponse(new ShardId("test", "test", 1), "custom-model-id", 1L, 1L, 1L, true));
+            return null;
+        }).when(client).index(indexRequestCaptor.capture(), any());
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        verify(actionListener).onResponse("custom-model-id");
+        IndexRequest indexRequest = indexRequestCaptor.getValue();
+        assertEquals("custom-model-id", indexRequest.id());
+        assertEquals(DocWriteRequest.OpType.CREATE, indexRequest.opType());
+    }
+
+    @Test
+    public void testRegisterModelMeta_DuplicateCustomModelId() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            "test-model",
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "custom-model-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId("test", "test", 1),
+            "custom-model-id",
+            "document already exists"
+        );
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onFailure(conflict);
+            return null;
+        }).when(client).index(any(), any());
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("model id 'custom-model-id' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
+    @Test
+    public void testIndexRemoteModel_UsesCustomModelId() throws Exception {
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(true).toBuilder().modelId("custom-remote-model").build();
+        MLTask remoteTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
+            getModelGrouplistener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
+        IndexResponse customIndexResponse = new IndexResponse(new ShardId("test", "test", 1), "custom-remote-model", 1L, 1L, 1L, true);
+        when(putResponse.indexResponse()).thenReturn(customIndexResponse);
+
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        when(mockSdkClient.putDataObjectAsync(putRequestCaptor.capture())).thenReturn(CompletableFuture.completedFuture(putResponse));
+
+        java.lang.reflect.Field sdkClientField = MLModelManager.class.getDeclaredField("sdkClient");
+        sdkClientField.setAccessible(true);
+        SdkClient originalSdkClient = (SdkClient) sdkClientField.get(modelManager);
+        sdkClientField.set(modelManager, mockSdkClient);
+        try {
+            modelManager.indexRemoteModel(inputWithCustomId, remoteTask, "1.0.0");
+        } finally {
+            sdkClientField.set(modelManager, originalSdkClient);
+        }
+
+        assertEquals("custom-remote-model", putRequestCaptor.getValue().id());
+        assertEquals("custom-remote-model", remoteTask.getModelId());
+    }
+
+    @Test
+    public void testRegisterMLRemoteModel_DuplicateCustomModelId() throws Exception {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(true).toBuilder().modelId("custom-remote-model").build();
+        MLTask remoteTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
+            getModelGrouplistener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        mock_client_update(client);
+
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId("test", "test", 1),
+            "custom-remote-model",
+            "document already exists"
+        );
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onFailure(conflict);
+            return null;
+        }).when(client).index(any(), any());
+
+        modelManager.registerMLRemoteModel(sdkClient, inputWithCustomId, remoteTask, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("model id 'custom-remote-model' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
     }
 
     @Ignore
