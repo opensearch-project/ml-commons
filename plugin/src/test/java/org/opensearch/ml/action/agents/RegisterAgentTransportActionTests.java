@@ -16,8 +16,8 @@ import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD;
 
 import java.io.IOException;
@@ -640,10 +640,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void doExecute_invalidCustomAgentId_tooLong() {
-        assertInvalidAgentId(
-            "a".repeat(MAX_DOCUMENT_ID_LENGTH + 1),
-            "agent id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH
-        );
+        assertInvalidAgentId("a".repeat(MAX_DOCUMENT_ID_LENGTH + 1), "agent id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH);
     }
 
     private void assertInvalidAgentId(String agentId, String expectedMessage) {

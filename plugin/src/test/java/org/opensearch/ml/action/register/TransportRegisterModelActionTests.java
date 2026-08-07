@@ -21,9 +21,9 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_MODEL_URL;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
-import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -879,10 +879,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     @Test
     public void doExecute_invalidCustomModelId_startsWithHyphen() {
-        assertInvalidModelId(
-            "-invalid",
-            "model id must not start with '-'"
-        );
+        assertInvalidModelId("-invalid", "model id must not start with '-'");
     }
 
     @Test
@@ -916,10 +913,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     @Test
     public void doExecute_invalidCustomModelId_tooLong() {
-        assertInvalidModelId(
-            "a".repeat(MAX_DOCUMENT_ID_LENGTH + 1),
-            "model id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH
-        );
+        assertInvalidModelId("a".repeat(MAX_DOCUMENT_ID_LENGTH + 1), "model id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH);
     }
 
     private void assertInvalidModelId(String modelId, String expectedMessage) {

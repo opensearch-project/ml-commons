@@ -258,7 +258,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertNotNull(action);
     }
 
-
     public void testDoExecute_invalidCustomMemoryContainerId_startsWithHyphen() {
         assertInvalidMemoryContainerId("-invalid", "memory container id must not start with '-'");
     }
