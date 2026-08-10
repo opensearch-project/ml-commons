@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "template_id": {
+      "type": "keyword"
+    },
+    "index_binding": {
+      "type": "keyword"
+    },
+    "description": {
+      "type": "text"
+    },
+    "param_schema": {
+      "type": "object",
+      "enabled": false
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "created_by": {
+      "type": "keyword"
+    }
+  }
+}
