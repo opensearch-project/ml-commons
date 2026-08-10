@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -38,6 +39,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -819,6 +821,138 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         assertTrue("Cache key should contain max connections", cacheKey1.contains("max:10"));
         assertTrue("Cache key should contain SSL settings", cacheKey1.contains("skipSsl:false"));
         assertTrue("Cache key should contain mTLS settings", cacheKey1.contains("mtls:false"));
+    }
+
+    /** Builds an mTLS connector whose credentials hold both PEM and PKCS12 material. */
+    private HttpConnector mtlsConnectorWithBothCertFormats(ConnectorClientConfig clientConfig) {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+
+        // Validation only checks that the material for the *configured* keystore type is present, so a
+        // credential map may legitimately carry both formats. That makes keystoreType the only thing
+        // distinguishing these two configurations.
+        Map<String, String> credentials = new HashMap<>();
+        credentials.put("client_cert_pem", "-----BEGIN CERTIFICATE-----\nCert\n-----END CERTIFICATE-----");
+        credentials.put("client_key_pem", "-----BEGIN PRIVATE KEY-----\nKey\n-----END PRIVATE KEY-----");
+        credentials.put("client_cert_pkcs12", "MIIKjwIBAzCCCkUGCSqGSIb3DQEHAaCCCjYEggoy");
+        credentials.put("keystore_password", "testpass");
+
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .connectorClientConfig(clientConfig)
+            .actions(Arrays.asList(predictAction))
+            .credential(credentials)
+            .build();
+        connector.setDecryptedCredential(credentials);
+        return connector;
+    }
+
+    private ConnectorClientConfig mtlsConfig(String keystoreType) {
+        return new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, false, true, keystoreType);
+    }
+
+    @Test
+    public void testHttpClientCacheKey_KeystoreTypeChange_ProducesDifferentKey() {
+        MLHttpClientCacheManager cacheManager = new MLHttpClientCacheManager();
+
+        ConnectorClientConfig pemConfig = mtlsConfig("PEM");
+        ConnectorClientConfig pkcs12Config = mtlsConfig("PKCS12");
+
+        String pemKey = cacheManager.generateHttpClientCacheKey(mtlsConnectorWithBothCertFormats(pemConfig), pemConfig);
+        String pkcs12Key = cacheManager.generateHttpClientCacheKey(mtlsConnectorWithBothCertFormats(pkcs12Config), pkcs12Config);
+
+        assertTrue("Cache key should record the keystore type", pemKey.contains("ksType:PEM"));
+        assertTrue("Cache key should record the keystore type", pkcs12Key.contains("ksType:PKCS12"));
+        assertNotEquals(
+            "Switching PEM -> PKCS12 must invalidate the cached client even when credentials are byte-identical",
+            pemKey,
+            pkcs12Key
+        );
+    }
+
+    @Test
+    public void testHttpClientCacheKey_EquivalentKeystoreTypeSpellings_ProduceSameKey() {
+        MLHttpClientCacheManager cacheManager = new MLHttpClientCacheManager();
+
+        // KeystoreType.from is case-insensitive and defaults null to PEM, so these must not cause
+        // spurious cache misses that would needlessly rebuild the client.
+        ConnectorClientConfig upperConfig = mtlsConfig("PKCS12");
+        ConnectorClientConfig lowerConfig = mtlsConfig("pkcs12");
+        ConnectorClientConfig nullConfig = mtlsConfig(null);
+        ConnectorClientConfig pemConfig = mtlsConfig("PEM");
+
+        assertEquals(
+            "Keystore type should be normalised before entering the cache key",
+            cacheManager.generateHttpClientCacheKey(mtlsConnectorWithBothCertFormats(upperConfig), upperConfig),
+            cacheManager.generateHttpClientCacheKey(mtlsConnectorWithBothCertFormats(lowerConfig), lowerConfig)
+        );
+        assertEquals(
+            "A null keystore type defaults to PEM and should key the same as an explicit PEM",
+            cacheManager.generateHttpClientCacheKey(mtlsConnectorWithBothCertFormats(pemConfig), pemConfig),
+            cacheManager.generateHttpClientCacheKey(mtlsConnectorWithBothCertFormats(nullConfig), nullConfig)
+        );
+    }
+
+    @Test
+    public void testClientCloseGracePeriod_ShortTimeouts_UsesMinimumFloor() {
+        // connect + read = 15s, below the floor, so the floor wins.
+        ConnectorClientConfig config = new ConnectorClientConfig(10, 5, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, false, false, null);
+
+        assertEquals(
+            "Short timeouts should not shrink the grace period below the floor",
+            MLHttpClientCacheManager.MIN_CLIENT_CLOSE_GRACE_PERIOD,
+            MLHttpClientCacheManager.clientCloseGracePeriod(config)
+        );
+    }
+
+    @Test
+    public void testClientCloseGracePeriod_LongReadTimeout_ExceedsMinimumFloor() {
+        // connect 10s + read 300s: a request may legitimately still be running well past the 30s floor,
+        // so the grace period must stretch to cover it rather than closing the pool mid-flight.
+        ConnectorClientConfig config = new ConnectorClientConfig(10, 300, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT, false, false, null);
+
+        TimeValue gracePeriod = MLHttpClientCacheManager.clientCloseGracePeriod(config);
+
+        assertEquals("Grace period should cover connect + read", TimeValue.timeValueSeconds(310), gracePeriod);
+        assertTrue(
+            "Grace period must exceed the floor when the configured timeouts do",
+            gracePeriod.seconds() > MLHttpClientCacheManager.MIN_CLIENT_CLOSE_GRACE_PERIOD.seconds()
+        );
+    }
+
+    @Test
+    public void testClientCloseGracePeriod_NullTimeouts_UsesMinimumFloor() {
+        ConnectorClientConfig config = new ConnectorClientConfig(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            RetryBackoffPolicy.CONSTANT,
+            null,
+            null,
+            null
+        );
+
+        assertEquals(
+            "Null timeouts must not produce a zero-length grace period",
+            MLHttpClientCacheManager.MIN_CLIENT_CLOSE_GRACE_PERIOD,
+            MLHttpClientCacheManager.clientCloseGracePeriod(config)
+        );
+        assertEquals(
+            "A null config must not throw",
+            MLHttpClientCacheManager.MIN_CLIENT_CLOSE_GRACE_PERIOD,
+            MLHttpClientCacheManager.clientCloseGracePeriod(null)
+        );
     }
 
     @Test

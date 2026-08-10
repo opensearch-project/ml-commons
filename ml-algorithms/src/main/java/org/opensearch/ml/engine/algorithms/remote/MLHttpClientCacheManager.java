@@ -38,8 +38,38 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 @Log4j2
 final class MLHttpClientCacheManager {
 
+    /**
+     * Floor for the grace period before a replaced HTTP client is closed. The actual period is the
+     * larger of this and the configured connect + read timeout, so a client is never torn down while
+     * a request that the configuration itself permits could still be running.
+     */
+    @VisibleForTesting
+    static final TimeValue MIN_CLIENT_CLOSE_GRACE_PERIOD = TimeValue.timeValueSeconds(30);
+
     private final AtomicReference<String> httpClientCacheKey = new AtomicReference<>();
     private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+
+    /**
+     * Grace period to wait before closing a replaced client. Retries re-fetch the client per attempt,
+     * so only attempts already in flight need to survive: one connect plus one read. Returns the
+     * larger of that budget and {@link #MIN_CLIENT_CLOSE_GRACE_PERIOD}. Best effort - a response that
+     * keeps resetting the read timeout can still outlive it.
+     */
+    @VisibleForTesting
+    static TimeValue clientCloseGracePeriod(ConnectorClientConfig config) {
+        long inFlightBudgetSeconds = 0;
+        if (config != null) {
+            if (config.getConnectionTimeout() != null) {
+                inFlightBudgetSeconds += config.getConnectionTimeout();
+            }
+            if (config.getReadTimeout() != null) {
+                inFlightBudgetSeconds += config.getReadTimeout();
+            }
+        }
+        return inFlightBudgetSeconds > MIN_CLIENT_CLOSE_GRACE_PERIOD.seconds()
+            ? TimeValue.timeValueSeconds(inFlightBudgetSeconds)
+            : MIN_CLIENT_CLOSE_GRACE_PERIOD;
+    }
 
     /**
      * Gets or creates an HTTP client with cache invalidation support.
@@ -78,6 +108,7 @@ final class MLHttpClientCacheManager {
 
                     if (existingClient != null) {
                         // Schedule deferred close to avoid tearing down connection pool while in-flight requests are active
+                        TimeValue gracePeriod = clientCloseGracePeriod(config);
                         client.threadPool().schedule(() -> {
                             try {
                                 existingClient.close();
@@ -85,8 +116,8 @@ final class MLHttpClientCacheManager {
                             } catch (Exception e) {
                                 log.warn("Failed to close existing HTTP client: {}", e.getMessage());
                             }
-                        }, TimeValue.timeValueSeconds(30), "generic");
-                        log.debug("Scheduled deferred close of existing HTTP client due to configuration change");
+                        }, gracePeriod, "generic");
+                        log.debug("Scheduled deferred close of existing HTTP client in {} due to configuration change", gracePeriod);
                     }
 
                     log.debug("Created new HTTP client with cache key: {}", currentCacheKey);
@@ -114,6 +145,11 @@ final class MLHttpClientCacheManager {
         keyBuilder.append(",mtls:").append(mutualTlsEnabled != null ? mutualTlsEnabled : false);
 
         if (mutualTlsEnabled != null && mutualTlsEnabled && connector.getDecryptedCredential() != null) {
+            // The keystore type selects which key managers get built (PEM vs PKCS12), so it has to take
+            // part in invalidation. Resolved through KeystoreType.from so that equivalent spellings
+            // ("pkcs12", "PKCS12") and the null default (PEM) do not produce spurious cache misses.
+            keyBuilder.append(",ksType:").append(CertificateProcessor.KeystoreType.from(config.getKeystoreType()));
+
             int credentialHash = Objects
                 .hash(
                     connector.getDecryptedCredential().get(CertificateProcessor.CLIENT_CERT_PEM_FIELD),
