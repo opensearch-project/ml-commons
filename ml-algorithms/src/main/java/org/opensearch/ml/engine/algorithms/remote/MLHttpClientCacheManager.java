@@ -179,34 +179,34 @@ final class MLHttpClientCacheManager {
         }
 
         // Use CertificateProcessor to resolve mTLS configuration in a single call
-        // This consolidates validateCertificateConfig + buildSSLContext
-        CertificateProcessor.SSLContextWithManagers contextWithManagers = null;
+        // This consolidates validateCertificateConfig + buildMtlsManagers
+        CertificateProcessor.MtlsManagers mtlsManagers = null;
         try {
-            contextWithManagers = certificateProcessor.resolveMtls(config, connector.getDecryptedCredential());
+            mtlsManagers = certificateProcessor.resolveMtls(config, connector.getDecryptedCredential());
         } catch (MLValidationException e) {
             log.error("Certificate validation failed: {}", e.getMessage());
             throw e;
         } catch (SecurityException e) {
-            log.error("Security policy violation during SSL context initialization: {}", e.getMessage());
+            log.error("Security policy violation while building mutual TLS managers: {}", e.getMessage());
             throw new MLException("SSL security policy violation: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Failed to configure mutual TLS: {}", e.getMessage());
             throw new MLException("Failed to configure mutual TLS: " + e.getMessage(), e);
         }
 
-        // Extract SSL components and determine client description
+        // Extract the TLS managers and determine client description
         KeyManager[] keyManagers = null;
         TrustManager[] trustManagers = null;
         String clientDescription = "standard";
         boolean mutualTlsEnabledValue = false;
 
-        if (contextWithManagers != null) {
-            keyManagers = contextWithManagers.getKeyManagers();
-            trustManagers = contextWithManagers.getTrustManagers();
+        if (mtlsManagers != null) {
+            keyManagers = mtlsManagers.getKeyManagers();
+            trustManagers = mtlsManagers.getTrustManagers();
             clientDescription = "mutual-TLS";
             mutualTlsEnabledValue = true;
 
-            log.debug("Successfully extracted SSL context and managers");
+            log.debug("Successfully extracted mutual TLS managers");
             log
                 .debug(
                     "Key managers: {}, Trust managers: {}",

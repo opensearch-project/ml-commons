@@ -806,8 +806,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .credential(credentials)
             .build();
 
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-
         // Access the cache manager directly to test the generateHttpClientCacheKey method
         MLHttpClientCacheManager cacheManager = new MLHttpClientCacheManager();
 

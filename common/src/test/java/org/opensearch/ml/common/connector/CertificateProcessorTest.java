@@ -17,9 +17,8 @@ import static org.opensearch.ml.common.connector.CertificateProcessor.CLIENT_KEY
 import static org.opensearch.ml.common.connector.CertificateProcessor.KEYSTORE_PASSWORD_FIELD;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,21 +43,21 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_MutualTlsDisabled_ReturnsNull() {
+    public void testBuildMtlsManagers_MutualTlsDisabled_ReturnsNull() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(false).build();
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNull("SSL context should be null when mutual TLS is disabled", result);
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
+        assertNull("Mutual TLS managers should be null when mutual TLS is disabled", result);
     }
 
     @Test
-    public void testBuildSSLContext_MutualTlsEnabled_NoCredentials_ThrowsException() {
+    public void testBuildMtlsManagers_MutualTlsEnabled_NoCredentials_ThrowsException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         assertThrows(
             "Should throw MLValidationException when credentials are missing",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, null)
+            () -> certificateProcessor.buildMtlsManagers(config, null)
         );
     }
 
@@ -250,55 +249,19 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_NullConfig_ReturnsNull() {
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(null, credentials);
-        assertNull("SSL context should be null when config is null", result);
+    public void testBuildMtlsManagers_NullConfig_ReturnsNull() {
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(null, credentials);
+        assertNull("Mutual TLS managers should be null when config is null", result);
     }
 
     @Test
-    public void testBuildSSLContext_EmptyCredentials_ThrowsException() {
+    public void testBuildMtlsManagers_EmptyCredentials_ThrowsException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         assertThrows(
             "Should throw MLValidationException when credentials are empty",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, new HashMap<>())
-        );
-    }
-
-    @Test
-    public void testBuildSSLContextWithManagers_MutualTlsDisabled_ReturnsNull() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(false).build();
-
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNull("SSL context with managers should be null when mutual TLS is disabled", result);
-    }
-
-    @Test
-    public void testBuildSSLContextWithManagers_NullConfig_ReturnsNull() {
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(null, credentials);
-        assertNull("SSL context with managers should be null when config is null", result);
-    }
-
-    @Test
-    public void testBuildSSLContextWithManagers_NoCredentials_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        assertThrows(
-            "Should throw MLValidationException when credentials are missing",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, null)
-        );
-    }
-
-    @Test
-    public void testBuildSSLContextWithManagers_EmptyCredentials_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        assertThrows(
-            "Should throw MLValidationException when credentials are empty",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, new HashMap<>())
+            () -> certificateProcessor.buildMtlsManagers(config, new HashMap<>())
         );
     }
 
@@ -313,25 +276,7 @@ public class CertificateProcessorTest {
         assertThrows(
             "Should throw MLValidationException for invalid PEM certificate",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
-        );
-    }
-
-    @Test
-    public void testCreatePemKeyManagers_Base64EncodedCertificate_ParsesCorrectly() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        // Base64 encoded invalid certificate data (will trigger parsing but fail validation)
-        String base64Cert = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkludmFsaWRDZXJ0aWZpY2F0ZURhdGEKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==";
-        String base64Key = "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCkludmFsaWRLZXlEYXRhCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0=";
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, base64Cert);
-        credentials.put(CLIENT_KEY_PEM_FIELD, base64Key);
-
-        assertThrows(
-            "Should throw MLValidationException for invalid base64 encoded certificate",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
@@ -344,54 +289,48 @@ public class CertificateProcessorTest {
         assertThrows(
             "Should throw MLValidationException for invalid PKCS12 certificate",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
     @Test
-    public void testCreatePkcs12KeyManagers_Base64EncodedCertificate_ParsesCorrectly() {
+    public void testCreatePkcs12KeyManagers_ValidBase64ButNotAKeystore_ThrowsException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
-        // Base64 encoded invalid PKCS12 data (will trigger parsing but fail validation)
+        // Well-formed base64 that decodes cleanly but is not a PKCS12 keystore, so the failure comes
+        // from KeyStore.load rather than from base64 decoding (contrast with the test above).
         String base64Pkcs12 = "SW52YWxpZFBLQ1MxMkRhdGE=";
 
         credentials.put(CLIENT_CERT_PKCS12_FIELD, base64Pkcs12);
 
         assertThrows(
-            "Should throw MLValidationException for invalid base64 encoded PKCS12",
+            "Should throw MLValidationException when the decoded bytes are not a PKCS12 keystore",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
     @Test
-    public void testGetCertificateContent_Base64Content_DecodesCorrectly() {
+    public void testGetCertificateContent_Base64EncodedPem_DecodedThenFailsCertParsing() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        // Test with base64 content that decodes to PEM format
+        // 104 characters, so it crosses the detection threshold and decodes to PEM-headed text.
+        // The decode therefore succeeds and the failure comes from parsing the (bogus) certificate body.
         String base64Content = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkludmFsaWRDZXJ0aWZpY2F0ZURhdGEKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==";
         credentials.put(CLIENT_CERT_PEM_FIELD, base64Content);
         credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidKeyData\n-----END PRIVATE KEY-----");
 
-        assertThrows(
-            "Should decode base64 content and then fail on invalid certificate",
+        MLValidationException exception = assertThrows(
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
-    }
-
-    @Test
-    public void testGetCertificateContent_NonBase64Content_ReturnsAsIs() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        // Test with non-base64 content (PEM format)
-        credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidCertificateData\n-----END CERTIFICATE-----");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidKeyData\n-----END PRIVATE KEY-----");
-
-        assertThrows(
-            "Should use content as-is and fail on invalid certificate",
-            MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+        assertFalse(
+            "Base64 decoding should have succeeded, not reported a decode failure: " + exception.getMessage(),
+            exception.getMessage().contains("appears to be base64 encoded")
+        );
+        assertTrue(
+            "Failure should come from parsing the decoded certificate: " + exception.getMessage(),
+            exception.getMessage().contains("Could not parse certificate")
         );
     }
 
@@ -406,7 +345,7 @@ public class CertificateProcessorTest {
         assertThrows(
             "Should throw MLValidationException for malformed PEM certificate",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
@@ -421,23 +360,50 @@ public class CertificateProcessorTest {
         assertThrows(
             "Should throw MLValidationException for malformed PEM private key",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
     @Test
-    public void testIsBase64EncodedContent_ValidBase64_ReturnsTrue() {
+    public void testIsBase64EncodedContent_OverLengthThreshold_DetectedAsBase64() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        // Test with valid base64 content
-        String base64Content = "SGVsbG8gV29ybGQ="; // "Hello World" in base64
-        credentials.put(CLIENT_CERT_PEM_FIELD, base64Content);
+        // Longer than the 100-character threshold and base64-shaped, so it IS treated as base64.
+        // It decodes to non-PEM bytes, and that distinctive error is what proves the branch was taken.
+        String longBase64 = Base64.getEncoder().encodeToString("X".repeat(200).getBytes(StandardCharsets.UTF_8));
+        credentials.put(CLIENT_CERT_PEM_FIELD, longBase64);
         credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidKeyData\n-----END PRIVATE KEY-----");
 
-        assertThrows(
-            "Should detect base64 content and attempt to decode",
+        MLValidationException exception = assertThrows(
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
+        );
+        assertTrue(
+            "Content over the threshold must be detected as base64 and decoded: " + exception.getMessage(),
+            exception.getMessage().contains("appears to be base64 encoded")
+        );
+    }
+
+    @Test
+    public void testIsBase64EncodedContent_UnderLengthThreshold_NotDetectedAsBase64() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+
+        // Valid base64 but only 16 characters, so the 100-character threshold rejects it and the
+        // content is passed through untouched - it then fails PEM parsing for lacking a BEGIN block.
+        credentials.put(CLIENT_CERT_PEM_FIELD, "SGVsbG8gV29ybGQ="); // "Hello World" in base64
+        credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidKeyData\n-----END PRIVATE KEY-----");
+
+        MLValidationException exception = assertThrows(
+            MLValidationException.class,
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
+        );
+        assertFalse(
+            "Content under the threshold must not be treated as base64: " + exception.getMessage(),
+            exception.getMessage().contains("appears to be base64 encoded")
+        );
+        assertTrue(
+            "Content should be passed through and fail PEM parsing: " + exception.getMessage(),
+            exception.getMessage().contains("Invalid PEM certificate format")
         );
     }
 
@@ -449,37 +415,41 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nSomeData\n-----END CERTIFICATE-----");
         credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidKeyData\n-----END PRIVATE KEY-----");
 
-        assertThrows(
+        MLValidationException exception = assertThrows(
             "Should not treat PEM format as base64",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
+        );
+        assertFalse(
+            "PEM-headed content must bypass base64 decoding entirely: " + exception.getMessage(),
+            exception.getMessage().contains("appears to be base64 encoded")
         );
     }
 
     @Test
-    public void testBuildSSLContextWithManagers_PemType_InvalidCertificate_ThrowsException() {
+    public void testBuildMtlsManagers_PemType_InvalidCertificate_ThrowsException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidData\n-----END CERTIFICATE-----");
         credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidData\n-----END PRIVATE KEY-----");
 
         assertThrows(
-            "Should throw MLValidationException for invalid certificate in buildSSLContext",
+            "Should throw MLValidationException for invalid certificate in buildMtlsManagers",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
     @Test
-    public void testBuildSSLContextWithManagers_Pkcs12Type_InvalidCertificate_ThrowsException() {
+    public void testBuildMtlsManagers_Pkcs12Type_InvalidCertificate_ThrowsException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         credentials.put(CLIENT_CERT_PKCS12_FIELD, "InvalidPKCS12Data");
 
         assertThrows(
-            "Should throw MLValidationException for invalid PKCS12 in buildSSLContext",
+            "Should throw MLValidationException for invalid PKCS12 in buildMtlsManagers",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
@@ -513,7 +483,7 @@ public class CertificateProcessorTest {
         assertThrows(
             "Should throw MLValidationException for invalid certificate data",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
     }
 
@@ -521,11 +491,16 @@ public class CertificateProcessorTest {
     // These tests verify successful certificate processing with real certificate fixtures
 
     private String loadCertificateFromFile(String filename) throws IOException {
-        return new String(Files.readAllBytes(Paths.get("src/test/resources/certificates/" + filename)));
+        // Loaded from the test classpath rather than a CWD-relative path so the fixtures resolve
+        // regardless of the working directory the runner chooses.
+        try (InputStream in = getClass().getResourceAsStream("/certificates/" + filename)) {
+            assertNotNull("Missing test fixture on classpath: /certificates/" + filename, in);
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     @Test
-    public void testBuildSSLContext_ValidPemCertificates_Success() throws IOException {
+    public void testBuildMtlsManagers_ValidPemCertificates_Success() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Load real certificate fixtures
@@ -537,28 +512,9 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
         credentials.put(CA_CERT_PEM_FIELD, caCert);
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNotNull("SSL context should be created successfully with valid PEM certificates", result);
-        assertNotNull("SSL context should not be null", result.getSslContext());
-    }
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
 
-    @Test
-    public void testBuildSSLContextWithManagers_ValidPemCertificates_Success() throws IOException {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        // Load real certificate fixtures
-        String clientCert = loadCertificateFromFile("test-client-cert.pem");
-        String clientKey = loadCertificateFromFile("test-client-key-pkcs8.pem");
-        String caCert = loadCertificateFromFile("test-ca-cert.pem");
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, clientCert);
-        credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
-        credentials.put(CA_CERT_PEM_FIELD, caCert);
-
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-
-        assertNotNull("SSL context with managers should be created successfully", result);
-        assertNotNull("SSL context should not be null", result.getSslContext());
+        assertNotNull("Mutual TLS managers should be created successfully", result);
 
         KeyManager[] keyManagers = result.getKeyManagers();
         TrustManager[] trustManagers = result.getTrustManagers();
@@ -570,7 +526,7 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_SingleLineBase64PemCertificates_Success() throws IOException {
+    public void testBuildMtlsManagers_SingleLineBase64PemCertificates_Success() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Base64-encoded PEM on a single line, i.e. the output of `base64 -w 0`.
@@ -578,13 +534,13 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_KEY_PEM_FIELD, base64SingleLine(loadCertificateFromFile("test-client-key-pkcs8.pem")));
         credentials.put(CA_CERT_PEM_FIELD, base64SingleLine(loadCertificateFromFile("test-ca-cert.pem")));
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNotNull("SSL context should be created successfully with single-line base64 PEM certificates", result);
-        assertNotNull("SSL context should not be null", result.getSslContext());
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
+        assertNotNull("Mutual TLS managers should be created successfully with single-line base64 PEM certificates", result);
+        assertNotNull("Key managers should not be null", result.getKeyManagers());
     }
 
     @Test
-    public void testBuildSSLContext_LineWrappedBase64PemCertificates_Success() throws IOException {
+    public void testBuildMtlsManagers_LineWrappedBase64PemCertificates_Success() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Base64-encoded PEM wrapped at 64 characters, i.e. the output of `openssl base64 -in cert.pem`.
@@ -594,9 +550,9 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_KEY_PEM_FIELD, base64LineWrapped(loadCertificateFromFile("test-client-key-pkcs8.pem")));
         credentials.put(CA_CERT_PEM_FIELD, base64LineWrapped(loadCertificateFromFile("test-ca-cert.pem")));
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNotNull("SSL context should be created successfully with line-wrapped base64 PEM certificates", result);
-        assertNotNull("SSL context should not be null", result.getSslContext());
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
+        assertNotNull("Mutual TLS managers should be created successfully with line-wrapped base64 PEM certificates", result);
+        assertNotNull("Key managers should not be null", result.getKeyManagers());
     }
 
     private String base64SingleLine(String content) {
@@ -608,7 +564,7 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_ValidPkcs12Certificate_Success() {
+    public void testBuildMtlsManagers_ValidPkcs12Certificate_Success() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
 
         // Use the base64 encoded PKCS12 content from our fixtures
@@ -618,9 +574,9 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_CERT_PKCS12_FIELD, pkcs12Content);
         credentials.put(KEYSTORE_PASSWORD_FIELD, "testpass");
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNotNull("SSL context should be created successfully with valid PKCS12 certificate", result);
-        assertNotNull("SSL context should not be null", result.getSslContext());
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
+        assertNotNull("Mutual TLS managers should be created successfully with valid PKCS12 certificate", result);
+        assertNotNull("Key managers should not be null", result.getKeyManagers());
     }
 
     @Test
@@ -643,7 +599,7 @@ public class CertificateProcessorTest {
     // are fully parsed rather than only the first certificate block.
 
     @Test
-    public void testBuildSSLContext_ClientCertChain_AllCertificatesLoaded() throws IOException {
+    public void testBuildMtlsManagers_ClientCertChain_AllCertificatesLoaded() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // test-client-chain-leaf-cert.pem is genuinely issued by test-intermediate-cert.pem (not just
@@ -656,17 +612,17 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_CERT_PEM_FIELD, leafCert + "\n" + intermediateCert);
         credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNotNull("SSL context should be created successfully with a client certificate chain", result);
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
+        assertNotNull("Mutual TLS managers should be created successfully with a client certificate chain", result);
         assertNotNull("Key managers should be present", result.getKeyManagers());
         assertTrue("Key managers array should not be empty", result.getKeyManagers().length > 0);
     }
 
     @Test
-    public void testBuildSSLContext_ClientCertChainMisordered_ThrowsClearOrderingException() throws IOException {
+    public void testBuildMtlsManagers_ClientCertChainMisordered_ThrowsClearOrderingException() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        // Same genuinely-chained fixtures as testBuildSSLContext_ClientCertChain_AllCertificatesLoaded,
+        // Same genuinely-chained fixtures as testBuildMtlsManagers_ClientCertChain_AllCertificatesLoaded,
         // but with the intermediate listed before the leaf - this must be rejected with a clear
         // ordering-specific message rather than surfacing a raw KeyStoreException later.
         String leafCert = loadCertificateFromFile("test-client-chain-leaf-cert.pem");
@@ -676,7 +632,7 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_CERT_PEM_FIELD, intermediateCert + "\n" + leafCert);
         credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
 
-        Exception exception = assertThrows(MLValidationException.class, () -> certificateProcessor.buildSSLContext(config, credentials));
+        Exception exception = assertThrows(MLValidationException.class, () -> certificateProcessor.buildMtlsManagers(config, credentials));
         assertTrue(
             "Exception message should explain the chain is not ordered correctly: " + exception.getMessage(),
             exception.getMessage().contains("not ordered correctly")
@@ -684,7 +640,7 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_CaCertBundle_AllTrustAnchorsLoaded() throws IOException {
+    public void testBuildMtlsManagers_CaCertBundle_AllTrustAnchorsLoaded() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         String clientCert = loadCertificateFromFile("test-client-cert.pem");
@@ -698,8 +654,8 @@ public class CertificateProcessorTest {
         credentials.put(CLIENT_KEY_PEM_FIELD, clientKey);
         credentials.put(CA_CERT_PEM_FIELD, caCert + "\n" + intermediateCert);
 
-        CertificateProcessor.SSLContextWithManagers result = certificateProcessor.buildSSLContext(config, credentials);
-        assertNotNull("SSL context should be created successfully with a CA certificate bundle", result);
+        CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
+        assertNotNull("Mutual TLS managers should be created successfully with a CA certificate bundle", result);
         assertNotNull("Trust managers should be present", result.getTrustManagers());
         assertTrue("Trust managers array should not be empty", result.getTrustManagers().length > 0);
     }
@@ -710,7 +666,7 @@ public class CertificateProcessorTest {
     // contains "/" characters (from base64) is not misdiagnosed as a file path.
 
     @Test
-    public void testBuildSSLContext_CertFieldIsUnixFilePath_ThrowsFilePathSpecificException() {
+    public void testBuildMtlsManagers_CertFieldIsUnixFilePath_ThrowsFilePathSpecificException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "/etc/ssl/certs/client.pem");
@@ -719,7 +675,7 @@ public class CertificateProcessorTest {
         MLValidationException exception = assertThrows(
             "Should throw MLValidationException when a filesystem path is passed instead of certificate content",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
         assertTrue(
             "Exception message should call out that file paths are not supported: " + exception.getMessage(),
@@ -728,7 +684,7 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_CertFieldIsWindowsFilePath_ThrowsFilePathSpecificException() {
+    public void testBuildMtlsManagers_CertFieldIsWindowsFilePath_ThrowsFilePathSpecificException() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         credentials.put(CLIENT_CERT_PEM_FIELD, "C:\\certs\\client.pem");
@@ -737,7 +693,7 @@ public class CertificateProcessorTest {
         MLValidationException exception = assertThrows(
             "Should throw MLValidationException when a Windows filesystem path is passed instead of certificate content",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
         assertTrue(
             "Exception message should call out that file paths are not supported: " + exception.getMessage(),
@@ -746,7 +702,7 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_KeyFieldLooksLikeFileNameWithExtension_ThrowsFilePathSpecificException() throws IOException {
+    public void testBuildMtlsManagers_KeyFieldLooksLikeFileNameWithExtension_ThrowsFilePathSpecificException() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // The certificate is parsed before the private key, so it must be well-formed here in order
@@ -757,7 +713,7 @@ public class CertificateProcessorTest {
         MLValidationException exception = assertThrows(
             "Should throw MLValidationException when a bare filename is passed instead of private key content",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
         assertTrue(
             "Exception message should call out that file paths are not supported: " + exception.getMessage(),
@@ -766,7 +722,7 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testBuildSSLContext_MalformedBase64BodyContainingSlash_DoesNotTriggerFilePathMessage() {
+    public void testBuildMtlsManagers_MalformedBase64BodyContainingSlash_DoesNotTriggerFilePathMessage() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
         // Malformed PEM body (missing -----BEGIN header) that legitimately contains "/" characters
@@ -777,7 +733,7 @@ public class CertificateProcessorTest {
         MLValidationException exception = assertThrows(
             "Should throw MLValidationException for malformed PEM certificate content",
             MLValidationException.class,
-            () -> certificateProcessor.buildSSLContext(config, credentials)
+            () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
         assertFalse(
             "Malformed base64 content containing '/' should not be misdiagnosed as a file path: " + exception.getMessage(),

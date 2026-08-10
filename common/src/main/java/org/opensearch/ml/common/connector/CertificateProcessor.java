@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
@@ -25,7 +26,6 @@ import java.util.regex.Pattern;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 
@@ -115,15 +115,17 @@ public class CertificateProcessor {
         .compile(".*\\.(pem|crt|cer|key|p12|pfx|der)$", Pattern.CASE_INSENSITIVE);
 
     /**
-     * Builds an SSL context for mutual TLS authentication based on the connector configuration
-     * and decrypted credentials. Returns both the SSL context and the managers for direct use.
+     * Builds the mutual TLS key and trust managers from the connector configuration and decrypted
+     * credentials. The managers are handed to the HTTP client as
+     * {@code TlsKeyManagersProvider}/{@code TlsTrustManagersProvider}, so no {@code SSLContext} is
+     * assembled here.
      *
      * @param config The connector client configuration
      * @param decryptedCredentials The decrypted credentials containing certificate data
-     * @return SSLContextWithManagers containing SSL context and managers, or null if mTLS is not enabled
+     * @return MtlsManagers containing the key and trust managers, or null if mTLS is not enabled
      * @throws MLValidationException if certificate processing fails
      */
-    public SSLContextWithManagers buildSSLContext(ConnectorClientConfig config, Map<String, String> decryptedCredentials) {
+    public MtlsManagers buildMtlsManagers(ConnectorClientConfig config, Map<String, String> decryptedCredentials) {
         if (config == null || !Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
             return null;
         }
@@ -138,34 +140,25 @@ public class CertificateProcessor {
             KeyManager[] keyManagers = createKeyManagers(keystoreType, decryptedCredentials);
             TrustManager[] trustManagers = createTrustManagers(config, decryptedCredentials);
 
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(keyManagers, trustManagers, null);
-
-            log.debug("Successfully built SSL context for mutual TLS with keystore type: {}", keystoreType);
-            return new SSLContextWithManagers(sslContext, keyManagers, trustManagers);
+            log.debug("Successfully built mutual TLS managers with keystore type: {}", keystoreType);
+            return new MtlsManagers(keyManagers, trustManagers);
 
         } catch (Exception e) {
-            log.error("Failed to build SSL context for mutual TLS", e);
-            throw new MLValidationException("Failed to build SSL context for mutual TLS: " + e.getMessage(), e);
+            log.error("Failed to build mutual TLS managers", e);
+            throw new MLValidationException("Failed to build mutual TLS managers: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Container class for SSL context and its managers
+     * Container for the mutual TLS key and trust managers.
      */
-    public static class SSLContextWithManagers {
-        private final SSLContext sslContext;
+    public static class MtlsManagers {
         private final KeyManager[] keyManagers;
         private final TrustManager[] trustManagers;
 
-        public SSLContextWithManagers(SSLContext sslContext, KeyManager[] keyManagers, TrustManager[] trustManagers) {
-            this.sslContext = sslContext;
+        public MtlsManagers(KeyManager[] keyManagers, TrustManager[] trustManagers) {
             this.keyManagers = keyManagers;
             this.trustManagers = trustManagers;
-        }
-
-        public SSLContext getSslContext() {
-            return sslContext;
         }
 
         public KeyManager[] getKeyManagers() {
@@ -435,10 +428,12 @@ public class CertificateProcessor {
 
             // Check if content is base64 encoded (no PEM headers) for PEM fields
             if (isBase64EncodedContent(directContent)) {
-                // Decode base64 and validate it's actually PEM content
+                // Decode base64 and validate it's actually PEM content.
+                // Use the MIME decoder so line-wrapped base64 (the default output of `base64` and
+                // `openssl base64`) decodes, matching the whitespace tolerance of isBase64EncodedContent.
                 try {
-                    byte[] decodedBytes = Base64.getDecoder().decode(directContent.trim());
-                    String decodedContent = new String(decodedBytes);
+                    byte[] decodedBytes = Base64.getMimeDecoder().decode(directContent.trim());
+                    String decodedContent = new String(decodedBytes, StandardCharsets.UTF_8);
 
                     // Security: Validate decoded content contains PEM headers
                     if (decodedContent.contains("-----BEGIN")) {
@@ -564,16 +559,16 @@ public class CertificateProcessor {
     }
 
     /**
-     * Resolves mutual TLS configuration by consolidating validation and SSL context creation.
-     * This method combines validateCertificateConfig and buildSSLContext into a single call
+     * Resolves mutual TLS configuration by consolidating validation and manager creation.
+     * This method combines validateCertificateConfig and buildMtlsManagers into a single call
      * to reduce credential parsing overhead.
      *
      * @param config The connector client configuration
      * @param credentials The decrypted credentials containing certificate data
-     * @return SSLContextWithManagers containing SSL context and managers, or null if mTLS is disabled
+     * @return MtlsManagers containing the key and trust managers, or null if mTLS is disabled
      * @throws MLValidationException if certificate processing or validation fails
      */
-    public SSLContextWithManagers resolveMtls(ConnectorClientConfig config, Map<String, String> credentials) {
+    public MtlsManagers resolveMtls(ConnectorClientConfig config, Map<String, String> credentials) {
         // Return null early if mTLS is not enabled
         if (config == null || !Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
             return null;
@@ -581,7 +576,7 @@ public class CertificateProcessor {
 
         validateCertificateConfig(config, credentials);
 
-        // Build and return SSL context with managers
-        return buildSSLContext(config, credentials);
+        // Build and return the mutual TLS managers
+        return buildMtlsManagers(config, credentials);
     }
 }
