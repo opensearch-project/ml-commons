@@ -22,8 +22,8 @@ import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectA
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;

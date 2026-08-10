@@ -203,12 +203,11 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 registerAgentToIndex(
                     updatedAgent,
                     tenantId,
-                    ActionListener.wrap(listener::onResponse, parentFailure -> deleteOrphanedConversationAgent(
-                        conversationAgentId,
-                        tenantId,
-                        parentFailure,
-                        listener
-                    ))
+                    ActionListener
+                        .wrap(
+                            listener::onResponse,
+                            parentFailure -> deleteOrphanedConversationAgent(conversationAgentId, tenantId, parentFailure, listener)
+                        )
                 );
             }, listener::onFailure));
         } else {
@@ -245,11 +244,12 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         Exception parentFailure,
         ActionListener<MLRegisterAgentResponse> listener
     ) {
-        log.warn(
-            "Plan-execute-and-reflect agent registration failed after creating conversation agent {}; attempting cleanup",
-            conversationAgentId,
-            parentFailure
-        );
+        log
+            .warn(
+                "Plan-execute-and-reflect agent registration failed after creating conversation agent {}; attempting cleanup",
+                conversationAgentId,
+                parentFailure
+            );
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                 .deleteDataObjectAsync(
