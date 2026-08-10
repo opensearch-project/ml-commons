@@ -123,6 +123,7 @@ import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -733,11 +734,131 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testRegisterModelMeta_HiddenModelUsesModelNameWithoutCreateOpType() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            modelName,
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            true,
+            null,
+            null
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onResponse(new IndexResponse(new ShardId("test", "test", 1), modelName, 1L, 1L, 1L, true));
+            return null;
+        }).when(client).index(indexRequestCaptor.capture(), any());
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        IndexRequest indexRequest = indexRequestCaptor.getValue();
+        assertEquals(modelName, indexRequest.id());
+        assertEquals(DocWriteRequest.OpType.INDEX, indexRequest.opType());
+    }
+
+    @Test
+    public void testRegisterModelMeta_rejectsCustomModelIdForHiddenModel() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            modelName,
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            true,
+            null,
+            "different-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Cannot specify custom model id for hidden models", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testRegisterModelMeta_rejectsCustomModelIdForMetricsCorrelationModel() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            modelName,
+            FunctionName.METRICS_CORRELATION,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            MetricsCorrelationModelConfig.builder().modelType("testModelType").build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            "different-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Cannot specify custom model id for metrics correlation models", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
     public void testIndexRemoteModel_UsesCustomModelId() throws Exception {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
-        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(true).toBuilder().modelId("custom-remote-model").build();
+        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(false).toBuilder().modelId("custom-remote-model").build();
         MLTask remoteTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
 
@@ -776,7 +897,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
-        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(true).toBuilder().modelId("custom-remote-model").build();
+        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(false).toBuilder().modelId("custom-remote-model").build();
         MLTask remoteTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
 

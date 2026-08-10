@@ -48,6 +48,7 @@ import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -199,7 +200,16 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
                 parameters.put(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD, conversationAgentId);
                 MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
-                registerAgentToIndex(updatedAgent, tenantId, listener);
+                registerAgentToIndex(
+                    updatedAgent,
+                    tenantId,
+                    ActionListener.wrap(listener::onResponse, parentFailure -> deleteOrphanedConversationAgent(
+                        conversationAgentId,
+                        tenantId,
+                        parentFailure,
+                        listener
+                    ))
+                );
             }, listener::onFailure));
         } else {
             registerAgentToIndex(mlAgent, tenantId, listener);
@@ -227,6 +237,37 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             tenantId,
             ActionListener.wrap(response -> { listener.onResponse(response.getAgentId()); }, listener::onFailure)
         );
+    }
+
+    private void deleteOrphanedConversationAgent(
+        String conversationAgentId,
+        String tenantId,
+        Exception parentFailure,
+        ActionListener<MLRegisterAgentResponse> listener
+    ) {
+        log.warn(
+            "Plan-execute-and-reflect agent registration failed after creating conversation agent {}; attempting cleanup",
+            conversationAgentId,
+            parentFailure
+        );
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
+                .deleteDataObjectAsync(
+                    DeleteDataObjectRequest.builder().index(ML_AGENT_INDEX).id(conversationAgentId).tenantId(tenantId).build()
+                )
+                .whenComplete((response, deleteThrowable) -> {
+                    context.restore();
+                    if (deleteThrowable != null) {
+                        log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, deleteThrowable);
+                    } else {
+                        log.info("Deleted orphaned conversation agent {} after parent registration failure", conversationAgentId);
+                    }
+                    listener.onFailure(parentFailure);
+                });
+        } catch (Exception e) {
+            log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, e);
+            listener.onFailure(parentFailure);
+        }
     }
 
     private void registerAgentToIndex(MLAgent mlAgent, String tenantId, ActionListener<MLRegisterAgentResponse> listener) {

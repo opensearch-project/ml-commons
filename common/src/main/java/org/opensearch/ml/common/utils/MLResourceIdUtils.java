@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.utils;
 
+import static java.util.Locale.ROOT;
+
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
@@ -80,7 +82,7 @@ public final class MLResourceIdUtils {
             if (current instanceof OpenSearchException openSearchException && openSearchException.status() == RestStatus.CONFLICT) {
                 String message = current.getMessage();
                 if (message != null) {
-                    String lowerMessage = message.toLowerCase();
+                    String lowerMessage = message.toLowerCase(ROOT);
                     if (lowerMessage.contains("document already exists") || lowerMessage.contains("version conflict")) {
                         return true;
                     }
