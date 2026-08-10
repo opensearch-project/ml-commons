@@ -72,6 +72,19 @@ final class MLHttpClientCacheManager {
     }
 
     /**
+     * Closes a replaced HTTP client, logging rather than propagating any failure. Shared by the
+     * deferred close and the fallback path so the two cannot drift apart.
+     */
+    private static void closeQuietly(SdkAsyncHttpClient httpClient, String reason) {
+        try {
+            httpClient.close();
+            log.debug("Closed existing HTTP client {}", reason);
+        } catch (Exception e) {
+            log.warn("Failed to close existing HTTP client: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Gets or creates an HTTP client with cache invalidation support.
      * 
      * @param connector The HTTP connector
@@ -109,15 +122,22 @@ final class MLHttpClientCacheManager {
                     if (existingClient != null) {
                         // Schedule deferred close to avoid tearing down connection pool while in-flight requests are active
                         TimeValue gracePeriod = clientCloseGracePeriod(config);
-                        client.threadPool().schedule(() -> {
-                            try {
-                                existingClient.close();
-                                log.debug("Closed existing HTTP client after grace period due to configuration change");
-                            } catch (Exception e) {
-                                log.warn("Failed to close existing HTTP client: {}", e.getMessage());
-                            }
-                        }, gracePeriod, "generic");
-                        log.debug("Scheduled deferred close of existing HTTP client in {} due to configuration change", gracePeriod);
+                        try {
+                            client
+                                .threadPool()
+                                .schedule(
+                                    () -> closeQuietly(existingClient, "after grace period due to configuration change"),
+                                    gracePeriod,
+                                    "generic"
+                                );
+                            log.debug("Scheduled deferred close of existing HTTP client in {} due to configuration change", gracePeriod);
+                        } catch (Exception e) {
+                            // Scheduling can be rejected, most plausibly while the node is shutting down. Closing now
+                            // may cut short in-flight requests on the old client, but that is preferable to leaking
+                            // its connection pool and threads outright.
+                            log.warn("Could not schedule deferred close of existing HTTP client: {}", e.getMessage());
+                            closeQuietly(existingClient, "immediately because the deferred close could not be scheduled");
+                        }
                     }
 
                     log.debug("Created new HTTP client with cache key: {}", currentCacheKey);

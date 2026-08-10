@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -84,7 +85,9 @@ public class CertificateProcessor {
                 return PEM; // Default to PEM
             }
 
-            String normalized = input.trim().toUpperCase();
+            // Locale.ROOT so the comparison against the fixed enum names never depends on the node's
+            // default locale (e.g. Turkish upper-cases 'i' to 'İ').
+            String normalized = input.trim().toUpperCase(Locale.ROOT);
             for (KeystoreType type : values()) {
                 if (type.getValue().equals(normalized)) {
                     return type;
