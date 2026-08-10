@@ -44,6 +44,9 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.batch.BatchInferenceExecutor;
+import org.opensearch.ml.batch.BatchSplitter;
+import org.opensearch.ml.batch.BatchableInputRegistry;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -57,6 +60,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -105,6 +109,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final MLModelManager mlModelManager;
     private final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
+    private final BatchInferenceExecutor batchInferenceExecutor;
     private volatile boolean autoDeploymentEnabled;
 
     public static final String BUCKET_FIELD = "bucket";
@@ -134,6 +139,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
+        this.batchInferenceExecutor = new BatchInferenceExecutor(new BatchableInputRegistry(), new BatchSplitter());
         autoDeploymentEnabled = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
             .getClusterSettings()
@@ -413,6 +419,24 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return functionName == FunctionName.REMOTE ? REMOTE_PREDICT_THREAD_POOL : PREDICT_THREAD_POOL;
     }
 
+    // Batch inference config lives on the cached model; null means the request is not batched.
+    private BatchInferenceConfig getBatchInferenceConfig(String modelId) {
+        if (modelId == null) {
+            return null;
+        }
+        MLModel cachedModel = mlModelManager.getModelInfo(modelId);
+        if (cachedModel == null) {
+            log
+                .warn(
+                    "No cached model metadata for model {} while running predict, so batch inference limits cannot be "
+                        + "applied to this request",
+                    modelId
+                );
+            return null;
+        }
+        return cachedModel.getBatchInferenceConfig();
+    }
+
     private void predict(
         String modelId,
         String tenantId,
@@ -586,7 +610,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName));
-                        predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
+                        // If it is offline batch inference, call the model directly. If it is an online predict request,
+                        // go through the batchInferenceExecutor, which splits it when the model defines batch inference limits.
+                        if (mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)) {
+                            predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
+                        } else {
+                            batchInferenceExecutor
+                                .execute(mlInput, getBatchInferenceConfig(modelId), predictor, channel, trackPredictDurationListener);
+                        }
                     } else {
                         // long startTime = System.nanoTime();
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without
