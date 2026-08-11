@@ -57,6 +57,7 @@ public class RegisterAgenticSearchTemplateTransportAction extends
                     request.getTemplateId(),
                     request.getIndex(),
                     request.getDescription(),
+                    request.getParamSchema(),
                     user,
                     ActionListener
                         .wrap(

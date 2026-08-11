@@ -81,6 +81,29 @@ public class RestMLRegisterAgenticSearchTemplateActionTests extends OpenSearchTe
         assertEquals("desc", result.getDescription());
     }
 
+    public void testGetRequestParsesParamSchema() throws Exception {
+        RestRequest request = bodyRequest(
+            "{\"template_id\":\"product_search\",\"index\":\"products\","
+                + "\"param_schema\":{\"lex_query\":{\"type\":\"string\",\"required\":true}}}"
+        );
+        MLRegisterAgenticSearchTemplateRequest result = restAction.getRequest(request);
+        assertEquals("product_search", result.getTemplateId());
+        assertNotNull(result.getParamSchema());
+        assertTrue(result.getParamSchema().containsKey("lex_query"));
+    }
+
+    public void testGetRequestEmptyParamSchemaRejected() throws Exception {
+        RestRequest request = bodyRequest("{\"template_id\":\"product_search\",\"index\":\"products\",\"param_schema\":{}}");
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> restAction.getRequest(request));
+        assertEquals("'param_schema' cannot be empty", e.getMessage());
+    }
+
+    public void testGetRequestNoParamSchemaIsNull() throws Exception {
+        RestRequest request = bodyRequest("{\"template_id\":\"product_search\",\"index\":\"products\"}");
+        MLRegisterAgenticSearchTemplateRequest result = restAction.getRequest(request);
+        assertNull(result.getParamSchema());
+    }
+
     public void testGetRequestMissingTemplateId() throws Exception {
         RestRequest request = bodyRequest("{\"index\":\"products\"}");
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> restAction.getRequest(request));

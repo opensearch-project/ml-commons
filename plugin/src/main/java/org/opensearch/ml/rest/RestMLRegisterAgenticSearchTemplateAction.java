@@ -12,6 +12,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -26,17 +27,19 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 /**
- * {@code POST /_plugins/_ml/agentic_search_templates} — register a search template
- * for filling. The customer sends only the link (§4.5): {@code template_id} (the
- * existing {@code _scripts} template id), {@code index}, and an optional {@code
- * description}; the server derives + stores the param-schema under the same id. The
- * {@code template_id} is the single identifier used by get/update/delete as well.
+ * {@code POST /_plugins/_ml/agentic_search_templates} registers a search template for
+ * filling. The body carries {@code template_id} (the existing {@code _scripts} template
+ * id), {@code index}, and an optional {@code description}; the server derives and stores
+ * the param-schema under the same id. A caller may instead supply {@code param_schema}
+ * directly, in which case the server validates and stores it rather than deriving one.
+ * The {@code template_id} is also the id used by get, update, and delete.
  */
 public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
     private static final String ACTION_NAME = "ml_register_agentic_search_template_action";
     private static final String TEMPLATE_ID_FIELD = "template_id";
     private static final String INDEX_FIELD = "index";
     private static final String DESCRIPTION_FIELD = "description";
+    private static final String PARAM_SCHEMA_FIELD = "param_schema";
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -76,6 +79,7 @@ public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
         String templateId = null;
         String index = null;
         String description = null;
+        Map<String, Object> paramSchema = null;
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -92,6 +96,9 @@ public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
+                case PARAM_SCHEMA_FIELD:
+                    paramSchema = parser.map();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -104,6 +111,9 @@ public class RestMLRegisterAgenticSearchTemplateAction extends BaseRestHandler {
         if (index == null || index.trim().isEmpty()) {
             throw new IllegalArgumentException("'index' is required");
         }
-        return new MLRegisterAgenticSearchTemplateRequest(templateId, index, description);
+        if (paramSchema != null && paramSchema.isEmpty()) {
+            throw new IllegalArgumentException("'param_schema' cannot be empty");
+        }
+        return new MLRegisterAgenticSearchTemplateRequest(templateId, index, description, paramSchema);
     }
 }

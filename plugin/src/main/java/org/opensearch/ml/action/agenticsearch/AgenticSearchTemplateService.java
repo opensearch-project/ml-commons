@@ -97,17 +97,27 @@ public class AgenticSearchTemplateService {
     // ---- Register (derive + validate + store) ------------------------------
 
     /**
-     * Register a template for filling: derive its param-schema and store it.
+     * Register a template for filling: derive or accept its param-schema and store it.
      *
      * @param templateId the {@code _scripts} template name (also the doc id)
      * @param index the target index (for field-name enums)
      * @param description optional human description
+     * @param providedSchema a caller-supplied param-schema. When non-null it is validated
+     *     and pre-flight rendered against the body, then stored without derivation. When
+     *     null the schema is derived from the body and index mapping.
      * @param user the caller, captured by the transport action before it stashed the
      *     thread context (reading it here would be too late — the stash below drops the
      *     security-user transient); may be null when security is disabled
      * @param listener yields the stored {@link AgenticSearchTemplate}
      */
-    public void register(String templateId, String index, String description, User user, ActionListener<AgenticSearchTemplate> listener) {
+    public void register(
+        String templateId,
+        String index,
+        String description,
+        Map<String, Object> providedSchema,
+        User user,
+        ActionListener<AgenticSearchTemplate> listener
+    ) {
         try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<AgenticSearchTemplate> wrapped = ActionListener.runBefore(listener, ctx::restore);
 
@@ -116,10 +126,20 @@ public class AgenticSearchTemplateService {
                 // 2. Fetch the index mapping for field-name enums.
                 fetchFlattenedMapping(index, ActionListener.wrap(mappingFields -> {
                     try {
-                        // 3. Derive the schema: parse-tree for names/types/required,
-                        // mapping for field-name enums (a param whose name is *_field
-                        // or that targets a field can only choose an existing field).
-                        Map<String, Object> paramSchema = deriveSchema(body, mappingFields);
+                        Map<String, Object> paramSchema;
+                        if (providedSchema != null) {
+                            // Caller-supplied schema: check it is internally consistent
+                            // (types, enums) and references only params the body declares,
+                            // then pre-flight render below. The schema is stored as sent.
+                            validateParamSchema(providedSchema);
+                            rejectUnknownParams(providedSchema, body);
+                            paramSchema = providedSchema;
+                        } else {
+                            // 3. Derive the schema: parse-tree for names/types/required,
+                            // mapping for field-name enums (a param whose name is *_field
+                            // or that targets a field can only choose an existing field).
+                            paramSchema = deriveSchema(body, mappingFields);
+                        }
                         // 4. Pre-flight validate: render all-filled + required-only.
                         preflightValidate(body, paramSchema);
 
@@ -547,6 +567,26 @@ public class AgenticSearchTemplateService {
             merged.put(name, mergedSpec);
         }
         return merged;
+    }
+
+    /**
+     * Reject any param in a caller-supplied schema that the Mustache body does not
+     * reference. Such a param can never be filled or rendered. This applies the same
+     * guard {@link #mergeParamSchema} uses for a schema edit, so register and update
+     * enforce the same contract.
+     */
+    void rejectUnknownParams(Map<String, Object> paramSchema, String body) {
+        Map<String, Object> bodyParams = MustacheTemplateAnalyzer.derive(body);
+        for (String name : paramSchema.keySet()) {
+            if (!bodyParams.containsKey(name)) {
+                throw new IllegalArgumentException(
+                    "param '"
+                        + name
+                        + "' is not a parameter of template body; "
+                        + "cannot register params that the Mustache body never references"
+                );
+            }
+        }
     }
 
     /**
