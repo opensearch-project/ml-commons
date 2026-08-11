@@ -699,6 +699,88 @@ public class TransportAddMemoriesActionTests {
     }
 
     @Test
+    public void testDoExecute_SessionCreation_NullOwnerId_SecurityDisabled() {
+        // Regression: on a security-disabled cluster owner_id is null; the auto-create session-source builder
+        // used Map.of(...) which throws NPE on null values. See paste 1786408766.
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("user_id", "alice");
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(true);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn(null); // security disabled -> no authenticated user
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-123");
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(3);
+            listener.onResponse("Session summary");
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            IndexRequest indexRequest = invocation.getArgument(1);
+            if (indexRequest.index().equals("session-index")) {
+                when(indexResponse.getId()).thenReturn("session-123");
+            } else {
+                when(indexResponse.getId()).thenReturn("working-mem-123");
+            }
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), indexRequestCaptor.capture(), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Session creation must have completed without NPE and produced a session-index write.
+        verify(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+
+        // The session document source must omit owner_id (rather than storing null).
+        IndexRequest sessionIndexRequest = indexRequestCaptor.getAllValues()
+            .stream()
+            .filter(r -> "session-index".equals(r.index()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No session-index IndexRequest captured"));
+        Map<String, Object> sessionSource = sessionIndexRequest.sourceAsMap();
+        assertFalse("owner_id should be omitted when null", sessionSource.containsKey("owner_id"));
+        assertEquals("container-123", sessionSource.get("memory_container_id"));
+        assertEquals("Session summary", sessionSource.get("summary"));
+    }
+
+    @Test
     public void testDoExecute_SessionCreation_SummarizeFailure() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
 

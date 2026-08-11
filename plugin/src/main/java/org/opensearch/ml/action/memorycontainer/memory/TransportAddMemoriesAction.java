@@ -182,24 +182,18 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 // TODO: use LLM to summarize first user message
                 ActionListener<String> summaryListener = ActionListener.wrap(summary -> {
                     Instant now = Instant.now();
-                    indexRequest
-                        .source(
-                            Map
-                                .of(
-                                    OWNER_ID_FIELD,
-                                    input.getOwnerId(),
-                                    MEMORY_CONTAINER_ID_FIELD,
-                                    input.getMemoryContainerId(),
-                                    SUMMARY_FIELD,
-                                    summary,
-                                    NAMESPACE_FIELD,
-                                    input.getNamespace(),
-                                    CREATED_TIME_FIELD,
-                                    now.toEpochMilli(),
-                                    LAST_UPDATED_TIME_FIELD,
-                                    now.toEpochMilli()
-                                )
-                        );
+                    // Build the source with a mutable map: owner_id may be null when security is disabled, and Map.of
+                    // rejects null values (which previously NPE'd this auto-create session path).
+                    Map<String, Object> source = new HashMap<>();
+                    if (input.getOwnerId() != null) {
+                        source.put(OWNER_ID_FIELD, input.getOwnerId());
+                    }
+                    source.put(MEMORY_CONTAINER_ID_FIELD, input.getMemoryContainerId());
+                    source.put(SUMMARY_FIELD, summary);
+                    source.put(NAMESPACE_FIELD, input.getNamespace());
+                    source.put(CREATED_TIME_FIELD, now.toEpochMilli());
+                    source.put(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+                    indexRequest.source(source);
                     indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                         input.getNamespace().put(SESSION_ID_FIELD, r.getId());
