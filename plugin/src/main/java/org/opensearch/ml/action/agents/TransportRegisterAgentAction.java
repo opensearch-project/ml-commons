@@ -250,23 +250,24 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 conversationAgentId,
                 parentFailure
             );
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
+        ActionListener<MLRegisterAgentResponse> failureListener = ActionListener.runBefore(listener, context::restore);
+        try {
             sdkClient
                 .deleteDataObjectAsync(
                     DeleteDataObjectRequest.builder().index(ML_AGENT_INDEX).id(conversationAgentId).tenantId(tenantId).build()
                 )
                 .whenComplete((response, deleteThrowable) -> {
-                    context.restore();
                     if (deleteThrowable != null) {
                         log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, deleteThrowable);
                     } else {
                         log.info("Deleted orphaned conversation agent {} after parent registration failure", conversationAgentId);
                     }
-                    listener.onFailure(parentFailure);
+                    failureListener.onFailure(parentFailure);
                 });
         } catch (Exception e) {
             log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, e);
-            listener.onFailure(parentFailure);
+            failureListener.onFailure(parentFailure);
         }
     }
 
