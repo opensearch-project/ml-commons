@@ -807,6 +807,33 @@ public class MLAgentTest {
     }
 
     @Test
+    public void parse_WithCustomAgentId() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\",\"agent_id\":\"chat-agent\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parseFromUserInput(parser);
+
+        assertEquals("chat-agent", agent.getAgentId());
+    }
+
+    @Test
+    public void writeToAndReadFrom_withCustomAgentId() throws IOException {
+        MLAgent agent = MLAgent.builder().name("test").type("FLOW").agentId("chat-agent").build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_9_0);
+        agent.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_9_0);
+        assertEquals("chat-agent", new MLAgent(in).getAgentId());
+    }
+
+    @Test
     public void parse_WithContextManagementName() throws IOException {
         String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\",\"context_management_name\":\"template_name\"}";
         XContentParser parser = XContentType.JSON

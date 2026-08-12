@@ -39,6 +39,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -116,6 +117,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
             return;
         }
+        MLResourceIdUtils.validateCustomDocumentId(mlCreateConnectorInput.getConnectorId(), "connector id");
         if (mlCreateConnectorInput.isDryRun()) {
             MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
             listener.onResponse(response);
@@ -129,9 +131,10 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
 
             User user = RestActionUtils.getUserContext(client);
+            String connectorId = mlCreateConnectorInput.getConnectorId();
             if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
                 validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
-                indexConnector(connector, listener);
+                indexConnector(connector, connectorId, listener);
             } else {
                 validateRequest4AccessControl(mlCreateConnectorInput, user);
                 if (Boolean.TRUE.equals(mlCreateConnectorInput.getAddAllBackendRoles())) {
@@ -140,7 +143,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 connector.setBackendRoles(mlCreateConnectorInput.getBackendRoles());
                 connector.setOwner(user);
                 connector.setAccess(mlCreateConnectorInput.getAccess());
-                indexConnector(connector, listener);
+                indexConnector(connector, connectorId, listener);
             }
         } catch (MetaDataException e) {
             log.error("The masterKey for credential encryption is missing in connector creation");
@@ -151,7 +154,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
     }
 
-    private void indexConnector(Connector connector, ActionListener<MLCreateConnectorResponse> listener) {
+    private void indexConnector(Connector connector, String connectorId, ActionListener<MLCreateConnectorResponse> listener) {
         ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(res -> {
             log.info("connector created, indexing into the connector system index");
             mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
@@ -163,36 +166,35 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     Instant currentTime = Instant.now();
                     connector.setCreatedTime(currentTime);
                     connector.setLastUpdateTime(currentTime);
-                    sdkClient
-                        .putDataObjectAsync(
-                            PutDataObjectRequest
-                                .builder()
-                                .tenantId(connector.getTenantId())
-                                .index(ML_CONNECTOR_INDEX)
-                                .dataObject(connector)
-                                .build()
-                        )
-                        .whenComplete((r, throwable) -> {
-                            context.restore();
-                            if (throwable != null) {
-                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                log.error("Failed to create ML connector", cause);
-                                listener.onFailure(cause);
-                            } else {
-                                try {
-                                    IndexResponse indexResponse = r.indexResponse();
-                                    log
-                                        .info(
-                                            "Connector creation result: {}, connector id: {}",
-                                            indexResponse.getResult(),
-                                            indexResponse.getId()
-                                        );
-                                    listener.onResponse(new MLCreateConnectorResponse(indexResponse.getId()));
-                                } catch (Exception e) {
-                                    listener.onFailure(e);
-                                }
+                    PutDataObjectRequest.Builder putRequestBuilder = PutDataObjectRequest
+                        .builder()
+                        .tenantId(connector.getTenantId())
+                        .index(ML_CONNECTOR_INDEX)
+                        .dataObject(connector);
+                    if (connectorId != null) {
+                        putRequestBuilder.id(connectorId).overwriteIfExists(false);
+                    }
+                    sdkClient.putDataObjectAsync(putRequestBuilder.build()).whenComplete((r, throwable) -> {
+                        context.restore();
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to create ML connector", cause);
+                            listener.onFailure(MLResourceIdUtils.toDocumentAlreadyExistsException(connectorId, "connector id", cause));
+                        } else {
+                            try {
+                                IndexResponse indexResponse = r.indexResponse();
+                                log
+                                    .info(
+                                        "Connector creation result: {}, connector id: {}",
+                                        indexResponse.getResult(),
+                                        indexResponse.getId()
+                                    );
+                                listener.onResponse(new MLCreateConnectorResponse(indexResponse.getId()));
+                            } catch (Exception e) {
+                                listener.onFailure(e);
                             }
-                        });
+                        }
+                    });
                 } catch (Exception e) {
                     log.error("Failed to save ML connector", e);
                     listener.onFailure(e);
