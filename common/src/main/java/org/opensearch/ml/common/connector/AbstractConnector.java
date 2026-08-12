@@ -74,6 +74,7 @@ public abstract class AbstractConnector implements Connector {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";
+    public static final String BATCH_JOB_STATUS_FIELD = "batch_job_status";
 
     protected String name;
     protected String description;
@@ -104,6 +105,8 @@ public abstract class AbstractConnector implements Connector {
     protected String tenantId;
     @Setter
     protected String provisionedBy;
+    @Setter
+    protected BatchJobStatusMapping batchJobStatus;
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
