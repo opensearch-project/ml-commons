@@ -350,17 +350,21 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testParsePemPrivateKey_InvalidFormat_ThrowsException() {
+    public void testParsePemPrivateKey_InvalidFormat_ThrowsException() throws IOException {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        // Test with malformed PEM private key
-        credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidCertificateData\n-----END CERTIFICATE-----");
+        // The certificate must be valid, otherwise it fails first and the key is never parsed.
+        credentials.put(CLIENT_CERT_PEM_FIELD, loadCertificateFromFile("test-client-cert.pem"));
         credentials.put(CLIENT_KEY_PEM_FIELD, "INVALID_KEY_FORMAT");
 
-        assertThrows(
+        MLValidationException exception = assertThrows(
             "Should throw MLValidationException for malformed PEM private key",
             MLValidationException.class,
             () -> certificateProcessor.buildMtlsManagers(config, credentials)
+        );
+        assertTrue(
+            "Failure must come from private key parsing, not certificate parsing: " + exception.getMessage(),
+            exception.getMessage().contains("Invalid PEM private key format")
         );
     }
 
@@ -368,7 +372,7 @@ public class CertificateProcessorTest {
     public void testIsBase64EncodedContent_OverLengthThreshold_DetectedAsBase64() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        // Longer than the 100-character threshold and base64-shaped, so it IS treated as base64.
+        // Longer than the 100-character threshold and base64-shaped, so it is treated as base64.
         // It decodes to non-PEM bytes, and that distinctive error is what proves the branch was taken.
         String longBase64 = Base64.getEncoder().encodeToString("X".repeat(200).getBytes(StandardCharsets.UTF_8));
         credentials.put(CLIENT_CERT_PEM_FIELD, longBase64);
@@ -379,8 +383,9 @@ public class CertificateProcessorTest {
             () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
         assertTrue(
-            "Content over the threshold must be detected as base64 and decoded: " + exception.getMessage(),
-            exception.getMessage().contains("appears to be base64 encoded")
+            "Content over the threshold must be detected as base64, decoded, and rejected for lacking PEM headers: "
+                + exception.getMessage(),
+            exception.getMessage().contains("appears to be base64 encoded but does not contain valid PEM content after decoding")
         );
     }
 
@@ -408,15 +413,15 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testIsBase64EncodedContent_PemFormat_ReturnsFalse() {
+    public void testGetCertificateContent_PemHeadedContent_BypassesBase64Decoding() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
 
-        // Test with PEM format (should not be treated as base64)
+        // PEM headers short-circuit base64 detection, so the content is used as-is and fails while
+        // parsing the certificate rather than during base64 decoding.
         credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nSomeData\n-----END CERTIFICATE-----");
         credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidKeyData\n-----END PRIVATE KEY-----");
 
         MLValidationException exception = assertThrows(
-            "Should not treat PEM format as base64",
             MLValidationException.class,
             () -> certificateProcessor.buildMtlsManagers(config, credentials)
         );
@@ -424,32 +429,9 @@ public class CertificateProcessorTest {
             "PEM-headed content must bypass base64 decoding entirely: " + exception.getMessage(),
             exception.getMessage().contains("appears to be base64 encoded")
         );
-    }
-
-    @Test
-    public void testBuildMtlsManagers_PemType_InvalidCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
-
-        credentials.put(CLIENT_CERT_PEM_FIELD, "-----BEGIN CERTIFICATE-----\nInvalidData\n-----END CERTIFICATE-----");
-        credentials.put(CLIENT_KEY_PEM_FIELD, "-----BEGIN PRIVATE KEY-----\nInvalidData\n-----END PRIVATE KEY-----");
-
-        assertThrows(
-            "Should throw MLValidationException for invalid certificate in buildMtlsManagers",
-            MLValidationException.class,
-            () -> certificateProcessor.buildMtlsManagers(config, credentials)
-        );
-    }
-
-    @Test
-    public void testBuildMtlsManagers_Pkcs12Type_InvalidCertificate_ThrowsException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
-
-        credentials.put(CLIENT_CERT_PKCS12_FIELD, "InvalidPKCS12Data");
-
-        assertThrows(
-            "Should throw MLValidationException for invalid PKCS12 in buildMtlsManagers",
-            MLValidationException.class,
-            () -> certificateProcessor.buildMtlsManagers(config, credentials)
+        assertTrue(
+            "Failure should come from parsing the certificate: " + exception.getMessage(),
+            exception.getMessage().contains("Could not parse certificate")
         );
     }
 

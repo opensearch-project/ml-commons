@@ -82,7 +82,7 @@ public class CertificateProcessor {
          */
         public static KeystoreType from(String input) {
             if (input == null) {
-                return PEM; // Default to PEM
+                return PEM;
             }
 
             // Locale.ROOT so the comparison against the fixed enum names never depends on the node's
@@ -128,7 +128,7 @@ public class CertificateProcessor {
      * @return MtlsManagers containing the key and trust managers, or null if mTLS is not enabled
      * @throws MLValidationException if certificate processing fails
      */
-    public MtlsManagers buildMtlsManagers(ConnectorClientConfig config, Map<String, String> decryptedCredentials) {
+    MtlsManagers buildMtlsManagers(ConnectorClientConfig config, Map<String, String> decryptedCredentials) {
         if (config == null || !Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
             return null;
         }
@@ -231,8 +231,18 @@ public class CertificateProcessor {
 
         byte[] keystoreBytes = Base64.getMimeDecoder().decode(pkcs12Data);
 
-        // Load the keystore directly from the decoded PKCS12 bytes
-        return buildKeyManagers(password, (keyStore, keyPassword) -> keyStore.load(new ByteArrayInputStream(keystoreBytes), keyPassword));
+        try {
+            // Load the keystore directly from the decoded PKCS12 bytes
+            return buildKeyManagers(
+                password,
+                (keyStore, keyPassword) -> keyStore.load(new ByteArrayInputStream(keystoreBytes), keyPassword)
+            );
+        } finally {
+            // Best-effort: clear the decoded keystore, which holds the client private key, once the
+            // KeyStore has parsed it. Mirrors the password handling in buildKeyManagers.
+            // Note: the base64 pkcs12Data String remains in the heap until GC (Java strings are immutable).
+            Arrays.fill(keystoreBytes, (byte) 0);
+        }
     }
 
     /**
@@ -391,8 +401,11 @@ public class CertificateProcessor {
             );
         }
 
+        // PRIVATE_KEY_PATTERN already restricts the body to [A-Za-z0-9+/\s=] and the strip removes the
+        // line wrapping, so strict and MIME decoding are equivalent here. MIME is used purely so every
+        // decode site in this class behaves the same way.
         String base64Key = matcher.group(1).replaceAll("\\s", "");
-        byte[] keyBytes = Base64.getDecoder().decode(base64Key);
+        byte[] keyBytes = Base64.getMimeDecoder().decode(base64Key);
 
         PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
 
@@ -436,23 +449,30 @@ public class CertificateProcessor {
                 // `openssl base64`) decodes, matching the whitespace tolerance of isBase64EncodedContent.
                 try {
                     byte[] decodedBytes = Base64.getMimeDecoder().decode(directContent.trim());
-                    String decodedContent = new String(decodedBytes, StandardCharsets.UTF_8);
+                    try {
+                        String decodedContent = new String(decodedBytes, StandardCharsets.UTF_8);
 
-                    // Security: Validate decoded content contains PEM headers
-                    if (decodedContent.contains("-----BEGIN")) {
-                        log.debug("Successfully decoded and validated base64 certificate content for field: {}", contentField);
-                        return decodedContent;
-                    } else {
-                        // Hard error: base64-detected content that doesn't decode to valid PEM.
-                        // Security: never echo the decoded content - it may be private key material.
-                        throw new MLValidationException(
-                            String
-                                .format(
-                                    "Certificate field '%s' appears to be base64 encoded but does not contain valid PEM content after decoding. "
-                                        + "Expected PEM headers (-----BEGIN...).",
-                                    contentField
-                                )
-                        );
+                        // Security: Validate decoded content contains PEM headers
+                        if (decodedContent.contains("-----BEGIN")) {
+                            log.debug("Successfully decoded and validated base64 certificate content for field: {}", contentField);
+                            return decodedContent;
+                        } else {
+                            // Hard error: base64-detected content that doesn't decode to valid PEM.
+                            // Security: never echo the decoded content - it may be private key material.
+                            throw new MLValidationException(
+                                String
+                                    .format(
+                                        "Certificate field '%s' appears to be base64 encoded but does not contain valid PEM content after decoding. "
+                                            + "Expected PEM headers (-----BEGIN...).",
+                                        contentField
+                                    )
+                            );
+                        }
+                    } finally {
+                        // Best-effort: clear the decoded buffer, which may hold private key material.
+                        // Note: the returned PEM String and the base64 input String cannot be cleared
+                        // (Java strings are immutable), so this only narrows the exposure window.
+                        Arrays.fill(decodedBytes, (byte) 0);
                     }
                 } catch (IllegalArgumentException e) {
                     // Hard error: malformed base64
@@ -507,7 +527,7 @@ public class CertificateProcessor {
      * @param credentials The connector credentials
      * @throws MLValidationException if the mutual TLS configuration is invalid
      */
-    public void validateCertificateConfig(ConnectorClientConfig config, Map<String, String> credentials) {
+    void validateCertificateConfig(ConnectorClientConfig config, Map<String, String> credentials) {
         if (!Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
             return; // No validation needed if mTLS is disabled
         }

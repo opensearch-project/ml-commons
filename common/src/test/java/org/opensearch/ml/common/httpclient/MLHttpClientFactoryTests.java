@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import javax.net.ssl.KeyManager;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 import org.junit.Test;
 import org.opensearch.ml.common.exception.MLValidationException;
@@ -95,6 +97,7 @@ public class MLHttpClientFactoryTests {
     @Test
     public void test_getAsyncHttpClient_mTlsWithSkipSslVerification_throwsException() {
         KeyManager[] keyManagers = new KeyManager[] { mock(KeyManager.class) };
+        TrustManager[] trustManagers = new TrustManager[] { mock(X509TrustManager.class) };
 
         assertThrows(
             MLValidationException.class,
@@ -108,7 +111,7 @@ public class MLHttpClientFactoryTests {
                     Collections.emptyList(),
                     true, // skipSslVerification = true
                     keyManagers, // a real client cert is present
-                    null
+                    trustManagers // and a populated truststore: the rejection must not depend on it being absent
                 )
         );
     }

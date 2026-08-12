@@ -133,6 +133,8 @@ public class ConnectorClientConfigTest {
             .maxRetryTimes(789)
             .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
             .skipSslVerification(true)
+            .mutualTlsEnabled(true)
+            .keystoreType("PEM")
             .build();
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -140,14 +142,30 @@ public class ConnectorClientConfigTest {
         String content = TestHelper.xContentBuilderToString(builder);
 
         String expectedJson = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
-            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true}";
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true,"
+            + "\"mutual_tls_enabled\":true,\"keystore_type\":\"PEM\"}";
         Assert.assertEquals(expectedJson, content);
+    }
+
+    @Test
+    public void toXContent_mtlsFieldsUnset_OmittedFromOutput() throws IOException {
+        // mutualTlsEnabled and keystoreType have no defaults so that connector configs which never
+        // mention mTLS are not polluted with the fields.
+        ConnectorClientConfig config = ConnectorClientConfig.builder().maxConnections(10).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        config.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert.assertFalse("mutual_tls_enabled should be omitted when unset", content.contains("mutual_tls_enabled"));
+        Assert.assertFalse("keystore_type should be omitted when unset", content.contains("keystore_type"));
     }
 
     @Test
     public void parse() throws IOException {
         String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
-            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true}";
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true,"
+            + "\"mutual_tls_enabled\":true,\"keystore_type\":\"PKCS12\"}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -167,6 +185,8 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(789), config.getMaxRetryTimes());
         Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
         Assert.assertEquals(Boolean.TRUE, config.getSkipSslVerification());
+        Assert.assertEquals(Boolean.TRUE, config.getMutualTlsEnabled());
+        Assert.assertEquals("PKCS12", config.getKeystoreType());
     }
 
     @Test
