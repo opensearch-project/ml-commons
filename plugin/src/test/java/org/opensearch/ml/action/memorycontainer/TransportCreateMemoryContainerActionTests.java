@@ -19,6 +19,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,6 +65,7 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
@@ -254,6 +256,95 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testConstructor() {
         assertNotNull(action);
+    }
+
+    public void testDoExecute_invalidCustomMemoryContainerId_startsWithHyphen() {
+        assertInvalidMemoryContainerId("-invalid", "memory container id must not start with '-'");
+    }
+
+    public void testDoExecute_invalidCustomMemoryContainerId_containsSpecialCharacters() {
+        assertInvalidMemoryContainerId(
+            "memory/container",
+            "memory container id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    public void testDoExecute_invalidCustomMemoryContainerId_blank() {
+        assertInvalidMemoryContainerId("   ", "memory container id is invalid");
+    }
+
+    public void testDoExecute_invalidCustomMemoryContainerId_tooLong() {
+        assertInvalidMemoryContainerId(
+            "a".repeat(MAX_DOCUMENT_ID_LENGTH + 1),
+            "memory container id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH
+        );
+    }
+
+    private void assertInvalidMemoryContainerId(String memoryContainerId, String expectedMessage) {
+        MLCreateMemoryContainerInput invalidInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("test-memory-container")
+            .memoryContainerId(memoryContainerId)
+            .configuration(MemoryConfiguration.builder().indexPrefix("test").build())
+            .tenantId(TENANT_ID)
+            .build();
+        MLCreateMemoryContainerRequest invalidRequest = new MLCreateMemoryContainerRequest(invalidInput);
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> action.doExecute(task, invalidRequest, actionListener)
+        );
+        assertEquals(expectedMessage, e.getMessage());
+    }
+
+    public void testDoExecute_usesCustomMemoryContainerId() throws InterruptedException {
+        String customId = "my-memory-container";
+        input = input.toBuilder().memoryContainerId(customId).build();
+        request = new MLCreateMemoryContainerRequest(input);
+
+        indexResponse = new IndexResponse(new ShardId(ML_MEMORY_CONTAINER_INDEX, "_na_", 0), customId, 1, 0, 2, true);
+        when(putDataObjectResponse.indexResponse()).thenReturn(indexResponse);
+
+        mockSuccessfulCreatePipeline();
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(putRequestCaptor.capture())).thenReturn(future);
+
+        action.doExecute(task, request, actionListener);
+
+        assertEquals(customId, putRequestCaptor.getValue().id());
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals(customId, responseCaptor.getValue().getMemoryContainerId());
+    }
+
+    public void testDoExecute_duplicateCustomMemoryContainerId() throws InterruptedException {
+        String customId = "my-memory-container";
+        input = input.toBuilder().memoryContainerId(customId).build();
+        request = new MLCreateMemoryContainerRequest(input);
+
+        mockSuccessfulCreatePipeline();
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId(ML_MEMORY_CONTAINER_INDEX, "_na_", 0),
+            customId,
+            "document already exists"
+        );
+        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
+        future.completeExceptionally(conflict);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals("memory container id 'my-memory-container' already exists", exception.getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exception).status());
     }
 
     public void testDoExecuteWithAgenticMemoryDisabled() throws InterruptedException {

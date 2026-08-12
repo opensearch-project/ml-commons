@@ -66,6 +66,7 @@ public class MLRegisterModelMetaRequestTest {
             null,
             null,
             null,
+            null,
             null
         );
     }
