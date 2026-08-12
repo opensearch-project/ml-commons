@@ -419,7 +419,7 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
         public boolean shouldRetry(Exception e) {
             Throwable cause = ExceptionsHelper.unwrapCause(e);
             Integer maxRetryTimes = args.connectionExecutor.getConnectorClientConfig().getMaxRetryTimes();
-            boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException;
+            boolean shouldRetry = isRetryable(cause);
             if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
                 shouldRetry = false;
             }
@@ -429,6 +429,22 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
                     .debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes), e);
             }
             return shouldRetry;
+        }
+
+        private static boolean isRetryable(Throwable cause) {
+            // AWS header-based throttling.
+            if (cause instanceof RemoteConnectorThrottlingException) {
+                return true;
+            }
+            // Transient HTTP failures from any remote service: 429 and 5xx.
+            if (cause instanceof OpenSearchStatusException) {
+                RestStatus status = ((OpenSearchStatusException) cause).status();
+                if (status == null) {
+                    return false;
+                }
+                return status == RestStatus.TOO_MANY_REQUESTS || status.getStatus() >= 500;
+            }
+            return false;
         }
     }
 

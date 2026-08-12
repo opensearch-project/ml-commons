@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -47,6 +48,7 @@ public class DefaultLlmImpl implements Llm {
 
     private static final String CONNECTOR_INPUT_PARAMETER_MODEL = "model";
     private static final String CONNECTOR_INPUT_PARAMETER_MESSAGES = "messages";
+    private static final String CONNECTOR_INPUT_PARAMETER_SYSTEM_PROMPT = "system_prompt";
     private static final String CONNECTOR_OUTPUT_CHOICES = "choices";
     private static final String CONNECTOR_OUTPUT_MESSAGE = "message";
     private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
@@ -138,6 +140,8 @@ public class DefaultLlmImpl implements Llm {
                 );
         } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK_CONVERSE) {
             // Bedrock Converse API does not include the system prompt as part of the Messages block.
+            // Instead, it is passed as a separate runtime parameter for the connector to place
+            // in the Converse API's top-level "system" field via ${parameters.system_prompt}.
             String messages = PromptUtil
                 .getChatCompletionPrompt(
                     chatCompletionInput.getModelProvider(),
@@ -149,6 +153,9 @@ public class DefaultLlmImpl implements Llm {
                     chatCompletionInput.getLlmMessages()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
+            if (!Strings.isNullOrEmpty(chatCompletionInput.getSystemPrompt())) {
+                inputParameters.put(CONNECTOR_INPUT_PARAMETER_SYSTEM_PROMPT, chatCompletionInput.getSystemPrompt());
+            }
         } else {
             throw new IllegalArgumentException(
                 "Unknown/unsupported model provider: "

@@ -21,6 +21,7 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -40,6 +41,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     private final Client client;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private boolean startedStatsJob;
+    private boolean startedMemoryRetentionJob;
 
     public MLCommonsClusterEventListener(
         ClusterService clusterService,
@@ -81,26 +83,38 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         }
 
         /*
-         * In version 3.1, a new index `.plugins-ml-jobs` replaces the old `.ml_commons_task_polling_job` index for the job scheduler.
-         * Version 3.1 also introduces a stats collector job that should run at startup if the relevant settings are enabled.
-         * When upgrading from 3.0 to 3.1, we need to ensure the new `.plugins-ml-jobs` index is created if either:
-         *   - The stats collector job is enabled, or
-         *   - The batch polling task job was already running.
-         * To avoid issues during blue/green or rolling upgrades, we wait for a data node running 3.1 or later before creating the new jobs index and starting the jobs.
-         * The following logic implements this behavior.
+         * The stats collector and memory retention jobs live in the `.plugins-ml-jobs` index (introduced in 3.1,
+         * replacing `.ml_commons_task_polling_job`). Indexing a job document auto-creates that index, and creating
+         * an index while a rolling upgrade is in flight strands its replicas: the primary is allocated to the
+         * new-version node that issued the write, and replicas can never be assigned to nodes older than the
+         * primary's node, so the cluster stays yellow until enough nodes are upgraded.
+         *
+         * To avoid that, only touch the jobs index when it is safe:
+         *   - the index already exists (writing a document to an existing index cannot strand a replica), or
+         *   - every node in the cluster is on at least this node's version, so a newly created index's replicas
+         *     are allocatable anywhere.
+         * While a rolling upgrade is in flight neither holds; the jobs are deferred, not skipped — when the last
+         * old node leaves, the resulting cluster state change re-runs this listener and the jobs are created then.
          */
-        for (DiscoveryNode node : state.nodes()) {
-            if (node.isDataNode() && node.getVersion().onOrAfter(Version.V_3_1_0)) {
-                if (mlFeatureEnabledSetting.isMetricCollectionEnabled()
-                    && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()
-                    && !clusterService.state().getMetadata().hasIndex(ML_JOBS_INDEX)
-                    && !this.startedStatsJob) {
-                    mlTaskManager.indexStatsCollectorJob(true);
-                    // using this variable in case if same node has a cluster state change event and the state is not updated yet
-                    this.startedStatsJob = true;
-                }
+        boolean jobsIndexExists = state.getMetadata().hasIndex(ML_JOBS_INDEX);
+        boolean noOlderNodes = state.nodes().getMinNodeVersion().onOrAfter(Version.CURRENT);
+        if (jobsIndexExists || noOlderNodes) {
+            if (mlFeatureEnabledSetting.isMetricCollectionEnabled()
+                && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()
+                && !jobsIndexExists
+                && !this.startedStatsJob) {
+                mlTaskManager.indexStatsCollectorJob(true);
+                // using this variable in case if same node has a cluster state change event and the state is not updated yet
+                this.startedStatsJob = true;
+            }
 
-                break;
+            if (mlFeatureEnabledSetting.isAgenticMemoryEnabled()
+                && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+                && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
+                && !this.startedMemoryRetentionJob) {
+                int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(clusterService.getSettings());
+                mlTaskManager.indexMemoryRetentionJob(intervalHours);
+                this.startedMemoryRetentionJob = true;
             }
         }
     }

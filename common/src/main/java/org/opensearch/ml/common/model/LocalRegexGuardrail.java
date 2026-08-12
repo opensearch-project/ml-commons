@@ -52,6 +52,7 @@ import lombok.extern.log4j.Log4j2;
 public class LocalRegexGuardrail extends Guardrail {
     public static final String STOP_WORDS_FIELD = "stop_words";
     public static final String REGEX_FIELD = "regex";
+    public static final long STOP_WORDS_SEARCH_TIMEOUT_IN_SECONDS = 5;
 
     private List<StopWords> stopWords;
     private String[] regex;
@@ -231,26 +232,24 @@ public class LocalRegexGuardrail extends Guardrail {
                 if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                     passedStopWordCheck.set(true);
                 }
-            }, e -> {
-                log.error("Failed to search stop words index {}", indexName, e);
-                passedStopWordCheck.set(true);
-            }), latch);
+            }, e -> { log.error("Failed to search stop words index {}, rejecting input as a safety measure", indexName, e); }), latch);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .searchDataObjectAsync(searchDataObjectRequest)
                     .whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.runBefore(responseListener, context::restore)));
             }
         } catch (Exception e) {
-            log.error("[validateStopWords] Searching stop words index failed.", e);
+            log.error("[validateStopWords] Searching stop words index failed, rejecting input as a safety measure.", e);
             latch.countDown();
-            passedStopWordCheck.set(true);
         }
 
         try {
-            latch.await(5, SECONDS);
+            if (!latch.await(STOP_WORDS_SEARCH_TIMEOUT_IN_SECONDS, SECONDS)) {
+                log.error("[validateStopWords] Timed out waiting for stop words index search, rejecting input as a safety measure.");
+            }
         } catch (InterruptedException e) {
-            log.error("[validateStopWords] Searching stop words index was timeout.", e);
-            throw new IllegalStateException(e);
+            log.error("[validateStopWords] Interrupted while searching stop words index, rejecting input as a safety measure.", e);
+            Thread.currentThread().interrupt();
         }
         return passedStopWordCheck.get();
     }

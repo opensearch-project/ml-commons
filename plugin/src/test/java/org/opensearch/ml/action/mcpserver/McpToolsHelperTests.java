@@ -39,6 +39,7 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
@@ -74,9 +75,6 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         super.setUp();
         MockitoAnnotations.openMocks(this);
 
-        // Reset the singleton state before each test to ensure test isolation
-        TestHelper.resetMcpStatelessServerHolder();
-
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
@@ -96,8 +94,6 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
 
     @After
     public void tearDown() throws Exception {
-        // Reset all static fields to ensure clean test isolation
-        TestHelper.resetMcpStatelessServerHolder();
         super.tearDown();
     }
 
@@ -121,6 +117,21 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         ArgumentCaptor<List<McpToolRegisterInput>> argumentCaptor = ArgumentCaptor.forClass(List.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(1, argumentCaptor.getValue().size());
+    }
+
+    @Test
+    public void test_searchAllTools_indexNotFound_returnsEmpty() {
+        doAnswer(invocationOnMock -> {
+            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("no index"));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
+        mcpToolsHelper.searchAllTools(actionListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<McpToolRegisterInput>> argumentCaptor = ArgumentCaptor.forClass(List.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().isEmpty());
     }
 
     @Test

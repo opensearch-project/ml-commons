@@ -1,9 +1,12 @@
 {
   "_meta": {
-    "schema_version": 2
+    "schema_version": 3
   },
   "properties": {
     "owner_id": {
+      "type": "keyword"
+    },
+    "session_id": {
       "type": "keyword"
     },
     "memory_container_id": {

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ERROR_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_AFTER_FIELD;
@@ -17,6 +18,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PINNED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.io.IOException;
@@ -57,6 +59,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
     private Instant createdTime;
     private String tenantId;
     private String error;
+    private Boolean pinned;
 
     public MLMemoryHistory(
         String ownerId,
@@ -69,7 +72,8 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         Map<String, String> tags,
         Instant createdTime,
         String tenantId,
-        String error
+        String error,
+        Boolean pinned
     ) {
         this.ownerId = ownerId;
         this.memoryContainerId = memoryContainerId;
@@ -82,6 +86,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         this.createdTime = createdTime;
         this.tenantId = tenantId;
         this.error = error;
+        this.pinned = pinned;
     }
 
     public MLMemoryHistory(StreamInput in) throws IOException {
@@ -97,15 +102,18 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.after = in.readMap();
         }
-        this.createdTime = in.readOptionalInstant();
         if (in.readBoolean()) {
             namespace = in.readMap(StreamInput::readString, StreamInput::readString);
         }
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
         }
+        this.createdTime = in.readOptionalInstant();
         this.tenantId = in.readOptionalString();
         this.error = in.readOptionalString();
+        if (in.getVersion().onOrAfter(VERSION_3_8_0)) {
+            this.pinned = in.readOptionalBoolean();
+        }
     }
 
     @Override
@@ -146,6 +154,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         out.writeOptionalInstant(createdTime);
         out.writeOptionalString(tenantId);
         out.writeOptionalString(error);
+        if (out.getVersion().onOrAfter(VERSION_3_8_0)) {
+            out.writeOptionalBoolean(pinned);
+        }
     }
 
     @Override
@@ -185,6 +196,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         if (error != null) {
             builder.field(ERROR_FIELD, error);
         }
+        if (pinned != null) {
+            builder.field(PINNED_FIELD, pinned);
+        }
         builder.endObject();
         return builder;
     }
@@ -201,6 +215,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         Instant createdTime = null;
         String tenantId = null;
         String error = null;
+        Boolean pinned = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -241,6 +256,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
                 case ERROR_FIELD:
                     error = parser.text();
                     break;
+                case PINNED_FIELD:
+                    pinned = parser.currentToken() == XContentParser.Token.VALUE_NULL ? null : parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -260,6 +278,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
             .createdTime(createdTime)
             .tenantId(tenantId)
             .error(error)
+            .pinned(pinned)
             .build();
     }
 

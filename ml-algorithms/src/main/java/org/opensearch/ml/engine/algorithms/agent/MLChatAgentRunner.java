@@ -41,6 +41,9 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpe
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolNames;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logModelInvocationFailure;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolFailure;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.logToolInvocation;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseFrontendTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
@@ -104,6 +107,7 @@ import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.ToolArgumentValidator;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
@@ -444,9 +448,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         Map<String, Tool> backendTools
     ) {
-        String agentId = parameters.get(AGENT_ID_LOG_FIELD);
         String tenantId = mlAgent.getTenantId();
-        log.info("Starting chat agent execution. agentId={}, tenantId={}", agentId, tenantId);
+        log.info("Starting chat agent execution. agentId={}, tenantId={}", parameters.get(AGENT_ID_LOG_FIELD), tenantId);
 
         LLMSpec llm = mlAgent.getLlm();
         String llmModelId = llm.getModelId();
@@ -512,7 +515,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean usesUnifiedInterface,
         ModelProvider modelProvider
     ) {
-        String agentId = parameters.get(AGENT_ID_LOG_FIELD);
         LLMSpec llm = mlAgent.getLlm();
         String sessionId = memory != null ? memory.getId() : null;
 
@@ -831,7 +833,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
-                log.error("Failed to run chat agent. agentId={}, tenantId={}, statusCode={}", agentId, tenantId, extractStatusCode(e), e);
+                log
+                    .error(
+                        "Failed to run chat agent. agentId={}, tenantId={}, statusCode={}",
+                        parameters.get(AGENT_ID_LOG_FIELD),
+                        tenantId,
+                        extractStatusCode(e),
+                        e
+                    );
                 listener.onFailure(e);
             });
             if (nextStepListener != null) {
@@ -914,6 +923,36 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         HookRegistry hookRegistry
     ) {
+        // Apply framework-level schema validation if provider doesn't support strict schema
+        if (functionCalling != null && !functionCalling.supportsStrictSchema()) {
+            try {
+                MLToolSpec toolSpec = toolSpecMap.get(action);
+                if (toolSpec != null && toolSpec.getParameters() != null && toolSpec.getParameters().containsKey("input_schema")) {
+                    String schema = toolSpec.getParameters().get("input_schema");
+
+                    // Validate and normalize the action input
+                    Map<String, Object> validatedInput = ToolArgumentValidator.validateAndNormalize(actionInput, schema);
+
+                    // Update toolParams with validated input
+                    toolParams.put("input", StringUtils.toJson(validatedInput));
+                    log.debug("Applied framework-level validation for tool: {}", action);
+                }
+            } catch (Exception e) {
+                log.warn("Framework validation failed for tool {}: {}", action, e.getMessage());
+                nextStepListener
+                    .onResponse(
+                        String
+                            .format(
+                                Locale.ROOT,
+                                "Tool %s failed validation: %s. Please retry with valid input format.",
+                                action,
+                                e.getMessage()
+                            )
+                    );
+                return;
+            }
+        }
+
         if (tools.get(action).validate(toolParams)) {
             try {
                 String finalAction = action;
@@ -984,6 +1023,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         tmpParameters.get(AGENT_ID_LOG_FIELD),
                         tmpParameters.get(TENANT_ID_FIELD)
                     );
+                logToolInvocation(action, tmpParameters.get(AGENT_ID_LOG_FIELD), tmpParameters.get(TENANT_ID_FIELD));
                 if (tools.get(action) instanceof MLModelTool) {
                     Map<String, String> llmToolTmpParameters = new HashMap<>();
                     llmToolTmpParameters.putAll(tmpParameters);
@@ -1008,6 +1048,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         extractStatusCode(e),
                         e
                     );
+                logToolFailure(action, tmpParameters.get(AGENT_ID_LOG_FIELD), tmpParameters.get(TENANT_ID_FIELD), extractStatusCode(e));
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
@@ -1081,7 +1122,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean includeTokenUsage
     ) {
         // Token tracking: send streaming batch or add to response tensors
-        if (streamingWrapper.isStreaming()) {
+        boolean isStreaming = streamingWrapper.isStreaming();
+        if (isStreaming) {
             if (includeTokenUsage) {
                 streamingWrapper.sendTokenUsageBatch(sessionId, parentInteractionId, tokenTracker, tenantId);
             }
@@ -1109,7 +1151,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             copyOfFinalAnswer,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            isStreaming
                         );
                     }, e -> {
                         log.error("Failed to save assistant response as structured message", e);
@@ -1142,7 +1185,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             copyOfFinalAnswer,
                             tokenTracker,
                             tenantId,
-                            includeTokenUsage
+                            includeTokenUsage,
+                            isStreaming
                         );
                     }, e -> {
                         log.error("Failed to save structured messages for AG-UI agent", e);
@@ -1165,7 +1209,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         copyOfFinalAnswer,
                                         tokenTracker,
                                         tenantId,
-                                        includeTokenUsage
+                                        includeTokenUsage,
+                                        isStreaming
                                     );
                                 }, e -> { listener.onFailure(e); })
                             );
@@ -1194,7 +1239,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 finalAnswer,
                 tokenTracker,
                 tenantId,
-                includeTokenUsage
+                includeTokenUsage,
+                isStreaming
             );
         }
     }
@@ -1359,7 +1405,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String finalAnswer2,
         AgentTokenTracker tokenTracker,
         String tenantId,
-        boolean includeTokenUsage
+        boolean includeTokenUsage,
+        boolean skipListenerCallback
     ) {
         cotModelTensors
             .add(
@@ -1377,12 +1424,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .build()
                 )
         );
-        if (verbose) {
-            AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId, includeTokenUsage);
-            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
-        } else {
-            AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
-            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+
+        if (!skipListenerCallback) {
+            if (verbose) {
+                AgentUtils.addTokenUsageTensor(cotModelTensors, tokenTracker, tenantId, includeTokenUsage);
+                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
+            } else {
+                AgentUtils.addTokenUsageTensor(finalModelTensors, tokenTracker, tenantId, includeTokenUsage);
+                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+            }
         }
     }
 
@@ -1585,6 +1635,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         AgentUtils.extractStatusCode(e),
                         e
                     );
+                logModelInvocationFailure(
+                    llmSpec.getModelId(),
+                    summaryParams.get(AGENT_ID_LOG_FIELD),
+                    tenantId,
+                    AgentUtils.extractStatusCode(e)
+                );
                 listener.onFailure(e);
             }));
         } catch (Exception e) {

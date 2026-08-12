@@ -277,8 +277,9 @@ public class LocalRegexGuardrailTests {
         when(sdkClient.searchDataObjectAsync(any())).thenReturn(failedFuture);
 
         // Covers error "Failed to search stop words index test_index"
+        // Fail-closed: when the stop words search fails, the input is rejected
         Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
-        Assert.assertTrue(res);
+        Assert.assertFalse(res);
         Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
     }
 
@@ -289,8 +290,11 @@ public class LocalRegexGuardrailTests {
 
         when(sdkClient.searchDataObjectAsync(any())).thenThrow(new RuntimeException("test exception"));
         // Covers error "[validateStopWords] Searching stop words index failed."
+        // Fail-closed: when the stop words search throws, the input is rejected.
+        // Note: the search-timeout scenario (SDK future never completes) is also fail-closed,
+        // since passedStopWordCheck defaults to false and the latch await simply times out.
         Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
-        Assert.assertTrue(res);
+        Assert.assertFalse(res);
         Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
     }
 

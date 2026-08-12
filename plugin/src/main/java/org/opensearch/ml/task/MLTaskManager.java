@@ -28,6 +28,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -41,6 +43,7 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
@@ -84,6 +87,7 @@ public class MLTaskManager implements SettingsChangeListener {
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
     private boolean taskPollingJobStarted;
     private boolean statsCollectorJobStarted;
+    private boolean memoryRetentionJobStarted;
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
@@ -570,6 +574,38 @@ public class MLTaskManager implements SettingsChangeListener {
         }
     }
 
+    public void indexMemoryRetentionJob(int intervalHours) {
+        if (this.memoryRetentionJobStarted) {
+            log.debug("Memory retention job already started");
+            return;
+        }
+
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.MEMORY_RETENTION.name(),
+                new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.HOURS),
+                120L,
+                null,
+                MLJobType.MEMORY_RETENTION,
+                true
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.MEMORY_RETENTION.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .opType(DocWriteRequest.OpType.CREATE)
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            indexJob(indexRequest, MLJobType.MEMORY_RETENTION, () -> {
+                this.memoryRetentionJobStarted = true;
+                log.debug("Memory retention job started successfully");
+            });
+        } catch (IOException e) {
+            log.error("Failed to index memory retention job", e);
+        }
+    }
+
     @Override
     public void onStaticMetricCollectionEnabledChanged(boolean isEnabled) {
         log.info("Static metric collection setting changed to: {}", isEnabled);
@@ -623,7 +659,17 @@ public class MLTaskManager implements SettingsChangeListener {
                         if (successCallback != null) {
                             successCallback.run();
                         }
-                    }, e -> log.error("Failed to index {} job", jobType.name(), e)), context::restore));
+                    }, e -> {
+                        if (ExceptionsHelper.unwrapCause(e) instanceof VersionConflictEngineException) {
+                            // The job document already exists (created by this or another node); treat as success
+                            log.debug("{} job already exists, skipping creation", jobType.name());
+                            if (successCallback != null) {
+                                successCallback.run();
+                            }
+                        } else {
+                            log.error("Failed to index {} job", jobType.name(), e);
+                        }
+                    }), context::restore));
                 }
             }
         }, e -> log.error("Failed to initialize ML jobs index", e)));

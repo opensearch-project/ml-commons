@@ -35,6 +35,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.Version;
 import org.opensearch.action.search.SearchResponse;
@@ -560,5 +561,76 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         assertNull(threadContext.getHeader(MCP_HEADER_AWS_REGION));
         assertNull(threadContext.getHeader(MCP_HEADER_AWS_SERVICE_NAME));
         assertNull(threadContext.getHeader(MCP_HEADER_OPENSEARCH_URL));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesOpenSearchStatusException() {
+        // A status-carrying exception (e.g. a 404) must be forwarded unchanged so the client sees its real status.
+        org.opensearch.OpenSearchStatusException original = new org.opensearch.OpenSearchStatusException(
+            "container not found",
+            RestStatus.NOT_FOUND
+        );
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesIllegalArgumentAsBadRequest() {
+        // IllegalArgumentException maps to 400 in the REST layer, so it is forwarded rather than masked as 500.
+        IllegalArgumentException original = new IllegalArgumentException("bad input");
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_MasksUnexpectedExceptionAsSanitized500() {
+        // A genuinely unexpected exception must be replaced with a sanitized 500 that leaks no internal detail.
+        Exception original = new RuntimeException("connection reset by peer at 10.0.0.5:9300");
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertTrue(wrapped instanceof org.opensearch.OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(wrapped));
+        assertEquals("Internal server error", wrapped.getMessage());
+        assertFalse(wrapped.getMessage().contains("10.0.0.5"));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesIndexNotFoundAsNotFound() {
+        // IndexNotFoundException is an OpenSearchException carrying a 404 and must be preserved.
+        IndexNotFoundException original = new IndexNotFoundException("missing-index");
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesConflictAsClientError() {
+        // A 4xx OpenSearchException other than 404 (e.g. 409 conflict) is a client error and must be preserved.
+        org.opensearch.OpenSearchStatusException original = new org.opensearch.OpenSearchStatusException(
+            "index prefix already in use",
+            RestStatus.CONFLICT
+        );
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.CONFLICT, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_SanitizesServerSideOpenSearchException() {
+        // A 5xx OpenSearchException is a server-side failure whose message may embed internal infrastructure
+        // detail (node addresses, shard routing). It must be sanitized to a generic 500, not forwarded, so the
+        // helper does not widen the information-disclosure surface beyond the package's 4xx-only forwarding norm.
+        org.opensearch.OpenSearchStatusException original = new org.opensearch.OpenSearchStatusException(
+            "all shards failed on node [abc123] at [10.0.0.5:9300]",
+            RestStatus.INTERNAL_SERVER_ERROR
+        );
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertNotSame(original, wrapped);
+        assertTrue(wrapped instanceof org.opensearch.OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(wrapped));
+        assertEquals("Internal server error", wrapped.getMessage());
+        assertFalse(wrapped.getMessage().contains("10.0.0.5"));
+        assertFalse(wrapped.getMessage().contains("abc123"));
     }
 }

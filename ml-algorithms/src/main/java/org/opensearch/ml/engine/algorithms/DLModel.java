@@ -267,6 +267,7 @@ public abstract class DLModel implements Predictable {
                         FileUtils.deleteDirectory(pathFile);
                     }
                     ZipUtils.unzip(modelZipFile, modelPath);
+                    ModelHelper.verifyModelDirSafety(modelPath);
                     boolean findModelFile = false;
                     for (File file : pathFile.listFiles()) {
                         String name = file.getName();

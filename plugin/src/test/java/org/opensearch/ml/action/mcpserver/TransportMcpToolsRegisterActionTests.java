@@ -26,7 +26,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -44,7 +43,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.tools.ListIndexTool;
@@ -56,7 +54,6 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
@@ -99,6 +96,17 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
             .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+        when(clusterService.getClusterName()).thenReturn(ClusterName.DEFAULT);
+        when(clusterService.localNode())
+            .thenReturn(
+                new DiscoveryNode(
+                    "localNode",
+                    new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+                    Collections.emptyMap(),
+                    Collections.singleton(CLUSTER_MANAGER_ROLE),
+                    Version.CURRENT
+                )
+            );
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         doAnswer(invocationOnMock -> {
@@ -126,26 +134,6 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             actionListener.onResponse(bulkResponse);
             return null;
         }).when(client).bulk(any(), isA(ActionListener.class));
-        doAnswer(invocationOnMock -> {
-            ActionListener<MLMcpToolsRegisterNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<MLMcpToolsRegisterNodeResponse> nodes = List
-                .of(
-                    new MLMcpToolsRegisterNodeResponse(
-                        new DiscoveryNode(
-                            "foo0",
-                            "foo0",
-                            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                            Collections.emptyMap(),
-                            Collections.singleton(CLUSTER_MANAGER_ROLE),
-                            Version.CURRENT
-                        ),
-                        true
-                    )
-                );
-            MLMcpToolsRegisterNodesResponse response = new MLMcpToolsRegisterNodesResponse(ClusterName.DEFAULT, nodes, ImmutableList.of());
-            actionListener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), isA(ActionListener.class));
         transportMcpToolsRegisterAction = new TransportMcpToolsRegisterAction(
             transportService,
             actionFilters,
@@ -168,7 +156,11 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<MLMcpToolsRegisterNodesResponse> argumentCaptor = ArgumentCaptor.forClass(MLMcpToolsRegisterNodesResponse.class);
         verify(listener).onResponse(argumentCaptor.capture());
-        assertEquals(mcpTools.size(), argumentCaptor.getValue().getNodes().size());
+        MLMcpToolsRegisterNodesResponse response = argumentCaptor.getValue();
+        assertEquals(1, response.getNodes().size());
+        assertEquals("localNode", response.getNodes().get(0).getNode().getId());
+        assertTrue(response.getNodes().get(0).getCreated());
+        assertTrue(response.failures().isEmpty());
     }
 
     public void test_doExecute_featureFlagDisabled() {
@@ -321,51 +313,6 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to persist 1 mcp tool(s) into system index", argumentCaptor.getValue().getMessage());
-    }
-
-    public void test_doExecute_registerOnNodeHasFailure() {
-        doAnswer(invocationOnMock -> {
-            ActionListener<MLMcpToolsRegisterNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<FailedNodeException> failures = List
-                .of(new FailedNodeException("mockNodeId", "Network issue", new RuntimeException("Network issue")));
-            MLMcpToolsRegisterNodesResponse response = new MLMcpToolsRegisterNodesResponse(
-                ClusterName.DEFAULT,
-                ImmutableList.of(),
-                failures
-            );
-            actionListener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), isA(ActionListener.class));
-        MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<McpToolRegisterInput> mcpTools = new ArrayList<>();
-        mcpTools.add(getRegisterMcpTool());
-        when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
-        transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Tools are persisted successfully but failed to register to mcp server memory",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    public void test_doExecute_registerOnNodeException() {
-        doAnswer(invocationOnMock -> {
-            ActionListener<MLMcpToolsRegisterNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            actionListener.onFailure(new RuntimeException("Serialization failure"));
-            return null;
-        }).when(client).execute(any(), any(), isA(ActionListener.class));
-        MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<McpToolRegisterInput> mcpTools = new ArrayList<>();
-        mcpTools.add(getRegisterMcpTool());
-        when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
-        transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Tools are persisted successfully but failed to register to mcp server memory with error: Serialization failure",
-            argumentCaptor.getValue().getMessage()
-        );
     }
 
     private McpToolRegisterInput getRegisterMcpTool() {

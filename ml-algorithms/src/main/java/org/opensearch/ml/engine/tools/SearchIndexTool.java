@@ -22,6 +22,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.ParsingException;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -70,16 +71,22 @@ public class SearchIndexTool implements Tool {
         "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available. "
             + "Returns documents matching the query in the provided index.";
 
-    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
-        + "\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
-        + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. You need to get index mapping to write correct search query. It must be a valid OpenSearch query."
-        + " Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}\\n"
-        + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
-        + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
+    public static final String DEFAULT_INPUT_SCHEMA = """
+        {"type":"object",\
+        "properties":{\
+        "index":{"type":"string","description":"OpenSearch index name. Example: index1"},\
+        "query":{"type":"object","description":"OpenSearch Query DSL as a JSON object. \
+        You need to get index mapping to write correct search query. \
+        The object MUST follow OpenSearch Query DSL and MUST include a top-level 'query' field. \
+        Preferred format for reliable parsing. \
+        Example: {\\"query\\":{\\"match\\":{\\"field\\":\\"value\\"}},\\"size\\":10}. \
+        String format is also supported for backward compatibility, but object format is strongly recommended."}},\
+        "required":["index","query"],\
+        "additionalProperties":false}""";
 
     private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 
-    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
     public static final String RETURN_RAW_RESPONSE = "return_raw_response";
 
     private String name = TYPE;
@@ -100,7 +107,7 @@ public class SearchIndexTool implements Tool {
 
         this.attributes = new HashMap<>();
         attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
-        attributes.put(STRICT_FIELD, false);
+        attributes.put(STRICT_FIELD, true);
     }
 
     @Override
@@ -131,10 +138,38 @@ public class SearchIndexTool implements Tool {
         return true;
     }
 
+    /**
+     * Normalizes a JsonElement query parameter to a proper JSON string.
+     * Framework-level validation now handles complex normalization, so this is simplified.
+     */
+    private String normalizeQueryParameter(JsonElement queryElement) {
+        if (queryElement == null || queryElement.isJsonNull()) {
+            return null;
+        }
+        if (queryElement.isJsonObject()) {
+            return PLAIN_NUMBER_GSON.toJson(queryElement);
+        } else if (queryElement.isJsonPrimitive() && queryElement.getAsJsonPrimitive().isString()) {
+            String queryString = queryElement.getAsString();
+            log.debug("Processing query as string (backward compatibility mode). Consider using object format for better reliability.");
+            // Framework validation handles complex normalization, just return the string
+            return queryString;
+        } else {
+            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
+            return PLAIN_NUMBER_GSON.toJson(queryObject);
+        }
+    }
+
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
-        searchSourceBuilder.parseXContent(queryParser);
+        try {
+            XContentParser queryParser = XContentType.JSON
+                .xContent()
+                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
+            searchSourceBuilder.parseXContent(queryParser);
+        } catch (Exception e) {
+            // Create a ParsingException without a cause to prevent unwrapping to JsonParseException
+            throw new ParsingException(null, "ParsingException[Invalid query format]: " + e.getMessage());
+        }
         return new SearchRequest().source(searchSourceBuilder).indices(index);
     }
 
@@ -177,6 +212,7 @@ public class SearchIndexTool implements Tool {
             String index = null;
             String query = null;
             boolean returnFullResponse = Boolean.parseBoolean(parameters.getOrDefault(RETURN_RAW_RESPONSE, "false"));
+
             if (!StringUtils.isEmpty(input)) {
                 try {
                     JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
@@ -185,12 +221,28 @@ public class SearchIndexTool implements Tool {
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
 
                         if (queryElement != null) {
-                            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
-                            query = PLAIN_NUMBER_GSON.toJson(queryObject);
+                            query = normalizeQueryParameter(queryElement);
                         }
+                    } else if (jsonObject != null) {
+                        log.debug("Input JSON is valid but missing required fields 'index' and/or 'query': {}", input);
                     }
                 } catch (JsonSyntaxException e) {
-                    log.error("Invalid JSON input: {}", input, e);
+                    log
+                        .error(
+                            "Invalid input JSON format (length: {}): {}. Input: {}",
+                            input != null ? input.length() : 0,
+                            e.getMessage(),
+                            input != null && input.length() <= 200 ? input : (input != null ? input.substring(0, 200) + "..." : "null")
+                        );
+                    // For malformed JSON input, fail early with a clear error message
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Invalid JSON format in input parameter. Expected valid JSON with 'index' and 'query' fields. Error: "
+                                    + e.getMessage()
+                            )
+                        );
+                    return;
                 }
             }
 
@@ -199,20 +251,66 @@ public class SearchIndexTool implements Tool {
             }
 
             if (StringUtils.isEmpty(query)) {
-                query = parameters.get(QUERY_FIELD);
+                String rawQuery = parameters.get(QUERY_FIELD);
+                if (!StringUtils.isEmpty(rawQuery)) {
+                    log
+                        .debug(
+                            "Processing query parameter as string (backward compatibility mode). Consider using object format for better reliability."
+                        );
+                    // Framework validation handles normalization, just use the raw query
+                    query = rawQuery;
+                }
             }
 
             if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
+                String missingParams = "";
+                if (StringUtils.isEmpty(index) && StringUtils.isEmpty(query)) {
+                    missingParams = "both 'index' and 'query'";
+                } else if (StringUtils.isEmpty(index)) {
+                    missingParams = "'index'";
+                } else {
+                    missingParams = "'query'";
+                }
+
+                log
+                    .error(
+                        "SearchIndexTool validation failed: missing required parameter(s): {}. "
+                            + "Received parameters - index: '{}', query: '{}'",
+                        missingParams,
+                        index != null ? index : "null",
+                        query != null && query.length() <= 100 ? query : (query != null ? query.substring(0, 100) + "..." : "null")
+                    );
+
                 listener
                     .onFailure(
                         new IllegalArgumentException(
-                            "SearchIndexTool's two parameters: index and query are required and should be in valid format"
+                            "SearchIndexTool's two parameters: index and query are required and should be in valid format. Missing: "
+                                + missingParams
                         )
                     );
                 return;
             }
 
-            SearchRequest searchRequest = getSearchRequest(index, query);
+            SearchRequest searchRequest;
+            try {
+                searchRequest = getSearchRequest(index, query);
+            } catch (Exception e) {
+                log.error("Failed to parse search query. Index: {}", index, e);
+
+                if (e instanceof ParsingException) {
+                    listener.onFailure(e);
+                } else {
+                    listener
+                        .onFailure(
+                            new ParsingException(
+                                null,
+                                "Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage(),
+                                e
+                            )
+                        );
+                }
+                return;
+            }
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();

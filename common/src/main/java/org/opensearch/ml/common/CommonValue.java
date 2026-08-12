@@ -63,6 +63,8 @@ public class CommonValue {
     public static final String MCP_SESSION_MANAGEMENT_INDEX = ".plugins-ml-mcp-session-management";
     public static final String MCP_TOOLS_INDEX = ".plugins-ml-mcp-tools";
     public static final String ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX = ".plugins-ml-context-management-templates";
+    // param-schema for agentic-search template fill (one doc per registered search template)
+    public static final String ML_AGENTIC_SEARCH_TEMPLATES_INDEX = ".plugins-ml-agentic-search-templates";
     // index created in 3.1 to track all ml jobs created via job scheduler
     public static final String ML_JOBS_INDEX = ".plugins-ml-jobs";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
@@ -86,6 +88,7 @@ public class CommonValue {
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";
     public static final String ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX_MAPPING_PATH = "index-mappings/ml_context_management_templates.json";
+    public static final String ML_AGENTIC_SEARCH_TEMPLATES_INDEX_MAPPING_PATH = "index-mappings/ml_agentic_search_templates.json";
     public static final String ML_JOBS_INDEX_MAPPING_PATH = "index-mappings/ml_jobs.json";
     public static final String ML_INDEX_INSIGHT_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_config.json";
     public static final String ML_INDEX_INSIGHT_STORAGE_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_storage.json";
@@ -110,6 +113,7 @@ public class CommonValue {
     public static final Version VERSION_3_4_0 = Version.fromString("3.4.0");
     public static final Version VERSION_3_5_0 = Version.fromString("3.5.0");
     public static final Version VERSION_3_7_0 = Version.fromString("3.7.0");
+    public static final Version VERSION_3_8_0 = Version.fromString("3.8.0");
 
     // Connector Constants
     public static final String NAME_FIELD = "name";
@@ -132,6 +136,7 @@ public class CommonValue {
     public static final String MCP_TOOL_NAME_FIELD = "name";
     public static final String MCP_TOOL_DESCRIPTION_FIELD = "description";
     public static final String MCP_TOOL_INPUT_SCHEMA_FIELD = "inputSchema";
+    public static final String MCP_TOOL_TYPE_FIELD = "type";
     public static final String MCP_SYNC_CLIENT = "mcp_sync_client";
     public static final String MCP_TOOLS_FIELD = "tools";
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
@@ -160,7 +165,6 @@ public class CommonValue {
     // JSON-RPC Error Codes
     public static final int JSON_RPC_PARSE_ERROR = -32700;
     public static final int JSON_RPC_INTERNAL_ERROR = -32603;
-    public static final int JSON_RPC_SERVER_NOT_READY_ERROR = -32000;
 
     // MCP Server response fields
     public static final String ACKNOWLEDGE_FIELD = "acknowledged";
