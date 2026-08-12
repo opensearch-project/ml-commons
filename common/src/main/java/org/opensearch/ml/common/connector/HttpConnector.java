@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -179,6 +180,9 @@ public class HttpConnector extends AbstractConnector {
                 case PROVISIONED_BY_FIELD:
                     provisionedBy = parser.textOrNull();
                     break;
+                case BATCH_JOB_STATUS_FIELD:
+                    batchJobStatus = BatchJobStatusMapping.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -234,6 +238,9 @@ public class HttpConnector extends AbstractConnector {
         if (provisionedBy != null) {
             builder.field(PROVISIONED_BY_FIELD, provisionedBy);
         }
+        if (batchJobStatus != null) {
+            builder.field(BATCH_JOB_STATUS_FIELD, batchJobStatus);
+        }
         builder.endObject();
         return builder;
     }
@@ -280,6 +287,9 @@ public class HttpConnector extends AbstractConnector {
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+        if (streamInputVersion.onOrAfter(VERSION_3_9_0) && input.readBoolean()) {
+            this.batchJobStatus = new BatchJobStatusMapping(input);
+        }
     }
 
     @Override
@@ -336,6 +346,14 @@ public class HttpConnector extends AbstractConnector {
         }
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             out.writeOptionalString(provisionedBy);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
+            if (batchJobStatus != null) {
+                out.writeBoolean(true);
+                batchJobStatus.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
         }
     }
 
