@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -41,6 +42,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
@@ -169,14 +171,28 @@ public class AgenticSearchTemplateService {
     private void storeTemplate(AgenticSearchTemplate template, ActionListener<Boolean> listener) {
         mlIndicesHandler.initMLIndexIfAbsent(MLIndex.AGENTIC_SEARCH_TEMPLATES, ActionListener.wrap(created -> {
             try {
+                // CREATE opType so a duplicate template id conflicts instead of overwriting.
                 IndexRequest indexRequest = new IndexRequest(INDEX)
                     .id(template.getTemplateId())
+                    .opType(DocWriteRequest.OpType.CREATE)
                     .source(template.toXContent(jsonXContent.contentBuilder(), ToXContentObject.EMPTY_PARAMS))
                     .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(indexRequest, ActionListener.wrap(r -> {
                     log.info("Registered agentic search template: {}", template.getTemplateId());
                     listener.onResponse(true);
-                }, listener::onFailure));
+                }, e -> {
+                    if (e instanceof VersionConflictEngineException) {
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Agentic search template already exists: " + template.getTemplateId(),
+                                    RestStatus.CONFLICT
+                                )
+                            );
+                    } else {
+                        listener.onFailure(e);
+                    }
+                }));
             } catch (Exception e) {
                 listener.onFailure(e);
             }

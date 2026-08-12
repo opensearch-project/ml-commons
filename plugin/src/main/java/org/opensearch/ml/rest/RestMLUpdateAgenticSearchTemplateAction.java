@@ -78,9 +78,14 @@ public class RestMLUpdateAgenticSearchTemplateAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        AgenticSearchTemplate patch = AgenticSearchTemplate.parse(parser);
-        // The URL id is authoritative; a body template_id (if any) is overridden.
-        patch = patch.toBuilder().templateId(templateId).build();
+        AgenticSearchTemplate parsed = AgenticSearchTemplate.parse(parser);
+        // Only description and param_schema are editable; the URL id is authoritative.
+        AgenticSearchTemplate patch = AgenticSearchTemplate
+            .builder()
+            .templateId(templateId)
+            .description(parsed.getDescription())
+            .paramSchema(parsed.getParamSchema())
+            .build();
 
         return new MLUpdateAgenticSearchTemplateRequest(templateId, patch);
     }

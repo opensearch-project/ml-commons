@@ -181,6 +181,54 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void register_existingId_failsConflict() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onFailure(new org.opensearch.index.engine.VersionConflictEngineException(null, "tmpl", "already exists"));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        assertStatus(listener, RestStatus.CONFLICT, "already exists");
+    }
+
+    @Test
+    public void register_setsOpTypeCreate() throws Exception {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        ArgumentCaptor<IndexRequest> reqCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        verify(client).index(reqCaptor.capture(), any());
+        assertEquals(org.opensearch.action.DocWriteRequest.OpType.CREATE, reqCaptor.getValue().opType());
+    }
+
+    @Test
     public void register_withProvidedSchema_storesItWithoutDeriving() throws Exception {
         stubStoredScript(TEMPLATE_BODY);
         stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));

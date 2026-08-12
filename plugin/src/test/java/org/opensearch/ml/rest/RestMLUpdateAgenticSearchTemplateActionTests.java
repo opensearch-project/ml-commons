@@ -84,6 +84,18 @@ public class RestMLUpdateAgenticSearchTemplateActionTests extends OpenSearchTest
         assertEquals("new desc", result.getTemplate().getDescription());
     }
 
+    public void testGetRequestDropsImmutableFields() throws Exception {
+        // index_binding, created_time, and created_by in the body are ignored.
+        String json = "{\"description\":\"new desc\",\"index_binding\":\"other-index\","
+            + "\"created_by\":\"attacker\",\"created_time\":123}";
+        RestRequest request = updateRequest("product_search", json);
+        MLUpdateAgenticSearchTemplateRequest result = restAction.getRequest(request);
+        assertEquals("new desc", result.getTemplate().getDescription());
+        assertNull(result.getTemplate().getIndexBinding());
+        assertNull(result.getTemplate().getCreatedBy());
+        assertNull(result.getTemplate().getCreatedTime());
+    }
+
     public void testGetRequestMissingTemplateId() throws Exception {
         RestRequest request = updateRequest("", "{\"description\":\"d\"}");
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> restAction.getRequest(request));
