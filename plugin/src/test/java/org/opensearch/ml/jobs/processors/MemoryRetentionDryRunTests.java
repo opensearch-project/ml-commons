@@ -6,6 +6,7 @@
 package org.opensearch.ml.jobs.processors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -527,38 +528,79 @@ public class MemoryRetentionDryRunTests {
         assertNoDeletes();
     }
 
-    @Test
-    public void testRetentionDisabledAndMultiTenancyWarnings() {
-        Settings settings = Settings
+    private Settings.Builder gateSettings(boolean multiTenancy, boolean retentionEnabled) {
+        return Settings
             .builder()
-            .put("plugins.ml_commons.multi_tenancy_enabled", true)
-            .put("plugins.ml_commons.memory.retention_enabled", false)
+            .put("plugins.ml_commons.multi_tenancy_enabled", multiTenancy)
+            .put("plugins.ml_commons.memory.retention_enabled", retentionEnabled)
             .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
             .put("plugins.ml_commons.memory.default_session_retention_days", -1)
             .put("plugins.ml_commons.memory.default_session_max_count", -1)
             .put("plugins.ml_commons.memory.default_long_term_max_count", -1)
             .put("plugins.ml_commons.memory.default_history_max_count", -1)
             .put("plugins.ml_commons.memory.orphan_ttl_days", 7)
-            .put("plugins.ml_commons.memory.working_memory_ttl_days", 30)
-            .build();
-        applySettings(settings);
+            .put("plugins.ml_commons.memory.working_memory_ttl_days", 30);
+    }
 
-        MemoryConfiguration config = sessionConfig(7, null);
+    /** Same session-eviction mock as {@link #testSessionsUnionTimeAndCount()}: would count 4 sessions + 10 cascade if the passes ran. */
+    private void mockSessionsWouldEvict() {
+        long old = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
         doAnswer(invocation -> {
             SearchRequest req = invocation.getArgument(0);
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             String idx = req.indices()[0];
-            if (idx.endsWith("sessions") && req.source().size() > 0) {
-                listener.onResponse(hitsResp(new SearchHit[0]));
+            String query = q(req);
+            if (idx.endsWith("sessions")) {
+                if (!isCount(req)) {
+                    if (isFetchSourceDisabled(req)) {
+                        listener.onResponse(hitsResp(new SearchHit[] { idHit("s2", 1), idHit("s3", 2), idHit("s4", 3) }));
+                    } else {
+                        listener.onResponse(hitsResp(new SearchHit[] { tsHit("s1", old), tsHit("s2", old), tsHit("s3", old) }));
+                    }
+                } else if (query.contains("must_not")) {
+                    listener.onResponse(countResp(8));
+                } else {
+                    listener.onResponse(countResp(0));
+                }
+            } else if (idx.endsWith("working")) {
+                listener.onResponse(countResp(10));
             } else {
                 listener.onResponse(countResp(0));
             }
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
 
-        MemoryRetentionDryRunResult result = run(config, null);
+    @Test
+    public void testDryRunShortCircuitsWhenMultiTenancyEnabled() {
+        // MT enabled hard-gates the scheduled job off, so the dry-run must short-circuit to total=0 even when the
+        // policy WOULD evict data. The mock returns evictable sessions; if the passes ran total would be > 0.
+        applySettings(gateSettings(true, true).build());
+        mockSessionsWouldEvict();
+
+        MemoryRetentionDryRunResult result = run(sessionConfig(7, 5), null);
+
+        assertEquals(0, result.getTotalWouldDelete());
         assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("multi-tenancy is enabled")));
+        assertFalse(result.getWarnings().stream().anyMatch(w -> w.contains("retention is disabled cluster-wide")));
+        assertNotNull(result.getEffectivePolicy());
+        assertNotNull(result.getPolicySource());
+        assertNoDeletes();
+    }
+
+    @Test
+    public void testDryRunShortCircuitsWhenRetentionDisabled() {
+        // retention_enabled=false gates the whole feature off, so the dry-run must short-circuit to total=0 even
+        // when the policy WOULD evict data. The mock returns evictable sessions; if the passes ran total would be > 0.
+        applySettings(gateSettings(false, false).build());
+        mockSessionsWouldEvict();
+
+        MemoryRetentionDryRunResult result = run(sessionConfig(7, 5), null);
+
+        assertEquals(0, result.getTotalWouldDelete());
         assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("retention is disabled cluster-wide")));
+        assertNotNull(result.getEffectivePolicy());
+        assertNotNull(result.getPolicySource());
         assertNoDeletes();
     }
 

@@ -206,7 +206,7 @@ public class RestMemoryRetentionDryRunIT extends MLCommonsRestTestCase {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testDryRunStillComputesButWarnsWhenRetentionDisabled() throws IOException {
+    public void testDryRunReportsZeroWhenRetentionDisabled() throws IOException {
         // Create the container WHILE retention is enabled (a stored policy is rejected when disabled), then disable.
         String containerId = createContainer(
             "{ \"name\": \"dryrun_retdisabled_it_"
@@ -216,12 +216,13 @@ public class RestMemoryRetentionDryRunIT extends MLCommonsRestTestCase {
         try {
             updateClusterSettings("plugins.ml_commons.memory.retention_enabled", false);
 
-            // Dry-run still returns 200 and still computes; it warns that the scheduled job will not run.
+            // Dry-run returns 200 but short-circuits: the feature is gated off, so it reports total 0 and warns why.
             Map<String, Object> result = dryRunSingle(containerId);
             assertEquals("stored", result.get("policy_source"));
+            assertEquals(0, ((Number) result.get("total_would_delete")).intValue());
             List<String> warnings = (List<String>) result.get("warnings");
             assertTrue(
-                "a retention-disabled warning should be emitted while still computing",
+                "a retention-disabled warning should be emitted",
                 warnings.stream().anyMatch(w -> w.contains("retention is disabled cluster-wide"))
             );
         } finally {

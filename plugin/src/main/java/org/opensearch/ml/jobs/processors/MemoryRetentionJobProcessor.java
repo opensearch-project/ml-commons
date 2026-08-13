@@ -2020,15 +2020,26 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
             DryRunContext ctx = new DryRunContext(containerId, policySource, System.currentTimeMillis(), effective.policy, ttlDays);
 
+            // Multi-tenancy hard-gates the scheduled job off - run() returns before any deletion when MT is
+            // enabled - so nothing would ever be deleted in this deployment mode. Skip the read-only passes and
+            // report an honest zero rather than scanning indices for counts the job can't act on.
+            // NOTE(PR-B): retention runs under multi-tenancy in PR-B; this becomes an isRemoteMetadataStore()
+            // gate there, but the skip-to-zero behavior is unchanged.
             if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
                 ctx.warnings.add("multi-tenancy is enabled; the scheduled retention job does not run, so nothing would be deleted");
+                listener.onResponse(buildDryRunResult(ctx));
+                return;
             }
+            // Retention is disabled cluster-wide, so run() would not execute and nothing would be deleted. Skip the
+            // read-only passes and report an honest zero - the whole feature stays gated behind this flag.
             if (!clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_ENABLED)) {
                 ctx.warnings
                     .add(
                         "retention is disabled cluster-wide (plugins.ml_commons.memory.retention_enabled=false);"
-                            + " the scheduled job will not run until it is re-enabled"
+                            + " the scheduled job will not run, so nothing would be deleted"
                     );
+                listener.onResponse(buildDryRunResult(ctx));
+                return;
             }
             if (MemoryRetentionDryRunResult.POLICY_SOURCE_NONE.equals(policySource)) {
                 ctx.warnings.add("container has no retention policy and no cluster defaults apply; nothing would be deleted");
