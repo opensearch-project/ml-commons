@@ -71,10 +71,18 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
 
     private ActionRequest request;
 
+    private org.opensearch.common.util.concurrent.ThreadContext threadContext;
+
     @Before
     public void setup() throws Exception {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        // Wire a real ThreadContext so RestActionUtils.getUserContext(client) can read the user header.
+        // No header set = security disabled (user == null) -> admin gate is a no-op, matching most tests.
+        threadContext = new org.opensearch.common.util.concurrent.ThreadContext(org.opensearch.common.settings.Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         request = MLExecuteMemoryRetentionRequest.builder().build();
 
@@ -168,6 +176,44 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
         assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) e).status());
         // The processor must never be touched when the feature is off.
         verify(mockProcessor, never()).triggerRun(any(ActionListener.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testNonAdminUserIsForbidden() throws Exception {
+        // A security-enabled, non-admin caller must be rejected: on-demand execute is cluster-wide and
+        // could force early deletion of data the caller cannot otherwise reach.
+        setUser("alice", "some_backend_role");
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener, never()).onResponse(any());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        Exception e = exceptionCaptor.getValue();
+        assertTrue(e instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) e).status());
+        // The processor must never be touched when the caller is not an admin.
+        verify(mockProcessor, never()).triggerRun(any(ActionListener.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testAdminUserIsAllowed() throws Exception {
+        // An all_access admin passes the gate and the trigger proceeds.
+        setUser("admin", "all_access");
+        stubTriggerRunResponds(TriggerStatus.TRIGGERED);
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener, times(1)).onResponse(responseCaptor.capture());
+        verify(actionListener, never()).onFailure(any());
+        assertEquals(TriggerStatus.TRIGGERED, responseCaptor.getValue().getStatus());
+        verify(mockProcessor, times(1)).triggerRun(any(ActionListener.class));
+    }
+
+    /** Put a user + roles into the thread context in the format RestActionUtils.getUserContext expects. */
+    private void setUser(String name, String... roles) {
+        String rolesCsv = String.join(",", roles);
+        threadContext
+            .putTransient(org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, name + "||" + rolesCsv);
     }
 
     @SuppressWarnings("unchecked")

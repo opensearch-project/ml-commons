@@ -13,6 +13,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -21,6 +22,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetenti
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
 import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -66,6 +68,23 @@ public class TransportExecuteMemoryRetentionAction extends HandledTransportActio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLExecuteMemoryRetentionResponse> actionListener) {
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
             actionListener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
+
+        // Admin-only: this triggers a CLUSTER-WIDE retention run that evaluates every container's policy and
+        // deletes expired memories across the cluster. Unlike per-container operations, there is no single
+        // container whose access we can check, so we restrict it to admins (all_access). This prevents a
+        // lower-privilege caller from forcing early deletion of data they could not otherwise reach, while
+        // still allowing the scheduled run (which uses the system context, no user) to proceed normally.
+        User user = RestActionUtils.getUserContext(client);
+        if (user != null && (user.getRoles() == null || !user.getRoles().contains("all_access"))) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Only administrators (all_access) may trigger the memory retention job on demand.",
+                        RestStatus.FORBIDDEN
+                    )
+                );
             return;
         }
 
