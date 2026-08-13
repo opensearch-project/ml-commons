@@ -684,4 +684,30 @@ public class MLCreateConnectorInputTests {
         verify.accept(parsedInput);
     }
 
+    @Test
+    public void parse_withCustomConnectorId() throws Exception {
+        String json = "{\"name\":\"conn\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"k\":\"v\"},"
+            + "\"connector_id\":\"bedrock-connector\"}";
+        testParseFromJsonString(json, parsed -> assertEquals("bedrock-connector", parsed.getConnectorId()));
+    }
+
+    @Test
+    public void toXContent_WithCustomConnectorId() throws Exception {
+        MLCreateConnectorInput input = mlCreateConnectorInput.toBuilder().connectorId("bedrock-connector").build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"connector_id\":\"bedrock-connector\""));
+    }
+
+    @Test
+    public void writeToAndReadFrom_withCustomConnectorId() throws IOException {
+        MLCreateConnectorInput input = mlCreateConnectorInput.toBuilder().connectorId("bedrock-connector").build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_9_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_9_0);
+        assertEquals("bedrock-connector", new MLCreateConnectorInput(in).getConnectorId());
+    }
+
 }

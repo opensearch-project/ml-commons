@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_MODEL_URL;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -869,6 +870,117 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             "The name {Test Model} you provided is unavailable because it is used by another model group with id {model_group_ID} to which you do not have access. Please provide a different name.",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelId_startsWithUnderscore() {
+        assertInvalidModelId("_invalid", "model id must not start with '_'");
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelId_startsWithHyphen() {
+        assertInvalidModelId("-invalid", "model id must not start with '-'");
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelId_startsWithSpecialCharacter() {
+        assertInvalidModelId(
+            "!invalid",
+            "model id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelId_containsSpecialCharacters() {
+        assertInvalidModelId(
+            "model#id",
+            "model id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelId_containsSpaces() {
+        assertInvalidModelId(
+            "model id",
+            "model id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelId_blank() {
+        assertInvalidModelId("   ", "model id is invalid");
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelId_tooLong() {
+        assertInvalidModelId("a".repeat(MAX_DOCUMENT_ID_LENGTH + 1), "model id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH);
+    }
+
+    private void assertInvalidModelId(String modelId, String expectedMessage) {
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.BATCH_RCF)
+            .deployModel(true)
+            .modelName("Test Model")
+            .modelConfig(
+                new TextEmbeddingModelConfig(
+                    "CUSTOM",
+                    123,
+                    TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+                    "all config",
+                    null,
+                    TextEmbeddingModelConfig.PoolingMode.MEAN,
+                    true,
+                    512
+                )
+            )
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .url("http://test_url")
+            .modelId(modelId)
+            .build();
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> transportRegisterModelAction.doExecute(task, new MLRegisterModelRequest(registerModelInput), actionListener)
+        );
+        assertEquals(expectedMessage, e.getMessage());
+    }
+
+    @Test
+    public void doExecute_passesCustomModelIdToModelManager() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .deployModel(true)
+            .modelGroupId("modelGroupID")
+            .modelName("Test Model")
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelId("custom-model-id")
+            .connectorId("connector-id")
+            .modelInterface(Map.of("input", "{}"))
+            .build();
+        when(request.getRegisterModelInput()).thenReturn(input);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(), any());
+
+        doAnswer(invocation -> null).when(mlModelManager).registerMLRemoteModel(any(), any(), any(), any());
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterModelInput> inputCaptor = ArgumentCaptor.forClass(MLRegisterModelInput.class);
+        verify(mlModelManager).registerMLRemoteModel(eq(sdkClient), inputCaptor.capture(), isA(MLTask.class), eq(actionListener));
+        assertEquals("custom-model-id", inputCaptor.getValue().getModelId());
     }
 
     private MLRegisterModelRequest prepareRequest(String url, String modelGroupID) {

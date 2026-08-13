@@ -89,6 +89,7 @@ import org.apache.commons.lang3.BooleanUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
@@ -140,6 +141,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
@@ -291,6 +293,53 @@ public class MLModelManager {
         return regexList.stream().map(Pattern::compile).collect(Collectors.toList());
     }
 
+    private void validateCustomModelIdForHiddenModel(String customModelId, Boolean isHidden, String hiddenDocumentId) {
+        if (Boolean.TRUE.equals(isHidden) && customModelId != null && hiddenDocumentId != null && !customModelId.equals(hiddenDocumentId)) {
+            throw new IllegalArgumentException("Cannot specify custom model id for hidden models");
+        }
+    }
+
+    private void configureModelMetaIndexRequest(
+        IndexRequest indexRequest,
+        Boolean isHidden,
+        String customModelId,
+        String modelName,
+        FunctionName functionName
+    ) {
+        if (Boolean.TRUE.equals(isHidden)) {
+            validateCustomModelIdForHiddenModel(customModelId, isHidden, modelName);
+            indexRequest.id(modelName);
+            return;
+        }
+        if (functionName == FunctionName.METRICS_CORRELATION) {
+            if (customModelId != null && !customModelId.equals(functionName.name())) {
+                throw new IllegalArgumentException("Cannot specify custom model id for metrics correlation models");
+            }
+            indexRequest.id(functionName.name());
+            return;
+        }
+        if (customModelId != null) {
+            indexRequest.id(customModelId);
+            indexRequest.opType(DocWriteRequest.OpType.CREATE);
+        }
+    }
+
+    private void configureModelMetaPutRequest(
+        PutDataObjectRequest.Builder putRequestBuilder,
+        Boolean isHidden,
+        String customModelId,
+        String modelName
+    ) {
+        if (Boolean.TRUE.equals(isHidden)) {
+            validateCustomModelIdForHiddenModel(customModelId, isHidden, modelName);
+            putRequestBuilder.id(modelName);
+            return;
+        }
+        if (customModelId != null) {
+            putRequestBuilder.id(customModelId).overwriteIfExists(false);
+        }
+    }
+
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
         try {
             FunctionName functionName = mlRegisterModelMetaInput.getFunctionName();
@@ -377,10 +426,14 @@ public class MLModelManager {
                     .lastUpdateTime(now)
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-
-                if (mlRegisterModelMetaInput.getIsHidden() != null && mlRegisterModelMetaInput.getIsHidden()) {
-                    indexRequest.id(modelName);
-                }
+                String customDocumentId = mlRegisterModelMetaInput.getModelId();
+                configureModelMetaIndexRequest(
+                    indexRequest,
+                    mlRegisterModelMetaInput.getIsHidden(),
+                    customDocumentId,
+                    modelName,
+                    functionName
+                );
                 indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -394,7 +447,7 @@ public class MLModelManager {
                         version
                     );
                     log.error("Failed to index model meta doc", e);
-                    wrappedListener.onFailure(e);
+                    wrappedListener.onFailure(MLResourceIdUtils.toDocumentAlreadyExistsException(customDocumentId, "model id", e));
                 }));
             }, ex -> {
                 log.error("Failed to init model index", ex);
@@ -675,13 +728,14 @@ public class MLModelManager {
                     .provisionedBy(registerModelInput.getProvisionedBy())
                     .build();
 
-                PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
+                String customDocumentId = registerModelInput.getModelId();
+                PutDataObjectRequest.Builder putModelMetaRequestBuilder = PutDataObjectRequest
                     .builder()
                     .index(ML_MODEL_INDEX)
-                    .id(Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : null)
                     .tenantId(registerModelInput.getTenantId())
-                    .dataObject(mlModelMeta)
-                    .build();
+                    .dataObject(mlModelMeta);
+                configureModelMetaPutRequest(putModelMetaRequestBuilder, registerModelInput.getIsHidden(), customDocumentId, modelName);
+                PutDataObjectRequest putModelMetaRequest = putModelMetaRequestBuilder.build();
 
                 // index remote model doc
                 ActionListener<IndexResponse> indexListener = ActionListener.wrap(modelMetaRes -> {
@@ -702,8 +756,9 @@ public class MLModelManager {
                     listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name(), modelId));
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
-                    handleException(functionName, taskId, registerModelInput.getTenantId(), e);
-                    listener.onFailure(e);
+                    Exception reported = MLResourceIdUtils.toDocumentAlreadyExistsException(customDocumentId, "model id", e);
+                    handleException(functionName, taskId, registerModelInput.getTenantId(), reported);
+                    listener.onFailure(reported);
                 });
 
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
@@ -785,18 +840,23 @@ public class MLModelManager {
                 .provisionedBy(registerModelInput.getProvisionedBy())
                 .build();
 
-            PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
+            String customDocumentId = registerModelInput.getModelId();
+            PutDataObjectRequest.Builder putModelMetaRequestBuilder = PutDataObjectRequest
                 .builder()
                 .index(ML_MODEL_INDEX)
-                .id(Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : null)
                 .tenantId(registerModelInput.getTenantId())
-                .dataObject(mlModelMeta)
-                .build();
+                .dataObject(mlModelMeta);
+            configureModelMetaPutRequest(putModelMetaRequestBuilder, registerModelInput.getIsHidden(), customDocumentId, modelName);
+            PutDataObjectRequest putModelMetaRequest = putModelMetaRequestBuilder.build();
 
             IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
-            if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
-                indexModelMetaRequest.id(modelName);
-            }
+            configureModelMetaIndexRequest(
+                indexModelMetaRequest,
+                registerModelInput.getIsHidden(),
+                customDocumentId,
+                modelName,
+                functionName
+            );
             indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
             indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             // create model meta doc
@@ -817,7 +877,12 @@ public class MLModelManager {
                 }
             }, e -> {
                 log.error("Failed to index model meta doc", e);
-                handleException(functionName, taskId, registerModelInput.getTenantId(), e);
+                handleException(
+                    functionName,
+                    taskId,
+                    registerModelInput.getTenantId(),
+                    MLResourceIdUtils.toDocumentAlreadyExistsException(customDocumentId, "model id", e)
+                );
             });
 
             ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
@@ -879,12 +944,14 @@ public class MLModelManager {
                     .provisionedBy(registerModelInput.getProvisionedBy())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
-                if (functionName == FunctionName.METRICS_CORRELATION) {
-                    indexModelMetaRequest.id(functionName.name());
-                }
-                if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
-                    indexModelMetaRequest.id(modelName);
-                }
+                String customDocumentId = registerModelInput.getModelId();
+                configureModelMetaIndexRequest(
+                    indexModelMetaRequest,
+                    registerModelInput.getIsHidden(),
+                    customDocumentId,
+                    modelName,
+                    functionName
+                );
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 // create model meta doc
@@ -896,7 +963,12 @@ public class MLModelManager {
                     registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
-                    handleException(functionName, taskId, registerModelInput.getTenantId(), e);
+                    handleException(
+                        functionName,
+                        taskId,
+                        registerModelInput.getTenantId(),
+                        MLResourceIdUtils.toDocumentAlreadyExistsException(customDocumentId, "model id", e)
+                    );
                 });
                 client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, listener));
             }, e -> {
