@@ -270,9 +270,12 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     public void testClusterChanged_MemoryRetentionReconcile_HonorsPersistedIntervalFromMetadata() {
         DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerState(dataNode, false, true);
-        // Node bootstrap (opensearch.yml) has nothing; the interval was set via the cluster-settings API -> metadata.
+        // Node bootstrap (opensearch.yml) has nothing; the interval was set via `PUT _cluster/settings persistent:`,
+        // which lands in metadata.persistentSettings(). Fix #1 overlays those on top of node settings so dynamic
+        // values win — this asserts the reconcile reads the persisted value (1), not the default (24).
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
-        when(metadata.settings()).thenReturn(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 1).build());
+        when(metadata.persistentSettings())
+            .thenReturn(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 1).build());
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
@@ -460,6 +463,8 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         when(clusterService.state()).thenReturn(clusterState);
         when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(hasMLJobsIndex);
         when(metadata.settings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.persistentSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.transientSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
         setupStateReady();
     }
 
@@ -478,6 +483,8 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         when(clusterService.state()).thenReturn(clusterState);
         when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(hasMLJobsIndex);
         when(metadata.settings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.persistentSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.transientSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
         setupStateReady();
     }
 

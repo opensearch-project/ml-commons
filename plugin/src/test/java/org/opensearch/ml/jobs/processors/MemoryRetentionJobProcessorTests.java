@@ -131,6 +131,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -462,6 +463,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -490,6 +492,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -562,6 +565,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -658,6 +662,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -700,6 +705,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -2088,6 +2094,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -2997,6 +3004,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -3066,6 +3074,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -3368,6 +3377,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -3674,7 +3684,7 @@ public class MemoryRetentionJobProcessorTests {
         // run could last. The watchdog in run() must CLEAR the guard and skip THIS invocation (it must
         // not take over and start a competing run), then the NEXT invocation must proceed cleanly.
         setIsRunning(processor, true);
-        setRunStartMillis(processor, System.currentTimeMillis() - stuckTimeoutMillis() - TimeUnit.HOURS.toMillis(1));
+        setRunStartMillis(processor, System.currentTimeMillis() - stuckTimeoutMillis(processor) - TimeUnit.HOURS.toMillis(1));
 
         AtomicBoolean searched = new AtomicBoolean(false);
         doAnswer(invocation -> {
@@ -3698,6 +3708,30 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
+    public void testStuckGuardTimeoutScalesWithConfiguredInterval() {
+        // Liveness floor, not a run timeout: max(24h floor, 2 × interval). The floor keeps the detection
+        // window generous on short intervals; the interval multiple widens it on long intervals so a
+        // legitimately long-running weekly-interval run isn't false-flagged as stuck. With the DEFAULT 24h
+        // interval, 2 × 24h = 48h beats the 24h floor. The floor only binds for intervals <= 12h.
+        assertEquals("default 24h interval -> 2 × interval (48h) wins", TimeUnit.HOURS.toMillis(48), processor.stuckGuardTimeoutMillis());
+
+        // 1h interval: 2 × 1h = 2h, floored up to 24h.
+        Settings shortInterval = Settings
+            .builder()
+            .put(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.getKey(), 1)
+            .build();
+        clusterService.getClusterSettings().applySettings(shortInterval);
+        assertEquals("1h interval -> 24h floor wins over 2h", TimeUnit.HOURS.toMillis(24), processor.stuckGuardTimeoutMillis());
+
+        // 72h (3d) interval: 2 × 72h = 144h.
+        Settings longInterval = Settings
+            .builder()
+            .put(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.getKey(), 72)
+            .build();
+        clusterService.getClusterSettings().applySettings(longInterval);
+        assertEquals("72h interval -> 2 × interval (144h) wins", TimeUnit.HOURS.toMillis(144), processor.stuckGuardTimeoutMillis());
+    }
+
     public void testRecentGuardIsNotStolenByWatchdog() throws Exception {
         // A genuinely in-flight run (guard acquired just now) must still cause a concurrent invocation
         // to skip — the watchdog must not steal a healthy run.
@@ -3734,9 +3768,7 @@ public class MemoryRetentionJobProcessorTests {
         ((AtomicLong) f.get(p)).set(value);
     }
 
-    private long stuckTimeoutMillis() throws Exception {
-        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("STUCK_GUARD_TIMEOUT_MILLIS");
-        f.setAccessible(true);
-        return f.getLong(null);
+    private long stuckTimeoutMillis(MemoryRetentionJobProcessor p) {
+        return p.stuckGuardTimeoutMillis();
     }
 }

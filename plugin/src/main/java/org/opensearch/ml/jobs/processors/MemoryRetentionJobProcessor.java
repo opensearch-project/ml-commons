@@ -25,6 +25,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS;
 
@@ -177,10 +178,36 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
      * itself. The worst case of a false positive is therefore that the next scheduled run overlaps a
      * still-live one, doing duplicate but idempotent deletes (same tolerated outcome as the cross-node
      * overlap noted in the 3.9 handoff §5.1). Recovery from a genuine leak costs at most one job
-     * interval. 24h comfortably exceeds any run on a normally-provisioned cluster while keeping the
-     * false-positive rate negligible.
+     * interval.
+     *
+     * <p>This is a liveness <em>floor</em>, not a run timeout. Because {@code retention_job_interval_hours}
+     * is operator-tunable (1–168h) and a legitimate run on a large cluster with an elevated throttle can
+     * take many hours, the effective threshold scales with the configured interval — see
+     * {@link #stuckGuardTimeoutMillis()}. The floor guarantees the threshold never drops so low on a
+     * short interval that it could false-positive a genuinely long run; the interval multiple keeps the
+     * threshold comfortably above any single run's plausible duration on clusters configured to run
+     * infrequently.
      */
-    static final long STUCK_GUARD_TIMEOUT_MILLIS = TimeUnit.HOURS.toMillis(24);
+    static final long STUCK_GUARD_TIMEOUT_FLOOR_MILLIS = TimeUnit.HOURS.toMillis(24);
+
+    /**
+     * Multiple of the configured job interval used as the stuck-guard threshold when it exceeds the floor.
+     * A run should never legitimately span more than one interval (the pipeline is single-flight and the
+     * next invocation folds any backlog into itself), so 2× the interval leaves generous headroom for a
+     * slow-but-live run before its guard is presumed leaked.
+     */
+    static final long STUCK_GUARD_INTERVAL_MULTIPLE = 2L;
+
+    /**
+     * Effective stuck-guard threshold: {@code max(24h floor, 2 × configured interval)}, read live from
+     * cluster settings so an operator raising the interval (up to 168h) also widens the leak-detection
+     * window and cannot have a long-but-legitimate run false-flagged as stuck.
+     */
+    long stuckGuardTimeoutMillis() {
+        int intervalHours = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS);
+        long intervalBasedMillis = TimeUnit.HOURS.toMillis((long) intervalHours * STUCK_GUARD_INTERVAL_MULTIPLE);
+        return Math.max(STUCK_GUARD_TIMEOUT_FLOOR_MILLIS, intervalBasedMillis);
+    }
 
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
@@ -201,7 +228,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
      * Wall-clock time (epoch millis) at which the current run acquired {@link #isRunning}, or
      * {@link Long#MIN_VALUE} when no run holds the guard. Read by the stuck-guard watchdog in
      * {@link #triggerRun(ActionListener)} to decide whether a still-set guard has outlived
-     * {@link #STUCK_GUARD_TIMEOUT_MILLIS}. Set when the guard is claimed and cleared by {@link #finishRun()}.
+     * {@link #stuckGuardTimeoutMillis()}. Set when the guard is claimed and cleared by {@link #finishRun()}.
      */
     private final AtomicLong runStartMillis = new AtomicLong(Long.MIN_VALUE);
 
@@ -326,7 +353,8 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             // run of idempotent deletes on the following interval.
             long heldSince = runStartMillis.get();
             long heldForMillis = System.currentTimeMillis() - heldSince;
-            if (heldSince == Long.MIN_VALUE || heldForMillis < STUCK_GUARD_TIMEOUT_MILLIS) {
+            long stuckGuardTimeoutMillis = stuckGuardTimeoutMillis();
+            if (heldSince == Long.MIN_VALUE || heldForMillis < stuckGuardTimeoutMillis) {
                 log.warn("Memory retention job already in progress on this node, skipping this invocation");
                 listener.onResponse(TriggerStatus.ALREADY_RUNNING);
                 return;
@@ -336,7 +364,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     "Memory retention job guard appears stuck (held for {} ms, exceeds {} ms); clearing it so the next "
                         + "scheduled run can proceed. A prior run likely failed without releasing the guard.",
                     heldForMillis,
-                    STUCK_GUARD_TIMEOUT_MILLIS
+                    stuckGuardTimeoutMillis
                 );
             finishRun();
             listener.onResponse(TriggerStatus.ALREADY_RUNNING);
