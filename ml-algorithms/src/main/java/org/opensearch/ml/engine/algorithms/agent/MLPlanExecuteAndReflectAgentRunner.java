@@ -89,6 +89,7 @@ import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
+import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
@@ -646,6 +647,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 }
                 // Mark sub-agent so its token tracker suppresses logging (parent logs merged totals)
                 reactParams.put(AgentTokenTracker.IS_SUB_AGENT_FIELD, "true");
+                // Forward AgentTool call-depth so the executor sub-agent inherits the recursion bound.
+                if (allParams.containsKey(AgentTool.AGENT_CALL_DEPTH_FIELD)) {
+                    reactParams.put(AgentTool.AGENT_CALL_DEPTH_FIELD, allParams.get(AgentTool.AGENT_CALL_DEPTH_FIELD));
+                }
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
