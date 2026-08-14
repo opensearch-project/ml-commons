@@ -37,6 +37,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.search.SearchModule;
 
 import com.google.gson.JsonObject;
@@ -1270,5 +1271,22 @@ public class HttpConnectorTest {
 
         HttpConnector deserialized = new HttpConnector(streamInput);
         Assert.assertNull(deserialized.getBatchJobStatus());
+    }
+
+    @Test
+    public void update_appliesBatchJobStatus() {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("google_cloud").build();
+        Assert.assertNull(connector.getBatchJobStatus());
+
+        MLCreateConnectorInput updateContent = MLCreateConnectorInput
+            .builder()
+            .updateConnector(true)
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        connector.update(updateContent);
+
+        Assert.assertNotNull(connector.getBatchJobStatus());
+        Assert.assertEquals("state", connector.getBatchJobStatus().getFieldName());
+        Assert.assertEquals("COMPLETED", connector.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
     }
 }

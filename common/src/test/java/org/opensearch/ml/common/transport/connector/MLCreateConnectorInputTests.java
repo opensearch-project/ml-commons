@@ -38,6 +38,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.connector.BatchJobStatusMapping;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -690,6 +691,82 @@ public class MLCreateConnectorInputTests {
         streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
         assertNull(deserialized.getProvisionedBy());
+    }
+
+    // ---- batch_job_status tests ----
+
+    @Test
+    public void testParse_withBatchJobStatus_preserved() throws Exception {
+        String json = "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"google_cloud\","
+            + "\"credential\":{\"key\":\"val\"},"
+            + "\"batch_job_status\":{\"field_name\":\"state\",\"mapping\":{\"JOB_STATE_SUCCEEDED\":\"COMPLETED\"}}}";
+        testParseFromJsonString(json, parsedInput -> {
+            assertNotNull(parsedInput.getBatchJobStatus());
+            assertEquals("state", parsedInput.getBatchJobStatus().getFieldName());
+            assertEquals("COMPLETED", parsedInput.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+        });
+    }
+
+    @Test
+    public void testToXContent_withBatchJobStatus_roundTrip() throws Exception {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = builder.toString();
+        assertTrue(json.contains("\"batch_job_status\""));
+
+        testParseFromJsonString(json, parsedInput -> {
+            assertNotNull(parsedInput.getBatchJobStatus());
+            assertEquals("state", parsedInput.getBatchJobStatus().getFieldName());
+            assertEquals("COMPLETED", parsedInput.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+        });
+    }
+
+    @Test
+    public void testStreamRoundTrip_withBatchJobStatus() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_9_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_9_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNotNull(deserialized.getBatchJobStatus());
+        assertEquals("state", deserialized.getBatchJobStatus().getFieldName());
+        assertEquals("COMPLETED", deserialized.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+    }
+
+    @Test
+    public void testStreamRoundTrip_batchJobStatus_oldVersion_isNull() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0); // pre-3.8 stream: field must not be written
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNull(deserialized.getBatchJobStatus());
     }
 
     // Helper method to create XContentParser from a JSON string

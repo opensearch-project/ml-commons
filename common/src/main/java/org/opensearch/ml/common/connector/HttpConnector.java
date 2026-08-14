@@ -389,6 +389,9 @@ public class HttpConnector extends AbstractConnector {
         if (updateContent.getConnectorClientConfig() != null) {
             this.connectorClientConfig = updateContent.getConnectorClientConfig();
         }
+        if (updateContent.getBatchJobStatus() != null) {
+            this.batchJobStatus = updateContent.getBatchJobStatus();
+        }
     }
 
     @Override
