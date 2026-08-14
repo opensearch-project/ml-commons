@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
@@ -54,6 +53,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
@@ -191,12 +191,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                     .orElse(null)
             );
 
-        // The Vertex AI batch job identifier ("name") is a slash-delimited resource path used
-        // directly in the status/cancel URL; keep it un-escaped so its '/' are not turned into '\/'.
-        if (parameters.containsKey("name")) {
-            String existingNoEscape = parameters.get(NO_ESCAPE_PARAMS);
-            parameters.put(NO_ESCAPE_PARAMS, existingNoEscape == null || existingNoEscape.isBlank() ? "name" : existingNoEscape + ",name");
-        }
+        ToolUtils.markResourcePathNameNoEscape(parameters);
 
         RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(
             parameters,
