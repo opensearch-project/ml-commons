@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -640,7 +639,9 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testHttpClientCacheInvalidation_CredentialRotation() {
+    // Invalidation itself is covered in MLHttpClientCacheManagerTests, which drives one cache
+    // manager with changing configuration. Here we only assert the cache-hit path.
+    public void testGetHttpClient_SameExecutor_ReturnsCachedClient() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -683,29 +684,12 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
 
         SdkAsyncHttpClient client2 = executor.getHttpClient();
         assertSame("HTTP client should be cached", client1, client2);
-
-        Map<String, String> rotatedCredentials = new HashMap<>();
-        rotatedCredentials.put("access_key", "rotated-access-key");
-        rotatedCredentials.put("secret_key", "rotated-secret-key");
-
-        HttpConnector rotatedConnector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .connectorClientConfig(clientConfig)
-            .actions(Arrays.asList(predictAction))
-            .credential(rotatedCredentials)
-            .build();
-
-        HttpJsonConnectorExecutor rotatedExecutor = spy(new HttpJsonConnectorExecutor(rotatedConnector));
-
-        SdkAsyncHttpClient client3 = rotatedExecutor.getHttpClient();
-        assertNotSame("HTTP client should be recreated after credential rotation", client1, client3);
     }
 
     @Test
-    public void testHttpClientCacheInvalidation_ConfigurationChange() {
+    // Invalidation itself is covered in MLHttpClientCacheManagerTests, which drives one cache
+    // manager with changing configuration. Here we only assert the cache-hit path.
+    public void testGetHttpClient_SameExecutorRepeatedCalls_ReturnsCachedClient() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -742,33 +726,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
 
         SdkAsyncHttpClient client2 = executor.getHttpClient();
         assertSame("HTTP client should be cached", client1, client2);
-
-        ConnectorClientConfig updatedConfig = new ConnectorClientConfig(
-            20,  // different maxConnections
-            15,  // different connectionTimeout
-            15,  // different readTimeout
-            1,
-            1,
-            0,
-            RetryBackoffPolicy.CONSTANT,
-            true,  // different skipSslVerification
-            false, // mutualTlsEnabled
-            null
-        );
-
-        HttpConnector updatedConnector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .connectorClientConfig(updatedConfig)
-            .actions(Arrays.asList(predictAction))
-            .build();
-
-        HttpJsonConnectorExecutor updatedExecutor = spy(new HttpJsonConnectorExecutor(updatedConnector));
-
-        SdkAsyncHttpClient client3 = updatedExecutor.getHttpClient();
-        assertNotSame("HTTP client should be recreated after configuration change", client1, client3);
     }
 
     @Test
@@ -953,69 +910,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             MLHttpClientCacheManager.MIN_CLIENT_CLOSE_GRACE_PERIOD,
             MLHttpClientCacheManager.clientCloseGracePeriod(null)
         );
-    }
-
-    @Test
-    public void testHttpClientCacheInvalidation_MtlsToggle() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://openai.com/mock")
-            .requestBody("hello world")
-            .build();
-
-        ConnectorClientConfig configWithoutMtls = new ConnectorClientConfig(
-            10,
-            10,
-            10,
-            1,
-            1,
-            0,
-            RetryBackoffPolicy.CONSTANT,
-            false, // skipSslVerification
-            false, // mutualTlsEnabled = false
-            null
-        );
-
-        HttpConnector connectorWithoutMtls = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .connectorClientConfig(configWithoutMtls)
-            .actions(Arrays.asList(predictAction))
-            .build();
-
-        HttpJsonConnectorExecutor executorWithoutMtls = spy(new HttpJsonConnectorExecutor(connectorWithoutMtls));
-        SdkAsyncHttpClient clientWithoutMtls = executorWithoutMtls.getHttpClient();
-
-        ConnectorClientConfig configWithDifferentSettings = new ConnectorClientConfig(
-            20,
-            20,
-            20,
-            1,
-            1,
-            0, // Different connection settings
-            RetryBackoffPolicy.CONSTANT,
-            true,  // Different skipSslVerification
-            false, // mutualTlsEnabled = false (to avoid certificate validation)
-            null
-        );
-
-        HttpConnector connectorWithDifferentSettings = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .connectorClientConfig(configWithDifferentSettings)
-            .actions(Arrays.asList(predictAction))
-            .build();
-
-        HttpJsonConnectorExecutor executorWithDifferentSettings = spy(new HttpJsonConnectorExecutor(connectorWithDifferentSettings));
-        SdkAsyncHttpClient clientWithDifferentSettings = executorWithDifferentSettings.getHttpClient();
-
-        assertNotSame("HTTP client should be different when configuration is changed", clientWithoutMtls, clientWithDifferentSettings);
     }
 
     @Test

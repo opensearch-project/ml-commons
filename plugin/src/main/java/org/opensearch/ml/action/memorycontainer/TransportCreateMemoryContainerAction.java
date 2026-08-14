@@ -40,6 +40,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContaine
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerModelValidator;
@@ -117,6 +118,7 @@ public class TransportCreateMemoryContainerAction extends
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, input.getTenantId(), listener)) {
             return;
         }
+        MLResourceIdUtils.validateCustomDocumentId(input.getMemoryContainerId(), "memory container id");
 
         User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
@@ -133,7 +135,7 @@ public class TransportCreateMemoryContainerAction extends
                     MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
 
                     // Index the memory container document (now includes auto-generated prefix if applicable)
-                    indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
+                    indexMemoryContainer(memoryContainer, input.getMemoryContainerId(), ActionListener.wrap(memoryContainerId -> {
                         // Create memory data indices based on semantic storage config
                         createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(actualIndexName -> {
                             listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
@@ -305,47 +307,51 @@ public class TransportCreateMemoryContainerAction extends
         MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline(indexName, memoryConfig, mlIndicesHandler, client, listener);
     }
 
-    private void indexMemoryContainer(MLMemoryContainer container, ActionListener<String> listener) {
+    private void indexMemoryContainer(MLMemoryContainer container, String memoryContainerId, ActionListener<String> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient
-                .putDataObjectAsync(
-                    PutDataObjectRequest
-                        .builder()
-                        .tenantId(container.getTenantId())
-                        .index(ML_MEMORY_CONTAINER_INDEX)
-                        .dataObject(container)
-                        .refreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-                        .build()
-                )
-                .whenComplete((r, throwable) -> {
-                    context.restore();
-                    if (throwable != null) {
-                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        log.error("Failed to index memory container", cause);
-                        listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            PutDataObjectRequest.Builder putRequestBuilder = PutDataObjectRequest
+                .builder()
+                .tenantId(container.getTenantId())
+                .index(ML_MEMORY_CONTAINER_INDEX)
+                .dataObject(container)
+                .refreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            if (memoryContainerId != null) {
+                putRequestBuilder.id(memoryContainerId).overwriteIfExists(false);
+            }
+            sdkClient.putDataObjectAsync(putRequestBuilder.build()).whenComplete((r, throwable) -> {
+                context.restore();
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    log.error("Failed to index memory container", cause);
+                    Exception reported = MLResourceIdUtils
+                        .toDocumentAlreadyExistsException(memoryContainerId, "memory container id", cause);
+                    if (reported != cause) {
+                        listener.onFailure(reported);
                     } else {
-                        try {
-                            IndexResponse indexResponse = r.indexResponse();
-                            assert indexResponse != null;
-                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
-                                String generatedId = indexResponse.getId();
-                                log.info("Successfully created memory container with ID: {}", generatedId);
-                                listener.onResponse(generatedId);
-                            } else {
-                                log
-                                    .error(
-                                        "Failed to create memory container - unexpected index response result: {}",
-                                        indexResponse.getResult()
-                                    );
-                                listener
-                                    .onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
-                            }
-                        } catch (Exception e) {
-                            log.error("Failed to process index response", e);
+                        listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR, cause));
+                    }
+                } else {
+                    try {
+                        IndexResponse indexResponse = r.indexResponse();
+                        assert indexResponse != null;
+                        if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+                            String generatedId = indexResponse.getId();
+                            log.info("Successfully created memory container with ID: {}", generatedId);
+                            listener.onResponse(generatedId);
+                        } else {
+                            log
+                                .error(
+                                    "Failed to create memory container - unexpected index response result: {}",
+                                    indexResponse.getResult()
+                                );
                             listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                         }
+                    } catch (Exception e) {
+                        log.error("Failed to process index response", e);
+                        listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                     }
-                });
+                }
+            });
         } catch (Exception e) {
             log.error("Failed to save memory container", e);
             listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));

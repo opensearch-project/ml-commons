@@ -18,6 +18,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REKOGNITION_TRUST_ENDPOINT_REGEX;
+import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -27,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -46,7 +48,9 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -59,6 +63,7 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -735,6 +740,129 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
                     || errorMsg.contains("private ip")
             );
         }
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_startsWithHyphen() {
+        assertInvalidConnectorId("-invalid", "connector id must not start with '-'");
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_containsSpecialCharacters() {
+        assertInvalidConnectorId(
+            "invalid@connector",
+            "connector id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_blank() {
+        assertInvalidConnectorId("   ", "connector id is invalid");
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_tooLong() {
+        assertInvalidConnectorId(
+            "a".repeat(MAX_DOCUMENT_ID_LENGTH + 1),
+            "connector id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH
+        );
+    }
+
+    private void assertInvalidConnectorId(String connectorId, String expectedMessage) {
+        input.setConnectorId(connectorId);
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> action.doExecute(task, request, actionListener));
+        assertEquals(expectedMessage, e.getMessage());
+    }
+
+    public void testCreateConnector_usesCustomConnectorId() throws InterruptedException {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        TransportCreateConnectorAction actionWithMockSdk = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mockSdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorId("bedrock-connector");
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
+        IndexResponse customIndexResponse = new IndexResponse(
+            new ShardId(ML_CONNECTOR_INDEX, "_na_", 0),
+            "bedrock-connector",
+            1,
+            0,
+            2,
+            true
+        );
+        when(putResponse.indexResponse()).thenReturn(customIndexResponse);
+
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        when(mockSdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(CompletableFuture.completedFuture(putResponse));
+
+        actionWithMockSdk.doExecute(task, request, actionListener);
+
+        verify(mockSdkClient).putDataObjectAsync(putRequestCaptor.capture());
+        assertEquals("bedrock-connector", putRequestCaptor.getValue().id());
+        ArgumentCaptor<MLCreateConnectorResponse> responseCaptor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals("bedrock-connector", responseCaptor.getValue().getConnectorId());
+    }
+
+    public void testCreateConnector_duplicateCustomConnectorId() throws InterruptedException {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        TransportCreateConnectorAction actionWithMockSdk = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mockSdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorId("bedrock-connector");
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId(ML_CONNECTOR_INDEX, "_na_", 0),
+            "bedrock-connector",
+            "document already exists"
+        );
+        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
+        future.completeExceptionally(conflict);
+        when(mockSdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        actionWithMockSdk.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("connector id 'bedrock-connector' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
     }
 
     public void testCreateConnector_PrivateIpWithTrustedEndpoint() {

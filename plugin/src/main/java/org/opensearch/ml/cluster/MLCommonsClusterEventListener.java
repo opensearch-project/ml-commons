@@ -20,6 +20,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.gateway.GatewayService;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -60,6 +61,47 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         this.mlModelAutoReDeployer = mlModelAutoReDeployer;
         this.client = client;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+
+        // Apply live changes to the retention job interval (dynamic PUT _cluster/settings) by upserting the persisted
+        // job document. The version bump is observed by JobScheduler's JobSweeper, which reschedules with no restart.
+        // The consumer runs on every node, so gate the write on the elected cluster manager to avoid multi-node churn.
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS, newIntervalHours -> {
+                if (shouldManageMemoryRetentionJob()) {
+                    mlTaskManager.upsertMemoryRetentionJob(newIntervalHours);
+                }
+            });
+    }
+
+    /**
+     * Single-writer gate for memory-retention job writes that mutate the shared, fixed-id job document. Exactly one
+     * node (the elected cluster manager) should ever upsert/reconcile, and only when agentic memory AND memory
+     * retention are enabled and multi-tenancy is disabled (mirroring the startup scheduling path exactly). The
+     * {@link #jobsIndexReadyForWrite()} check mirrors the startup loop's rolling-upgrade guard so a live setting
+     * change during a mixed-version upgrade does not create the new {@code .plugins-ml-jobs} index before the
+     * cluster is ready for it.
+     */
+    private boolean shouldManageMemoryRetentionJob() {
+        return clusterService.state().nodes().isLocalNodeElectedClusterManager()
+            && jobsIndexReadyForWrite()
+            && mlFeatureEnabledSetting.isAgenticMemoryEnabled()
+            && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
+            && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings());
+    }
+
+    /**
+     * Rolling-upgrade guard shared by the startup scheduling path and the live interval-change consumer. It is safe to
+     * write the {@code .plugins-ml-jobs} job document only when:
+     *   - the index already exists (writing a document to an existing index cannot strand a replica), or
+     *   - every node in the cluster is on at least this node's version, so a newly created index's replicas are
+     *     allocatable anywhere.
+     * While a rolling upgrade is in flight neither holds, so the write is deferred rather than creating the index
+     * with stranded replicas (which leaves the cluster yellow until enough nodes are upgraded).
+     */
+    private boolean jobsIndexReadyForWrite() {
+        ClusterState state = clusterService.state();
+        return state.getMetadata().hasIndex(ML_JOBS_INDEX) || state.nodes().getMinNodeVersion().onOrAfter(Version.CURRENT);
     }
 
     @Override
@@ -82,6 +124,22 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
             mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodesIds, state.getNodes().getClusterManagerNodeId());
         }
 
+        // The job-starting logic below reads and writes the .plugins-ml-jobs index. On a cluster restart this listener
+        // fires before the state is usable, so those reads/writes would fail and leave the one-shot
+        // startedMemoryRetentionJob / startedStatsJob flags stuck true with no retry until the next restart. Defer until
+        // the state is ready; clusterChanged fires again as startup progresses, with the flags still unset. Two gates:
+        // 1. cluster state not yet recovered -> a GET/index hits a "state not recovered" global block.
+        // 2. the jobs index exists (restart) but its primary shard is not yet allocated -> a GET hits
+        // NoShardAvailableActionException. (On a fresh cluster the index does not exist yet; the CREATE path seeds
+        // it, so we only wait when it already exists.)
+        if (state.blocks().hasGlobalBlock(GatewayService.STATE_NOT_RECOVERED_BLOCK)) {
+            return;
+        }
+        if (state.getMetadata().hasIndex(ML_JOBS_INDEX)
+            && (state.routingTable().index(ML_JOBS_INDEX) == null || !state.routingTable().index(ML_JOBS_INDEX).allPrimaryShardsActive())) {
+            return;
+        }
+
         /*
          * The stats collector and memory retention jobs live in the `.plugins-ml-jobs` index (introduced in 3.1,
          * replacing `.ml_commons_task_polling_job`). Indexing a job document auto-creates that index, and creating
@@ -97,8 +155,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
          * old node leaves, the resulting cluster state change re-runs this listener and the jobs are created then.
          */
         boolean jobsIndexExists = state.getMetadata().hasIndex(ML_JOBS_INDEX);
-        boolean noOlderNodes = state.nodes().getMinNodeVersion().onOrAfter(Version.CURRENT);
-        if (jobsIndexExists || noOlderNodes) {
+        if (jobsIndexReadyForWrite()) {
             if (mlFeatureEnabledSetting.isMetricCollectionEnabled()
                 && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()
                 && !jobsIndexExists
@@ -112,8 +169,22 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                 && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
                 && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
                 && !this.startedMemoryRetentionJob) {
-                int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(clusterService.getSettings());
+                // Read the effective interval, honoring OpenSearch precedence (transient > persistent > opensearch.yml
+                // > default). clusterService.getSettings() holds only node bootstrap settings (opensearch.yml / CLI),
+                // frozen at construction; state.getMetadata().settings() holds the persistent/transient values set via
+                // PUT _cluster/settings. Overlaying metadata on the node settings lets dynamic cluster settings win
+                // while still honoring an opensearch.yml value. Reading only one source would drop the other and make
+                // reconcile (which actively upserts on mismatch) revert an operator's chosen interval on restart.
+                Settings effectiveSettings = Settings.builder().put(clusterService.getSettings()).put(settings).build();
+                int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(effectiveSettings);
+                // CREATE (conflict-swallowing) seeds the job doc; safe to run on any node.
                 mlTaskManager.indexMemoryRetentionJob(intervalHours);
+                // Reconcile a settings.yml / restart value onto the already-existing (write-once) doc. This upserts
+                // only when the persisted interval differs, so restart doesn't keep resetting the next-run anchor.
+                // Gate on the elected cluster manager so exactly one node ever writes the shared doc.
+                if (clusterService.state().nodes().isLocalNodeElectedClusterManager()) {
+                    mlTaskManager.reconcileMemoryRetentionJob(intervalHours);
+                }
                 this.startedMemoryRetentionJob = true;
             }
         }

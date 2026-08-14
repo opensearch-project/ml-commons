@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.settings;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
@@ -43,6 +44,7 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isRemoteInferenceEnabled;
     private volatile Boolean isAgentFrameworkEnabled;
     private volatile Boolean isUnifiedAgentApiEnabled;
+    private volatile Boolean isAgenticSearchTemplateEnabled;
 
     private volatile Boolean isLocalModelEnabled;
     private volatile Boolean isConnectorPrivateIpEnabled;
@@ -88,6 +90,7 @@ public class MLFeatureEnabledSetting {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
         isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
         isUnifiedAgentApiEnabled = ML_COMMONS_UNIFIED_AGENT_API_ENABLED.get(settings);
+        isAgenticSearchTemplateEnabled = ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
@@ -119,6 +122,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_UNIFIED_AGENT_API_ENABLED, it -> isUnifiedAgentApiEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED, it -> isAgenticSearchTemplateEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
         clusterService
             .getClusterSettings()
@@ -185,6 +191,14 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isUnifiedAgentApiEnabled() {
         return isUnifiedAgentApiEnabled;
+    }
+
+    /**
+     * Whether the agentic search template CRUD APIs are enabled. Disabled by default pending security review.
+     * @return whether the agentic search template APIs are enabled.
+     */
+    public boolean isAgenticSearchTemplateEnabled() {
+        return isAgenticSearchTemplateEnabled;
     }
 
     /**

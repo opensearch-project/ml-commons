@@ -36,6 +36,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -126,35 +127,38 @@ public class MLModelGroupManager {
                         }
 
                         mlIndicesHandler.initModelGroupIndexIfAbsent(ActionListener.wrap(res -> {
-                            sdkClient
-                                .putDataObjectAsync(
-                                    PutDataObjectRequest
-                                        .builder()
-                                        .tenantId(mlModelGroup.getTenantId())
-                                        .index(ML_MODEL_GROUP_INDEX)
-                                        .dataObject(mlModelGroup)
-                                        .build()
-                                )
-                                .whenComplete((r, throwable) -> {
-                                    if (throwable != null) {
-                                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                        log.error("Failed to index model group", cause);
-                                        wrappedListener.onFailure(cause);
-                                    } else {
-                                        try {
-                                            IndexResponse indexResponse = r.indexResponse();
-                                            log
-                                                .info(
-                                                    "Model group creation result: {}, model group id: {}",
-                                                    indexResponse.getResult(),
-                                                    indexResponse.getId()
-                                                );
-                                            wrappedListener.onResponse(r.id());
-                                        } catch (Exception e) {
-                                            wrappedListener.onFailure(e);
-                                        }
+                            String modelGroupId = input.getModelGroupId();
+                            PutDataObjectRequest.Builder putRequestBuilder = PutDataObjectRequest
+                                .builder()
+                                .tenantId(mlModelGroup.getTenantId())
+                                .index(ML_MODEL_GROUP_INDEX)
+                                .dataObject(mlModelGroup);
+                            if (modelGroupId != null) {
+                                putRequestBuilder.id(modelGroupId).overwriteIfExists(false);
+                            }
+                            sdkClient.putDataObjectAsync(putRequestBuilder.build()).whenComplete((r, throwable) -> {
+                                if (throwable != null) {
+                                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                                    log.error("Failed to index model group", cause);
+                                    wrappedListener
+                                        .onFailure(
+                                            MLResourceIdUtils.toDocumentAlreadyExistsException(modelGroupId, "model group id", cause)
+                                        );
+                                } else {
+                                    try {
+                                        IndexResponse indexResponse = r.indexResponse();
+                                        log
+                                            .info(
+                                                "Model group creation result: {}, model group id: {}",
+                                                indexResponse.getResult(),
+                                                indexResponse.getId()
+                                            );
+                                        wrappedListener.onResponse(r.id());
+                                    } catch (Exception e) {
+                                        wrappedListener.onFailure(e);
                                     }
-                                });
+                                }
+                            });
 
                         }, ex -> {
                             log.error("Failed to init model group index", ex);

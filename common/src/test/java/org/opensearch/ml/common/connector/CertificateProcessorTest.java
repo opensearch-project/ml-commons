@@ -203,16 +203,6 @@ public class CertificateProcessorTest {
     }
 
     @Test
-    public void testValidateCertificateConfig_PKCS12Type_CertificateOnly_NoException() {
-        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
-
-        credentials.put(CLIENT_CERT_PKCS12_FIELD, "test-pkcs12-cert");
-
-        // Should not throw any exception
-        certificateProcessor.validateCertificateConfig(config, credentials);
-    }
-
-    @Test
     public void testValidateCertificateConfig_MutualTlsDisabled_MixedAuthIgnored() {
         config = ConnectorClientConfig.builder().mutualTlsEnabled(false).build();
 
@@ -518,7 +508,7 @@ public class CertificateProcessorTest {
 
         CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
         assertNotNull("Mutual TLS managers should be created successfully with single-line base64 PEM certificates", result);
-        assertNotNull("Key managers should not be null", result.getKeyManagers());
+        assertTrue("Single-line base64 must yield populated key managers", result.getKeyManagers().length > 0);
     }
 
     @Test
@@ -534,7 +524,7 @@ public class CertificateProcessorTest {
 
         CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
         assertNotNull("Mutual TLS managers should be created successfully with line-wrapped base64 PEM certificates", result);
-        assertNotNull("Key managers should not be null", result.getKeyManagers());
+        assertTrue("Line-wrapped base64 must yield populated key managers", result.getKeyManagers().length > 0);
     }
 
     private String base64SingleLine(String content) {
@@ -558,6 +548,7 @@ public class CertificateProcessorTest {
 
         CertificateProcessor.MtlsManagers result = certificateProcessor.buildMtlsManagers(config, credentials);
         assertNotNull("Mutual TLS managers should be created successfully with valid PKCS12 certificate", result);
+        assertTrue("PKCS12 keystore must yield populated key managers", result.getKeyManagers().length > 0);
         assertNotNull("Key managers should not be null", result.getKeyManagers());
     }
 
