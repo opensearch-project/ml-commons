@@ -45,6 +45,16 @@ POST /_plugins/_ml/connectors/_create
         "client_email": "<YOUR_SERVICE_ACCOUNT_CLIENT_EMAIL>",
         "token_uri": "https://oauth2.googleapis.com/token"
     },
+    "batch_job_status": {
+        "field_name": "state",
+        "mapping": {
+            "JOB_STATE_SUCCEEDED": "COMPLETED",
+            "JOB_STATE_FAILED": "FAILED",
+            "JOB_STATE_EXPIRED": "EXPIRED",
+            "JOB_STATE_CANCELLING": "CANCELLING",
+            "JOB_STATE_CANCELLED": "CANCELLED"
+        }
+    },
     "actions": [
         {
             "action_type": "batch_predict",
@@ -61,8 +71,14 @@ POST /_plugins/_ml/connectors/_create
 
 Only the `batch_predict` action is defined. ml-commons derives the status and cancel calls
 from it automatically (using the Vertex batch job's resource `name` returned at submit time),
-so you do **not** declare separate `batch_predict_status` / `cancel_batch_predict` actions —
-doing so would leave an unresolved `${parameters.job_id}` in the derived URL.
+so you do **not** declare separate `batch_predict_status` / `cancel_batch_predict` actions.
+Declaring them would leave an unresolved `${parameters.job_id}` in the derived URL.
+
+The `batch_job_status` block tells ml-commons how to map Vertex's job status onto an ML task
+state. Vertex reports status in the flat `state` field (for example `JOB_STATE_SUCCEEDED`),
+which is matched exactly against `mapping` to set the terminal task state. When a connector
+declares `batch_job_status`, this mapping is used exclusively and the cluster-wide
+`plugins.ml_commons.remote_job.status_*` settings are not consulted for that connector.
 
 For ADC / Workload Identity mode, set `"auth_mode": "adc"` in `parameters` and leave
 `credential` empty (`{}`).
