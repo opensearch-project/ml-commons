@@ -21,6 +21,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetenti
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
@@ -47,6 +48,7 @@ public class TransportExecuteMemoryRetentionAction extends HandledTransportActio
     final ClusterService clusterService;
     final ThreadPool threadPool;
     final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    final MemoryContainerHelper memoryContainerHelper;
 
     @Inject
     public TransportExecuteMemoryRetentionAction(
@@ -55,13 +57,15 @@ public class TransportExecuteMemoryRetentionAction extends HandledTransportActio
         Client client,
         ClusterService clusterService,
         ThreadPool threadPool,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MemoryContainerHelper memoryContainerHelper
     ) {
         super(MLExecuteMemoryRetentionAction.NAME, transportService, actionFilters, MLExecuteMemoryRetentionRequest::new);
         this.client = client;
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.memoryContainerHelper = memoryContainerHelper;
     }
 
     @Override
@@ -77,7 +81,7 @@ public class TransportExecuteMemoryRetentionAction extends HandledTransportActio
         // lower-privilege caller from forcing early deletion of data they could not otherwise reach, while
         // still allowing the scheduled run (which uses the system context, no user) to proceed normally.
         User user = RestActionUtils.getUserContext(client);
-        if (user != null && (user.getRoles() == null || !user.getRoles().contains("all_access"))) {
+        if (user != null && !memoryContainerHelper.isAdminUser(user)) {
             actionListener
                 .onFailure(
                     new OpenSearchStatusException(
@@ -128,8 +132,6 @@ public class TransportExecuteMemoryRetentionAction extends HandledTransportActio
             case REMOTE_METADATA_STORE:
                 return "Memory retention job cannot run while a remote metadata store is configured; "
                     + "the container registry is not in the local cluster.";
-            case MULTI_TENANCY_ENABLED:
-                return "Memory retention job cannot run while multi-tenancy is enabled; the native client lacks tenant routing.";
             default:
                 return null;
         }

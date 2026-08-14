@@ -34,8 +34,8 @@ public class MLExecuteMemoryRetentionResponseTests {
         assertFalse(TriggerStatus.RETENTION_DISABLED.isTriggered());
         assertEquals("retention_disabled", TriggerStatus.RETENTION_DISABLED.getValue());
 
-        assertFalse(TriggerStatus.MULTI_TENANCY_ENABLED.isTriggered());
-        assertEquals("multi_tenancy_enabled", TriggerStatus.MULTI_TENANCY_ENABLED.getValue());
+        assertFalse(TriggerStatus.REMOTE_METADATA_STORE.isTriggered());
+        assertEquals("remote_metadata_store", TriggerStatus.REMOTE_METADATA_STORE.getValue());
     }
 
     @Test
@@ -78,6 +78,8 @@ public class MLExecuteMemoryRetentionResponseTests {
     public void testToXContentAlreadyRunning() throws IOException {
         MLExecuteMemoryRetentionResponse response = new MLExecuteMemoryRetentionResponse(TriggerStatus.ALREADY_RUNNING, "busy");
         String json = toJson(response);
+        // acknowledged reflects whether a run was actually triggered; a benign "already running" was not.
+        assertTrue(json.contains("\"acknowledged\":false"));
         assertTrue(json.contains("\"triggered\":false"));
         assertTrue(json.contains("\"status\":\"already_running\""));
     }
@@ -86,6 +88,7 @@ public class MLExecuteMemoryRetentionResponseTests {
     public void testToXContentDisabled() throws IOException {
         MLExecuteMemoryRetentionResponse response = new MLExecuteMemoryRetentionResponse(TriggerStatus.RETENTION_DISABLED, "off");
         String json = toJson(response);
+        assertTrue(json.contains("\"acknowledged\":false"));
         assertTrue(json.contains("\"triggered\":false"));
         assertTrue(json.contains("\"status\":\"retention_disabled\""));
     }

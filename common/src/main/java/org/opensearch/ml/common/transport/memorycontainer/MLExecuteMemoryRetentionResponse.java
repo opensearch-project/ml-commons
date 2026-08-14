@@ -44,17 +44,6 @@ public class MLExecuteMemoryRetentionResponse extends ActionResponse implements 
         /** plugins.ml_commons.memory.retention_enabled=false. */
         RETENTION_DISABLED("retention_disabled", false),
         /**
-         * Multi-tenancy is enabled; the native retention job cannot route by tenant.
-         *
-         * @deprecated RFC #4859: multi-tenancy no longer gates the retention job (local-metadata multi-tenancy runs
-         *             tenant-isolated via per-container memory_container_id filters). The job now skips only when a
-         *             REMOTE metadata store is configured; see {@link #REMOTE_METADATA_STORE}. This constant is
-         *             retained (never emitted by current code) purely for wire-compatibility: writeEnum/readEnum
-         *             serialize by ordinal, so it must not be removed or reordered.
-         */
-        @Deprecated
-        MULTI_TENANCY_ENABLED("multi_tenancy_enabled", false),
-        /**
          * A remote metadata store (e.g. AWS OpenSearch Serverless / DynamoDB) is configured; the container registry
          * lives outside the local cluster, so the native-client retention job cannot enumerate containers. See RFC #4859.
          */
@@ -100,7 +89,7 @@ public class MLExecuteMemoryRetentionResponse extends ActionResponse implements 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field("acknowledged", true);
+        builder.field("acknowledged", status.isTriggered());
         builder.field("triggered", status.isTriggered());
         builder.field("status", status.getValue());
         if (message != null) {

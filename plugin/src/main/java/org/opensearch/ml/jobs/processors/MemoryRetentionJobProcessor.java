@@ -262,6 +262,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     @VisibleForTesting
     public static synchronized void reset() {
         instance = null;
+        // Clear the static LockService too so a fresh getInstance() after reset() starts clean and does not
+        // inherit a stale lock service from a previous lifecycle. Tests re-inject via setLockService().
+        lockService = null;
     }
 
     /**
@@ -585,7 +588,6 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             }
         }
         releaseGuard();
-        log.info("Memory retention job completed");
     }
 
     /**
@@ -639,6 +641,8 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     SearchHit[] hitArray = hits.getHits();
 
                     if (hitArray.length == 0) {
+                        // No containers carry a retention policy: nothing to delete, the run is complete.
+                        log.info("Memory retention job completed");
                         finishRun();
                         return;
                     }
@@ -1785,6 +1789,8 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     SearchHit[] hitArray = hits.getHits();
 
                     if (hitArray.length == 0) {
+                        // No containers to orphan-sweep: the run has finished all its work.
+                        log.info("Memory retention job completed");
                         finishRun();
                         return;
                     }
@@ -1807,6 +1813,8 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             if (nextPageSortValues != null) {
                 resolveOrphanSweepContainers(nextPageSortValues);
             } else {
+                // Final page of the orphan sweep processed: the full retention run is complete.
+                log.info("Memory retention job completed");
                 finishRun();
             }
             return;

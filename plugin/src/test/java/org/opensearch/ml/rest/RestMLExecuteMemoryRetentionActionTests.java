@@ -30,7 +30,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionRequest;
@@ -102,27 +101,10 @@ public class RestMLExecuteMemoryRetentionActionTests extends OpenSearchTestCase 
         assertEquals("/_plugins/_ml/memory_containers/_retention/_execute", route.getPath());
     }
 
-    public void testGetRequestMultiTenancyDisabled() throws IOException {
+    public void testGetRequest() throws IOException {
         RestRequest request = createRestRequest();
         MLExecuteMemoryRetentionRequest executeRequest = restAction.getRequest(request);
         assertNotNull(executeRequest);
-        assertNull(executeRequest.getTenantId());
-    }
-
-    public void testGetRequestMultiTenancyEnabled() throws IOException {
-        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-
-        Map<String, List<String>> headers = new HashMap<>();
-        headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList("tenant-77"));
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withMethod(RestRequest.Method.POST)
-            .withPath("/_plugins/_ml/memory_containers/_retention/_execute")
-            .withHeaders(headers)
-            .build();
-
-        MLExecuteMemoryRetentionRequest executeRequest = restAction.getRequest(request);
-        assertNotNull(executeRequest);
-        assertEquals("tenant-77", executeRequest.getTenantId());
     }
 
     public void testPrepareRequest() throws Exception {
@@ -132,7 +114,22 @@ public class RestMLExecuteMemoryRetentionActionTests extends OpenSearchTestCase 
         ArgumentCaptor<MLExecuteMemoryRetentionRequest> captor = ArgumentCaptor.forClass(MLExecuteMemoryRetentionRequest.class);
         verify(client, times(1)).execute(eq(MLExecuteMemoryRetentionAction.INSTANCE), captor.capture(), any());
         assertNotNull(captor.getValue());
-        assertNull(captor.getValue().getTenantId());
+    }
+
+    public void testPrepareRequestRejectsRequestBody() throws IOException {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("Content-Type", Collections.singletonList("application/json"));
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath("/_plugins/_ml/memory_containers/_retention/_execute")
+            .withHeaders(headers)
+            .withContent(new org.opensearch.core.common.bytes.BytesArray("{\"foo\":\"bar\"}"), org.opensearch.common.xcontent.XContentType.JSON)
+            .build();
+
+        thrown.expect(OpenSearchStatusException.class);
+        thrown.expectMessage("_execute does not accept a request body");
+
+        restAction.prepareRequest(request, client);
     }
 
     public void testPrepareRequestAgenticMemoryDisabled() throws IOException {

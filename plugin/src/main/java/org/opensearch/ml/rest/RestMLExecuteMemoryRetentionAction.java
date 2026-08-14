@@ -7,7 +7,6 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EXECUTE_MEMORY_RETENTION_PATH;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
-import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -58,13 +57,18 @@ public class RestMLExecuteMemoryRetentionAction extends BaseRestHandler {
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
             throw new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
         }
+        if (request.hasContent()) {
+            throw new OpenSearchStatusException(
+                "_execute does not accept a request body; it always runs cluster-wide.",
+                RestStatus.BAD_REQUEST
+            );
+        }
         MLExecuteMemoryRetentionRequest executeRequest = getRequest(request);
         return channel -> client.execute(MLExecuteMemoryRetentionAction.INSTANCE, executeRequest, new RestToXContentListener<>(channel));
     }
 
     @VisibleForTesting
     MLExecuteMemoryRetentionRequest getRequest(RestRequest request) throws IOException {
-        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
-        return MLExecuteMemoryRetentionRequest.builder().tenantId(tenantId).build();
+        return MLExecuteMemoryRetentionRequest.builder().build();
     }
 }

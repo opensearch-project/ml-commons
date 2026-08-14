@@ -28,33 +28,25 @@ import lombok.experimental.FieldDefaults;
  *
  * <p>The retention pipeline is a singleton, cluster-wide operation that iterates every container.
  * There is no per-container scoping today (see MLExecuteMemoryRetentionAction), so this request
- * carries no target id. {@code tenantId} is captured from the request context by the REST layer for
- * transport-serialization symmetry with the other memory-container requests; the multi-tenancy
- * decision itself is made by the processor from the cluster setting (the scheduled job refuses to
- * run under multi-tenancy), so {@code tenantId} is not used for gating and {@code validate()} has no
- * required fields.
+ * carries no target id and no fields. It always runs cluster-wide; under multi-tenancy the run is
+ * tenant-isolated by the processor via per-container {@code memory_container_id} filters, and it
+ * skips only when a remote metadata store is configured. {@code validate()} has no required fields.
  */
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class MLExecuteMemoryRetentionRequest extends ActionRequest {
 
-    String tenantId;
-
     @Builder
-    public MLExecuteMemoryRetentionRequest(String tenantId) {
-        this.tenantId = tenantId;
-    }
+    public MLExecuteMemoryRetentionRequest() {}
 
     public MLExecuteMemoryRetentionRequest(StreamInput in) throws IOException {
         super(in);
-        this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeOptionalString(tenantId);
     }
 
     @Override

@@ -32,6 +32,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -90,13 +91,18 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
         // instead of constructing a real processor. This lets us drive triggerRun()'s outcome directly.
         setSingletonInstance(mockProcessor);
 
+        // isAdminUser() only inspects the passed User's roles and touches no helper fields, so a real
+        // helper constructed with nulls is sufficient to exercise the admin gate.
+        MemoryContainerHelper memoryContainerHelper = new MemoryContainerHelper(null, null, null, null);
+
         action = new TransportExecuteMemoryRetentionAction(
             transportService,
             actionFilters,
             client,
             clusterService,
             threadPool,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            memoryContainerHelper
         );
     }
 
@@ -150,17 +156,6 @@ public class TransportExecuteMemoryRetentionActionTests extends OpenSearchTestCa
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
         MLExecuteMemoryRetentionResponse response = responseCaptor.getValue();
         assertEquals(TriggerStatus.RETENTION_DISABLED, response.getStatus());
-        assertFalse(response.getStatus().isTriggered());
-    }
-
-    public void testMultiTenancyEnabled() {
-        stubTriggerRunResponds(TriggerStatus.MULTI_TENANCY_ENABLED);
-
-        action.doExecute(task, request, actionListener);
-
-        verify(actionListener, times(1)).onResponse(responseCaptor.capture());
-        MLExecuteMemoryRetentionResponse response = responseCaptor.getValue();
-        assertEquals(TriggerStatus.MULTI_TENANCY_ENABLED, response.getStatus());
         assertFalse(response.getStatus().isTriggered());
     }
 
