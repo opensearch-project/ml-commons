@@ -12,6 +12,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -327,6 +330,77 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         verify(client, never()).index(any(IndexRequest.class), any());
     }
 
+    // ---- structural enrichment ---------------------------------------------
+
+    @Test
+    public void applyStructuralEnrichment_boolAndArrayGetGenericDescriptions() {
+        // Array and boolean params carry no locatable clause, so they get a generic
+        // type-only description (their only guidance channel to the model).
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("flag", specMap("boolean", false, ""));
+        schema.put("extra", specMap("array", false, ""));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+
+        service.applyStructuralEnrichment(schema, markers, new LinkedHashMap<>(), null);
+
+        assertEquals("Set to true to enable the optional flag clause.", descOf(schema, "flag"));
+        assertEquals("A JSON array or object passed as a raw JSON string.", descOf(schema, "extra"));
+    }
+
+    @Test
+    public void applyStructuralEnrichment_doesNotOverwriteCallerDescriptionOrEnum() {
+        // A param that already carries a description and an enum is left untouched, even
+        // though its slot would otherwise classify as a sort order with an asc/desc enum.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        Map<String, Object> sortOrder = specMap("string", false, "Caller-set sort direction.");
+        sortOrder.put("enum", Arrays.asList("ASC", "DESC"));
+        schema.put("sort_order", sortOrder);
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Object marker = markers.renderParams().get("sort_order");
+        Map<String, Object> rendered = ImmutableMap.of("sort", List.of(ImmutableMap.of("price", ImmutableMap.of("order", marker))));
+
+        service.applyStructuralEnrichment(schema, markers, rendered, null);
+
+        assertEquals("Caller-set sort direction.", descOf(schema, "sort_order"));
+        assertEquals(Arrays.asList("ASC", "DESC"), ((Map<?, ?>) schema.get("sort_order")).get("enum"));
+    }
+
+    @Test
+    public void register_enrichmentRuns_addsDescriptionFromRender() {
+        // End-to-end through register: the marker render locates lex_query in a match on
+        // title, so the stored schema gets a grounded full-text description.
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderEchoesMarkerIntoMatch();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Full-text query matched against the title field.", descOf(captor.getValue().getParamSchema(), "lex_query"));
+    }
+
+    @Test
+    public void register_enrichmentRenderFails_stillStoresBaseSchema() {
+        // If enrichment's marker render is not parseable, enrichment degrades and the base
+        // derived schema is stored; registration must still succeed (never fail on enrichment).
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderMarkerFailsSampleSucceeds();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("", descOf(captor.getValue().getParamSchema(), "lex_query"));
+    }
+
     // ---- update: optimistic concurrency ------------------------------------
 
     @Test
@@ -630,6 +704,76 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
             l.onResponse(response);
             return null;
         }).when(clusterAdminClient).getStoredScript(any(GetStoredScriptRequest.class), any());
+    }
+
+    private void stubStoreSucceeds() {
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+    }
+
+    /**
+     * Render stub where the marker (all-filled) render returns invalid JSON so enrichment
+     * degrades, while sample-value renders (pre-flight, defaults) stay valid so registration
+     * still succeeds.
+     */
+    private void stubRenderMarkerFailsSampleSucceeds() {
+        TemplateScript.Factory factory = mock(TemplateScript.Factory.class);
+        when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
+        when(factory.newInstance(any())).thenAnswer((Answer<TemplateScript>) inv -> {
+            Map<String, Object> params = inv.getArgument(0);
+            TemplateScript ts = mock(TemplateScript.class);
+            when(ts.execute()).thenReturn(firstStringMarker(params) != null ? "NOT JSON" : "{\"query\":{\"match_all\":{}}}");
+            return ts;
+        });
+    }
+
+    /**
+     * Render stub where the marker render echoes the first string marker into a match on
+     * title, so enrichment locates that param and writes a full-text description.
+     */
+    private void stubRenderEchoesMarkerIntoMatch() {
+        TemplateScript.Factory factory = mock(TemplateScript.Factory.class);
+        when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
+        when(factory.newInstance(any())).thenAnswer((Answer<TemplateScript>) inv -> {
+            Map<String, Object> params = inv.getArgument(0);
+            TemplateScript ts = mock(TemplateScript.class);
+            String marker = firstStringMarker(params);
+            when(ts.execute())
+                .thenReturn(marker != null ? "{\"query\":{\"match\":{\"title\":\"" + marker + "\"}}}" : "{\"query\":{\"match_all\":{}}}");
+            return ts;
+        });
+    }
+
+    private static String firstStringMarker(Map<String, Object> params) {
+        for (Object v : params.values()) {
+            if (v instanceof String && ((String) v).startsWith(TemplateStructureAnalyzer.MARKER_PREFIX)) {
+                return (String) v;
+            }
+        }
+        return null;
+    }
+
+    private static Map<String, Object> specMap(String type, boolean required, String description) {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("type", type);
+        spec.put("required", required);
+        if (description != null) {
+            spec.put("description", description);
+        }
+        return spec;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String descOf(Map<String, Object> schema, String param) {
+        return (String) ((Map<String, Object>) schema.get(param)).get("description");
     }
 
     private void stubIndexMapping(Map<String, Object> mappingSource) {
