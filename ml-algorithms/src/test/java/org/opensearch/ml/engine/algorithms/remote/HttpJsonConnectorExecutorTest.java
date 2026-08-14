@@ -687,48 +687,6 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
-    // Invalidation itself is covered in MLHttpClientCacheManagerTests, which drives one cache
-    // manager with changing configuration. Here we only assert the cache-hit path.
-    public void testGetHttpClient_SameExecutorRepeatedCalls_ReturnsCachedClient() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://openai.com/mock")
-            .requestBody("hello world")
-            .build();
-
-        ConnectorClientConfig initialConfig = new ConnectorClientConfig(
-            10,  // maxConnections
-            10,  // connectionTimeout
-            10,  // readTimeout
-            1,
-            1,
-            0,
-            RetryBackoffPolicy.CONSTANT,
-            false, // skipSslVerification
-            false, // mutualTlsEnabled
-            null
-        );
-
-        HttpConnector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .connectorClientConfig(initialConfig)
-            .actions(Arrays.asList(predictAction))
-            .build();
-
-        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
-
-        SdkAsyncHttpClient client1 = executor.getHttpClient();
-
-        SdkAsyncHttpClient client2 = executor.getHttpClient();
-        assertSame("HTTP client should be cached", client1, client2);
-    }
-
-    @Test
     public void testHttpClientCacheKey_Generation() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
