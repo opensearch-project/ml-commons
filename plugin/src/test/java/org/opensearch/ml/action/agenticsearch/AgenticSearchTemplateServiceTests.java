@@ -112,7 +112,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
-        service.register("missing_tmpl", "my-index", "desc", null, listener);
+        service.register("missing_tmpl", "my-index", "desc", null, null, listener);
 
         ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(ex.capture());
@@ -133,7 +133,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
-        service.register("tmpl", "my-index", "desc", null, listener);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
 
         ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(ex.capture());
@@ -161,7 +161,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
-        service.register("tmpl", "my-index", "desc", null, listener);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
 
         ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
         verify(listener).onResponse(captor.capture());
@@ -178,6 +178,153 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         @SuppressWarnings("unchecked")
         Map<String, Object> size = (Map<String, Object>) schema.get("size");
         assertEquals(Boolean.FALSE, size.get("required"));
+    }
+
+    @Test
+    public void register_existingId_failsConflict() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onFailure(new org.opensearch.index.engine.VersionConflictEngineException(null, "tmpl", "already exists"));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        assertStatus(listener, RestStatus.CONFLICT, "already exists");
+    }
+
+    @Test
+    public void register_setsOpTypeCreate() throws Exception {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        ArgumentCaptor<IndexRequest> reqCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        verify(client).index(reqCaptor.capture(), any());
+        assertEquals(org.opensearch.action.DocWriteRequest.OpType.CREATE, reqCaptor.getValue().opType());
+    }
+
+    @Test
+    public void register_withProvidedSchema_storesItWithoutDeriving() throws Exception {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        // A caller-supplied schema is stored as sent, not derived. lex_query is marked
+        // optional here though the body makes it required, so the stored value confirms
+        // the provided schema was used.
+        Map<String, Object> provided = ImmutableMap
+            .of(
+                "lex_query",
+                ImmutableMap.of("type", "string", "required", false),
+                "size",
+                ImmutableMap.of("type", "number", "required", false)
+            );
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        Map<String, Object> schema = captor.getValue().getParamSchema();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> lex = (Map<String, Object>) schema.get("lex_query");
+        assertEquals(Boolean.FALSE, lex.get("required"));
+    }
+
+    @Test
+    public void register_withInvalidProvidedSchema_failsValidation() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+
+        // An enum value that does not fit the declared numeric type is rejected before store.
+        Map<String, Object> provided = ImmutableMap
+            .of("size", ImmutableMap.of("type", "number", "enum", java.util.Arrays.asList("not-a-number")));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    @Test
+    public void register_withProvidedSchema_preflightRenderFailure_propagates() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        // Params exist in the body, but rendering throws, so pre-flight fails and
+        // nothing is stored.
+        when(scriptService.compile(any(Script.class), any())).thenThrow(new IllegalArgumentException("bad mustache"));
+
+        Map<String, Object> provided = ImmutableMap.of("lex_query", ImmutableMap.of("type", "string", "required", true));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        assertTrue(ex.getValue().getMessage().contains("failed to render"));
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    @Test
+    public void register_withProvidedSchema_unknownParam_failsBadRequest() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+
+        // A param the Mustache body does not reference is rejected before store.
+        Map<String, Object> provided = ImmutableMap.of("not_in_body", ImmutableMap.of("type", "string", "required", false));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        assertTrue(ex.getValue().getMessage().contains("not a parameter of template body"));
+        verify(client, never()).index(any(IndexRequest.class), any());
     }
 
     // ---- update: optimistic concurrency ------------------------------------

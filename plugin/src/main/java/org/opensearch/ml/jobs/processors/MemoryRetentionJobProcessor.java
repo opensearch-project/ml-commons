@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -64,6 +65,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -71,6 +73,7 @@ import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.memorycontainer.RetentionRule;
+import org.opensearch.ml.common.transport.memorycontainer.MemoryRetentionDryRunResult;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
 import org.opensearch.search.SearchHit;
@@ -341,7 +344,14 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
      * never happen under a policy the user cannot see. Only settings explicitly configured by the
      * admin (value &gt; 0; the settings default to -1, an unset sentinel) contribute to the policy.
      */
-    private void applyDefaultRetentionPolicy(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
+    /**
+     * Computes the cluster-default retention policy from admin settings, or {@code null} when no admin
+     * defaults are configured (all settings at the -1 unset sentinel). Only settings with a value &gt; 0
+     * contribute a rule. This is the single source of truth for the default policy, shared by the real
+     * backfill path ({@link #applyDefaultRetentionPolicy}) and the dry-run so the two can never diverge.
+     */
+    @VisibleForTesting
+    Map<MemoryType, RetentionRule> computeDefaultRetentionPolicy() {
         int sessionRetentionDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS);
         int sessionMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT);
         int longTermMaxCount = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT);
@@ -349,13 +359,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
 
         boolean anyConfigured = sessionRetentionDays > 0 || sessionMaxCount > 0 || longTermMaxCount > 0 || historyMaxCount > 0;
         if (!anyConfigured) {
-            log
-                .debug(
-                    "Container [{}] has no retention policy and no admin default retention settings are configured; skipping",
-                    containerId
-                );
-            listener.onResponse(false);
-            return;
+            return null;
         }
 
         Map<MemoryType, RetentionRule> defaultPolicy = new EnumMap<>(MemoryType.class);
@@ -372,17 +376,36 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         if (historyMaxCount > 0) {
             defaultPolicy.put(MemoryType.HISTORY, new RetentionRule(null, historyMaxCount));
         }
+        return defaultPolicy;
+    }
+
+    private void applyDefaultRetentionPolicy(MemoryConfiguration config, String containerId, ActionListener<Boolean> listener) {
+        Map<MemoryType, RetentionRule> defaultPolicy = computeDefaultRetentionPolicy();
+        if (defaultPolicy == null) {
+            log
+                .debug(
+                    "Container [{}] has no retention policy and no admin default retention settings are configured; skipping",
+                    containerId
+                );
+            listener.onResponse(false);
+            return;
+        }
 
         config.setRetentionPolicy(defaultPolicy);
 
+        // Derive the logged interval/counts from the computed policy rather than re-reading cluster settings
+        // (computeDefaultRetentionPolicy already read them). A null rule/value means that type has no default.
+        RetentionRule sessionsRule = defaultPolicy.get(MemoryType.SESSIONS);
+        RetentionRule longTermRule = defaultPolicy.get(MemoryType.LONG_TERM);
+        RetentionRule historyRule = defaultPolicy.get(MemoryType.HISTORY);
         log
             .info(
                 "[MemoryRetentionJob] container={} auto-applying default retention policy: sessions={}/{}d, long-term={}, history={}",
                 containerId,
-                sessionMaxCount,
-                sessionRetentionDays,
-                longTermMaxCount,
-                historyMaxCount
+                sessionsRule != null ? sessionsRule.getMaxCount() : null,
+                sessionsRule != null ? sessionsRule.getRetentionDays() : null,
+                longTermRule != null ? longTermRule.getMaxCount() : null,
+                historyRule != null ? historyRule.getMaxCount() : null
             );
 
         try {
@@ -1882,6 +1905,706 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             client.execute(DeleteByQueryAction.INSTANCE, dbq, ActionListener.wrap((BulkByScrollResponse response) -> {
                 listener.onResponse(response.getDeleted());
             }, listener::onFailure));
+        }
+    }
+
+    // =====================================================================================================
+    // DRY-RUN: preview exactly what the scheduled retention job WOULD delete, performing zero deletions.
+    //
+    // These methods reuse the same read-only identify/count/enumerate logic the real job uses to decide
+    // what to evict (identifyTimeBasedExpiredSessions, identifyCountBasedExpiredSessions, checkOrphanBatch,
+    // enumerate*SessionIds*, buildEpochAwareCutoffQuery, buildSessionIdMatchQuery, computeDefaultRetentionPolicy).
+    // No DeleteRequest / DeleteByQuery / bulk delete is ever issued from this path. Because the counting reuses
+    // the job's own predicates, the reported numbers track the job's behavior and cannot silently drift.
+    //
+    // Per-pass attribution mirrors each pass's real algorithm:
+    // - sessions: the job computes the UNION of the time-expired and count-expired id sets, then deletes it
+    // in one pass. We reuse both identify methods and attribute retention_days = |timeSet|,
+    // max_count = |countSet \ timeSet| (disjoint, sums to |union|).
+    // - long_term: the job deletes time-expired docs FIRST, then evicts by count on the REMAINDER. We compute
+    // the count-based excess against the post-time-deletion population analytically so time and
+    // count reasons stay disjoint, matching what the next run would delete.
+    // - history: count-only (retention_days is rejected by validation for history), so retention_days = 0.
+    // - working: cascade (sessions that expire), ttl (session-less containers only), and orphan sweep.
+    // =====================================================================================================
+
+    /**
+     * The effective retention policy for a dry-run: the policy map that would actually be evaluated plus the
+     * {@code MemoryRetentionDryRunResult.POLICY_SOURCE_*} constant describing where it came from. The dry-run is
+     * read-only, so this is computed locally and never written back onto the caller-owned {@link MemoryConfiguration}.
+     */
+    static final class EffectivePolicy {
+        final String source;
+        final Map<MemoryType, RetentionRule> policy;
+
+        EffectivePolicy(String source, Map<MemoryType, RetentionRule> policy) {
+            this.source = source;
+            this.policy = policy;
+        }
+    }
+
+    /**
+     * Resolves the effective retention policy for a dry-run and reports its source. Does NOT mutate {@code config}:
+     * for the "default" case it backfills cluster defaults into a LOCAL map (exactly the policy the real job would
+     * persist before evaluating) and returns it, leaving the caller's configuration untouched. The returned
+     * {@link EffectivePolicy#source} is one of the {@code MemoryRetentionDryRunResult.POLICY_SOURCE_*} constants.
+     */
+    @VisibleForTesting
+    EffectivePolicy resolveEffectivePolicyForDryRun(MemoryConfiguration config) {
+        Map<MemoryType, RetentionRule> stored = config.getRetentionPolicy();
+        if (stored != null && !stored.isEmpty()) {
+            return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_STORED, stored);
+        }
+        if (config.isRetentionPolicyExplicitlyNull()) {
+            return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_NONE, stored);
+        }
+        Map<MemoryType, RetentionRule> defaults = computeDefaultRetentionPolicy();
+        if (defaults == null) {
+            return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_NONE, stored);
+        }
+        return new EffectivePolicy(MemoryRetentionDryRunResult.POLICY_SOURCE_DEFAULT, defaults);
+    }
+
+    /** Mutable accumulator threaded through the dry-run pass chain. */
+    private static final class DryRunContext {
+        final String containerId;
+        final String policySource;
+        final long evaluatedAt;
+        final Map<MemoryType, RetentionRule> effectivePolicy;
+        final Integer workingMemoryTtlDays;
+        final List<String> warnings = new ArrayList<>();
+
+        MemoryRetentionDryRunResult.TypeDeletion sessions = zero();
+        MemoryRetentionDryRunResult.TypeDeletion longTerm = zero();
+        MemoryRetentionDryRunResult.TypeDeletion history = zero();
+        long cascade = 0;
+        long ttl = 0;
+        long orphan = 0;
+        long pinnedWouldSkip = 0;
+        Set<String> expiredSessionUnion = new HashSet<>();
+
+        DryRunContext(
+            String containerId,
+            String policySource,
+            long evaluatedAt,
+            Map<MemoryType, RetentionRule> effectivePolicy,
+            Integer workingMemoryTtlDays
+        ) {
+            this.containerId = containerId;
+            this.policySource = policySource;
+            this.evaluatedAt = evaluatedAt;
+            this.effectivePolicy = effectivePolicy;
+            this.workingMemoryTtlDays = workingMemoryTtlDays;
+        }
+
+        static MemoryRetentionDryRunResult.TypeDeletion zero() {
+            return new MemoryRetentionDryRunResult.TypeDeletion(0, new LinkedHashMap<>());
+        }
+    }
+
+    /**
+     * Entry point for a single-container dry-run. Resolves the effective policy, then evaluates every retention
+     * pass read-only and assembles a {@link MemoryRetentionDryRunResult}. {@code orphanBaselineMillis} is the
+     * container's stored orphan-sweep baseline (or {@code null} if never stamped), used to honor the same
+     * first-observation grace window the real orphan sweep applies.
+     */
+    public void dryRunContainer(
+        MemoryConfiguration config,
+        String containerId,
+        Long orphanBaselineMillis,
+        ActionListener<MemoryRetentionDryRunResult> listener
+    ) {
+        try {
+            EffectivePolicy effective = resolveEffectivePolicyForDryRun(config);
+            String policySource = effective.source;
+            int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
+            DryRunContext ctx = new DryRunContext(containerId, policySource, System.currentTimeMillis(), effective.policy, ttlDays);
+
+            // Multi-tenancy hard-gates the scheduled job off - run() returns before any deletion when MT is
+            // enabled - so nothing would ever be deleted in this deployment mode. Skip the read-only passes and
+            // report an honest zero rather than scanning indices for counts the job can't act on.
+            // NOTE(PR-B): retention runs under multi-tenancy in PR-B; this becomes an isRemoteMetadataStore()
+            // gate there, but the skip-to-zero behavior is unchanged.
+            if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
+                ctx.warnings.add("multi-tenancy is enabled; the scheduled retention job does not run, so nothing would be deleted");
+                listener.onResponse(buildDryRunResult(ctx));
+                return;
+            }
+            // Retention is disabled cluster-wide, so run() would not execute and nothing would be deleted. Skip the
+            // read-only passes and report an honest zero - the whole feature stays gated behind this flag.
+            if (!clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_ENABLED)) {
+                ctx.warnings
+                    .add(
+                        "retention is disabled cluster-wide (plugins.ml_commons.memory.retention_enabled=false);"
+                            + " the scheduled job will not run, so nothing would be deleted"
+                    );
+                listener.onResponse(buildDryRunResult(ctx));
+                return;
+            }
+            if (MemoryRetentionDryRunResult.POLICY_SOURCE_NONE.equals(policySource)) {
+                ctx.warnings.add("container has no retention policy and no cluster defaults apply; nothing would be deleted");
+            }
+
+            // sessions -> long-term -> history -> working -> finalize
+            dryRunSessions(
+                config,
+                ctx,
+                ActionListener
+                    .wrap(
+                        v1 -> dryRunLongTerm(
+                            config,
+                            ctx,
+                            ActionListener
+                                .wrap(
+                                    v2 -> dryRunHistory(
+                                        config,
+                                        ctx,
+                                        ActionListener
+                                            .wrap(v3 -> dryRunWorking(config, ctx, orphanBaselineMillis, ActionListener.wrap(v4 -> {
+                                                listener.onResponse(buildDryRunResult(ctx));
+                                            }, listener::onFailure)), listener::onFailure)
+                                    ),
+                                    listener::onFailure
+                                )
+                        ),
+                        listener::onFailure
+                    )
+            );
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    private MemoryRetentionDryRunResult buildDryRunResult(DryRunContext ctx) {
+        LinkedHashMap<String, Long> workingByReason = new LinkedHashMap<>();
+        workingByReason.put(MemoryRetentionDryRunResult.REASON_CASCADE, ctx.cascade);
+        workingByReason.put(MemoryRetentionDryRunResult.REASON_TTL, ctx.ttl);
+        workingByReason.put(MemoryRetentionDryRunResult.REASON_ORPHAN, ctx.orphan);
+        long workingTotal = ctx.cascade + ctx.ttl + ctx.orphan;
+        MemoryRetentionDryRunResult.TypeDeletion workingMemory = new MemoryRetentionDryRunResult.TypeDeletion(
+            workingTotal,
+            workingByReason
+        );
+
+        long total = ctx.sessions.getTotal() + ctx.longTerm.getTotal() + ctx.history.getTotal() + workingTotal;
+
+        return MemoryRetentionDryRunResult
+            .builder()
+            .containerId(ctx.containerId)
+            .evaluatedAt(ctx.evaluatedAt)
+            .policySource(ctx.policySource)
+            .effectivePolicy(ctx.effectivePolicy)
+            .workingMemoryTtlDays(ctx.workingMemoryTtlDays)
+            .sessions(ctx.sessions)
+            .longTerm(ctx.longTerm)
+            .history(ctx.history)
+            .workingMemory(workingMemory)
+            .totalWouldDelete(total)
+            .pinnedWouldSkip(ctx.pinnedWouldSkip)
+            .warnings(ctx.warnings)
+            .build();
+    }
+
+    private void dryRunSessions(MemoryConfiguration config, DryRunContext ctx, ActionListener<Void> listener) {
+        String sessionIndex = config.getIndexName(MemoryType.SESSIONS);
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
+        RetentionRule rule = policy == null ? null : policy.get(MemoryType.SESSIONS);
+        if (sessionIndex == null || rule == null) {
+            listener.onResponse(null);
+            return;
+        }
+
+        Set<String> timeSet = new HashSet<>();
+        ActionListener<Set<String>> afterCount = ActionListener.wrap(countSet -> {
+            // Attribute reasons disjointly: retention_days owns the time set; max_count owns only the
+            // count-expired ids NOT already covered by time expiry. Sum equals |union| (what the job deletes).
+            long timeCount = timeSet.size();
+            long countOnly = countSet.stream().filter(id -> !timeSet.contains(id)).count();
+            long unionTotal = timeCount + countOnly;
+
+            ctx.expiredSessionUnion = new HashSet<>(timeSet);
+            ctx.expiredSessionUnion.addAll(countSet);
+
+            LinkedHashMap<String, Long> byReason = new LinkedHashMap<>();
+            byReason.put(MemoryRetentionDryRunResult.REASON_RETENTION_DAYS, timeCount);
+            byReason.put(MemoryRetentionDryRunResult.REASON_MAX_COUNT, countOnly);
+            ctx.sessions = new MemoryRetentionDryRunResult.TypeDeletion(unionTotal, byReason);
+
+            if (rule.getMaxCount() != null && countSet.size() >= COUNT_BASED_ID_CAP) {
+                addCapWarning(ctx, "sessions");
+            }
+
+            // pinned_would_skip: pinned sessions that fall inside the time-expiry window (would be deleted but
+            // for the pin). Count-based eviction never considers pinned docs, so only the time window contributes.
+            addPinnedWarningsAndSkip(sessionIndex, ctx, "sessions", rule, LAST_UPDATED_TIME_FIELD, listener);
+        }, listener::onFailure);
+
+        ActionListener<Set<String>> afterTime = ActionListener.wrap(t -> {
+            timeSet.addAll(t);
+            if (rule.getMaxCount() != null) {
+                identifyCountBasedExpiredSessions(config, ctx.containerId, sessionIndex, rule.getMaxCount(), afterCount);
+            } else {
+                afterCount.onResponse(new HashSet<>());
+            }
+        }, listener::onFailure);
+
+        if (rule.getRetentionDays() != null) {
+            identifyTimeBasedExpiredSessions(config, ctx.containerId, sessionIndex, rule.getRetentionDays(), afterTime);
+        } else {
+            afterTime.onResponse(new HashSet<>());
+        }
+    }
+
+    private void dryRunLongTerm(MemoryConfiguration config, DryRunContext ctx, ActionListener<Void> listener) {
+        String longTermIndex = config.getIndexName(MemoryType.LONG_TERM);
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
+        RetentionRule rule = policy == null ? null : policy.get(MemoryType.LONG_TERM);
+        if (longTermIndex == null || rule == null) {
+            listener.onResponse(null);
+            return;
+        }
+
+        ActionListener<Long> afterTime = ActionListener.wrap(timeCount -> {
+            if (rule.getMaxCount() == null) {
+                setSequentialTypeDeletion(ctx, MemoryType.LONG_TERM, timeCount, 0L);
+                addPinnedWarningsAndSkip(longTermIndex, ctx, "long_term", rule, LAST_UPDATED_TIME_FIELD, listener);
+                return;
+            }
+            int maxCount = rule.getMaxCount();
+            // Count-based eviction runs on the population that REMAINS after time-based deletion.
+            countNonPinned(longTermIndex, ctx.containerId, ActionListener.wrap(totalNonPinned -> {
+                long remaining = Math.max(0, totalNonPinned - timeCount);
+                long rawExcess = Math.max(0, remaining - maxCount);
+                long cappedExcess = Math.min(rawExcess, COUNT_BASED_ID_CAP);
+                if (rawExcess > COUNT_BASED_ID_CAP) {
+                    addCapWarning(ctx, "long_term");
+                }
+                setSequentialTypeDeletion(ctx, MemoryType.LONG_TERM, timeCount, cappedExcess);
+                addPinnedWarningsAndSkip(longTermIndex, ctx, "long_term", rule, LAST_UPDATED_TIME_FIELD, listener);
+            }, listener::onFailure));
+        }, listener::onFailure);
+
+        if (rule.getRetentionDays() != null) {
+            long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(rule.getRetentionDays());
+            BoolQueryBuilder query = QueryBuilders
+                .boolQuery()
+                .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, ctx.containerId))
+                .must(buildEpochAwareCutoffQuery(LAST_UPDATED_TIME_FIELD, cutoffMillis))
+                .mustNot(QueryBuilders.termQuery(PINNED_FIELD, true));
+            countMatching(longTermIndex, query, afterTime);
+        } else {
+            afterTime.onResponse(0L);
+        }
+    }
+
+    private void dryRunHistory(MemoryConfiguration config, DryRunContext ctx, ActionListener<Void> listener) {
+        String historyIndex = config.getIndexName(MemoryType.HISTORY);
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
+        RetentionRule rule = policy == null ? null : policy.get(MemoryType.HISTORY);
+        // History supports max_count only; retention_days is rejected by validation.
+        if (historyIndex == null || rule == null || rule.getMaxCount() == null) {
+            listener.onResponse(null);
+            return;
+        }
+        int maxCount = rule.getMaxCount();
+        countNonPinned(historyIndex, ctx.containerId, ActionListener.wrap(totalNonPinned -> {
+            long rawExcess = Math.max(0, totalNonPinned - maxCount);
+            long cappedExcess = Math.min(rawExcess, COUNT_BASED_ID_CAP);
+            if (rawExcess > COUNT_BASED_ID_CAP) {
+                addCapWarning(ctx, "history");
+            }
+            LinkedHashMap<String, Long> byReason = new LinkedHashMap<>();
+            byReason.put(MemoryRetentionDryRunResult.REASON_RETENTION_DAYS, 0L);
+            byReason.put(MemoryRetentionDryRunResult.REASON_MAX_COUNT, cappedExcess);
+            ctx.history = new MemoryRetentionDryRunResult.TypeDeletion(cappedExcess, byReason);
+            // History count-based eviction excludes pinned; add the pinned>max_count warning (no time window,
+            // so no pinned_would_skip contribution).
+            checkPinnedExceedsMaxCountForDryRun(
+                historyIndex,
+                ctx,
+                "history",
+                maxCount,
+                ActionListener.wrap(v -> listener.onResponse(null), listener::onFailure)
+            );
+        }, listener::onFailure));
+    }
+
+    private void dryRunWorking(MemoryConfiguration config, DryRunContext ctx, Long orphanBaselineMillis, ActionListener<Void> listener) {
+        String workingIndex = config.getIndexName(MemoryType.WORKING);
+        if (workingIndex == null) {
+            listener.onResponse(null);
+            return;
+        }
+
+        // cascade: working memory belonging to sessions that would expire this run.
+        ActionListener<Void> afterCascade = ActionListener.wrap(v -> {
+            // ttl: only session-less (disable_session) containers age out working memory by TTL.
+            dryRunWorkingTtl(config, ctx, workingIndex, ActionListener.wrap(v2 -> {
+                // orphan: only runs for session-backed containers (mirrors resolveOrphanSweepContainers).
+                dryRunOrphanSweep(config, ctx, workingIndex, orphanBaselineMillis, listener);
+            }, listener::onFailure));
+        }, listener::onFailure);
+
+        if (ctx.expiredSessionUnion.isEmpty()) {
+            afterCascade.onResponse(null);
+        } else {
+            countWorkingForSessions(
+                workingIndex,
+                ctx.containerId,
+                new ArrayList<>(ctx.expiredSessionUnion),
+                ActionListener.wrap(cascadeCount -> {
+                    ctx.cascade = cascadeCount;
+                    afterCascade.onResponse(null);
+                }, listener::onFailure)
+            );
+        }
+    }
+
+    private void dryRunWorkingTtl(MemoryConfiguration config, DryRunContext ctx, String workingIndex, ActionListener<Void> listener) {
+        if (!config.isDisableSession()) {
+            listener.onResponse(null);
+            return;
+        }
+        int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
+        if (ttlDays <= 0) {
+            listener.onResponse(null);
+            return;
+        }
+        long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(ttlDays);
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, ctx.containerId))
+            .must(buildEpochAwareCutoffQuery(CREATED_TIME_FIELD, cutoffMillis));
+        countMatching(workingIndex, query, ActionListener.wrap(c -> {
+            ctx.ttl = c;
+            listener.onResponse(null);
+        }, listener::onFailure));
+    }
+
+    private void dryRunOrphanSweep(
+        MemoryConfiguration config,
+        DryRunContext ctx,
+        String workingIndex,
+        Long orphanBaselineMillis,
+        ActionListener<Void> listener
+    ) {
+        String sessionsIndex = config.getIndexName(MemoryType.SESSIONS);
+        Map<MemoryType, RetentionRule> policy = ctx.effectivePolicy;
+        boolean hasPolicy = policy != null && !policy.isEmpty();
+        // Orphan sweep only runs for session-backed containers that have a retention policy, and only after the
+        // sweep's first-observation grace window has elapsed (mirrors resolveOrphanSweepContainers + baseline gate).
+        if (!hasPolicy || config.isDisableSession() || sessionsIndex == null) {
+            listener.onResponse(null);
+            return;
+        }
+        // Mirror the real sweep's index-existence safety check (processOrphanSweepContainerChain): if the working
+        // index doesn't exist there is nothing to sweep, and if the sessions index doesn't exist the sweep would
+        // classify ALL working memory as orphaned. Skip (report 0) in either case so the dry-run matches the job.
+        if (!clusterService.state().metadata().hasIndex(workingIndex) || !clusterService.state().metadata().hasIndex(sessionsIndex)) {
+            listener.onResponse(null);
+            return;
+        }
+        int orphanTtlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS);
+        long now = System.currentTimeMillis();
+        if (orphanBaselineMillis == null) {
+            ctx.warnings
+                .add(
+                    "orphan sweep has not yet observed this container (no baseline); orphaned working memory would be"
+                        + " deferred one orphan_ttl_days window before any deletion"
+                );
+            listener.onResponse(null);
+            return;
+        }
+        long normalizedBaseline = normalizeTimestamp(orphanBaselineMillis);
+        long graceUntil = normalizedBaseline + TimeUnit.DAYS.toMillis(orphanTtlDays);
+        if (now < graceUntil) {
+            ctx.warnings
+                .add(
+                    "orphan sweep is within its first-observation grace window for this container;"
+                        + " orphaned working memory would not be deleted until the window elapses"
+                );
+            listener.onResponse(null);
+            return;
+        }
+
+        long orphanCutoffMillis = now - TimeUnit.DAYS.toMillis(orphanTtlDays);
+
+        // Enumerate session ids referenced by working memory (top-level field + legacy namespace subpath),
+        // reusing the exact enumeration the real sweep uses.
+        Set<String> sessionIds = new HashSet<>();
+        String startKey = randomEnumerationStartKey();
+        enumerateSessionIdsFromWorkingMemory(
+            workingIndex,
+            ctx.containerId,
+            sessionIds,
+            Map.of(SESSION_ID_FIELD, startKey),
+            startKey,
+            false,
+            ActionListener
+                .wrap(
+                    aggIds -> enumerateLegacySessionIdsFromWorkingMemory(
+                        workingIndex,
+                        ctx.containerId,
+                        aggIds,
+                        new Object[] { startKey },
+                        startKey,
+                        false,
+                        ActionListener.wrap(collectedIds -> {
+                            ActionListener<Long> afterOrphanDocs = ActionListener.wrap(orphanDocs -> {
+                                // Plus session-less/empty-namespace working memory older than the cutoff.
+                                countEmptyNamespaceWorking(
+                                    ctx.containerId,
+                                    workingIndex,
+                                    orphanCutoffMillis,
+                                    ActionListener.wrap(emptyDocs -> {
+                                        ctx.orphan = orphanDocs + emptyDocs;
+                                        listener.onResponse(null);
+                                    }, listener::onFailure)
+                                );
+                            }, listener::onFailure);
+
+                            if (collectedIds.isEmpty()) {
+                                afterOrphanDocs.onResponse(0L);
+                            } else {
+                                List<List<String>> batches = partition(new ArrayList<>(collectedIds), ORPHAN_SESSION_BATCH_SIZE);
+                                Set<String> allOrphanIds = new HashSet<>();
+                                checkOrphanBatch(
+                                    ctx.containerId,
+                                    sessionsIndex,
+                                    batches,
+                                    0,
+                                    allOrphanIds,
+                                    ActionListener.wrap(orphanIds -> {
+                                        if (orphanIds.isEmpty()) {
+                                            afterOrphanDocs.onResponse(0L);
+                                        } else {
+                                            countWorkingForOrphanSessions(
+                                                ctx.containerId,
+                                                workingIndex,
+                                                new ArrayList<>(orphanIds),
+                                                orphanCutoffMillis,
+                                                afterOrphanDocs
+                                            );
+                                        }
+                                    }, listener::onFailure)
+                                );
+                            }
+                        }, listener::onFailure)
+                    ),
+                    listener::onFailure
+                )
+        );
+    }
+
+    // ---- dry-run count helpers (read-only) ----
+
+    private void setSequentialTypeDeletion(DryRunContext ctx, MemoryType type, long timeCount, long countExcess) {
+        LinkedHashMap<String, Long> byReason = new LinkedHashMap<>();
+        byReason.put(MemoryRetentionDryRunResult.REASON_RETENTION_DAYS, timeCount);
+        byReason.put(MemoryRetentionDryRunResult.REASON_MAX_COUNT, countExcess);
+        MemoryRetentionDryRunResult.TypeDeletion td = new MemoryRetentionDryRunResult.TypeDeletion(timeCount + countExcess, byReason);
+        if (type == MemoryType.LONG_TERM) {
+            ctx.longTerm = td;
+        } else if (type == MemoryType.HISTORY) {
+            ctx.history = td;
+        } else {
+            ctx.sessions = td;
+        }
+    }
+
+    private void addCapWarning(DryRunContext ctx, String type) {
+        ctx.warnings
+            .add(
+                "count-based eviction for "
+                    + type
+                    + " exceeds the per-run cap of "
+                    + COUNT_BASED_ID_CAP
+                    + "; the dry-run reports the single-run amount and the remainder would be removed over subsequent runs"
+            );
+    }
+
+    /**
+     * Adds the "pinned exceeds max_count" warning (when a max_count rule is set) and accumulates
+     * pinned_would_skip (pinned docs inside the time-expiry window, when a retention_days rule is set), then
+     * signals completion. Two independent read-only counts; both are best-effort in the sense that failures
+     * propagate via the listener.
+     */
+    private void addPinnedWarningsAndSkip(
+        String index,
+        DryRunContext ctx,
+        String type,
+        RetentionRule rule,
+        String timeField,
+        ActionListener<Void> listener
+    ) {
+        ActionListener<Void> afterPinnedExceed = ActionListener.wrap(v -> {
+            if (rule.getRetentionDays() != null) {
+                long cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(rule.getRetentionDays());
+                BoolQueryBuilder query = QueryBuilders
+                    .boolQuery()
+                    .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, ctx.containerId))
+                    .must(QueryBuilders.termQuery(PINNED_FIELD, true))
+                    .must(buildEpochAwareCutoffQuery(timeField, cutoffMillis));
+                countMatching(index, query, ActionListener.wrap(pinnedExpired -> {
+                    ctx.pinnedWouldSkip += pinnedExpired;
+                    listener.onResponse(null);
+                }, listener::onFailure));
+            } else {
+                listener.onResponse(null);
+            }
+        }, listener::onFailure);
+
+        if (rule.getMaxCount() != null) {
+            checkPinnedExceedsMaxCountForDryRun(index, ctx, type, rule.getMaxCount(), afterPinnedExceed);
+        } else {
+            afterPinnedExceed.onResponse(null);
+        }
+    }
+
+    /**
+     * Read-only mirror of {@link #checkPinnedExceedsMaxCount}: adds a warning when pinned docs alone exceed
+     * max_count (the container will grow unbounded), then signals completion.
+     */
+    private void checkPinnedExceedsMaxCountForDryRun(
+        String index,
+        DryRunContext ctx,
+        String type,
+        int maxCount,
+        ActionListener<Void> listener
+    ) {
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, ctx.containerId))
+            .must(QueryBuilders.termQuery(PINNED_FIELD, true));
+        countMatching(index, query, ActionListener.wrap(pinnedCount -> {
+            if (pinnedCount > maxCount) {
+                ctx.warnings
+                    .add(
+                        "pinned count ("
+                            + pinnedCount
+                            + ") exceeds max_count ("
+                            + maxCount
+                            + ") for "
+                            + type
+                            + " — container will grow unbounded"
+                    );
+            }
+            listener.onResponse(null);
+        }, listener::onFailure));
+    }
+
+    private void countNonPinned(String index, String containerId, ActionListener<Long> listener) {
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+            .mustNot(QueryBuilders.termQuery(PINNED_FIELD, true));
+        countMatching(index, query, listener);
+    }
+
+    private void countWorkingForSessions(String workingIndex, String containerId, List<String> sessionIds, ActionListener<Long> listener) {
+        List<List<String>> batches = partition(sessionIds, DELETE_BY_QUERY_BATCH_SIZE);
+        countWorkingForSessionsBatch(workingIndex, containerId, batches, 0, 0L, listener);
+    }
+
+    private void countWorkingForSessionsBatch(
+        String workingIndex,
+        String containerId,
+        List<List<String>> batches,
+        int batchIndex,
+        long total,
+        ActionListener<Long> listener
+    ) {
+        if (batchIndex >= batches.size()) {
+            listener.onResponse(total);
+            return;
+        }
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+            .must(buildSessionIdMatchQuery(batches.get(batchIndex)));
+        countMatching(
+            workingIndex,
+            query,
+            ActionListener
+                .wrap(
+                    c -> countWorkingForSessionsBatch(workingIndex, containerId, batches, batchIndex + 1, total + c, listener),
+                    listener::onFailure
+                )
+        );
+    }
+
+    private void countWorkingForOrphanSessions(
+        String containerId,
+        String workingIndex,
+        List<String> orphanSessionIds,
+        long orphanCutoffMillis,
+        ActionListener<Long> listener
+    ) {
+        List<List<String>> batches = partition(orphanSessionIds, DELETE_BY_QUERY_BATCH_SIZE);
+        countWorkingForOrphanBatch(containerId, workingIndex, batches, 0, orphanCutoffMillis, 0L, listener);
+    }
+
+    private void countWorkingForOrphanBatch(
+        String containerId,
+        String workingIndex,
+        List<List<String>> batches,
+        int batchIndex,
+        long orphanCutoffMillis,
+        long total,
+        ActionListener<Long> listener
+    ) {
+        if (batchIndex >= batches.size()) {
+            listener.onResponse(total);
+            return;
+        }
+        // Mirrors deleteOrphanBatch's query exactly (session-id match + epoch-aware created_time cutoff).
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+            .must(buildSessionIdMatchQuery(batches.get(batchIndex)))
+            .must(buildEpochAwareCutoffQuery(CREATED_TIME_FIELD, orphanCutoffMillis));
+        countMatching(
+            workingIndex,
+            query,
+            ActionListener
+                .wrap(
+                    c -> countWorkingForOrphanBatch(
+                        containerId,
+                        workingIndex,
+                        batches,
+                        batchIndex + 1,
+                        orphanCutoffMillis,
+                        total + c,
+                        listener
+                    ),
+                    listener::onFailure
+                )
+        );
+    }
+
+    private void countEmptyNamespaceWorking(String containerId, String workingIndex, long cutoffMillis, ActionListener<Long> listener) {
+        // Mirrors deleteEmptyNamespaceWorkingMemory's query exactly.
+        BoolQueryBuilder query = QueryBuilders
+            .boolQuery()
+            .must(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId))
+            .mustNot(QueryBuilders.existsQuery(SESSION_ID_FIELD))
+            .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
+            .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + USER_ID_FIELD))
+            .mustNot(QueryBuilders.existsQuery(NAMESPACE_FIELD + "." + AGENT_ID_FIELD))
+            .must(buildEpochAwareCutoffQuery(CREATED_TIME_FIELD, cutoffMillis));
+        countMatching(workingIndex, query, listener);
+    }
+
+    private void countMatching(String index, QueryBuilder query, ActionListener<Long> listener) {
+        SearchRequest request = new SearchRequest(index);
+        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+        request.source(new SearchSourceBuilder().query(query).size(0).trackTotalHits(true));
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            client
+                .search(
+                    request,
+                    ActionListener.wrap(response -> listener.onResponse(response.getHits().getTotalHits().value()), listener::onFailure)
+                );
         }
     }
 

@@ -11,6 +11,8 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
+import static org.opensearch.ml.common.MLModel.CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -60,6 +62,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String CONNECTOR_HEADER_FIELD = "headers";
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_2_13_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID = VERSION_3_9_0;
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
@@ -82,6 +85,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private String url;
     private Map<String, String> headers;
     private String provisionedBy;
+    private String connectorId;
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(
@@ -101,7 +105,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         String tenantId,
         String url,
         Map<String, String> headers,
-        String provisionedBy
+        String provisionedBy,
+        String connectorId
     ) {
         if (!dryRun && !updateConnector) {
 
@@ -145,6 +150,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.url = url;
         this.headers = headers;
         this.provisionedBy = provisionedBy;
+        this.connectorId = connectorId;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -168,6 +174,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         String url = null;
         Map<String, String> headers = null;
         String provisionedBy = null;
+        String connectorId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -175,6 +182,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
+                case CONNECTOR_ID_FIELD:
+                    connectorId = parser.text();
+                    break;
                 case CONNECTOR_NAME_FIELD:
                     name = parser.text();
                     break;
@@ -253,7 +263,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             tenantId,
             url,
             headers,
-            provisionedBy
+            provisionedBy,
+            connectorId
         );
     }
 
@@ -304,6 +315,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (provisionedBy != null) {
             builder.field(PROVISIONED_BY_FIELD, provisionedBy);
+        }
+        if (connectorId != null) {
+            builder.field(CONNECTOR_ID_FIELD, connectorId);
         }
         builder.endObject();
         return builder;
@@ -377,6 +391,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             output.writeOptionalString(provisionedBy);
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID)) {
+            output.writeOptionalString(connectorId);
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -420,5 +437,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+        this.connectorId = streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID)
+            ? input.readOptionalString()
+            : null;
     }
 }

@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -156,6 +157,67 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelGroupId_startsWithUnderscore() {
+        assertInvalidModelGroupId("_invalid", "model group id must not start with '_'");
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelGroupId_startsWithSpecialCharacter() {
+        assertInvalidModelGroupId(
+            "#invalid",
+            "model group id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelGroupId_containsSpaces() {
+        assertInvalidModelGroupId(
+            "model group",
+            "model group id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    @Test
+    public void doExecute_invalidCustomModelGroupId_tooLong() {
+        assertInvalidModelGroupId(
+            "a".repeat(MAX_DOCUMENT_ID_LENGTH + 1),
+            "model group id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH
+        );
+    }
+
+    private void assertInvalidModelGroupId(String modelGroupId, String expectedMessage) {
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput.builder().name("modelGroupName").modelGroupId(modelGroupId).build();
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> transportRegisterModelGroupAction.doExecute(task, new MLRegisterModelGroupRequest(input), actionListener)
+        );
+        assertEquals(expectedMessage, e.getMessage());
+    }
+
+    @Test
+    public void doExecute_passesCustomModelGroupIdToManager() {
+        ArgumentCaptor<MLRegisterModelGroupInput> inputCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupInput.class);
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("my-model-group");
+            return null;
+        }).when(mlModelGroupManager).createModelGroup(inputCaptor.capture(), any());
+
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .modelGroupId("my-model-group")
+            .build();
+        transportRegisterModelGroupAction.doExecute(task, new MLRegisterModelGroupRequest(input), actionListener);
+
+        assertEquals("my-model-group", inputCaptor.getValue().getModelGroupId());
+        ArgumentCaptor<MLRegisterModelGroupResponse> responseCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals("my-model-group", responseCaptor.getValue().getModelGroupId());
     }
 
     private MLRegisterModelGroupRequest prepareRequest(
