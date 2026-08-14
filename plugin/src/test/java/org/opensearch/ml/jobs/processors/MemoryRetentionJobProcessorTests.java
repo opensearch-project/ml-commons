@@ -20,6 +20,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -47,6 +48,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -454,6 +457,149 @@ public class MemoryRetentionJobProcessorTests {
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
         assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testLockRenewalRunnableRenewsLockAndAdvancesCurrentLock() throws Exception {
+        // Keep the pipeline in flight (search never completes) so the run holds the lock and does not tear it
+        // down before we drive one renewal tick.
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        // renewLock returns a fresh, higher-version model (distinct instance) that currentLock should adopt.
+        LockModel renewed = new LockModel(".plugins-ml-jobs", "MEMORY_RETENTION", java.time.Instant.ofEpochMilli(60000L), 120L, false);
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onResponse(renewed);
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+        assertSame("the run should be holding the freshly acquired lock", lockModel, currentLock(processor));
+
+        // Capture the periodic renewal task registered via scheduleWithFixedDelay and drive one tick by hand.
+        ArgumentCaptor<Runnable> cap = ArgumentCaptor.forClass(Runnable.class);
+        verify(threadPool).scheduleWithFixedDelay(cap.capture(), any(TimeValue.class), anyString());
+        cap.getValue().run();
+
+        verify(lockService, atLeastOnce()).renewLock(any(LockModel.class), isA(ActionListener.class));
+        assertSame("currentLock must advance to the renewed (higher-version) model", renewed, currentLock(processor));
+    }
+
+    @Test
+    public void testFinishRunCancelsRenewalBeforeDeletingLock() throws Exception {
+        // Hold a concrete cancellable so we can assert the teardown ordering.
+        Scheduler.Cancellable cancellable = mock(Scheduler.Cancellable.class);
+        when(threadPool.scheduleWithFixedDelay(any(Runnable.class), any(TimeValue.class), anyString())).thenReturn(cancellable);
+        // Empty containers -> pipeline completes synchronously, so finishRun() runs on this thread.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+
+        // Ordering contract (see finishRun): the renewal task is cancelled BEFORE the lock is deleted, to
+        // minimise the window in which an in-flight renewal can race the delete.
+        InOrder order = inOrder(cancellable, lockService);
+        order.verify(cancellable).cancel();
+        order.verify(lockService).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRenewalReturningNullSetsLockLostAndFinishRunSkipsDeleteLock() throws Exception {
+        // Keep the run in flight so it holds the lock; then drive a renewal that returns null (the lock doc
+        // could not be advanced -- likely expired and possibly re-acquired elsewhere under the same id).
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onResponse(null);
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+        assertFalse("lockLost starts false for a fresh acquisition", lockLost(processor));
+
+        ArgumentCaptor<Runnable> cap = ArgumentCaptor.forClass(Runnable.class);
+        verify(threadPool).scheduleWithFixedDelay(cap.capture(), any(TimeValue.class), anyString());
+        cap.getValue().run();
+        assertTrue("a null renewal must flag lockLost", lockLost(processor));
+
+        // finishRun() must now SKIP deleteLock: the doc may belong to a different, still-live run.
+        invokeFinishRun(processor);
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRenewalFailureSetsLockLostAndFinishRunSkipsDeleteLock() throws Exception {
+        // Same contract as the null case, but via the renewLock onFailure arm.
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onFailure(new RuntimeException("renew failed"));
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+
+        ArgumentCaptor<Runnable> cap = ArgumentCaptor.forClass(Runnable.class);
+        verify(threadPool).scheduleWithFixedDelay(cap.capture(), any(TimeValue.class), anyString());
+        cap.getValue().run();
+        assertTrue("a failed renewal must flag lockLost", lockLost(processor));
+
+        invokeFinishRun(processor);
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testWatchdogReclaimsGuardWithoutTouchingClusterLock() throws Exception {
+        // Option C: a leaked per-node guard (held longer than any real run could last) is reclaimed by the
+        // watchdog reclaiming ONLY the per-node guard. It must NOT acquire, renew, or delete the cluster-wide
+        // lock -- a still-live run on another node may own it, and deleting it here would let a competing run
+        // start and cascade.
+        setIsRunning(processor, true);
+        setRunStartMillis(processor, System.currentTimeMillis() - stuckTimeoutMillis(processor) - TimeUnit.HOURS.toMillis(1));
+
+        processor.run();
+
+        assertFalse("watchdog must clear the per-node guard", isRunningFlag(processor));
+        assertEquals("watchdog must clear the start-time stamp", Long.MIN_VALUE, runStartMillis(processor));
+        // No run was started and the cluster-wide lock was left entirely untouched.
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunSkipsForRemoteOpenSearch() {
+        assertTriggerSkipsForRemoteMetadataType("RemoteOpenSearch");
+    }
+
+    @Test
+    public void testTriggerRunSkipsForAWSDynamoDB() {
+        assertTriggerSkipsForRemoteMetadataType("AWSDynamoDB");
+    }
+
+    @Test
+    public void testTriggerRunSkipsForAWSOpenSearchService() {
+        assertTriggerSkipsForRemoteMetadataType("AWSOpenSearchService");
+    }
+
+    /**
+     * Shared body for the REMOTE_METADATA_STORE trigger tests: with the given remote metadata type configured, the
+     * trigger must short-circuit to REMOTE_METADATA_STORE before any registry scan or lock acquisition.
+     */
+    private void assertTriggerSkipsForRemoteMetadataType(String remoteType) {
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_metadata_type", remoteType).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
+
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        processor
+            .triggerRun(ActionListener.wrap(statusRef::set, e -> fail("unexpected failure for " + remoteType + ": " + e.getMessage())));
+
+        assertEquals("remote metadata type " + remoteType + " must skip", TriggerStatus.REMOTE_METADATA_STORE, statusRef.get());
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
     }
 
     private java.util.Set<Setting<?>> gatingSettingsSet() {
@@ -3770,5 +3916,24 @@ public class MemoryRetentionJobProcessorTests {
 
     private long stuckTimeoutMillis(MemoryRetentionJobProcessor p) {
         return p.stuckGuardTimeoutMillis();
+    }
+
+    @SuppressWarnings("unchecked")
+    private LockModel currentLock(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("currentLock");
+        f.setAccessible(true);
+        return ((AtomicReference<LockModel>) f.get(p)).get();
+    }
+
+    private boolean lockLost(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("lockLost");
+        f.setAccessible(true);
+        return f.getBoolean(p);
+    }
+
+    private void invokeFinishRun(MemoryRetentionJobProcessor p) throws Exception {
+        Method m = MemoryRetentionJobProcessor.class.getDeclaredMethod("finishRun");
+        m.setAccessible(true);
+        m.invoke(p);
     }
 }

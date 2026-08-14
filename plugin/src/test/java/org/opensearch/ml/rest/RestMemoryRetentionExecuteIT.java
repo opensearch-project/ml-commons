@@ -57,7 +57,8 @@ public class RestMemoryRetentionExecuteIT extends MLCommonsRestTestCase {
             // not an error, with triggered=false.
             assertEquals("retention_disabled", body.get("status"));
             assertEquals(Boolean.FALSE, body.get("triggered"));
-            assertEquals(Boolean.TRUE, body.get("acknowledged"));
+            // acknowledged mirrors whether a run was actually triggered; a disabled job was not, so it is false.
+            assertEquals(Boolean.FALSE, body.get("acknowledged"));
         } finally {
             updateClusterSettings("plugins.ml_commons.memory.retention_enabled", true);
         }
@@ -114,19 +115,26 @@ public class RestMemoryRetentionExecuteIT extends MLCommonsRestTestCase {
     @Test
     public void testConcurrentExecuteDoesNotError() throws IOException {
         // A second immediate trigger must return cleanly (either "triggered" again or "already_running"),
-        // never an HTTP error. Both are benign HTTP 200 outcomes.
+        // never an HTTP error. Both are benign HTTP 200 outcomes. acknowledged mirrors triggered: it is true
+        // only when this call actually started a run, and false for a benign "already_running".
         Map<String, Object> first = execute();
-        assertEquals(Boolean.TRUE, first.get("acknowledged"));
+        assertBenignExecuteOutcome(first);
 
         Map<String, Object> second = execute();
-        assertEquals(Boolean.TRUE, second.get("acknowledged"));
-        assertTrue(
-            "second execute should report a benign status, not an error",
-            List.of("triggered", "already_running").contains(second.get("status"))
-        );
+        assertBenignExecuteOutcome(second);
     }
 
     // ---- helpers ----
+
+    /**
+     * Asserts an execute response is a benign HTTP 200 outcome ("triggered" or "already_running", never an error)
+     * and that {@code acknowledged} agrees with {@code triggered}: true only when a run was actually started.
+     */
+    private void assertBenignExecuteOutcome(Map<String, Object> body) {
+        Object status = body.get("status");
+        assertTrue("execute should report a benign status, not an error", List.of("triggered", "already_running").contains(status));
+        assertEquals("acknowledged must mirror triggered", body.get("triggered"), body.get("acknowledged"));
+    }
 
     private String createContainer(String body) throws IOException {
         Response response = TestHelper.makeRequest(client(), "POST", CREATE_PATH, null, TestHelper.toHttpEntity(body), null);

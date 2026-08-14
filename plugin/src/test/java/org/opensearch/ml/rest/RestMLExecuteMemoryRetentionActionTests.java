@@ -123,7 +123,10 @@ public class RestMLExecuteMemoryRetentionActionTests extends OpenSearchTestCase 
             .withMethod(RestRequest.Method.POST)
             .withPath("/_plugins/_ml/memory_containers/_retention/_execute")
             .withHeaders(headers)
-            .withContent(new org.opensearch.core.common.bytes.BytesArray("{\"foo\":\"bar\"}"), org.opensearch.common.xcontent.XContentType.JSON)
+            .withContent(
+                new org.opensearch.core.common.bytes.BytesArray("{\"foo\":\"bar\"}"),
+                org.opensearch.common.xcontent.XContentType.JSON
+            )
             .build();
 
         thrown.expect(OpenSearchStatusException.class);
