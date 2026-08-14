@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.jobs.processors;
 
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
@@ -24,9 +25,9 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +41,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -70,10 +73,17 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.jobscheduler.spi.JobExecutionContext;
+import org.opensearch.jobscheduler.spi.LockModel;
+import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
+import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.memorycontainer.RetentionRule;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
 import org.opensearch.ml.common.transport.memorycontainer.MemoryRetentionDryRunResult;
+import org.opensearch.ml.jobs.MLJobType;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
 import org.opensearch.search.SearchHit;
@@ -83,6 +93,7 @@ import org.opensearch.search.aggregations.bucket.composite.CompositeAggregationB
 import org.opensearch.search.aggregations.bucket.composite.TermsValuesSourceBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
+import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -120,9 +131,118 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
      */
     private static final long EPOCH_SECOND_DETECTION_THRESHOLD = 10_000_000_000L;
 
+    /**
+     * Duration, in seconds, of the cluster-wide JobScheduler lock acquired for a run. Matches the
+     * {@code lockDurationSeconds} the scheduled job document is registered with (see
+     * {@code MLTaskManager#indexMemoryRetentionJob}) so the on-demand and scheduled paths request an
+     * identically-scoped lock. The retention pipeline is fully async and throttled and can outlive this
+     * TTL, so the lock is periodically renewed (see {@link #LOCK_RENEWAL_SECONDS}) for as long as the run
+     * is in progress; the TTL is the ceiling on how long a stale lock survives a node crash mid-run.
+     */
+    private static final long LOCK_DURATION_SECONDS = 120L;
+
+    /**
+     * How often (seconds) the held cluster-wide lock is renewed while a run is in progress. Set to a third of
+     * {@link #LOCK_DURATION_SECONDS} so at least two renewal attempts land before the lock could expire — one
+     * slow or failed renewal still leaves a retry with margin to spare, rather than racing the TTL.
+     */
+    private static final long LOCK_RENEWAL_SECONDS = 40L;
+
     private static volatile MemoryRetentionJobProcessor instance;
 
+    /**
+     * Process-wide handle to the JobScheduler {@link LockService}, injected once at node start via the
+     * plugin's Guice service holder (the impl lives in the job-scheduler plugin and is only reachable at
+     * runtime). It is the SAME instance the scheduled run receives through {@code JobExecutionContext}, so
+     * a lock acquired on the on-demand path and one acquired on the scheduled path are the same document in
+     * the same lock index. When null (e.g. job-scheduler not installed, or a unit test that does not wire
+     * it) the processor degrades to the per-node {@link #isRunning} guard only and logs a warning.
+     */
+    private static volatile LockService lockService;
+
+    /**
+     * How long the {@link #isRunning} guard may stay held before {@link #triggerRun(ActionListener)} treats it
+     * as leaked. The run is a fully asynchronous callback chain: an unhandled throw on a thread we do not wrap
+     * (e.g. a transport/listener thread deep in a continuation whose {@code onFailure} itself throws)
+     * can leave {@code isRunning} stuck {@code true}, after which every future invocation logs
+     * "already in progress, skipping" and retention silently stops until the node restarts. The
+     * watchdog in {@link #triggerRun(ActionListener)} recovers from that without a restart.
+     *
+     * <p>This bound is a heuristic, not a hard guarantee that a healthy run finishes within it. A
+     * run's wall-clock time is roughly (containers-with-deletions &times; per-container throttle,
+     * capped at 60s each) plus per-container I/O plus the orphan sweep, so on a very large cluster
+     * with an elevated throttle a legitimate run could in principle approach 24h. The watchdog is
+     * deliberately conservative about that: on a suspected leak it reclaims ONLY the per-node guard
+     * (via {@link #releaseGuard()}) and skips the current invocation — it never touches the
+     * cluster-wide lock, never aborts the in-flight run, and never starts a second run itself.
+     * Leaving the cluster-wide lock untouched is what makes a false positive safe: if the run is
+     * actually still live it keeps its lock, so the next invocation hits the lock gate and reports
+     * {@link TriggerStatus#ALREADY_RUNNING} rather than starting a second, overlapping run. The
+     * watchdog therefore fails safe — worst case is a stalled interval (the next run skips), never a
+     * double-run. Recovery from a genuine leak costs at most one job interval.
+     *
+     * <p>This is a liveness <em>floor</em>, not a run timeout. Because {@code retention_job_interval_hours}
+     * is operator-tunable (1–168h) and a legitimate run on a large cluster with an elevated throttle can
+     * take many hours, the effective threshold scales with the configured interval — see
+     * {@link #stuckGuardTimeoutMillis()}. The floor guarantees the threshold never drops so low on a
+     * short interval that it could false-positive a genuinely long run; the interval multiple keeps the
+     * threshold comfortably above any single run's plausible duration on clusters configured to run
+     * infrequently.
+     */
+    static final long STUCK_GUARD_TIMEOUT_FLOOR_MILLIS = TimeUnit.HOURS.toMillis(24);
+
+    /**
+     * Multiple of the configured job interval used as the stuck-guard threshold when it exceeds the floor.
+     * A run should never legitimately span more than one interval (the pipeline is single-flight and the
+     * next invocation folds any backlog into itself), so 2× the interval leaves generous headroom for a
+     * slow-but-live run before its guard is presumed leaked.
+     */
+    static final long STUCK_GUARD_INTERVAL_MULTIPLE = 2L;
+
+    /**
+     * Effective stuck-guard threshold: {@code max(24h floor, 2 × configured interval)}, read live from
+     * cluster settings so an operator raising the interval (up to 168h) also widens the leak-detection
+     * window and cannot have a long-but-legitimate run false-flagged as stuck.
+     */
+    long stuckGuardTimeoutMillis() {
+        int intervalHours = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS);
+        long intervalBasedMillis = TimeUnit.HOURS.toMillis((long) intervalHours * STUCK_GUARD_INTERVAL_MULTIPLE);
+        return Math.max(STUCK_GUARD_TIMEOUT_FLOOR_MILLIS, intervalBasedMillis);
+    }
+
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
+
+    /**
+     * The cluster-wide lock currently held by an in-progress run, or null when idle. Advanced on each
+     * successful {@code renewLock} (which returns a new {@link LockModel} carrying fresh seqNo/primaryTerm) so
+     * the NEXT renewal's seqNo-gated update targets the current version; teardown itself deletes by stable lock
+     * id (see {@link #finishRun()}) and so does not depend on this being the latest version. Guarded for
+     * visibility by being an {@link AtomicReference}; only one run is ever in flight at a time (enforced by
+     * {@link #isRunning}) so there is no contended mutation.
+     */
+    private final AtomicReference<LockModel> currentLock = new AtomicReference<>();
+
+    /** Cancellable handle for the periodic lock-renewal task of the in-progress run, or null when idle. */
+    private final AtomicReference<Scheduler.Cancellable> lockRenewalTask = new AtomicReference<>();
+
+    /**
+     * Wall-clock time (epoch millis) at which the current run acquired {@link #isRunning}, or
+     * {@link Long#MIN_VALUE} when no run holds the guard. Read by the stuck-guard watchdog in
+     * {@link #triggerRun(ActionListener)} to decide whether a still-set guard has outlived
+     * {@link #stuckGuardTimeoutMillis()}. Set when the guard is claimed and cleared by {@link #finishRun()}.
+     */
+    private final AtomicLong runStartMillis = new AtomicLong(Long.MIN_VALUE);
+
+    /**
+     * Set true when lock renewal is observed to have failed — {@code renewLock} returned null (the lock doc
+     * was gone / could not be advanced) or the renewal call errored. When true, cluster-wide exclusion may
+     * already have been lost: the lock could have expired and been re-acquired by another run, which now owns
+     * the lock doc under the same stable id. {@link #finishRun()} therefore SKIPS its {@code deleteLock} when
+     * this flag is set, so this run never deletes a lock doc that a different, still-live run may now hold.
+     * Reset to false when a new run freshly acquires the lock (before {@link #startLockRenewal()}). Volatile
+     * for cross-thread visibility between the renewal task (GENERIC pool) and the teardown path.
+     */
+    private volatile boolean lockLost = false;
 
     public static MemoryRetentionJobProcessor getInstance(ClusterService clusterService, Client client, ThreadPool threadPool) {
         if (instance != null) {
@@ -142,73 +262,407 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     @VisibleForTesting
     public static synchronized void reset() {
         instance = null;
+        // Clear the static LockService too so a fresh getInstance() after reset() starts clean and does not
+        // inherit a stale lock service from a previous lifecycle. Tests re-inject via setLockService().
+        lockService = null;
+    }
+
+    /**
+     * Injects the process-wide JobScheduler {@link LockService}. Called once at node start from the
+     * plugin's Guice service holder. Idempotent and null-tolerant: passing null (or never calling this)
+     * leaves the processor on the per-node guard only.
+     */
+    public static void setLockService(LockService lockService) {
+        MemoryRetentionJobProcessor.lockService = lockService;
+    }
+
+    @VisibleForTesting
+    static LockService getLockService() {
+        return lockService;
     }
 
     public MemoryRetentionJobProcessor(ClusterService clusterService, Client client, ThreadPool threadPool) {
         super(clusterService, client, threadPool);
     }
 
+    /**
+     * Scheduled entry point (invoked from {@link #process(ScheduledJobParameter, JobExecutionContext)}).
+     * Fire-and-forget: kicks off the async pipeline via {@link #triggerRun(ActionListener)} and only logs
+     * the outcome, preserving the pre-refactor scheduled semantics where a run never propagates a failure
+     * back to the JobScheduler thread.
+     */
     @Override
     public void run() {
-        if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
-            log.warn("Memory retention job skipped: multi-tenancy is enabled and native client lacks tenant routing");
+        triggerRun(ActionListener.wrap(status -> {
+            if (status != TriggerStatus.TRIGGERED) {
+                log.info("Scheduled memory retention run not started: {}", status.getValue());
+            }
+        }, e -> log.error("Scheduled memory retention run failed to start", e)));
+    }
+
+    /**
+     * The single source of truth for both the scheduled {@link #run()} and the on-demand transport action:
+     * applies the retention job's gating (remote-metadata-store skip, retention_enabled), then acquires mutual
+     * exclusion and, when all pass, kicks off the full async retention pipeline. Reports the outcome via
+     * {@code listener} as a {@link TriggerStatus}; it does NOT block until the (fully async) delete pipeline completes.
+     *
+     * <p><b>Two layers of mutual exclusion.</b> A per-JVM {@link #isRunning} guard serializes invocations on
+     * THIS node, and the cluster-wide JobScheduler {@link LockService} lock (same lock index and doc id the
+     * scheduled run uses — keyed on {@link MLJobType#MEMORY_RETENTION} in {@link org.opensearch.ml.common.CommonValue#ML_JOBS_INDEX})
+     * serializes across nodes. Unlike the base {@link MLJobProcessor#process} — which releases its lock the
+     * instant {@code run()} returns, i.e. right after the pipeline is merely <em>dispatched</em> — this path
+     * HOLDS the lock for the entire pipeline lifetime and renews it periodically (see {@link #startLockRenewal()}),
+     * releasing only at every terminal/error exit via {@link #finishRun()}. That is what actually prevents an
+     * on-demand trigger on one node from overlapping a scheduled (or on-demand) run on another.
+     *
+     * <p>When {@link TriggerStatus#TRIGGERED} is reported the guard is held and the lock is owned; both are
+     * released by {@link #finishRun()}. For every other status no guard is held and no lock is owned, so a
+     * caller can safely retry. If the JobScheduler {@link LockService} is unavailable (not installed, or not
+     * wired in a unit test) the run proceeds under the per-node guard only, logged as a warning.
+     *
+     * @param listener receives the job-level outcome (onFailure only for an unexpected error, which the
+     *                 transport layer surfaces as HTTP 500)
+     */
+    public void triggerRun(ActionListener<TriggerStatus> listener) {
+        // The retention job is a single cluster-wide, system-context janitor. Under multi-tenancy it still scans the
+        // one global container registry (matchAllQuery) and cleans EVERY container regardless of tenant. Tenant
+        // isolation is achieved per-container: each per-container search/delete is bounded by
+        // termQuery(memory_container_id, ...), and container ids are globally unique with each mapping to exactly one
+        // tenant, so filtering by container_id transitively confines every read/delete to that container's own tenant.
+        // No tenant_id term filter is added (it would be redundant on sessions/working/history and outright wrong on
+        // long_term, whose mapping has no tenant_id field). See RFC #4859.
+        //
+        // Exception: when metadata is stored in a REMOTE store (e.g. AWS OpenSearch Serverless / DynamoDB), the
+        // container registry lives remotely and this native-client scan of the local registry index would find zero
+        // containers and silently clean nothing. Skip in that mode rather than give a false impression of retention.
+        // Self-hosted multi-tenancy (local metadata) is fully supported and runs normally.
+        if (MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings())) {
+            log
+                .warn(
+                    "Memory retention job skipped: remote metadata store is configured; the container registry is not "
+                        + "in the local cluster, so the retention job cannot enumerate containers. See RFC #4859."
+                );
+            listener.onResponse(TriggerStatus.REMOTE_METADATA_STORE);
             return;
         }
 
         if (!clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_ENABLED)) {
             log.info("Memory retention job disabled via cluster setting plugins.ml_commons.memory.retention_enabled=false");
+            listener.onResponse(TriggerStatus.RETENTION_DISABLED);
             return;
         }
 
+        // Per-node single-flight guard. Claimed here; released by finishRun() (on the lock-owning paths) or
+        // by releaseGuard() on the pre-kickoff gating paths below (no lock owned yet).
         if (!isRunning.compareAndSet(false, true)) {
-            log.warn("Memory retention job already in progress, skipping this invocation");
+            // The guard is held. Normally that means a prior run is genuinely still in flight, so we
+            // skip. But because the run is a fully async callback chain, an unhandled throw on a
+            // thread we cannot wrap can leave the guard stuck true forever, silently disabling
+            // retention until node restart. Detect that: if the holder acquired the guard longer ago
+            // than any run should plausibly last, assume it leaked and reclaim ONLY the per-node guard
+            // (releaseGuard()) so the NEXT invocation can start cleanly. We deliberately do NOT release
+            // the cluster-wide lock here and do NOT start a run: if this is a false positive (a
+            // genuinely long, still-live run), that run still owns its cluster-wide lock, so the next
+            // invocation hits the lock gate and reports ALREADY_RUNNING instead of overlapping it. That
+            // is exactly what keeps "at most one run, and only via the lock gate" true. Deleting the
+            // lock here (as a shared full teardown would) is precisely the bug: it would free a lock a
+            // live run still holds, let a second run acquire it, and the old run's eventual finishRun()
+            // would then tear down the NEW run — an unbounded cross-node cascade. releaseGuard() fails
+            // safe: the worst case of a false positive is a stalled interval (the next run skips),
+            // never a double-run.
+            long heldSince = runStartMillis.get();
+            long heldForMillis = System.currentTimeMillis() - heldSince;
+            long stuckGuardTimeoutMillis = stuckGuardTimeoutMillis();
+            if (heldSince == Long.MIN_VALUE || heldForMillis < stuckGuardTimeoutMillis) {
+                log.warn("Memory retention job already in progress on this node, skipping this invocation");
+                listener.onResponse(TriggerStatus.ALREADY_RUNNING);
+                return;
+            }
+            log
+                .error(
+                    "Memory retention job guard appears stuck (held for {} ms, exceeds {} ms); reclaiming the per-node "
+                        + "guard so the next scheduled run can proceed. The cluster-wide lock is left untouched: if a run "
+                        + "is still live it keeps its lock and the next invocation reports ALREADY_RUNNING.",
+                    heldForMillis,
+                    stuckGuardTimeoutMillis
+                );
+            releaseGuard();
+            listener.onResponse(TriggerStatus.ALREADY_RUNNING);
+            return;
+        }
+
+        runStartMillis.set(System.currentTimeMillis());
+
+        LockService ls = lockService;
+        if (ls == null) {
+            // No cluster-wide lock available: degrade to per-node exclusion only. Safe on single-node; on
+            // multi-node this reopens the cross-node overlap window, but deletes are idempotent so it cannot
+            // corrupt data (duplicate work only).
+            log.warn("JobScheduler LockService unavailable; running memory retention with per-node mutual exclusion only");
+            kickOffPipeline(listener);
             return;
         }
 
         try {
-            log.info("Memory retention job started");
-            resolveContainersWithPolicies(null);
+            ls.acquireLockWithId(ML_JOBS_INDEX, LOCK_DURATION_SECONDS, MLJobType.MEMORY_RETENTION.name(), ActionListener.wrap(lock -> {
+                if (lock == null) {
+                    // A run is already in progress cluster-wide (another node, or the scheduler, holds
+                    // the lock). This run never acquired the lock, so reclaim ONLY the per-node guard (and
+                    // start-time stamp); it must NOT touch the cluster-wide lock, which belongs to the other
+                    // run. Report already-running.
+                    releaseGuard();
+                    log.info("Memory retention job already running cluster-wide (lock held); skipping this invocation");
+                    listener.onResponse(TriggerStatus.ALREADY_RUNNING);
+                    return;
+                }
+                // Freshly acquired the cluster-wide lock; clear any stale renewal-loss flag from a prior run
+                // before starting renewal so this run's finishRun() will delete the lock it now owns.
+                lockLost = false;
+                currentLock.set(lock);
+                startLockRenewal();
+                kickOffPipeline(listener);
+            }, e -> {
+                // No lock was acquired on this error path, so reclaim only the per-node guard.
+                releaseGuard();
+                log.error("Failed to acquire cluster-wide lock for memory retention job", e);
+                listener.onFailure(e);
+            }));
         } catch (Exception e) {
-            log.error("Unexpected error starting memory retention job", e);
-            isRunning.set(false);
+            // Lock acquisition threw synchronously; no lock was acquired, so reclaim only the per-node guard.
+            releaseGuard();
+            log.error("Failed to acquire cluster-wide lock for memory retention job", e);
+            listener.onFailure(e);
         }
     }
 
-    private void resolveContainersWithPolicies(Object[] searchAfterValues) {
-        SearchRequest request = new SearchRequest(ML_MEMORY_CONTAINER_INDEX);
-        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
-
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
-            .query(QueryBuilders.matchAllQuery())
-            .size(CONTAINER_PAGE_SIZE)
-            .sort("_id", SortOrder.ASC)
-            .fetchSource(true);
-
-        if (searchAfterValues != null) {
-            sourceBuilder.searchAfter(searchAfterValues);
+    /**
+     * Kicks off the async delete pipeline. On a synchronous kickoff failure it tears down all held state
+     * ({@link #finishRun()}) and reports the failure; otherwise it reports {@link TriggerStatus#TRIGGERED}
+     * and the pipeline releases everything at its own terminal points. The in-progress guard is assumed
+     * already held by the caller.
+     */
+    private void kickOffPipeline(ActionListener<TriggerStatus> listener) {
+        try {
+            log.info("Memory retention job started");
+            resolveContainersWithPolicies(null);
+            listener.onResponse(TriggerStatus.TRIGGERED);
+        } catch (Exception e) {
+            log.error("Unexpected error starting memory retention job", e);
+            finishRun();
+            listener.onFailure(e);
         }
+    }
 
-        request.source(sourceBuilder);
+    /**
+     * Overrides the base kickoff-only locking. The base {@link MLJobProcessor#process} acquires the
+     * JobScheduler lock, calls {@code run()}, and releases the lock in a {@code finally} — but {@code run()}
+     * only DISPATCHES the fire-and-forget async pipeline and returns immediately, so that lock would be gone
+     * long before the deletes finish, giving no real exclusion across the run. This processor acquires the
+     * SAME cluster-wide lock inside {@link #triggerRun(ActionListener)} and holds it for the whole pipeline,
+     * so taking the base lock here too would self-contend on the identical lock id and turn every scheduled
+     * run into a no-op {@code ALREADY_RUNNING}. We therefore dispatch {@code run()} directly (still off the
+     * scheduler thread, matching the base) and let {@code triggerRun} own the lock lifecycle.
+     */
+    @Override
+    public void process(ScheduledJobParameter scheduledJobParameter, JobExecutionContext jobExecutionContext) {
+        threadPool.generic().submit(this::run);
+    }
 
-        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
-            client.search(request, ActionListener.wrap(response -> {
-                SearchHits hits = response.getHits();
-                SearchHit[] hitArray = hits.getHits();
+    /** Starts periodic renewal of the held cluster-wide lock so a long pipeline never lets it expire. */
+    private void startLockRenewal() {
+        try {
+            Scheduler.Cancellable task = threadPool
+                .scheduleWithFixedDelay(this::renewCurrentLock, TimeValue.timeValueSeconds(LOCK_RENEWAL_SECONDS), ThreadPool.Names.GENERIC);
+            lockRenewalTask.set(task);
+        } catch (Exception e) {
+            // Renewal is best-effort; a failure to schedule it only risks the lock expiring after its TTL
+            // (bounding, not breaking, cluster-wide exclusion). Do not fail the run over it.
+            log.error("Failed to schedule cluster-wide memory retention lock renewal", e);
+        }
+    }
 
-                if (hitArray.length == 0) {
-                    onJobComplete();
-                    return;
+    /** Renews the currently-held lock, advancing {@link #currentLock} to the fresh (higher-version) model. */
+    private void renewCurrentLock() {
+        LockModel lock = currentLock.get();
+        LockService ls = lockService;
+        if (lock == null || ls == null) {
+            return;
+        }
+        try {
+            ls.renewLock(lock, ActionListener.wrap(renewed -> {
+                if (renewed != null) {
+                    // Only advance if the run is still holding the same lock; a failed CAS means finishRun()
+                    // already released it, so we must not resurrect it.
+                    currentLock.compareAndSet(lock, renewed);
+                    log.debug("Renewed cluster-wide memory retention lock");
+                } else {
+                    // Renewal returned null: the lock doc could not be advanced (likely expired and possibly
+                    // re-acquired by another run under the same stable id). Flag the loss so finishRun() will
+                    // NOT delete a lock doc that a different, still-live run may now own.
+                    lockLost = true;
+                    log
+                        .warn(
+                            "Cluster-wide memory retention lock renewal returned null; the lock may have expired and "
+                                + "cluster-wide exclusion may be lost. This run will not delete the lock doc on teardown."
+                        );
                 }
-
-                processContainerChain(
-                    hitArray,
-                    0,
-                    hitArray.length == CONTAINER_PAGE_SIZE ? hitArray[hitArray.length - 1].getSortValues() : null
-                );
             }, e -> {
-                log.error("Failed to search for containers with retention policies", e);
-                onJobComplete();
+                // Renewal errored: treat as a possible loss of cluster-wide exclusion for the same reason as above.
+                lockLost = true;
+                log
+                    .error(
+                        "Failed to renew cluster-wide memory retention lock; cluster-wide exclusion may be lost. This "
+                            + "run will not delete the lock doc on teardown.",
+                        e
+                    );
             }));
+        } catch (Exception e) {
+            lockLost = true;
+            log
+                .error(
+                    "Failed to renew cluster-wide memory retention lock; cluster-wide exclusion may be lost. This run "
+                        + "will not delete the lock doc on teardown.",
+                    e
+                );
+        }
+    }
+
+    /**
+     * FULL teardown for a run that OWNS the cluster-wide lock: stops lock renewal, releases the cluster-wide lock
+     * (best-effort; on failure the lock simply expires after its TTL), then reclaims the per-node guard via
+     * {@link #releaseGuard()}. Idempotent for the lock/renewal (null-safe getAndSet), so the "already released"
+     * case is harmless. Replaces the former {@code onJobComplete()}.
+     *
+     * <p><b>Call only from lock-owning paths.</b> This is the full teardown and is invoked ONLY where the run has
+     * confirmed it acquired the cluster-wide lock — {@link #kickOffPipeline(ActionListener)}'s catch and every
+     * pipeline terminal/error exit downstream of a successful acquisition. The pre-kickoff gating paths (stuck-guard
+     * watchdog, lock-already-held, lock-acquire failure) must instead call {@link #releaseGuard()}, because deleting
+     * a lock those paths do not own could free a lock a still-live run holds and cascade into overlapping runs.
+     *
+     * <p><b>Renewal-loss guard.</b> If {@link #lockLost} is set (renewal failed, so the lock may have expired and
+     * been re-acquired elsewhere under the same stable id), the {@code deleteLock} is SKIPPED — this run must not
+     * delete a lock doc a different, still-live run may now own; the doc (if still ours) expires after its TTL.
+     *
+     * <p>Otherwise the lock is dropped via {@link LockService#deleteLock(String, ActionListener)} keyed on the stable
+     * lock doc id, NOT via {@code release(lockModel, ...)}. {@code release} issues a seqNo/primaryTerm-gated
+     * update, so a renewal still in flight when we tear down (its {@code cancel()} cannot stop an
+     * already-dispatched call) would advance the doc's seqNo and make a gated release fail — leaving the lock
+     * held for its full TTL after the run already finished. {@code deleteLock} is unconditional and races
+     * cleanly against any in-flight renewal: a renewal landing before the delete is overwritten by it, and a
+     * renewal landing after is a seqNo-gated update against a now-missing doc, which no-ops. Either way the
+     * lock doc ends up gone. The doc id is identical for the on-demand and scheduled paths, so this always
+     * targets the one lock this run holds.
+     */
+    private void finishRun() {
+        // Cancel renewals first to minimise the in-flight-renewal window; deleteLock handles any that slip through.
+        Scheduler.Cancellable renewal = lockRenewalTask.getAndSet(null);
+        if (renewal != null) {
+            renewal.cancel();
+        }
+        LockModel lock = currentLock.getAndSet(null);
+        LockService ls = lockService;
+        if (lockLost) {
+            // Renewal was observed to have failed (see renewCurrentLock): the lock doc may have expired and been
+            // re-acquired by another run under the same stable id. Deleting it now could free a lock a DIFFERENT,
+            // still-live run owns, letting a third run start and cascade. Skip the delete and just fall through to
+            // releaseGuard(); if the lock doc really is still ours it simply expires after its TTL.
+            log
+                .warn(
+                    "Skipping cluster-wide memory retention lock deletion because renewal was lost; the lock doc (if still "
+                        + "present) will expire after its TTL rather than risk deleting a lock another run now owns."
+                );
+        } else if (lock != null && ls != null) {
+            String lockId = LockModel.generateLockId(lock.getJobIndexName(), lock.getJobId());
+            try {
+                ls
+                    .deleteLock(
+                        lockId,
+                        ActionListener
+                            .wrap(
+                                deleted -> log.debug("Released cluster-wide memory retention lock (deleted={})", deleted),
+                                e -> log.error("Failed to release cluster-wide memory retention lock; it will expire after its TTL", e)
+                            )
+                    );
+            } catch (Exception e) {
+                log.error("Failed to release cluster-wide memory retention lock; it will expire after its TTL", e);
+            }
+        }
+        releaseGuard();
+    }
+
+    /**
+     * Reclaims ONLY the per-node single-flight guard: clears the watchdog start-time stamp and then releases
+     * {@link #isRunning}. It does NOT cancel lock renewal and NEVER touches the cluster-wide lock, so it is safe
+     * to call from the pre-kickoff gating paths (stuck-guard watchdog, lock-already-held, lock-acquire failure)
+     * where this node does not own — and may be racing a still-live holder of — the cluster-wide lock. The
+     * start-time stamp is cleared BEFORE the guard so a subsequent invocation never sees a stale timestamp
+     * against a freshly-cleared guard. This is the fail-safe half of the Option-C split (see {@link #finishRun()}
+     * for the full teardown used only by lock-owning paths).
+     */
+    private void releaseGuard() {
+        runStartMillis.set(Long.MIN_VALUE);
+        isRunning.set(false);
+    }
+
+    private void resolveContainersWithPolicies(Object[] searchAfterValues) {
+        // Guard the whole body: a synchronous throw here (e.g. threadpool rejection dispatching the search,
+        // or during node shutdown) must still tear the run down. Otherwise the escaped exception would leave
+        // isRunning stuck true AND the lock-renewal task alive, renewing the cluster-wide lock forever and
+        // wedging retention cluster-wide until node restart.
+        //
+        // Teardown vs. propagation depends on WHICH dispatch this is, distinguished by searchAfterValues:
+        // - Initial kickoff (searchAfterValues == null, called only from kickOffPipeline): after tearing down
+        // we RETHROW so kickOffPipeline reports the failure to the trigger listener and the on-demand
+        // transport surfaces HTTP 500 (the pipeline never actually started).
+        // - Pagination continuation (searchAfterValues != null, re-entered from processContainerChain inside a
+        // container's ActionListener): we must NOT rethrow. That callback's onFailure retries the chain, so a
+        // rethrow would loop; the run has genuinely started, so we simply tear down and stop. finishRun() is
+        // idempotent.
+        boolean initialKickoff = searchAfterValues == null;
+        try {
+            SearchRequest request = new SearchRequest(ML_MEMORY_CONTAINER_INDEX);
+            request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+
+            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+                .query(QueryBuilders.matchAllQuery())
+                .size(CONTAINER_PAGE_SIZE)
+                .sort("_id", SortOrder.ASC)
+                .fetchSource(true);
+
+            if (searchAfterValues != null) {
+                sourceBuilder.searchAfter(searchAfterValues);
+            }
+
+            request.source(sourceBuilder);
+
+            try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+                client.search(request, ActionListener.wrap(response -> {
+                    SearchHits hits = response.getHits();
+                    SearchHit[] hitArray = hits.getHits();
+
+                    if (hitArray.length == 0) {
+                        // No containers carry a retention policy: nothing to delete, the run is complete.
+                        log.info("Memory retention job completed");
+                        finishRun();
+                        return;
+                    }
+
+                    processContainerChain(
+                        hitArray,
+                        0,
+                        hitArray.length == CONTAINER_PAGE_SIZE ? hitArray[hitArray.length - 1].getSortValues() : null
+                    );
+                }, e -> {
+                    log.error("Failed to search for containers with retention policies", e);
+                    finishRun();
+                }));
+            }
+        } catch (Exception e) {
+            log.error("Unexpected error dispatching container search for memory retention", e);
+            finishRun();
+            if (initialKickoff) {
+                throw e;
+            }
         }
     }
 
@@ -237,15 +691,24 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     private void scheduleNext(SearchHit[] hits, int nextIndex, Object[] nextPageSortValues) {
         int throttleSeconds = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS);
         try {
-            threadPool
-                .schedule(
-                    () -> processContainerChain(hits, nextIndex, nextPageSortValues),
-                    TimeValue.timeValueSeconds(throttleSeconds),
-                    ThreadPool.Names.GENERIC
-                );
+            threadPool.schedule(() -> {
+                // This runnable executes later on the GENERIC pool, outside any ActionListener that would route a
+                // throw to onFailure. It re-enters the driver (which may synchronously dispatch the next search),
+                // and if processContainerChain throws (e.g. client.search rejects work during node shutdown) the
+                // throw would be swallowed by the executor and the run's state would never reset, silently wedging
+                // retention AND leaving the lock-renewal task alive forever. Guarantee a full teardown on any
+                // unhandled failure.
+                try {
+                    processContainerChain(hits, nextIndex, nextPageSortValues);
+                } catch (Throwable t) {
+                    log.error("Unhandled error resuming container processing chain; releasing retention guard", t);
+                    finishRun();
+                }
+            }, TimeValue.timeValueSeconds(throttleSeconds), ThreadPool.Names.GENERIC);
         } catch (Exception e) {
+            // Abandoning the run here: release the cluster-wide lock and per-node guard, don't just clear the flag.
             log.error("Failed to schedule next container processing", e);
-            isRunning.set(false);
+            finishRun();
         }
     }
 
@@ -1297,42 +1760,51 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
     }
 
     private void resolveOrphanSweepContainers(Object[] searchAfterValues) {
-        SearchRequest request = new SearchRequest(ML_MEMORY_CONTAINER_INDEX);
-        request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+        // Guarded like resolveContainersWithPolicies: a synchronous throw dispatching this search must tear
+        // the run down, or the lock-renewal task would keep the cluster-wide lock alive indefinitely.
+        try {
+            SearchRequest request = new SearchRequest(ML_MEMORY_CONTAINER_INDEX);
+            request.indicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
 
-        BoolQueryBuilder query = QueryBuilders
-            .boolQuery()
-            .must(QueryBuilders.existsQuery(MEMORY_STORAGE_CONFIG_FIELD + "." + RETENTION_POLICY_FIELD))
-            .mustNot(QueryBuilders.termQuery(MEMORY_STORAGE_CONFIG_FIELD + "." + DISABLE_SESSION_FIELD, true));
+            BoolQueryBuilder query = QueryBuilders
+                .boolQuery()
+                .must(QueryBuilders.existsQuery(MEMORY_STORAGE_CONFIG_FIELD + "." + RETENTION_POLICY_FIELD))
+                .mustNot(QueryBuilders.termQuery(MEMORY_STORAGE_CONFIG_FIELD + "." + DISABLE_SESSION_FIELD, true));
 
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
-            .query(query)
-            .size(CONTAINER_PAGE_SIZE)
-            .sort("_id", SortOrder.ASC)
-            .fetchSource(true);
+            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+                .query(query)
+                .size(CONTAINER_PAGE_SIZE)
+                .sort("_id", SortOrder.ASC)
+                .fetchSource(true);
 
-        if (searchAfterValues != null) {
-            sourceBuilder.searchAfter(searchAfterValues);
-        }
+            if (searchAfterValues != null) {
+                sourceBuilder.searchAfter(searchAfterValues);
+            }
 
-        request.source(sourceBuilder);
+            request.source(sourceBuilder);
 
-        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
-            client.search(request, ActionListener.wrap(response -> {
-                SearchHits hits = response.getHits();
-                SearchHit[] hitArray = hits.getHits();
+            try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+                client.search(request, ActionListener.wrap(response -> {
+                    SearchHits hits = response.getHits();
+                    SearchHit[] hitArray = hits.getHits();
 
-                if (hitArray.length == 0) {
-                    onJobComplete();
-                    return;
-                }
+                    if (hitArray.length == 0) {
+                        // No containers to orphan-sweep: the run has finished all its work.
+                        log.info("Memory retention job completed");
+                        finishRun();
+                        return;
+                    }
 
-                Object[] nextPageSort = hitArray.length == CONTAINER_PAGE_SIZE ? hitArray[hitArray.length - 1].getSortValues() : null;
-                processOrphanSweepContainerChain(hitArray, 0, nextPageSort);
-            }, e -> {
-                log.error("Failed to search containers for orphan sweep", e);
-                onJobComplete();
-            }));
+                    Object[] nextPageSort = hitArray.length == CONTAINER_PAGE_SIZE ? hitArray[hitArray.length - 1].getSortValues() : null;
+                    processOrphanSweepContainerChain(hitArray, 0, nextPageSort);
+                }, e -> {
+                    log.error("Failed to search containers for orphan sweep", e);
+                    finishRun();
+                }));
+            }
+        } catch (Exception e) {
+            log.error("Unexpected error dispatching orphan-sweep container search for memory retention", e);
+            finishRun();
         }
     }
 
@@ -1341,7 +1813,9 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             if (nextPageSortValues != null) {
                 resolveOrphanSweepContainers(nextPageSortValues);
             } else {
-                onJobComplete();
+                // Final page of the orphan sweep processed: the full retention run is complete.
+                log.info("Memory retention job completed");
+                finishRun();
             }
             return;
         }
@@ -2020,13 +2494,13 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             int ttlDays = clusterService.getClusterSettings().get(ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS);
             DryRunContext ctx = new DryRunContext(containerId, policySource, System.currentTimeMillis(), effective.policy, ttlDays);
 
-            // Multi-tenancy hard-gates the scheduled job off - run() returns before any deletion when MT is
-            // enabled - so nothing would ever be deleted in this deployment mode. Skip the read-only passes and
-            // report an honest zero rather than scanning indices for counts the job can't act on.
-            // NOTE(PR-B): retention runs under multi-tenancy in PR-B; this becomes an isRemoteMetadataStore()
-            // gate there, but the skip-to-zero behavior is unchanged.
-            if (clusterService.getClusterSettings().get(ML_COMMONS_MULTI_TENANCY_ENABLED)) {
-                ctx.warnings.add("multi-tenancy is enabled; the scheduled retention job does not run, so nothing would be deleted");
+            // A remote metadata store hard-gates the scheduled job off - run() returns before any deletion when a
+            // remote metadata store is configured (see the isRemoteMetadataStore() gate in run()) - so nothing would
+            // ever be deleted in this deployment mode. Skip the read-only passes and report an honest zero rather than
+            // scanning indices for counts the job can't act on.
+            if (MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings())) {
+                ctx.warnings
+                    .add("a remote metadata store is configured; the scheduled retention job does not run, so nothing would be deleted");
                 listener.onResponse(buildDryRunResult(ctx));
                 return;
             }
@@ -2606,11 +3080,6 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     ActionListener.wrap(response -> listener.onResponse(response.getHits().getTotalHits().value()), listener::onFailure)
                 );
         }
-    }
-
-    private void onJobComplete() {
-        isRunning.set(false);
-        log.info("Memory retention job completed");
     }
 
     private static <T> List<List<T>> partition(List<T> list, int size) {

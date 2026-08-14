@@ -77,17 +77,21 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     /**
      * Single-writer gate for memory-retention job writes that mutate the shared, fixed-id job document. Exactly one
      * node (the elected cluster manager) should ever upsert/reconcile, and only when agentic memory AND memory
-     * retention are enabled and multi-tenancy is disabled (mirroring the startup scheduling path exactly). The
-     * {@link #jobsIndexReadyForWrite()} check mirrors the startup loop's rolling-upgrade guard so a live setting
-     * change during a mixed-version upgrade does not create the new {@code .plugins-ml-jobs} index before the
-     * cluster is ready for it.
+     * retention are enabled (mirroring the startup scheduling path exactly). The {@link #jobsIndexReadyForWrite()}
+     * check mirrors the startup loop's rolling-upgrade guard so a live setting change during a mixed-version upgrade
+     * does not create the new {@code .plugins-ml-jobs} index before the cluster is ready for it. The retention job
+     * schedules and runs under multi-tenancy too: it is a single cluster-wide, system-context janitor that cleans
+     * every container across every tenant, with per-container memory_container_id filters providing tenant isolation.
+     * It is NOT scheduled when a remote metadata store is configured (e.g. AWS OpenSearch Serverless / DynamoDB),
+     * because the container registry then lives outside the local cluster and the native-client job cannot enumerate
+     * it; self-hosted (local metadata) multi-tenancy is fully supported. See RFC #4859.
      */
     private boolean shouldManageMemoryRetentionJob() {
         return clusterService.state().nodes().isLocalNodeElectedClusterManager()
             && jobsIndexReadyForWrite()
             && mlFeatureEnabledSetting.isAgenticMemoryEnabled()
             && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
-            && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings());
+            && !MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings());
     }
 
     /**
@@ -165,17 +169,25 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                 this.startedStatsJob = true;
             }
 
+            // Skip when a remote metadata store is configured: the container registry lives outside the local
+            // cluster, so the native-client retention job cannot enumerate containers. Local-metadata
+            // multi-tenancy is fully supported. See RFC #4859.
             if (mlFeatureEnabledSetting.isAgenticMemoryEnabled()
                 && mlFeatureEnabledSetting.isMemoryRetentionEnabled()
-                && !MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED.get(clusterService.getSettings())
-                && !this.startedMemoryRetentionJob) {
+                && !this.startedMemoryRetentionJob
+                && !MLCommonsSettings.isRemoteMetadataStore(clusterService.getSettings())) {
                 // Read the effective interval, honoring OpenSearch precedence (transient > persistent > opensearch.yml
                 // > default). clusterService.getSettings() holds only node bootstrap settings (opensearch.yml / CLI),
-                // frozen at construction; state.getMetadata().settings() holds the persistent/transient values set via
-                // PUT _cluster/settings. Overlaying metadata on the node settings lets dynamic cluster settings win
-                // while still honoring an opensearch.yml value. Reading only one source would drop the other and make
-                // reconcile (which actively upserts on mismatch) revert an operator's chosen interval on restart.
-                Settings effectiveSettings = Settings.builder().put(clusterService.getSettings()).put(settings).build();
+                // frozen at construction; the cluster state's persistent/transient settings hold the values set via
+                // PUT _cluster/settings. Overlay them so dynamic cluster settings win while still honoring an
+                // opensearch.yml value. Reading only the node settings would drop dynamic values and make reconcile
+                // (which actively upserts on mismatch) revert an operator's chosen interval on restart.
+                Settings effectiveSettings = Settings
+                    .builder()
+                    .put(clusterService.getSettings())
+                    .put(state.getMetadata().persistentSettings())
+                    .put(state.getMetadata().transientSettings())
+                    .build();
                 int intervalHours = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(effectiveSettings);
                 // CREATE (conflict-swallowing) seeds the job doc; safe to run on any node.
                 mlTaskManager.indexMemoryRetentionJob(intervalHours);

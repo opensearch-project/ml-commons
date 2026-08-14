@@ -126,6 +126,9 @@ public class TransportMemoryRetentionDryRunActionTests extends OpenSearchTestCas
                 )
         );
         lenient().when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, set));
+        // dryRunContainer consults the node-scoped remote-metadata setting via clusterService.getSettings();
+        // no remote store is configured here (REMOTE_METADATA_TYPE defaults to empty), so isRemoteMetadataStore == false.
+        lenient().when(clusterService.getSettings()).thenReturn(settings);
         ClusterState clusterState = mock(ClusterState.class);
         Metadata metadata = mock(Metadata.class);
         lenient().when(clusterService.state()).thenReturn(clusterState);
@@ -356,6 +359,126 @@ public class TransportMemoryRetentionDryRunActionTests extends OpenSearchTestCas
         assertEquals(0, response.getSkippedCount());
     }
 
+    public void testSingleContainerTenantValidationFailure() {
+        // Multi-tenancy on + null tenantId -> validateTenantId short-circuits with FORBIDDEN before any get().
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().memoryContainerId("c1").build();
+        action.doExecute(task, request, listener);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
+    public void testSingleContainerGetFailureWrappedAsStatus() {
+        // A non-IndexNotFound get() failure is wrapped and surfaced (hits the log.error/wrapAsStatusException branch).
+        doAnswer(inv -> {
+            ActionListener<GetResponse> l = inv.getArgument(1);
+            l.onFailure(new RuntimeException("boom"));
+            return null;
+        }).when(client).get(any(), isA(ActionListener.class));
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().memoryContainerId("c1").build();
+        action.doExecute(task, request, listener);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+    }
+
+    public void testClusterWideWithContainersEvaluatesEach() {
+        // Two visible containers with no policy -> both evaluated, both produce a "none" result. Exercises the
+        // full cluster-wide processHitChain path (searchContainerPage -> processHitChain -> dryRunContainer).
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(containerHits("a", "b"));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().build();
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(responseCaptor.capture());
+        MLMemoryRetentionDryRunResponse response = responseCaptor.getValue();
+        assertTrue(response.isClusterWide());
+        assertEquals(2, response.getResults().size());
+        assertEquals("none", response.getResults().get(0).getPolicySource());
+    }
+
+    public void testClusterWideSkipsAccessDeniedContainers() {
+        // Access denied on every container -> all silently skipped, empty results but still cluster-wide.
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(containerHits("a", "b"));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().build();
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(responseCaptor.capture());
+        assertTrue(responseCaptor.getValue().isClusterWide());
+        assertEquals(0, responseCaptor.getValue().getResults().size());
+    }
+
+    public void testClusterWideSkipsUnparseableContainers() {
+        // A hit whose source is not valid container JSON is skipped without failing the whole run.
+        SearchHit good = containerHit("a", CONTAINER_JSON);
+        SearchHit bad = containerHit("b", "{not valid json");
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(hitsOf(good, bad));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().build();
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(responseCaptor.capture());
+        assertEquals(1, responseCaptor.getValue().getResults().size());
+    }
+
+    public void testClusterWideSearchErrorSurfaces() {
+        // A non-IndexNotFound search failure is surfaced as a status exception.
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onFailure(new RuntimeException("search boom"));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().build();
+        action.doExecute(task, request, listener);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+    }
+
+    public void testClusterWidePaginatesAcrossPages() {
+        // First page returns a full page (100 hits) so a follow-up searchContainerPage runs with searchAfter;
+        // second page is empty and terminates. Exercises the nextPageSort / searchAfter branch.
+        SearchHit[] full = new SearchHit[100];
+        for (int i = 0; i < 100; i++) {
+            full[i] = containerHit("c" + i, CONTAINER_JSON);
+        }
+        java.util.concurrent.atomic.AtomicInteger call = new java.util.concurrent.atomic.AtomicInteger();
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            if (call.getAndIncrement() == 0) {
+                l.onResponse(hitsOf(full));
+            } else {
+                l.onResponse(emptyHits());
+            }
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+
+        MLMemoryRetentionDryRunRequest request = MLMemoryRetentionDryRunRequest.builder().build();
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(responseCaptor.capture());
+        assertEquals(100, responseCaptor.getValue().getResults().size());
+        // 1 first page + 1 empty follow-up page.
+        assertEquals(2, call.get());
+    }
+
     private SearchResponse emptyCount() {
         SearchResponse r = mock(SearchResponse.class);
         SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
@@ -365,5 +488,28 @@ public class TransportMemoryRetentionDryRunActionTests extends OpenSearchTestCas
 
     private SearchResponse emptyHits() {
         return emptyCount();
+    }
+
+    /** Builds a SearchHit carrying the given id and JSON source, with a sort value so pagination can read it. */
+    private SearchHit containerHit(String id, String json) {
+        SearchHit hit = new SearchHit(0, id, null, java.util.Collections.emptyMap());
+        hit.sourceRef(new org.opensearch.core.common.bytes.BytesArray(json));
+        hit.sortValues(new Object[] { id }, new org.opensearch.search.DocValueFormat[] { org.opensearch.search.DocValueFormat.RAW });
+        return hit;
+    }
+
+    private SearchResponse hitsOf(SearchHit... hits) {
+        SearchResponse r = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(hits, new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO), 1.0f);
+        when(r.getHits()).thenReturn(searchHits);
+        return r;
+    }
+
+    private SearchResponse containerHits(String... ids) {
+        SearchHit[] hits = new SearchHit[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            hits[i] = containerHit(ids[i], CONTAINER_JSON);
+        }
+        return hitsOf(hits);
     }
 }
