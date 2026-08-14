@@ -41,6 +41,20 @@ public class BatchJobStatusMapping implements ToXContentObject, Writeable {
     private final Map<String, String> mapping;
 
     public BatchJobStatusMapping(String fieldName, Map<String, String> mapping) {
+        validate(fieldName, mapping);
+        this.fieldName = fieldName;
+        this.mapping = mapping;
+    }
+
+    public BatchJobStatusMapping(StreamInput input) throws IOException {
+        String fieldName = input.readString();
+        Map<String, String> mapping = input.readMap(StreamInput::readString, StreamInput::readString);
+        validate(fieldName, mapping);
+        this.fieldName = fieldName;
+        this.mapping = mapping;
+    }
+
+    private static void validate(String fieldName, Map<String, String> mapping) {
         if (fieldName == null || fieldName.isBlank()) {
             throw new IllegalArgumentException("batch_job_status.field_name must not be blank");
         }
@@ -54,13 +68,6 @@ public class BatchJobStatusMapping implements ToXContentObject, Writeable {
                 throw new IllegalArgumentException("batch_job_status.mapping value '" + value + "' is not a valid MLTaskState");
             }
         }
-        this.fieldName = fieldName;
-        this.mapping = mapping;
-    }
-
-    public BatchJobStatusMapping(StreamInput input) throws IOException {
-        this.fieldName = input.readString();
-        this.mapping = input.readMap(StreamInput::readString, StreamInput::readString);
     }
 
     @Override

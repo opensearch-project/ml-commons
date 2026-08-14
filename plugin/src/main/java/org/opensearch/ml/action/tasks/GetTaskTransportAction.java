@@ -65,7 +65,9 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.BatchJobStatusMapping;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -490,7 +492,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
             connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
                 connectorExecutor.close();
-                processTaskResponse(mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, r, actionListener);
+                processTaskResponse(connector, mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, r, actionListener);
             }, e -> {
                 connectorExecutor.close();
                 // When the request to remote service fails, we will retry the request for next 10 minutes (10 runs).
@@ -527,6 +529,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     }
 
     protected void processTaskResponse(
+        Connector connector,
         MLTask mlTask,
         String taskId,
         Boolean isUserInitiatedGetTaskRequest,
@@ -547,10 +550,23 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         updatedTask.put(REMOTE_JOB_FIELD, remoteJob);
                         mlTask.setRemoteJob(remoteJob);
 
-                        for (String statusField : remoteJobStatusFields) {
-                            String statusValue = String.valueOf(remoteJob.get(statusField));
-                            if (remoteJob.containsKey(statusField)) {
-                                updateTaskState(updatedTask, mlTask, statusValue);
+                        BatchJobStatusMapping batchJobStatus = connector == null ? null : connector.getBatchJobStatus();
+                        if (batchJobStatus != null) {
+                            Object rawStatus = remoteJob.get(batchJobStatus.getFieldName());
+                            if (rawStatus != null) {
+                                String mappedState = batchJobStatus.getMapping().get(String.valueOf(rawStatus));
+                                if (mappedState != null) {
+                                    MLTaskState state = MLTaskState.valueOf(mappedState);
+                                    updatedTask.put(STATE_FIELD, state);
+                                    mlTask.setState(state);
+                                }
+                            }
+                        } else {
+                            for (String statusField : remoteJobStatusFields) {
+                                String statusValue = String.valueOf(remoteJob.get(statusField));
+                                if (remoteJob.containsKey(statusField)) {
+                                    updateTaskState(updatedTask, mlTask, statusValue);
+                                }
                             }
                         }
 

@@ -64,6 +64,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.BatchJobStatusMapping;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -152,12 +153,12 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         Settings settings = Settings
             .builder()
-            .putList(ML_COMMONS_REMOTE_JOB_STATUS_FIELD.getKey(), List.of("status", "TransformJobStatus", "state"))
-            .put(ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX.getKey(), "(complete|completed|JOB_STATE_SUCCEEDED)")
+            .putList(ML_COMMONS_REMOTE_JOB_STATUS_FIELD.getKey(), List.of("status", "TransformJobStatus"))
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX.getKey(), "(complete|completed)")
             .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX.getKey(), "(stopped|cancelled)")
             .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX.getKey(), "(stopping|cancelling)")
-            .put(ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX.getKey(), "(expired|timeout|JOB_STATE_EXPIRED)")
-            .put(ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX.getKey(), "(failed|JOB_STATE_FAILED)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX.getKey(), "(expired|timeout)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX.getKey(), "(failed)")
             .build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -483,23 +484,23 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     }
 
     // GCP Vertex AI batch jobs report status under the "state" field with JOB_STATE_* values.
-    // These verify the shared status settings recognize that vocabulary so a finished Vertex
-    // job reaches a terminal MLTask state (rather than being re-polled forever).
+    // Now that batch-status interpretation is connector-scoped (the cluster-global field-list/regex
+    // defaults have been reverted out), these drive the four terminal Vertex transitions through a
+    // connector that DECLARES the Vertex mapping, rather than relying on shared status settings.
     public void test_processTaskResponse_vertexSucceeded() {
-        processTaskResponse("state", "JOB_STATE_SUCCEEDED", MLTaskState.COMPLETED);
+        processTaskResponseWithConnector(vertexConnector(), "state", "JOB_STATE_SUCCEEDED", MLTaskState.COMPLETED);
     }
 
     public void test_processTaskResponse_vertexFailed() {
-        processTaskResponse("state", "JOB_STATE_FAILED", MLTaskState.FAILED);
+        processTaskResponseWithConnector(vertexConnector(), "state", "JOB_STATE_FAILED", MLTaskState.FAILED);
     }
 
     public void test_processTaskResponse_vertexExpired() {
-        processTaskResponse("state", "JOB_STATE_EXPIRED", MLTaskState.EXPIRED);
+        processTaskResponseWithConnector(vertexConnector(), "state", "JOB_STATE_EXPIRED", MLTaskState.EXPIRED);
     }
 
     public void test_processTaskResponse_vertexCancelled() {
-        // No JOB_STATE_CANCELLED token needed: it substring-matches the cancelled regex.
-        processTaskResponse("state", "JOB_STATE_CANCELLED", MLTaskState.CANCELLED);
+        processTaskResponseWithConnector(vertexConnector(), "state", "JOB_STATE_CANCELLED", MLTaskState.CANCELLED);
     }
 
     public void test_processTaskResponse_WrongStatusField() {
@@ -510,7 +511,74 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         processTaskResponse("status", "unkown_status", null);
     }
 
+    // A connector that declares the Vertex mapping resolves an exact match to a terminal state.
+    public void test_processTaskResponse_declaredMapping_setsCompletedOnExactMatch() {
+        processTaskResponseWithConnector(vertexConnector(), "state", "JOB_STATE_SUCCEEDED", MLTaskState.COMPLETED);
+    }
+
+    // The declared mapping is exact-match, not substring: a look-alike value must not transition.
+    public void test_processTaskResponse_declaredMapping_exactMatch_ignoresLookalike() {
+        processTaskResponseWithConnector(vertexConnector(), "state", "JOB_STATE_SUCCEEDED_AT_NOON", null);
+    }
+
+    // Regression guard: an undeclared connector that happens to carry a "state" key is unaffected,
+    // because with the global defaults reverted, "state" is not in the cluster status field list.
+    public void test_processTaskResponse_undeclaredConnectorCarryingStateKey_isUnaffected() {
+        Connector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .build();
+        processTaskResponseWithConnector(connector, "state", "completed_at", null);
+    }
+
+    private Connector vertexConnector() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("vertex")
+            .protocol("google_cloud")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .build();
+        connector
+            .setBatchJobStatus(
+                new BatchJobStatusMapping(
+                    "state",
+                    Map
+                        .of(
+                            "JOB_STATE_SUCCEEDED",
+                            "COMPLETED",
+                            "JOB_STATE_FAILED",
+                            "FAILED",
+                            "JOB_STATE_EXPIRED",
+                            "EXPIRED",
+                            "JOB_STATE_CANCELLED",
+                            "CANCELLED"
+                        )
+                )
+            );
+        return connector;
+    }
+
+    // Global-loop path: connector is null, so interpretation falls back to the cluster status
+    // field-list/regex loop configured in setup().
     private void processTaskResponse(String statusField, String remoteJobResponseStatus, MLTaskState taskState) {
+        processTaskResponse(null, statusField, remoteJobResponseStatus, taskState);
+    }
+
+    // Connector-declared path: interpretation is resolved from the connector's BatchJobStatusMapping.
+    private void processTaskResponseWithConnector(
+        Connector connector,
+        String statusField,
+        String remoteJobResponseStatus,
+        MLTaskState taskState
+    ) {
+        processTaskResponse(connector, statusField, remoteJobResponseStatus, taskState);
+    }
+
+    private void processTaskResponse(Connector connector, String statusField, String remoteJobResponseStatus, MLTaskState taskState) {
         String taskId = "testTaskId";
         String remoteJobName = randomAlphaOfLength(5);
         Map<String, Object> remoteJob = new HashMap();
@@ -533,7 +601,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         ActionListener<MLTaskGetResponse> actionListener = mock(ActionListener.class);
         ArgumentCaptor<Map<String, Object>> updatedTaskCaptor = ArgumentCaptor.forClass(Map.class);
 
-        getTaskTransportAction.processTaskResponse(mlTask, taskId, true, taskResponse, mlTask.getRemoteJob(), null, actionListener);
+        getTaskTransportAction
+            .processTaskResponse(connector, mlTask, taskId, true, taskResponse, mlTask.getRemoteJob(), null, actionListener);
 
         verify(mlTaskManager).updateMLTaskDirectly(any(), updatedTaskCaptor.capture(), any());
         Map<String, Object> updatedTask = updatedTaskCaptor.getValue();
