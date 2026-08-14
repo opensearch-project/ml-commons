@@ -172,13 +172,14 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
      * run's wall-clock time is roughly (containers-with-deletions &times; per-container throttle,
      * capped at 60s each) plus per-container I/O plus the orphan sweep, so on a very large cluster
      * with an elevated throttle a legitimate run could in principle approach 24h. The watchdog is
-     * deliberately conservative about that: on a suspected leak it only tears the guard down (via
-     * {@link #finishRun()}, which also stops lock renewal and releases the cluster-wide lock) and
-     * skips the current invocation — it never aborts the in-flight run and never starts a second run
-     * itself. The worst case of a false positive is therefore that the next scheduled run overlaps a
-     * still-live one, doing duplicate but idempotent deletes (same tolerated outcome as the cross-node
-     * overlap noted in the 3.9 handoff §5.1). Recovery from a genuine leak costs at most one job
-     * interval.
+     * deliberately conservative about that: on a suspected leak it reclaims ONLY the per-node guard
+     * (via {@link #releaseGuard()}) and skips the current invocation — it never touches the
+     * cluster-wide lock, never aborts the in-flight run, and never starts a second run itself.
+     * Leaving the cluster-wide lock untouched is what makes a false positive safe: if the run is
+     * actually still live it keeps its lock, so the next invocation hits the lock gate and reports
+     * {@link TriggerStatus#ALREADY_RUNNING} rather than starting a second, overlapping run. The
+     * watchdog therefore fails safe — worst case is a stalled interval (the next run skips), never a
+     * double-run. Recovery from a genuine leak costs at most one job interval.
      *
      * <p>This is a liveness <em>floor</em>, not a run timeout. Because {@code retention_job_interval_hours}
      * is operator-tunable (1–168h) and a legitimate run on a large cluster with an elevated throttle can
@@ -231,6 +232,17 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
      * {@link #stuckGuardTimeoutMillis()}. Set when the guard is claimed and cleared by {@link #finishRun()}.
      */
     private final AtomicLong runStartMillis = new AtomicLong(Long.MIN_VALUE);
+
+    /**
+     * Set true when lock renewal is observed to have failed — {@code renewLock} returned null (the lock doc
+     * was gone / could not be advanced) or the renewal call errored. When true, cluster-wide exclusion may
+     * already have been lost: the lock could have expired and been re-acquired by another run, which now owns
+     * the lock doc under the same stable id. {@link #finishRun()} therefore SKIPS its {@code deleteLock} when
+     * this flag is set, so this run never deletes a lock doc that a different, still-live run may now hold.
+     * Reset to false when a new run freshly acquires the lock (before {@link #startLockRenewal()}). Volatile
+     * for cross-thread visibility between the renewal task (GENERIC pool) and the teardown path.
+     */
+    private volatile boolean lockLost = false;
 
     public static MemoryRetentionJobProcessor getInstance(ClusterService clusterService, Client client, ThreadPool threadPool) {
         if (instance != null) {
@@ -337,20 +349,24 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             return;
         }
 
-        // Per-node single-flight guard. Claimed here; released by finishRun() (success/terminal/error) or
-        // immediately below if the cluster-wide lock is already held elsewhere / cannot be acquired.
+        // Per-node single-flight guard. Claimed here; released by finishRun() (on the lock-owning paths) or
+        // by releaseGuard() on the pre-kickoff gating paths below (no lock owned yet).
         if (!isRunning.compareAndSet(false, true)) {
             // The guard is held. Normally that means a prior run is genuinely still in flight, so we
             // skip. But because the run is a fully async callback chain, an unhandled throw on a
             // thread we cannot wrap can leave the guard stuck true forever, silently disabling
             // retention until node restart. Detect that: if the holder acquired the guard longer ago
-            // than any run should plausibly last, assume it leaked and tear it down (finishRun() also
-            // stops lock renewal and releases the cluster-wide lock) so the NEXT invocation can start
-            // cleanly. We deliberately do NOT take over and start a run here: if this were a false
-            // positive (a genuinely long run), starting a second chain now — with no per-run ownership
-            // on the shared finishRun() teardown — could let the two runs race the guard and cascade
-            // into several concurrent runs. Clearing-and-skipping caps the worst case at one overlapping
-            // run of idempotent deletes on the following interval.
+            // than any run should plausibly last, assume it leaked and reclaim ONLY the per-node guard
+            // (releaseGuard()) so the NEXT invocation can start cleanly. We deliberately do NOT release
+            // the cluster-wide lock here and do NOT start a run: if this is a false positive (a
+            // genuinely long, still-live run), that run still owns its cluster-wide lock, so the next
+            // invocation hits the lock gate and reports ALREADY_RUNNING instead of overlapping it. That
+            // is exactly what keeps "at most one run, and only via the lock gate" true. Deleting the
+            // lock here (as a shared full teardown would) is precisely the bug: it would free a lock a
+            // live run still holds, let a second run acquire it, and the old run's eventual finishRun()
+            // would then tear down the NEW run — an unbounded cross-node cascade. releaseGuard() fails
+            // safe: the worst case of a false positive is a stalled interval (the next run skips),
+            // never a double-run.
             long heldSince = runStartMillis.get();
             long heldForMillis = System.currentTimeMillis() - heldSince;
             long stuckGuardTimeoutMillis = stuckGuardTimeoutMillis();
@@ -361,12 +377,13 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             }
             log
                 .error(
-                    "Memory retention job guard appears stuck (held for {} ms, exceeds {} ms); clearing it so the next "
-                        + "scheduled run can proceed. A prior run likely failed without releasing the guard.",
+                    "Memory retention job guard appears stuck (held for {} ms, exceeds {} ms); reclaiming the per-node "
+                        + "guard so the next scheduled run can proceed. The cluster-wide lock is left untouched: if a run "
+                        + "is still live it keeps its lock and the next invocation reports ALREADY_RUNNING.",
                     heldForMillis,
                     stuckGuardTimeoutMillis
                 );
-            finishRun();
+            releaseGuard();
             listener.onResponse(TriggerStatus.ALREADY_RUNNING);
             return;
         }
@@ -387,22 +404,29 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
             ls.acquireLockWithId(ML_JOBS_INDEX, LOCK_DURATION_SECONDS, MLJobType.MEMORY_RETENTION.name(), ActionListener.wrap(lock -> {
                 if (lock == null) {
                     // A run is already in progress cluster-wide (another node, or the scheduler, holds
-                    // the lock). Release the per-node guard (and start-time stamp) and report already-running.
-                    finishRun();
+                    // the lock). This run never acquired the lock, so reclaim ONLY the per-node guard (and
+                    // start-time stamp); it must NOT touch the cluster-wide lock, which belongs to the other
+                    // run. Report already-running.
+                    releaseGuard();
                     log.info("Memory retention job already running cluster-wide (lock held); skipping this invocation");
                     listener.onResponse(TriggerStatus.ALREADY_RUNNING);
                     return;
                 }
+                // Freshly acquired the cluster-wide lock; clear any stale renewal-loss flag from a prior run
+                // before starting renewal so this run's finishRun() will delete the lock it now owns.
+                lockLost = false;
                 currentLock.set(lock);
                 startLockRenewal();
                 kickOffPipeline(listener);
             }, e -> {
-                finishRun();
+                // No lock was acquired on this error path, so reclaim only the per-node guard.
+                releaseGuard();
                 log.error("Failed to acquire cluster-wide lock for memory retention job", e);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
-            finishRun();
+            // Lock acquisition threw synchronously; no lock was acquired, so reclaim only the per-node guard.
+            releaseGuard();
             log.error("Failed to acquire cluster-wide lock for memory retention job", e);
             listener.onFailure(e);
         }
@@ -469,20 +493,54 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                     currentLock.compareAndSet(lock, renewed);
                     log.debug("Renewed cluster-wide memory retention lock");
                 } else {
-                    log.warn("Cluster-wide memory retention lock renewal returned null; the lock may have expired");
+                    // Renewal returned null: the lock doc could not be advanced (likely expired and possibly
+                    // re-acquired by another run under the same stable id). Flag the loss so finishRun() will
+                    // NOT delete a lock doc that a different, still-live run may now own.
+                    lockLost = true;
+                    log
+                        .warn(
+                            "Cluster-wide memory retention lock renewal returned null; the lock may have expired and "
+                                + "cluster-wide exclusion may be lost. This run will not delete the lock doc on teardown."
+                        );
                 }
-            }, e -> log.error("Failed to renew cluster-wide memory retention lock", e)));
+            }, e -> {
+                // Renewal errored: treat as a possible loss of cluster-wide exclusion for the same reason as above.
+                lockLost = true;
+                log
+                    .error(
+                        "Failed to renew cluster-wide memory retention lock; cluster-wide exclusion may be lost. This "
+                            + "run will not delete the lock doc on teardown.",
+                        e
+                    );
+            }));
         } catch (Exception e) {
-            log.error("Failed to renew cluster-wide memory retention lock", e);
+            lockLost = true;
+            log
+                .error(
+                    "Failed to renew cluster-wide memory retention lock; cluster-wide exclusion may be lost. This run "
+                        + "will not delete the lock doc on teardown.",
+                    e
+                );
         }
     }
 
     /**
-     * Single teardown for a run: stops lock renewal, releases the cluster-wide lock (best-effort; on failure
-     * the lock simply expires after its TTL), and releases the per-node guard. Idempotent for the lock/renewal
-     * (null-safe getAndSet), so the "already released" case is harmless. Replaces the former {@code onJobComplete()}.
+     * FULL teardown for a run that OWNS the cluster-wide lock: stops lock renewal, releases the cluster-wide lock
+     * (best-effort; on failure the lock simply expires after its TTL), then reclaims the per-node guard via
+     * {@link #releaseGuard()}. Idempotent for the lock/renewal (null-safe getAndSet), so the "already released"
+     * case is harmless. Replaces the former {@code onJobComplete()}.
      *
-     * <p>The lock is dropped via {@link LockService#deleteLock(String, ActionListener)} keyed on the stable
+     * <p><b>Call only from lock-owning paths.</b> This is the full teardown and is invoked ONLY where the run has
+     * confirmed it acquired the cluster-wide lock — {@link #kickOffPipeline(ActionListener)}'s catch and every
+     * pipeline terminal/error exit downstream of a successful acquisition. The pre-kickoff gating paths (stuck-guard
+     * watchdog, lock-already-held, lock-acquire failure) must instead call {@link #releaseGuard()}, because deleting
+     * a lock those paths do not own could free a lock a still-live run holds and cascade into overlapping runs.
+     *
+     * <p><b>Renewal-loss guard.</b> If {@link #lockLost} is set (renewal failed, so the lock may have expired and
+     * been re-acquired elsewhere under the same stable id), the {@code deleteLock} is SKIPPED — this run must not
+     * delete a lock doc a different, still-live run may now own; the doc (if still ours) expires after its TTL.
+     *
+     * <p>Otherwise the lock is dropped via {@link LockService#deleteLock(String, ActionListener)} keyed on the stable
      * lock doc id, NOT via {@code release(lockModel, ...)}. {@code release} issues a seqNo/primaryTerm-gated
      * update, so a renewal still in flight when we tear down (its {@code cancel()} cannot stop an
      * already-dispatched call) would advance the doc's seqNo and make a gated release fail — leaving the lock
@@ -500,7 +558,17 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         }
         LockModel lock = currentLock.getAndSet(null);
         LockService ls = lockService;
-        if (lock != null && ls != null) {
+        if (lockLost) {
+            // Renewal was observed to have failed (see renewCurrentLock): the lock doc may have expired and been
+            // re-acquired by another run under the same stable id. Deleting it now could free a lock a DIFFERENT,
+            // still-live run owns, letting a third run start and cascade. Skip the delete and just fall through to
+            // releaseGuard(); if the lock doc really is still ours it simply expires after its TTL.
+            log
+                .warn(
+                    "Skipping cluster-wide memory retention lock deletion because renewal was lost; the lock doc (if still "
+                        + "present) will expire after its TTL rather than risk deleting a lock another run now owns."
+                );
+        } else if (lock != null && ls != null) {
             String lockId = LockModel.generateLockId(lock.getJobIndexName(), lock.getJobId());
             try {
                 ls
@@ -516,11 +584,22 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 log.error("Failed to release cluster-wide memory retention lock; it will expire after its TTL", e);
             }
         }
-        // Clear the watchdog start-time stamp before releasing the guard so a subsequent invocation never sees a
-        // stale timestamp against a freshly-cleared guard.
+        releaseGuard();
+        log.info("Memory retention job completed");
+    }
+
+    /**
+     * Reclaims ONLY the per-node single-flight guard: clears the watchdog start-time stamp and then releases
+     * {@link #isRunning}. It does NOT cancel lock renewal and NEVER touches the cluster-wide lock, so it is safe
+     * to call from the pre-kickoff gating paths (stuck-guard watchdog, lock-already-held, lock-acquire failure)
+     * where this node does not own — and may be racing a still-live holder of — the cluster-wide lock. The
+     * start-time stamp is cleared BEFORE the guard so a subsequent invocation never sees a stale timestamp
+     * against a freshly-cleared guard. This is the fail-safe half of the Option-C split (see {@link #finishRun()}
+     * for the full teardown used only by lock-owning paths).
+     */
+    private void releaseGuard() {
         runStartMillis.set(Long.MIN_VALUE);
         isRunning.set(false);
-        log.info("Memory retention job completed");
     }
 
     private void resolveContainersWithPolicies(Object[] searchAfterValues) {
