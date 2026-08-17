@@ -353,6 +353,166 @@ public class TemplateStructureAnalyzerTests {
         assertNull(TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
     }
 
+    @Test
+    public void classify_rangeGtBound() {
+        checkSingle(
+            "number",
+            mk -> map("range", map("price", map("gt", mk))),
+            TemplateStructureAnalyzer.ROLE_RANGE_BOUND,
+            "Lower bound (>) on price."
+        );
+    }
+
+    @Test
+    public void classify_rangeLtBound() {
+        checkSingle(
+            "number",
+            mk -> map("range", map("price", map("lt", mk))),
+            TemplateStructureAnalyzer.ROLE_RANGE_BOUND,
+            "Upper bound (<) on price."
+        );
+    }
+
+    @Test
+    public void classify_wildcardIsPattern() {
+        checkSingle(
+            "string",
+            mk -> map("wildcard", map("code", mk)),
+            TemplateStructureAnalyzer.ROLE_PATTERN,
+            "Pattern to match against the code field."
+        );
+    }
+
+    @Test
+    public void classify_regexpIsPattern() {
+        checkSingle(
+            "string",
+            mk -> map("regexp", map("code", mk)),
+            TemplateStructureAnalyzer.ROLE_PATTERN,
+            "Pattern to match against the code field."
+        );
+    }
+
+    @Test
+    public void classify_matchBoolPrefixIsFullText() {
+        checkSingle(
+            "string",
+            mk -> map("match_bool_prefix", map("title", mk)),
+            TemplateStructureAnalyzer.ROLE_FULL_TEXT,
+            "Full-text query matched against the title field."
+        );
+    }
+
+    @Test
+    public void classify_matchPhrasePrefixIsPhrase() {
+        checkSingle(
+            "string",
+            mk -> map("match_phrase_prefix", map("title", mk)),
+            TemplateStructureAnalyzer.ROLE_PHRASE,
+            "Exact phrase to match in the title field."
+        );
+    }
+
+    @Test
+    public void classify_scoreModeRole() {
+        checkSingle(
+            "string",
+            mk -> map("function_score", map("score_mode", mk)),
+            TemplateStructureAnalyzer.ROLE_SCORE_MODE,
+            "How to combine the scores of matching clauses."
+        );
+    }
+
+    @Test
+    public void classify_boostModeRole() {
+        checkSingle(
+            "string",
+            mk -> map("function_score", map("boost_mode", mk)),
+            TemplateStructureAnalyzer.ROLE_BOOST_MODE,
+            "How to combine the query score with the function score."
+        );
+    }
+
+    @Test
+    public void locate_firstOccurrenceWins_whenParamAppearsTwice() {
+        // A param used in two clauses is recorded at its first occurrence.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("q", spec("string", true));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Object mk = markers.renderParams().get("q");
+        Map<String, Object> rendered = map(
+            "query",
+            map("bool", map("must", list(map("match", map("title", mk)), map("match", map("body", mk)))))
+        );
+
+        TemplateStructureAnalyzer.Facts f = TemplateStructureAnalyzer
+            .classify(TemplateStructureAnalyzer.locate(rendered, markers).get("q"), rendered);
+        assertEquals(TemplateStructureAnalyzer.ROLE_FULL_TEXT, f.role);
+        assertEquals("Full-text query matched against the title field.", TemplateStructureAnalyzer.describe(f, null));
+    }
+
+    @Test
+    public void describeTemplate_filterAndPaginated() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("from", spec("number", false));
+        schema.put("category", spec("string", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rp = markers.renderParams();
+        Map<String, Object> rendered = map(
+            "from",
+            rp.get("from"),
+            "query",
+            map("bool", map("filter", list(map("term", map("category", rp.get("category"))))))
+        );
+
+        assertEquals("Filters by category; paginated.", TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
+    @Test
+    public void describeTemplate_patternAndFuzzyClauses() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("code", spec("string", false));
+        schema.put("name", spec("string", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rp = markers.renderParams();
+        Map<String, Object> rendered = map(
+            "query",
+            map("bool", map("should", list(map("prefix", map("code", rp.get("code"))), map("fuzzy", map("name", rp.get("name"))))))
+        );
+
+        assertEquals(
+            "Pattern matching on code; fuzzy matching on name.",
+            TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered)
+        );
+    }
+
+    @Test
+    public void describeTemplate_multiFieldFullText() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("q", spec("string", true));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = map(
+            "query",
+            map("multi_match", map("query", markers.renderParams().get("q"), "fields", list("title", "body")))
+        );
+
+        assertEquals("Full-text search over title and body.", TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
+    @Test
+    public void describeTemplate_fullTextWithNoRecoverableField() {
+        // The multi_match fields are themselves params, so no field name is recovered and the
+        // clause is described without one.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("q", spec("string", true));
+        schema.put("f1", spec("string", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rp = markers.renderParams();
+        Map<String, Object> rendered = map("query", map("multi_match", map("query", rp.get("q"), "fields", list(rp.get("f1")))));
+
+        assertEquals("Full-text search.", TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
     /** Builds a one-param schema, renders it via {@code renderWith}, then classifies and describes it. */
     private static void checkSingle(
         String type,
