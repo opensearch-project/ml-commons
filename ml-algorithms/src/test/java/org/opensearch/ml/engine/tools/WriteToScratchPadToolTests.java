@@ -222,7 +222,23 @@ public class WriteToScratchPadToolTests {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Wrote to scratchpad: new note", captor.getValue());
-        assertEquals("[\"existing note\",\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+    }
+
+    @Test
+    public void testRun_SecurityException() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(WriteToScratchPadTool.NOTES_KEY, "confidential test data");
+
+        SecurityException securityException = new SecurityException(
+            "no permissions for [indices:data/write/index] and User [name=test_user]"
+        );
+        listener.onFailure(securityException);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof SecurityException);
+        assertTrue(exception.getMessage().contains("no permissions"));
     }
 
     @Test

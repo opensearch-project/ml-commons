@@ -202,4 +202,26 @@ public class MLToolExecutorTest {
         Output output = outputCaptor.getValue();
         Assert.assertTrue(output instanceof ModelTensorOutput);
     }
+
+    @Test
+    public void test_ToolExecutionFailsWithoutProperPermission() {
+        when(toolMLInput.getToolName()).thenReturn("TestTool");
+        when(toolMLInput.getInputDataset()).thenReturn(inputDataSet);
+        when(inputDataSet.getParameters()).thenReturn(parameters);
+        when(toolFactory.create(any())).thenReturn(tool);
+        when(tool.validate(parameters)).thenReturn(true);
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(new SecurityException("no permissions for [indices:data/read/search] and User [name=test_user]"));
+            return null;
+        }).when(tool).run(Mockito.eq(parameters), any());
+
+        mlToolExecutor.execute(toolMLInput, actionListener);
+
+        Mockito.verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof SecurityException);
+        Assert.assertTrue(exception.getMessage().contains("no permissions"));
+    }
 }
