@@ -15,22 +15,23 @@ import java.util.Set;
 
 /**
  * Recovers each param's role from where it lands in the rendered query, so the derived
- * schema can carry a grounded description and a fixed-value enum instead of a bare name.
+ * schema can carry a description and a fixed-value enum instead of a bare name.
  *
  * <p>{@link MustacheTemplateAnalyzer} sees only the {@code {{tags}}} and cannot tell what
- * a param is <em>for</em>. This analyzer closes that gap without an LLM: give every param a
- * unique marker value ({@link #buildMarkers}), let the cluster render the body, then locate
- * each marker in the parsed JSON ({@link #locate}). A marker's key-path names the enclosing
- * clause and the field it targets, so {@code {{query}}} landing in {@code match.title}
- * becomes "Full-text query matched against the title field" ({@link #classify},
- * {@link #describe}), and a slot with a closed OpenSearch vocabulary (a sort order, a match
- * operator) becomes an {@code enum} ({@link #vocabEnum}).
+ * a param is used for. This analyzer derives the role without an LLM: each param is assigned
+ * a unique marker value ({@link #buildMarkers}), the cluster renders the body, and each
+ * marker is located in the parsed JSON ({@link #locate}). A marker's key-path names the
+ * enclosing clause and the field it targets, so {@code {{query}}} landing in
+ * {@code match.title} becomes "Full-text query matched against the title field"
+ * ({@link #classify}, {@link #describe}), and a slot with a closed OpenSearch vocabulary
+ * (a sort order, a match operator) becomes an {@code enum} ({@link #vocabEnum}).
  *
- * <p>The clause table below is OpenSearch DSL grammar, not per-template logic: every template
- * reuses it. A param whose marker cannot be located, or whose clause is not in the table,
- * yields no role and keeps the base derivation, so an unrecognized body degrades rather than
- * fails. The class is pure (no cluster I/O) so the caller owns rendering and the tables are
- * unit-testable on hand-built JSON.
+ * <p>The clause table below encodes OpenSearch DSL grammar and is shared by every template
+ * rather than being per-template logic. A param whose marker cannot be located, or whose
+ * clause is not in the table, yields no role and keeps the base derivation, so an
+ * unrecognized body falls back to the base schema rather than failing. The class is pure
+ * (no cluster I/O) so the caller owns rendering and the tables are unit-testable on
+ * hand-built JSON.
  */
 public final class TemplateStructureAnalyzer {
 
@@ -374,10 +375,10 @@ public final class TemplateStructureAnalyzer {
 
     /**
      * Assemble a one-line, template-level description from the params' recovered roles, for
-     * multi-template selection. Deterministic and terse: capabilities are grouped by clause
-     * (full-text fields, filters, ranges, sort, paging) and joined with semicolons -- a fixed
-     * set of fragments, not a generated sentence. Returns null when no role is recovered, so
-     * an unrecognized body leaves the description unset rather than carrying a misleading one.
+     * multi-template selection. Capabilities are grouped by clause (full-text fields, filters,
+     * ranges, sort, paging) and joined with semicolons into a fixed set of fragments. Returns
+     * null when no role is recovered, so an unrecognized body leaves the description unset
+     * rather than carrying an incorrect one.
      */
     static String describeTemplate(Map<String, Object> schema, MarkerSet markers, Object renderedRoot) {
         Map<String, Located> located = locate(renderedRoot, markers);
@@ -552,7 +553,7 @@ public final class TemplateStructureAnalyzer {
         return node;
     }
 
-    /** Drop a field's boost suffix ({@code title^2} -> {@code title}) for a clean description. */
+    /** Drop a field's boost suffix ({@code title^2} -> {@code title}) from the description. */
     private static String stripBoost(String field) {
         int caret = field.indexOf('^');
         return caret >= 0 ? field.substring(0, caret) : field;

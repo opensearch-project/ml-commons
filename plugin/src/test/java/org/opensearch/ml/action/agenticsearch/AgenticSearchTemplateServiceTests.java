@@ -335,7 +335,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void applyStructuralEnrichment_boolAndArrayGetGenericDescriptions() {
         // Array and boolean params carry no locatable clause, so they get a generic
-        // type-only description (their only guidance channel to the model).
+        // type-only description.
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("flag", specMap("boolean", false, ""));
         schema.put("extra", specMap("array", false, ""));
@@ -368,7 +368,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void register_enrichmentRuns_addsDescriptionFromRender() {
         // End-to-end through register: the marker render locates lex_query in a match on
-        // title, so the stored schema gets a grounded full-text description.
+        // title, so the stored schema gets a full-text description.
         stubStoredScript(TEMPLATE_BODY);
         stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
         stubRenderEchoesMarkerIntoMatch();
@@ -385,7 +385,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
 
     @Test
     public void register_enrichmentRenderFails_stillStoresBaseSchema() {
-        // If enrichment's marker render is not parseable, enrichment degrades and the base
+        // If enrichment's marker render is not parseable, enrichment is skipped and the base
         // derived schema is stored; registration must still succeed (never fail on enrichment).
         stubStoredScript(TEMPLATE_BODY);
         stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));

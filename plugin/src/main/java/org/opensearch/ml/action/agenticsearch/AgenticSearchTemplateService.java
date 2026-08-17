@@ -143,7 +143,7 @@ public class AgenticSearchTemplateService {
                             // mapping for field-name enums (a param whose name is *_field
                             // or that targets a field can only choose an existing field).
                             paramSchema = deriveSchema(body, mappingFields);
-                            // Enrich the derived schema with grounded descriptions and
+                            // Enrich the derived schema with descriptions and
                             // fixed-value enums recovered from where each param renders, and
                             // derive a template-level description for multi-template selection.
                             // Best-effort: on any failure the base derivation stands.
@@ -237,7 +237,7 @@ public class AgenticSearchTemplateService {
     }
 
     /**
-     * Enrich a derived schema in place with a grounded description and a fixed-value enum per
+     * Enrich a derived schema in place with a description and a fixed-value enum per
      * param, recovered from where each param renders in the body (see
      * {@link TemplateStructureAnalyzer}). Best-effort: any failure, or a body that will not
      * render to parseable JSON, leaves the base derivation untouched. Only writes an empty

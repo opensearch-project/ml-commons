@@ -223,7 +223,7 @@ public class TemplateStructureAnalyzerTests {
 
     @Test
     public void classify_multiMatchParameterizedFields_doesNotLeakMarker() {
-        // When the multi_match fields themselves are params, their markers must NOT surface
+        // When the multi_match fields themselves are params, their markers must not surface
         // as field names in the description.
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("q", spec("string", true));
@@ -353,7 +353,7 @@ public class TemplateStructureAnalyzerTests {
         assertNull(TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
     }
 
-    /** Build a one-param schema, render it via {@code renderWith}, then classify + describe. */
+    /** Builds a one-param schema, renders it via {@code renderWith}, then classifies and describes it. */
     private static void checkSingle(
         String type,
         Function<Object, Map<String, Object>> renderWith,
