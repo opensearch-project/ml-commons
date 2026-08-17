@@ -336,21 +336,33 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
             // resumes the drain; whichever arrives first simply hands off. A synchronous callback (mocked client)
             // arrives first, so the loop below observes handoff already set and continues iteratively (no recursion).
             final java.util.concurrent.atomic.AtomicBoolean handoff = new java.util.concurrent.atomic.AtomicBoolean(false);
-            processor.dryRunContainer(container.getConfiguration(), containerId, baseline, ActionListener.wrap(result -> {
-                results.add(result);
-                index[0]++;
-                if (!handoff.compareAndSet(false, true)) {
-                    // Loop already yielded (async completion): this callback is the second arriver, resume draining.
-                    drainPage(processor, user, tenantId, hits, index, nextPageSort, results, skipped, truncated, listener);
-                }
-            }, e -> {
-                log.warn("Skipping container {} in retention dry-run: evaluation failed", containerId, e);
+            try {
+                processor.dryRunContainer(container.getConfiguration(), containerId, baseline, ActionListener.wrap(result -> {
+                    results.add(result);
+                    index[0]++;
+                    if (!handoff.compareAndSet(false, true)) {
+                        // Loop already yielded (async completion): this callback is the second arriver, resume draining.
+                        drainPage(processor, user, tenantId, hits, index, nextPageSort, results, skipped, truncated, listener);
+                    }
+                }, e -> {
+                    log.warn("Skipping container {} in retention dry-run: evaluation failed", containerId, e);
+                    skipped[0]++;
+                    index[0]++;
+                    if (!handoff.compareAndSet(false, true)) {
+                        drainPage(processor, user, tenantId, hits, index, nextPageSort, results, skipped, truncated, listener);
+                    }
+                }));
+            } catch (Exception e) {
+                // dryRunContainer threw synchronously before ever invoking the listener (e.g. a client that rejects
+                // the dispatch inline). Mirror the async onFailure handler so the container is skipped and the drain
+                // still advances, instead of leaking the exception up and aborting the whole page.
+                log.warn("Skipping container {} in retention dry-run: dispatch failed", containerId, e);
                 skipped[0]++;
                 index[0]++;
                 if (!handoff.compareAndSet(false, true)) {
                     drainPage(processor, user, tenantId, hits, index, nextPageSort, results, skipped, truncated, listener);
                 }
-            }));
+            }
             if (handoff.compareAndSet(false, true)) {
                 // Callback has not fired yet (async): yield; the callback will resume the drain when it arrives.
                 return;

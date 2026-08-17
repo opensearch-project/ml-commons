@@ -38,6 +38,9 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Inject;
+import org.opensearch.common.lifecycle.AbstractLifecycleComponent;
+import org.opensearch.common.lifecycle.LifecycleComponent;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.IndexScopedSettings;
 import org.opensearch.common.settings.Setting;
@@ -59,6 +62,7 @@ import org.opensearch.indices.analysis.PreBuiltCacheFactory;
 import org.opensearch.jobscheduler.spi.JobSchedulerExtension;
 import org.opensearch.jobscheduler.spi.ScheduledJobParser;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
+import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightConfigTransportAction;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightTransportAction;
 import org.opensearch.ml.action.IndexInsight.PutIndexInsightConfigTransportAction;
@@ -109,6 +113,7 @@ import org.opensearch.ml.action.mcpserver.TransportMcpToolsRemoveAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsUpdateAction;
 import org.opensearch.ml.action.memorycontainer.TransportCreateMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.TransportDeleteMemoryContainerAction;
+import org.opensearch.ml.action.memorycontainer.TransportExecuteMemoryRetentionAction;
 import org.opensearch.ml.action.memorycontainer.TransportGetMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.TransportMemoryRetentionDryRunAction;
 import org.opensearch.ml.action.memorycontainer.TransportSearchMemoryContainerAction;
@@ -221,6 +226,7 @@ import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAct
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
+import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerSearchAction;
@@ -301,6 +307,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobRunner;
+import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationTransportAction;
@@ -356,6 +363,7 @@ import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
+import org.opensearch.ml.rest.RestMLExecuteMemoryRetentionAction;
 import org.opensearch.ml.rest.RestMLExecuteStreamAction;
 import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetAgenticSearchTemplateAction;
@@ -610,6 +618,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLUpdateMemoryContainerAction.INSTANCE, TransportUpdateMemoryContainerAction.class),
                 new ActionHandler<>(MLMemoryContainerGetAction.INSTANCE, TransportGetMemoryContainerAction.class),
                 new ActionHandler<>(MLMemoryRetentionDryRunAction.INSTANCE, TransportMemoryRetentionDryRunAction.class),
+                new ActionHandler<>(MLExecuteMemoryRetentionAction.INSTANCE, TransportExecuteMemoryRetentionAction.class),
                 new ActionHandler<>(MLMemoryContainerSearchAction.INSTANCE, TransportSearchMemoryContainerAction.class),
                 new ActionHandler<>(MLMemoryContainerDeleteAction.INSTANCE, TransportDeleteMemoryContainerAction.class),
                 new ActionHandler<>(MLAddMemoriesAction.INSTANCE, TransportAddMemoriesAction.class),
@@ -1117,6 +1126,9 @@ public class MachineLearningPlugin extends Plugin
         RestMLMemoryRetentionDryRunAction restMLMemoryRetentionDryRunAction = new RestMLMemoryRetentionDryRunAction(
             mlFeatureEnabledSetting
         );
+        RestMLExecuteMemoryRetentionAction restMLExecuteMemoryRetentionAction = new RestMLExecuteMemoryRetentionAction(
+            mlFeatureEnabledSetting
+        );
         RestMLSearchMemoryContainerAction restMLSearchMemoryContainerAction = new RestMLSearchMemoryContainerAction(
             mlFeatureEnabledSetting
         );
@@ -1236,6 +1248,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLUpdateMemoryContainerAction,
                 restMLGetMemoryContainerAction,
                 restMLMemoryRetentionDryRunAction,
+                restMLExecuteMemoryRetentionAction,
                 restMLSearchMemoryContainerAction,
                 restMLDeleteMemoryContainerAction,
                 restMLAddMemoriesAction,
@@ -1704,5 +1717,48 @@ public class MachineLearningPlugin extends Plugin
     @Override
     public ScheduledJobParser getJobParser() {
         return (parser, id, jobDocVersion) -> MLJobParameter.parse(parser);
+    }
+
+    @Override
+    public Collection<Class<? extends LifecycleComponent>> getGuiceServiceClasses() {
+        // Registers the holder so Guice constructs it and injects the JobScheduler LockService. The
+        // LockService impl lives in the job-scheduler plugin and is only reachable at runtime via this
+        // node-level binding (bound by JobSchedulerPluginModule); ml-commons compiles against the SPI
+        // interface only. This is the upstream-sanctioned way (used by security-analytics) for a guest
+        // plugin to obtain a LockService for use outside a scheduled job run.
+        return Collections.singletonList(GuiceHolder.class);
+    }
+
+    /**
+     * Guice service holder that captures the node's shared {@link LockService} and hands it to
+     * {@link MemoryRetentionJobProcessor}, so the on-demand retention trigger can acquire the SAME cluster-wide
+     * lock the scheduled run uses. Injection is the only supported way to reach the LockService implementation
+     * (which is provided at runtime by the job-scheduler plugin) from ml-commons code that is not itself a
+     * scheduled-job callback.
+     *
+     * <p>The LockService is wired via OPTIONAL METHOD injection, NOT constructor injection: a constructor
+     * parameter makes LockService a hard Guice binding, so on any harness where the job-scheduler plugin is not
+     * installed (e.g. integ-test clusters, some unit harnesses) node startup fails with an unsatisfied binding.
+     * An optional setter lets Guice skip the injection when no LockService binding exists, leaving the processor
+     * on its per-JVM {@link MemoryRetentionJobProcessor#isRunning} guard only. When job-scheduler IS present the
+     * setter fires at node start and the on-demand path gets the shared cluster-wide lock.
+     */
+    public static class GuiceHolder extends AbstractLifecycleComponent {
+
+        public GuiceHolder() {}
+
+        @Inject(optional = true)
+        public void setLockService(final LockService lockService) {
+            MemoryRetentionJobProcessor.setLockService(lockService);
+        }
+
+        @Override
+        protected void doStart() {}
+
+        @Override
+        protected void doStop() {}
+
+        @Override
+        protected void doClose() {}
     }
 }

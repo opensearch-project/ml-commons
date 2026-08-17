@@ -182,24 +182,19 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 // TODO: use LLM to summarize first user message
                 ActionListener<String> summaryListener = ActionListener.wrap(summary -> {
                     Instant now = Instant.now();
-                    indexRequest
-                        .source(
-                            Map
-                                .of(
-                                    OWNER_ID_FIELD,
-                                    input.getOwnerId(),
-                                    MEMORY_CONTAINER_ID_FIELD,
-                                    input.getMemoryContainerId(),
-                                    SUMMARY_FIELD,
-                                    summary,
-                                    NAMESPACE_FIELD,
-                                    input.getNamespace(),
-                                    CREATED_TIME_FIELD,
-                                    now.toEpochMilli(),
-                                    LAST_UPDATED_TIME_FIELD,
-                                    now.toEpochMilli()
-                                )
-                        );
+                    // Build the source with a mutable map: owner_id is absent when the security plugin is
+                    // disabled (no authenticated user), and Map.of() rejects null values. This mirrors the
+                    // null-safe owner_id handling in processAndIndexMemory below.
+                    Map<String, Object> sessionSource = new HashMap<>();
+                    if (input.getOwnerId() != null) {
+                        sessionSource.put(OWNER_ID_FIELD, input.getOwnerId());
+                    }
+                    sessionSource.put(MEMORY_CONTAINER_ID_FIELD, input.getMemoryContainerId());
+                    sessionSource.put(SUMMARY_FIELD, summary);
+                    sessionSource.put(NAMESPACE_FIELD, input.getNamespace());
+                    sessionSource.put(CREATED_TIME_FIELD, now.toEpochMilli());
+                    sessionSource.put(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+                    indexRequest.source(sessionSource);
                     indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                         input.getNamespace().put(SESSION_ID_FIELD, r.getId());

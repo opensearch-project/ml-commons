@@ -95,7 +95,13 @@ public class MLMemoryRetentionDryRunResponse extends ActionResponse implements T
             builder.endObject();
             return builder;
         }
-        // Single-container dry-run: render the sole result as a bare object.
+        // Single-container dry-run: render the sole result as a bare object. Guard against an empty result list so a
+        // container that produced no evaluation renders "{}" instead of throwing IndexOutOfBoundsException.
+        if (results == null || results.isEmpty()) {
+            builder.startObject();
+            builder.endObject();
+            return builder;
+        }
         return results.get(0).toXContent(builder, params);
     }
 

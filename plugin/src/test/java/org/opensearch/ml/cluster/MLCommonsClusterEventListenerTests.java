@@ -185,10 +185,34 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).indexMemoryRetentionJob(anyInt());
     }
 
-    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenMultiTenancyEnabled() {
+    public void testClusterChanged_MemoryRetentionJobStarted_WhenMultiTenancyEnabled() {
+        // RFC #4859: the retention job is a single cluster-wide, system-context janitor with per-container tenant
+        // isolation, so it must be SCHEDULED even when multi-tenancy is enabled. Multi-tenancy no longer gates it.
         setupClusterState(false, createDataNode("n1", Version.CURRENT));
         when(clusterService.getSettings())
             .thenReturn(org.opensearch.common.settings.Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager).indexMemoryRetentionJob(24);
+    }
+
+    public void testClusterChanged_MemoryRetentionJobNotStarted_WhenRemoteMetadataStoreConfigured() {
+        // RFC #4859: with a remote metadata store (e.g. AWS OpenSearch Serverless / DynamoDB), the container registry
+        // is not in the local cluster, so the native-client retention job cannot enumerate it. It must NOT be scheduled.
+        // Local-metadata multi-tenancy remains supported (see testClusterChanged_MemoryRetentionJobStarted_WhenMultiTenancyEnabled).
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
+        when(clusterService.getSettings())
+            .thenReturn(
+                org.opensearch.common.settings.Settings
+                    .builder()
+                    .put("plugins.ml_commons.multi_tenancy_enabled", true)
+                    .put("plugins.ml_commons.remote_metadata_type", "AWSOpenSearchService")
+                    .build()
+            );
 
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
@@ -246,9 +270,12 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     public void testClusterChanged_MemoryRetentionReconcile_HonorsPersistedIntervalFromMetadata() {
         DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerState(dataNode, false, true);
-        // Node bootstrap (opensearch.yml) has nothing; the interval was set via the cluster-settings API -> metadata.
+        // Node bootstrap (opensearch.yml) has nothing; the interval was set via `PUT _cluster/settings persistent:`,
+        // which lands in metadata.persistentSettings(). Fix #1 overlays those on top of node settings so dynamic
+        // values win — this asserts the reconcile reads the persisted value (1), not the default (24).
         when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
-        when(metadata.settings()).thenReturn(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 1).build());
+        when(metadata.persistentSettings())
+            .thenReturn(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 1).build());
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
 
@@ -355,7 +382,10 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
     }
 
-    public void testSettingsUpdateConsumer_SkippedWhenMultiTenancyEnabled() {
+    public void testSettingsUpdateConsumer_UpsertsWhenMultiTenancyEnabled() {
+        // RFC #4859: multi-tenancy no longer gates the retention job, so a live interval change on the elected
+        // cluster manager must still upsert the shared job doc even when multi-tenancy is enabled. All nodes on
+        // CURRENT so the rolling-upgrade guard (jobsIndexReadyForWrite) passes and multi-tenancy is the only variable.
         DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
         setupElectedClusterManagerConsumerState(dataNode);
         when(clusterService.getSettings()).thenReturn(Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build());
@@ -364,7 +394,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
 
         clusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 2).build());
 
-        verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
+        verify(mlTaskManager).upsertMemoryRetentionJob(2);
     }
 
     public void testSettingsUpdateConsumer_SkippedWhenMixedVersionCluster() {
@@ -433,6 +463,8 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         when(clusterService.state()).thenReturn(clusterState);
         when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(hasMLJobsIndex);
         when(metadata.settings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.persistentSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.transientSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
         setupStateReady();
     }
 
@@ -451,6 +483,8 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         when(clusterService.state()).thenReturn(clusterState);
         when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(hasMLJobsIndex);
         when(metadata.settings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.persistentSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
+        when(metadata.transientSettings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
         setupStateReady();
     }
 
