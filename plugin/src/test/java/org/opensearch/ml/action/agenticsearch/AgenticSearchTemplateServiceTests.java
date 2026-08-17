@@ -401,6 +401,41 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         assertEquals("", descOf(captor.getValue().getParamSchema(), "lex_query"));
     }
 
+    @Test
+    public void register_derivesTemplateDescriptionWhenCallerOmitsIt() {
+        // No caller description: the derive path assembles a template-level one from the
+        // body's recovered clauses (here, a full-text match on title).
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderEchoesMarkerIntoMatch();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", null, null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Full-text search over title.", captor.getValue().getDescription());
+    }
+
+    @Test
+    public void register_keepsCallerDescriptionOverDerived() {
+        // A caller-supplied description always wins over the derived one.
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderEchoesMarkerIntoMatch();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "Caller-authored description.", null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Caller-authored description.", captor.getValue().getDescription());
+    }
+
     // ---- update: optimistic concurrency ------------------------------------
 
     @Test

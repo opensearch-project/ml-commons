@@ -7,9 +7,11 @@ package org.opensearch.ml.action.agenticsearch;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Recovers each param's role from where it lands in the rendered query, so the derived
@@ -368,6 +370,98 @@ public final class TemplateStructureAnalyzer {
             base = base + " Defaults to " + renderDefault(defaultValue) + " if unset.";
         }
         return base;
+    }
+
+    /**
+     * Assemble a one-line, template-level description from the params' recovered roles, for
+     * multi-template selection. Deterministic and terse: capabilities are grouped by clause
+     * (full-text fields, filters, ranges, sort, paging) and joined with semicolons -- a fixed
+     * set of fragments, not a generated sentence. Returns null when no role is recovered, so
+     * an unrecognized body leaves the description unset rather than carrying a misleading one.
+     */
+    static String describeTemplate(Map<String, Object> schema, MarkerSet markers, Object renderedRoot) {
+        Map<String, Located> located = locate(renderedRoot, markers);
+        Set<String> fullText = new LinkedHashSet<>();
+        Set<String> pattern = new LinkedHashSet<>();
+        Set<String> fuzzy = new LinkedHashSet<>();
+        Set<String> filters = new LinkedHashSet<>();
+        Set<String> ranges = new LinkedHashSet<>();
+        boolean fullTextNoField = false;
+        boolean sortable = false;
+        boolean paged = false;
+
+        for (String param : schema.keySet()) {
+            Located loc = located.get(param);
+            if (loc == null) {
+                continue;
+            }
+            Facts facts = classify(loc, renderedRoot);
+            if (facts.role == null) {
+                continue;
+            }
+            switch (facts.role) {
+                case ROLE_FULL_TEXT:
+                case ROLE_PHRASE:
+                    if (facts.fields.isEmpty()) {
+                        fullTextNoField = true;
+                    } else {
+                        fullText.addAll(facts.fields);
+                    }
+                    break;
+                case ROLE_PATTERN:
+                    pattern.addAll(facts.fields);
+                    break;
+                case ROLE_FUZZY:
+                    fuzzy.addAll(facts.fields);
+                    break;
+                case ROLE_FILTER_TERM:
+                case ROLE_FILTER_TERMS:
+                    filters.addAll(facts.fields);
+                    break;
+                case ROLE_RANGE_BOUND:
+                    ranges.addAll(facts.fields);
+                    break;
+                case ROLE_SORT_ORDER:
+                case ROLE_SORT_FIELD:
+                    sortable = true;
+                    break;
+                case ROLE_RESULT_OFFSET:
+                    paged = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        List<String> clauses = new ArrayList<>();
+        if (!fullText.isEmpty()) {
+            clauses.add("full-text search over " + joinFields(new ArrayList<>(fullText)));
+        } else if (fullTextNoField) {
+            clauses.add("full-text search");
+        }
+        if (!pattern.isEmpty()) {
+            clauses.add("pattern matching on " + joinFields(new ArrayList<>(pattern)));
+        }
+        if (!fuzzy.isEmpty()) {
+            clauses.add("fuzzy matching on " + joinFields(new ArrayList<>(fuzzy)));
+        }
+        if (!filters.isEmpty()) {
+            clauses.add("filters by " + joinFields(new ArrayList<>(filters)));
+        }
+        if (!ranges.isEmpty()) {
+            clauses.add("range filters on " + joinFields(new ArrayList<>(ranges)));
+        }
+        if (sortable) {
+            clauses.add("sortable");
+        }
+        if (paged) {
+            clauses.add("paginated");
+        }
+        if (clauses.isEmpty()) {
+            return null;
+        }
+        String joined = String.join("; ", clauses);
+        return Character.toUpperCase(joined.charAt(0)) + joined.substring(1) + ".";
     }
 
     /** Resolve a scalar value at a key-path in a parsed JSON tree, or null if absent. */

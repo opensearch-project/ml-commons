@@ -103,7 +103,8 @@ public class AgenticSearchTemplateService {
      *
      * @param templateId the {@code _scripts} template name (also the doc id)
      * @param index the target index (for field-name enums)
-     * @param description optional human description
+     * @param description optional human description; when null, the derive path assembles a
+     *     template-level one from the body's recovered clauses (used for multi-template selection)
      * @param providedSchema a caller-supplied param-schema. When non-null it is validated
      *     and pre-flight rendered against the body, then stored without derivation. When
      *     null the schema is derived from the body and index mapping.
@@ -129,6 +130,7 @@ public class AgenticSearchTemplateService {
                 fetchFlattenedMapping(index, ActionListener.wrap(mappingFields -> {
                     try {
                         Map<String, Object> paramSchema;
+                        String derivedDescription = null;
                         if (providedSchema != null) {
                             // Caller-supplied schema: check it is internally consistent
                             // (types, enums) and references only params the body declares,
@@ -142,9 +144,10 @@ public class AgenticSearchTemplateService {
                             // or that targets a field can only choose an existing field).
                             paramSchema = deriveSchema(body, mappingFields);
                             // Enrich the derived schema with grounded descriptions and
-                            // fixed-value enums recovered from where each param renders.
+                            // fixed-value enums recovered from where each param renders, and
+                            // derive a template-level description for multi-template selection.
                             // Best-effort: on any failure the base derivation stands.
-                            enrichStructurally(body, paramSchema);
+                            derivedDescription = enrichStructurally(body, paramSchema);
                         }
                         // 4. Pre-flight validate: render all-filled + required-only.
                         preflightValidate(body, paramSchema);
@@ -154,7 +157,7 @@ public class AgenticSearchTemplateService {
                             .builder()
                             .templateId(templateId)
                             .indexBinding(index)
-                            .description(description)
+                            .description(description != null ? description : derivedDescription)
                             .paramSchema(paramSchema)
                             .createdTime(now)
                             .lastUpdatedTime(now)
@@ -241,19 +244,23 @@ public class AgenticSearchTemplateService {
      * description and only adds an enum a param does not already carry, so a field-name enum
      * from {@link #deriveSchema} is preserved.
      */
-    void enrichStructurally(String body, Map<String, Object> schema) {
+    String enrichStructurally(String body, Map<String, Object> schema) {
         try {
             TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
             Map<String, Object> rendered = renderToMap(body, markers.renderParams());
             if (rendered == null) {
-                return;
+                return null;
             }
             // Render with optionals omitted so an optional param's slot shows the body's own
             // default; read that value at the param's (stable) path below.
             Map<String, Object> defaults = renderToMap(body, sampleParams(schema, true));
             applyStructuralEnrichment(schema, markers, rendered, defaults);
+            // Derive a one-line template-level description (capabilities grouped by clause)
+            // for multi-template selection. Null when no role is recovered.
+            return TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered);
         } catch (Exception e) {
             log.warn("Structural enrichment skipped: {}", e.getMessage());
+            return null;
         }
     }
 

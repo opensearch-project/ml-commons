@@ -331,6 +331,28 @@ public class TemplateStructureAnalyzerTests {
         assertNull(TemplateStructureAnalyzer.vocabEnum(roleFacts(TemplateStructureAnalyzer.ROLE_FILTER_TERM)));
     }
 
+    @Test
+    public void describeTemplate_summarizesCapabilitiesGroupedByClause() {
+        Map<String, Object> schema = productSchema();
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = productRendered(markers.renderParams());
+
+        assertEquals(
+            "Full-text search over title; filters by color; range filters on price; sortable.",
+            TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered)
+        );
+    }
+
+    @Test
+    public void describeTemplate_noRecognizedRole_returnsNull() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("x", spec("string", true));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = map("custom_clause", map("field", markers.renderParams().get("x")));
+
+        assertNull(TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
     /** Build a one-param schema, render it via {@code renderWith}, then classify + describe. */
     private static void checkSingle(
         String type,
