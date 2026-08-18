@@ -1871,4 +1871,145 @@ public class QueryPlanningToolTests {
         assertNull(tool.getFallbackQuery());
     }
 
+    // --- inline template_body tests ---
+
+    @Test
+    public void testFactory_CreateWithInlineTemplateBody() {
+        String searchTemplatesJson =
+            "[{\"template_id\":\"t1\",\"template_description\":\"desc1\",\"template_body\":\"{\\\"query\\\":{\\\"match_all\\\":{}}}\"}]";
+
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ID_FIELD, "test-model-id");
+        params.put(GENERATION_TYPE_FIELD, USER_SEARCH_TEMPLATES_TYPE_FIELD);
+        params.put(SEARCH_TEMPLATES_FIELD, searchTemplatesJson);
+
+        QueryPlanningTool tool = factory.create(params);
+        assertNotNull(tool);
+        assertEquals(USER_SEARCH_TEMPLATES_TYPE_FIELD, tool.getGenerationType());
+    }
+
+    @Test
+    public void testFactory_CreateWithInvalidTemplateBodyJson() {
+        String searchTemplatesJson = "[{\"template_id\":\"t1\",\"template_description\":\"desc1\",\"template_body\":\"not valid json\"}]";
+
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ID_FIELD, "test-model-id");
+        params.put(GENERATION_TYPE_FIELD, USER_SEARCH_TEMPLATES_TYPE_FIELD);
+        params.put(SEARCH_TEMPLATES_FIELD, searchTemplatesJson);
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertTrue(exception.getMessage().contains("template_body must be valid JSON"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRunWithInlineTemplateBody_SkipsGetStoredScript() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+        String templateBody = "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"category\":\"{{category}}\"}}]}}}";
+        String searchTemplatesJson =
+            "[{\"template_id\":\"inline_tpl\",\"template_description\":\"filters by category\",\"template_body\":\""
+                + templateBody.replace("\"", "\\\"")
+                + "\"}]";
+
+        // Stub: first call = template selection (returns template_id), second call = query generation
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("inline_tpl");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(
+            USER_SEARCH_TEMPLATES_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            gson.toJson(searchTemplatesJson),
+            null
+        );
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        validParams.put(QUESTION_FIELD, "find electronics items");
+        validParams.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(validParams, listener);
+
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        String result = future.get();
+        assertEquals(matchQueryString, result);
+
+        // Verify: GetStoredScript is never called when template_body is provided
+        verify(clusterAdminClient, times(0)).getStoredScript(any(), any());
+
+        // Verify: inline body reaches the query-generation call via TEMPLATE_FIELD
+        // Index 0 = template selection call, index 1 = query generation call
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool, times(2)).run(paramsCaptor.capture(), any());
+        String templateFieldValue = paramsCaptor.getAllValues().get(1).get(TEMPLATE_FIELD);
+        assertEquals(gson.toJson(templateBody), templateFieldValue);
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRunWithMixedTemplates_NonInlineFallsBackToStoredScript() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+        // First entry has inline body, second does not
+        String searchTemplatesJson = "[{\"template_id\":\"inline_tpl\",\"template_description\":\"has body\","
+            + "\"template_body\":\"{\\\"query\\\":{\\\"match_all\\\":{}}}\"},"
+            + "{\"template_id\":\"stored_tpl\",\"template_description\":\"no body\"}]";
+
+        // Mock stored script retrieval for the non-inline template
+        doAnswer(invocation -> {
+            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
+            GetStoredScriptResponse getStoredScriptResponse = mock(GetStoredScriptResponse.class);
+            StoredScriptSource storedScriptSource = mock(StoredScriptSource.class);
+            when(getStoredScriptResponse.getSource()).thenReturn(storedScriptSource);
+            when(storedScriptSource.getSource()).thenReturn("{\"query\":{\"term\":{\"status\":\"active\"}}}");
+            actionListener.onResponse(getStoredScriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(), any());
+
+        // LLM selects the non-inline template, then generates query
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("stored_tpl");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(
+            USER_SEARCH_TEMPLATES_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            gson.toJson(searchTemplatesJson),
+            null
+        );
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        validParams.put(QUESTION_FIELD, "find active items");
+        validParams.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(validParams, listener);
+
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        String result = future.get();
+        assertEquals(matchQueryString, result);
+
+        // Verify: GetStoredScript IS called when the selected template has no inline body
+        verify(clusterAdminClient, times(1)).getStoredScript(any(), any());
+    }
+
 }
