@@ -22,12 +22,12 @@ import org.opensearch.protobufs.MlExecuteAgentStreamRequest;
 import org.opensearch.protobufs.MlPredictModelStreamRequest;
 import org.opensearch.protobufs.Parameters;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
 
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Converts protobuf request messages to ML Commons request objects.
@@ -230,7 +230,7 @@ public class ProtoRequestConverter {
         }
         try {
             return OBJECT_MAPPER.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("Failed to convert value to JSON string", e);
             throw new IllegalArgumentException("Failed to serialize value to JSON", e);
         }
