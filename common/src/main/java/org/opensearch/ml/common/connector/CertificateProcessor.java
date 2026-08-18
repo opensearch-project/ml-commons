@@ -1,0 +1,605 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common.connector;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+
+import org.opensearch.ml.common.exception.MLValidationException;
+
+import lombok.extern.log4j.Log4j2;
+
+/**
+ * Certificate processor for handling different certificate formats and building SSL contexts
+ * for mutual TLS authentication in ML connectors.
+ */
+@Log4j2
+public class CertificateProcessor {
+
+    // Certificate field names in credentials (direct content)
+    public static final String CLIENT_CERT_PEM_FIELD = "client_cert_pem";
+    public static final String CLIENT_KEY_PEM_FIELD = "client_key_pem";
+    public static final String CLIENT_CERT_PKCS12_FIELD = "client_cert_pkcs12";
+    public static final String CA_CERT_PEM_FIELD = "ca_cert_pem";
+    public static final String KEYSTORE_PASSWORD_FIELD = "keystore_password";
+
+    // Non-certificate credential field that conflicts with certificate-only authentication
+    private static final String API_KEY_FIELD = "api_key";
+
+    // Keystore type used internally to hold parsed key material, independent of the input format
+    private static final String PKCS12_KEYSTORE_TYPE = "PKCS12";
+
+    // Alias for the client key entry in the internally-built keystore
+    private static final String CLIENT_KEY_ALIAS = "client";
+
+    /**
+     * Supported keystore types for certificate processing
+     */
+    public enum KeystoreType {
+        PEM("PEM"),
+        PKCS12("PKCS12");
+
+        private final String value;
+
+        KeystoreType(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        /**
+         * Parse keystore type from string input (case-insensitive)
+         * @param input The string input to parse
+         * @return The corresponding KeystoreType
+         * @throws MLValidationException if the input is not a supported keystore type
+         */
+        public static KeystoreType from(String input) {
+            if (input == null) {
+                return PEM;
+            }
+
+            // Locale.ROOT so the comparison against the fixed enum names never depends on the node's
+            // default locale (e.g. Turkish upper-cases 'i' to 'İ').
+            String normalized = input.trim().toUpperCase(Locale.ROOT);
+            for (KeystoreType type : values()) {
+                if (type.getValue().equals(normalized)) {
+                    return type;
+                }
+            }
+
+            throw new MLValidationException("Unsupported keystore type: " + input + ". Supported types are: PEM, PKCS12");
+        }
+
+        @Override
+        public String toString() {
+            return value;
+        }
+    }
+
+    // PEM patterns - support certificate chains by matching multiple certificate blocks
+    // Updated to handle comments after PEM headers (e.g., "-----BEGIN CERTIFICATE----- # comment")
+    private static final Pattern CERT_PATTERN = Pattern
+        .compile("-----BEGIN CERTIFICATE-----[^\\r\\n]*\\s*([A-Za-z0-9+/\\s=]+?)\\s*-----END CERTIFICATE-----", Pattern.DOTALL);
+    private static final Pattern PRIVATE_KEY_PATTERN = Pattern
+        .compile("-----BEGIN PRIVATE KEY-----[^\\r\\n]*\\s*([A-Za-z0-9+/\\s=]+?)\\s*-----END PRIVATE KEY-----", Pattern.DOTALL);
+
+    // Patterns used to heuristically detect a filesystem path mistakenly passed in place of certificate
+    // content - deliberately narrow (path prefix or known cert/key extension) to avoid misclassifying
+    // malformed base64 PEM bodies, which legitimately contain "/" characters, as file paths.
+    private static final Pattern FILE_PATH_PREFIX_PATTERN = Pattern.compile("^(?:[A-Za-z]:[\\\\/]|~[/\\\\]|\\.{1,2}[/\\\\]|/).*");
+    private static final Pattern FILE_PATH_EXTENSION_PATTERN = Pattern
+        .compile(".*\\.(pem|crt|cer|key|p12|pfx|der)$", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Builds the mutual TLS key and trust managers from the connector configuration and decrypted
+     * credentials. The managers are handed to the HTTP client as
+     * {@code TlsKeyManagersProvider}/{@code TlsTrustManagersProvider}, so no {@code SSLContext} is
+     * assembled here.
+     *
+     * @param config The connector client configuration
+     * @param decryptedCredentials The decrypted credentials containing certificate data
+     * @return MtlsManagers containing the key and trust managers, or null if mTLS is not enabled
+     * @throws MLValidationException if certificate processing fails
+     */
+    MtlsManagers buildMtlsManagers(ConnectorClientConfig config, Map<String, String> decryptedCredentials) {
+        if (config == null || !Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
+            return null;
+        }
+
+        if (decryptedCredentials == null || decryptedCredentials.isEmpty()) {
+            throw new MLValidationException("Decrypted credentials are required for mutual TLS");
+        }
+
+        try {
+            KeystoreType keystoreType = KeystoreType.from(config.getKeystoreType());
+
+            KeyManager[] keyManagers = createKeyManagers(keystoreType, decryptedCredentials);
+            TrustManager[] trustManagers = createTrustManagers(config, decryptedCredentials);
+
+            log.debug("Successfully built mutual TLS managers with keystore type: {}", keystoreType);
+            return new MtlsManagers(keyManagers, trustManagers);
+
+        } catch (Exception e) {
+            log.error("Failed to build mutual TLS managers", e);
+            throw new MLValidationException("Failed to build mutual TLS managers: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Container for the mutual TLS key and trust managers.
+     */
+    public static class MtlsManagers {
+        private final KeyManager[] keyManagers;
+        private final TrustManager[] trustManagers;
+
+        public MtlsManagers(KeyManager[] keyManagers, TrustManager[] trustManagers) {
+            this.keyManagers = keyManagers;
+            this.trustManagers = trustManagers;
+        }
+
+        public KeyManager[] getKeyManagers() {
+            return keyManagers;
+        }
+
+        public TrustManager[] getTrustManagers() {
+            return trustManagers;
+        }
+    }
+
+    /**
+     * Creates key managers based on the keystore type and credentials.
+     */
+    private KeyManager[] createKeyManagers(KeystoreType keystoreType, Map<String, String> credentials) throws Exception {
+        switch (keystoreType) {
+            case PEM:
+                return createPemKeyManagers(credentials);
+            case PKCS12:
+                return createPkcs12KeyManagers(credentials);
+            default:
+                throw new MLValidationException("Unsupported keystore type: " + keystoreType);
+        }
+    }
+
+    /**
+     * Creates key managers from PEM format certificates and private keys.
+     */
+    private KeyManager[] createPemKeyManagers(Map<String, String> credentials) throws Exception {
+        String certPem = getCertificateContent(credentials, CLIENT_CERT_PEM_FIELD);
+        String keyPem = getCertificateContent(credentials, CLIENT_KEY_PEM_FIELD);
+        String password = credentials.get(KEYSTORE_PASSWORD_FIELD);
+
+        if (certPem == null || keyPem == null) {
+            throw new MLValidationException(
+                "Both client certificate and private key are required for PEM keystore. Provide "
+                    + CLIENT_CERT_PEM_FIELD
+                    + " and "
+                    + CLIENT_KEY_PEM_FIELD
+            );
+        }
+
+        // Parse the full certificate chain (leaf + any intermediates) so the complete chain is
+        // presented to the peer during the TLS handshake, not just the leaf certificate
+        X509Certificate[] certificateChain = parsePemCertificateChain(certPem);
+        validateChainOrder(certificateChain);
+
+        PrivateKey privateKey = parsePemPrivateKey(keyPem);
+
+        // Start from an empty keystore and add the parsed key entry
+        return buildKeyManagers(password, (keyStore, keyPassword) -> {
+            keyStore.load(null, null);
+            keyStore.setKeyEntry(CLIENT_KEY_ALIAS, privateKey, keyPassword, certificateChain);
+        });
+    }
+
+    /**
+     * Creates key managers from PKCS12 format certificates.
+     */
+    private KeyManager[] createPkcs12KeyManagers(Map<String, String> credentials) throws Exception {
+        String pkcs12Data = getCertificateContent(credentials, CLIENT_CERT_PKCS12_FIELD);
+        String password = credentials.get(KEYSTORE_PASSWORD_FIELD);
+
+        if (pkcs12Data == null) {
+            throw new MLValidationException("PKCS12 certificate is required for PKCS12 keystore. Provide " + CLIENT_CERT_PKCS12_FIELD);
+        }
+
+        byte[] keystoreBytes = Base64.getMimeDecoder().decode(pkcs12Data);
+
+        try {
+            // Load the keystore directly from the decoded PKCS12 bytes
+            return buildKeyManagers(
+                password,
+                (keyStore, keyPassword) -> keyStore.load(new ByteArrayInputStream(keystoreBytes), keyPassword)
+            );
+        } finally {
+            // Best-effort: clear the decoded keystore, which holds the client private key, once the
+            // KeyStore has parsed it. Mirrors the password handling in buildKeyManagers.
+            // Note: the base64 pkcs12Data String remains in the heap until GC (Java strings are immutable).
+            Arrays.fill(keystoreBytes, (byte) 0);
+        }
+    }
+
+    /**
+     * Populates a PKCS12 keystore and derives key managers from it. Shared by the PEM and PKCS12
+     * paths, which differ only in how the keystore is populated.
+     *
+     * @param password The keystore password, may be null
+     * @param populator Callback that fills the keystore, given the keystore and the password
+     * @return The key managers backed by the populated keystore
+     */
+    private KeyManager[] buildKeyManagers(String password, KeyStorePopulator populator) throws Exception {
+        char[] keyPassword = password != null ? password.toCharArray() : new char[0];
+        try {
+            KeyStore keyStore = KeyStore.getInstance(PKCS12_KEYSTORE_TYPE);
+            populator.populate(keyStore, keyPassword);
+
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keyStore, keyPassword);
+
+            return kmf.getKeyManagers();
+        } finally {
+            // Best-effort: Clear password char array from memory
+            // Note: Original password String remains in heap until GC due to Java string immutability
+            Arrays.fill(keyPassword, '\0');
+        }
+    }
+
+    /**
+     * Strategy for populating a keystore, allowing the PEM and PKCS12 paths to share the
+     * surrounding keystore and key manager setup.
+     */
+    @FunctionalInterface
+    private interface KeyStorePopulator {
+        void populate(KeyStore keyStore, char[] password) throws Exception;
+    }
+
+    /**
+     * Creates trust managers for certificate validation.
+     */
+    private TrustManager[] createTrustManagers(ConnectorClientConfig config, Map<String, String> credentials) throws Exception {
+        String caCertPem = getCertificateContent(credentials, CA_CERT_PEM_FIELD);
+
+        // If no custom CA certificate is provided, use system default
+        if (caCertPem == null) {
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init((KeyStore) null); // Use system default truststore
+            return tmf.getTrustManagers();
+        }
+
+        // Create custom truststore with the provided CA certificate(s) - supports bundles with
+        // intermediate/root certificates, not just a single CA certificate
+        X509Certificate[] caCertificates = parsePemCertificateChain(caCertPem);
+
+        KeyStore trustStore = KeyStore.getInstance(PKCS12_KEYSTORE_TYPE);
+        trustStore.load(null, null);
+        for (int i = 0; i < caCertificates.length; i++) {
+            trustStore.setCertificateEntry("ca-" + i, caCertificates[i]);
+        }
+
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+        return tmf.getTrustManagers();
+    }
+
+    /**
+     * Parses all PEM certificate blocks in the input and returns them as an ordered chain
+     * (leaf certificate first, followed by any intermediate certificates present).
+     */
+    private X509Certificate[] parsePemCertificateChain(String pemCert) throws CertificateException {
+        Matcher matcher = CERT_PATTERN.matcher(pemCert.trim());
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        List<X509Certificate> chain = new ArrayList<>();
+
+        while (matcher.find()) {
+            // Use MIME decoder for better compatibility with various PEM formats
+            String base64Cert = matcher.group(1).replaceAll("\\s", "");
+            byte[] certBytes = Base64.getMimeDecoder().decode(base64Cert);
+            chain.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certBytes)));
+        }
+
+        if (chain.isEmpty()) {
+            if (looksLikeFilePath(pemCert)) {
+                throw new CertificateException(
+                    "File paths are not supported for certificate fields. Provide the certificate content itself "
+                        + "(PEM text or base64-encoded PEM), not a file path."
+                );
+            }
+            throw new CertificateException("Invalid PEM certificate format. Expected -----BEGIN CERTIFICATE----- block.");
+        }
+
+        return chain.toArray(new X509Certificate[0]);
+    }
+
+    /**
+     * Validates that a client certificate chain is ordered leaf-first: each certificate's issuer
+     * must match the subject of the next certificate in the array. Without this check, a misordered
+     * chain fails later with an opaque "java.security.KeyStoreException: Certificate chain is not
+     * valid" from KeyStore#setKeyEntry, which gives no indication that ordering is the problem.
+     */
+    private void validateChainOrder(X509Certificate[] chain) throws CertificateException {
+        for (int i = 0; i < chain.length - 1; i++) {
+            if (!chain[i].getIssuerX500Principal().equals(chain[i + 1].getSubjectX500Principal())) {
+                throw new CertificateException(
+                    "Client certificate chain is not ordered correctly. Certificate at index "
+                        + i
+                        + " (subject: "
+                        + chain[i].getSubjectX500Principal()
+                        + ") is not issued by the certificate at index "
+                        + (i + 1)
+                        + " (subject: "
+                        + chain[i + 1].getSubjectX500Principal()
+                        + "). List the leaf certificate first, followed by its issuing intermediate "
+                        + "certificates in order."
+                );
+            }
+        }
+    }
+
+    /**
+     * Heuristic check for whether certificate/key field content is actually a filesystem path rather
+     * than PEM content - file-based certificate loading is not supported, so this exists only to give
+     * a clearer error message for that specific mistake. Requires a path-like prefix or a known
+     * certificate/key file extension; both patterns are anchored with .matches() and use "." without
+     * DOTALL, so multi-line input (e.g. malformed base64 PEM bodies, which may contain "/" characters)
+     * can never satisfy them and is not misdiagnosed as a file path.
+     */
+    private boolean looksLikeFilePath(String content) {
+        String trimmed = content.trim();
+        if (trimmed.contains("-----BEGIN")) {
+            return false;
+        }
+        return FILE_PATH_PREFIX_PATTERN.matcher(trimmed).matches() || FILE_PATH_EXTENSION_PATTERN.matcher(trimmed).matches();
+    }
+
+    /**
+     * Parses a PEM format private key.
+     * Only supports PKCS#8 format (-----BEGIN PRIVATE KEY-----) for security and compatibility.
+     *
+     * Note: PKCS#1 RSA format (-----BEGIN RSA PRIVATE KEY-----) is not supported.
+     * To convert PKCS#1 to PKCS#8, use:
+     * openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in rsa_key.pem -out pkcs8_key.pem
+     */
+    private PrivateKey parsePemPrivateKey(String pemKey) throws Exception {
+        Matcher matcher = PRIVATE_KEY_PATTERN.matcher(pemKey.trim());
+        if (!matcher.find()) {
+            if (looksLikeFilePath(pemKey)) {
+                throw new InvalidKeySpecException(
+                    "File paths are not supported for certificate fields. Provide the private key content itself "
+                        + "(PEM text or base64-encoded PEM), not a file path."
+                );
+            }
+            throw new InvalidKeySpecException(
+                "Invalid PEM private key format. Only PKCS#8 format is supported (-----BEGIN PRIVATE KEY-----). "
+                    + "If you have a PKCS#1 RSA key (-----BEGIN RSA PRIVATE KEY-----), convert it using: "
+                    + "openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in rsa_key.pem -out pkcs8_key.pem"
+            );
+        }
+
+        // PRIVATE_KEY_PATTERN already restricts the body to [A-Za-z0-9+/\s=] and the strip removes the
+        // line wrapping, so strict and MIME decoding are equivalent here. MIME is used purely so every
+        // decode site in this class behaves the same way.
+        String base64Key = matcher.group(1).replaceAll("\\s", "");
+        byte[] keyBytes = Base64.getMimeDecoder().decode(base64Key);
+
+        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
+
+        // Try different key algorithms
+        String[] algorithms = { "RSA", "EC", "DSA" };
+        Exception lastException = null;
+        for (String algorithm : algorithms) {
+            try {
+                KeyFactory keyFactory = KeyFactory.getInstance(algorithm);
+                return keyFactory.generatePrivate(keySpec);
+            } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+                lastException = e;
+                // Try next algorithm
+            }
+        }
+
+        throw new InvalidKeySpecException("Unable to parse private key with supported algorithms (RSA, EC, DSA)", lastException);
+    }
+
+    /**
+     * Gets certificate content from direct field with automatic base64 decoding.
+     *
+     * @param credentials The credentials map
+     * @param contentField The field name for direct content
+     * @return The certificate content, or null if field is not present
+     */
+    private String getCertificateContent(Map<String, String> credentials, String contentField) {
+        String directContent = credentials.get(contentField);
+        if (directContent != null && !directContent.trim().isEmpty()) {
+            // For PKCS12 fields, return the base64 content directly without PEM validation
+            if (CLIENT_CERT_PKCS12_FIELD.equals(contentField)) {
+                // PKCS12 is a binary format, so we just return the base64 content as-is
+                // The createPkcs12KeyManagers method will handle the base64 decoding
+                return directContent.trim();
+            }
+
+            // Check if content is base64 encoded (no PEM headers) for PEM fields
+            if (isBase64EncodedContent(directContent)) {
+                // Decode base64 and validate it's actually PEM content.
+                // Use the MIME decoder so line-wrapped base64 (the default output of `base64` and
+                // `openssl base64`) decodes, matching the whitespace tolerance of isBase64EncodedContent.
+                try {
+                    byte[] decodedBytes = Base64.getMimeDecoder().decode(directContent.trim());
+                    try {
+                        String decodedContent = new String(decodedBytes, StandardCharsets.UTF_8);
+
+                        // Security: Validate decoded content contains PEM headers
+                        if (decodedContent.contains("-----BEGIN")) {
+                            log.debug("Successfully decoded and validated base64 certificate content for field: {}", contentField);
+                            return decodedContent;
+                        } else {
+                            // Hard error: base64-detected content that doesn't decode to valid PEM.
+                            // Security: never echo the decoded content - it may be private key material.
+                            throw new MLValidationException(
+                                String
+                                    .format(
+                                        "Certificate field '%s' appears to be base64 encoded but does not contain valid PEM content after decoding. "
+                                            + "Expected PEM headers (-----BEGIN...).",
+                                        contentField
+                                    )
+                            );
+                        }
+                    } finally {
+                        // Best-effort: clear the decoded buffer, which may hold private key material.
+                        // Note: the returned PEM String and the base64 input String cannot be cleared
+                        // (Java strings are immutable), so this only narrows the exposure window.
+                        Arrays.fill(decodedBytes, (byte) 0);
+                    }
+                } catch (IllegalArgumentException e) {
+                    // Hard error: malformed base64
+                    throw new MLValidationException(
+                        String
+                            .format(
+                                "Certificate field '%s' appears to be base64 encoded but contains invalid base64 data: %s",
+                                contentField,
+                                e.getMessage()
+                            )
+                    );
+                } catch (Exception e) {
+                    // Hard error: other decoding failures
+                    throw new MLValidationException(
+                        String.format("Failed to decode base64 certificate content for field '%s': %s", contentField, e.getMessage())
+                    );
+                }
+            }
+            return directContent;
+        }
+
+        return null;
+    }
+
+    /**
+     * Checks if the content appears to be base64 encoded (no PEM headers).
+     */
+    private boolean isBase64EncodedContent(String content) {
+        String trimmed = content.trim();
+
+        // If it has PEM headers, it's not base64-only content
+        if (trimmed.contains("-----BEGIN") || trimmed.contains("-----END")) {
+            return false;
+        }
+
+        // Check if it looks like base64 (only base64 characters and reasonable length)
+        // Strip whitespace before matching to handle line-wrapped base64
+        String strippedContent = trimmed.replaceAll("\\s", "");
+        if (strippedContent.length() > 100 && strippedContent.matches("^[A-Za-z0-9+/]*={0,2}$")) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Validates the mutual TLS configuration: SSL verification consistency, presence of the
+     * certificate material required by the configured keystore type, and absence of conflicting
+     * (non certificate-based) authentication methods.
+     *
+     * @param config The connector client configuration
+     * @param credentials The connector credentials
+     * @throws MLValidationException if the mutual TLS configuration is invalid
+     */
+    void validateCertificateConfig(ConnectorClientConfig config, Map<String, String> credentials) {
+        if (!Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
+            return; // No validation needed if mTLS is disabled
+        }
+
+        if (Boolean.TRUE.equals(config.getSkipSslVerification())) {
+            throw new MLValidationException(
+                "skip_ssl_verification cannot be enabled together with mutual_tls_enabled. Disabling server "
+                    + "certificate validation while presenting a client certificate defeats the purpose of mutual "
+                    + "TLS and allows man-in-the-middle attacks. Provide a trusted CA certificate ("
+                    + CA_CERT_PEM_FIELD
+                    + ") instead of skipping SSL verification."
+            );
+        }
+
+        if (credentials == null || credentials.isEmpty()) {
+            throw new MLValidationException("Credentials are required when mutual TLS is enabled");
+        }
+
+        KeystoreType keystoreType = KeystoreType.from(config.getKeystoreType());
+
+        switch (keystoreType) {
+            case PEM:
+                boolean hasPemContent = credentials.containsKey(CLIENT_CERT_PEM_FIELD) && credentials.containsKey(CLIENT_KEY_PEM_FIELD);
+                if (!hasPemContent) {
+                    throw new MLValidationException(
+                        "For PEM keystore, provide both " + CLIENT_CERT_PEM_FIELD + " and " + CLIENT_KEY_PEM_FIELD
+                    );
+                }
+                break;
+            case PKCS12:
+                boolean hasPkcs12Content = credentials.containsKey(CLIENT_CERT_PKCS12_FIELD);
+                if (!hasPkcs12Content) {
+                    throw new MLValidationException("For PKCS12 keystore, provide " + CLIENT_CERT_PKCS12_FIELD);
+                }
+                break;
+            default:
+                throw new MLValidationException("Unsupported keystore type: " + keystoreType);
+        }
+
+        // Certificate material is present at this point, so an API key means mixed authentication.
+        // Strictly enforce certificate-only authentication when mTLS is enabled.
+        String apiKey = credentials.get(API_KEY_FIELD);
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
+            throw new MLValidationException(
+                "Mixed authentication methods are not allowed. "
+                    + "When using mutual TLS with client certificates, API keys should not be provided. "
+                    + "Please remove the '"
+                    + API_KEY_FIELD
+                    + "' from credentials when 'mutual_tls_enabled' is true."
+            );
+        }
+    }
+
+    /**
+     * Resolves mutual TLS configuration by consolidating validation and manager creation.
+     * This method combines validateCertificateConfig and buildMtlsManagers into a single call
+     * to reduce credential parsing overhead.
+     *
+     * @param config The connector client configuration
+     * @param credentials The decrypted credentials containing certificate data
+     * @return MtlsManagers containing the key and trust managers, or null if mTLS is disabled
+     * @throws MLValidationException if certificate processing or validation fails
+     */
+    public MtlsManagers resolveMtls(ConnectorClientConfig config, Map<String, String> credentials) {
+        // Return null early if mTLS is not enabled
+        if (config == null || !Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
+            return null;
+        }
+
+        validateCertificateConfig(config, credentials);
+
+        // Build and return the mutual TLS managers
+        return buildMtlsManagers(config, credentials);
+    }
+}
