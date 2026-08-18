@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -63,7 +64,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
     private static final int TERM_SIZE = 5;
     private static final List<String> PREFIXES = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
-    private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
+    private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short");
     private static final Double HIGH_PRIORITY_COLUMN_THRESHOLD = 0.001;
     private static final int SAMPLE_NUMBER = 100000;
     private static final String PARSE_COLUMN_NAME_PATTERN = "<column_name>(.*?)</column_name>";
@@ -181,7 +182,6 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
     public SearchSourceBuilder buildQuery(Map<String, String> fields) {
         AggregatorFactories.Builder subAggs = new AggregatorFactories.Builder();
-
         for (Map.Entry<String, String> field : fields.entrySet()) {
             String name = field.getKey();
             String type = field.getValue();
@@ -198,13 +198,6 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
                 subAggs.addAggregator(termsAgg);
                 subAggs.addAggregator(countAgg);
-            }
-            if (MIN_MAX_LIST.contains(type)) {
-                MinAggregationBuilder minAgg = AggregationBuilders.min(MIN_VALUE_PREFIX + name).field(fieldUsed);
-                MaxAggregationBuilder maxAgg = AggregationBuilders.max(MAX_VALUE_PREFIX + name).field(fieldUsed);
-
-                subAggs.addAggregator(minAgg);
-                subAggs.addAggregator(maxAgg);
             }
         }
 
@@ -229,6 +222,18 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
             .sort("_doc", SortOrder.DESC)
             .size(0)
             .aggregation(samplerAgg);
+
+
+        for (Map.Entry<String, String> field : fields.entrySet()) {
+            String name = field.getKey();
+            String type = field.getValue();
+            String fieldUsed = "text".equals(type) ? name + ".keyword" : name;
+
+            if (MIN_MAX_LIST.contains(type) && !(name.toLowerCase(Locale.ROOT).contains("time") | name.toLowerCase(Locale.ROOT).contains("date"))) {
+                sourceBuilder.aggregation(AggregationBuilders.min(MIN_VALUE_PREFIX + name).field(fieldUsed));
+                sourceBuilder.aggregation(AggregationBuilders.max(MAX_VALUE_PREFIX + name).field(fieldUsed));
+            }
+        }
 
         return sourceBuilder;
     }
@@ -313,10 +318,35 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         Set<String> filteredNames,
         SearchResponse searchResponse
     ) {
+        Map<String, Aggregation> maxMinMap = searchResponse.getAggregations().getAsMap();
         Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
             .getAggregations()
             .getAsMap();
         Map<String, Object> result = new LinkedHashMap<>();
+        // Add for global aggregations
+        for (Map.Entry<String, Aggregation> entry : maxMinMap.entrySet()) {
+            String key = entry.getKey();
+            Aggregation aggregation = entry.getValue();
+            Map<String, Object> aggregationResult = gson.fromJson(aggregation.toString(), Map.class);
+            Object targetValue;
+            if (key.startsWith(MAX_VALUE_PREFIX) || key.startsWith(MIN_VALUE_PREFIX)) {
+                String targetField = key.substring(MAX_VALUE_PREFIX.length());
+                if (!filteredNames.contains(targetField)) {
+                    continue;
+                }
+                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
+                if (aggResult.containsKey("value_as_string")) {
+                    targetValue = aggResult.get("value_as_string");
+                } else {
+                    targetValue = aggResult.get("value");
+                }
+                String aggregationType = key.substring(0, MAX_VALUE_PREFIX.length() - 1);
+                result.computeIfAbsent(targetField, k -> new HashMap<>(Map.of("type", allFieldsToType.get(targetField))));
+                ((Map<String, Object>) result.get(targetField)).put(aggregationType, targetValue);
+
+            }
+        }
+
         Map<String, Object> finalResult = new LinkedHashMap<>();
         List<Object> exampleDocs = null;
         for (Map.Entry<String, Aggregation> entry : aggregationMap.entrySet()) {
