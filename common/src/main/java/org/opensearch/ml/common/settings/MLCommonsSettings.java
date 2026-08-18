@@ -702,7 +702,7 @@ public final class MLCommonsSettings {
 
     private static void validateRegexSafety(String regex) {
         // Reject nested quantifiers or backreferences
-        if (regex.matches(".*\\([^)]*[*+?]\\)[*+?{].*") || regex.matches(".*\\\\[1-9].*")) {
+        if (regex.matches(".*\\([^)]*[*+?]\\)[*+].*") || regex.matches(".*\\\\[1-9].*")) {
             throw new IllegalArgumentException(
                 "Regex pattern contains nested quantifiers or backreferences that may cause ReDoS: " + regex
             );
