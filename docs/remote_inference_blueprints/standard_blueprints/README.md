@@ -48,7 +48,11 @@ These blueprints include pre- and post-processing functions, suitable when you n
 
 - OpenAI: 
   - [text-embedding-ada-002](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/openai_connector_embedding_blueprint.md)
-  
+
+- Google Gemini
+  - chat: [gemini-2.0-flash](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/google_gemini_connector_chat_blueprint.md)
+  - text embedding: [gemini-embedding-001](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/google_gemini_connector_embedding_blueprint.md)
+
 - VertexAI
   - [embedding](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/gcp_vertexai_connector_embedding_blueprint.md)
 
