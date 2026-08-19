@@ -12,5 +12,6 @@ public enum ContentType {
     TEXT,
     IMAGE,
     VIDEO,
-    DOCUMENT
+    DOCUMENT,
+    COMPACTION
 }

@@ -11,7 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Represents a content block that can contain different types of content (text, image, video, document).
+ * Represents a content block that can contain different types of content (text, image, video, document, compaction).
  */
 @Data
 @NoArgsConstructor
@@ -22,4 +22,5 @@ public class ContentBlock {
     private ImageContent image; // for image content
     private VideoContent video; // for video content
     private DocumentContent document; // for document content
+    private String content; // for compaction content
 }
