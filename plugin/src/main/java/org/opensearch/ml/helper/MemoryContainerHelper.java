@@ -95,12 +95,19 @@ public class MemoryContainerHelper {
     private static final String URL_TOKEN_GOOGLEAPIS = "googleapis";
     private static final String URL_TOKEN_COHERE = "cohere";
     private static final String URL_TOKEN_V2_PATH_SEGMENT = "v2";
+    private static final String URL_TOKEN_CHAT_SEGMENT = "chat";
+    // URL_TOKEN_OPENAI is used only for Azure path matching (/openai/deployments/...).
+    // Direct OpenAI API calls use URL_HOST_OPENAI_API equality to prevent openai.attacker.com
+    // from matching via label-based host segment checks.
     private static final String URL_TOKEN_OPENAI = "openai";
-    private static final String URL_TOKEN_DEEPSEEK = "deepseek";
     // Multi-segment path — used with path.contains() on a query-stripped path, which is safe.
     private static final String URL_TOKEN_OPENAI_COMPAT_PATH = "/v1/chat/completions";
     private static final String URL_TOKEN_AMAZONAWS = "amazonaws";
     private static final String URL_TOKEN_CONVERSE_SEGMENT = "converse";
+    // Exact hostnames for public providers — full equality prevents label-confusion attacks
+    // (e.g. openai.attacker.com contains "openai" as a label but does not equal "api.openai.com").
+    private static final String URL_HOST_OPENAI_API = "api.openai.com";
+    private static final String URL_HOST_DEEPSEEK_API = "api.deepseek.com";
 
     // Captures (1) host and (2) path from a URL, stopping before '?' or '#'.
     // Handles connector template URLs such as https://${parameters.endpoint}/openai/...
@@ -570,7 +577,9 @@ public class MemoryContainerHelper {
         if (connector.getActions() == null) {
             return Map.of();
         }
-        // first matching PREDICT action wins; assumes one PREDICT per connector for fact extraction
+        // TODO: extend to support multi-action connectors — currently only the first PREDICT action
+        // with supports_structured_output=true is used; connectors with multiple PREDICT actions
+        // each targeting different providers would need per-action URL routing.
         return connector
             .getActions()
             .stream()
@@ -611,22 +620,24 @@ public class MemoryContainerHelper {
         }
         // Cohere structured output (json_schema type) requires the v2 Chat API (/v2/chat).
         // The legacy /v1/chat endpoint only supports json_object and ignores json_schema.
-        if (hostHasSegment(host, URL_TOKEN_COHERE) && pathHasSegment(path, URL_TOKEN_V2_PATH_SEGMENT)) {
+        // Both "v2" and "chat" segments are required to avoid matching /v2/embed or /v2/rerank.
+        if (hostHasSegment(host, URL_TOKEN_COHERE)
+            && pathHasSegment(path, URL_TOKEN_V2_PATH_SEGMENT)
+            && pathHasSegment(path, URL_TOKEN_CHAT_SEGMENT)) {
             return Map.of("_response_format_json", FACTS_EXTRACTION_COHERE_RESPONSE_FORMAT_JSON);
         }
-        // hostHasSegment(host, URL_TOKEN_OPENAI) catches api.openai.com and similar.
-        // pathHasSegment(path, URL_TOKEN_OPENAI) is specifically for Azure, whose connector URL uses
+        // host.equals(URL_HOST_OPENAI_API) matches the canonical OpenAI API endpoint exactly.
+        // Full equality closes the openai.attacker.com label-confusion attack: that host has
+        // "openai" as an exact segment but does not equal "api.openai.com".
+        // pathHasSegment(path, URL_TOKEN_OPENAI) handles Azure OpenAI, whose connector URL uses
         // a template host (${parameters.endpoint}), so "openai" only appears in the path
         // (/openai/deployments/...) rather than the host.
+        // host.equals(URL_HOST_DEEPSEEK_API) applies the same exact-equality defence for DeepSeek.
         // URL_TOKEN_OPENAI_COMPAT_PATH ("/v1/chat/completions") catches Ollama, vLLM, LM Studio,
-        // and other OpenAI-compatible servers whose hostnames contain neither "openai" nor "deepseek".
-        // supports_structured_output must be explicitly set to true on the connector action
-        // (requires admin access), so an unintended match only results in an extra response_format
-        // field being sent. Note: if the upstream provider rejects the extra field with a 4xx,
-        // that surfaces as a failed predict call, not a silent fallback.
-        if (hostHasSegment(host, URL_TOKEN_OPENAI)
+        // and other OpenAI-compatible servers regardless of hostname.
+        if (host.equals(URL_HOST_OPENAI_API)
             || pathHasSegment(path, URL_TOKEN_OPENAI)
-            || hostHasSegment(host, URL_TOKEN_DEEPSEEK)
+            || host.equals(URL_HOST_DEEPSEEK_API)
             || path.contains(URL_TOKEN_OPENAI_COMPAT_PATH)) {
             return Map.of("_response_format_json", FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON);
         }
