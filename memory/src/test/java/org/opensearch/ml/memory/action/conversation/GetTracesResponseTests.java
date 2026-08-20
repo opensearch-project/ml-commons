@@ -100,7 +100,7 @@ public class GetTracesResponseTests extends OpenSearchTestCase {
             + trace.getCreateTime()
             + "\"update_time\":\""
             + trace.getUpdatedTime()
-            + ",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"},\"parent_message_id\":\"parent_id\",\"trace_number\":1}],\"next_token\":2}";
+            + ",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"},\"parent_message_id\":\"parent_id\",\"trace_number\":1}],\"next_token\":2,\"next_page_token\":\"Mg\"}";
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         assert (ld.getDistance(result, expected) > 0.95);

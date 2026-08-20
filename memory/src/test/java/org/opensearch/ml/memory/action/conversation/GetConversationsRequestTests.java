@@ -63,6 +63,13 @@ public class GetConversationsRequestTests extends OpenSearchTestCase {
         assert (req.validate().validationErrors().get(0).equals("Can't list 0 or negative conversations"));
     }
 
+    public void testNegativeFrom_thenFail() {
+        GetConversationsRequest req = new GetConversationsRequest(5, -2);
+        assert (req.validate() != null);
+        assert (req.validate().validationErrors().size() == 1);
+        assert (req.validate().validationErrors().get(0).equals("The starting position must be nonnegative"));
+    }
+
     public void testFromRestRequest() throws IOException {
         Map<String, String> maxResOnly = Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "4");
         Map<String, String> nextTokOnly = Map.of(ActionConstants.NEXT_TOKEN_FIELD, "6");
@@ -80,5 +87,35 @@ public class GetConversationsRequestTests extends OpenSearchTestCase {
         assert (gcr1.getFrom() == 0 && gcr2.getFrom() == 0 && gcr3.getFrom() == 6 && gcr4.getFrom() == 7);
         assert (gcr1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gcr2.getMaxResults() == 4);
         assert (gcr3.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gcr4.getMaxResults() == 2);
+    }
+
+    public void testFromRestRequest_withOpaquePageToken() throws IOException {
+        // "Ng" = offset 6
+        Map<String, String> pageTokenOnly = Map.of(ActionConstants.NEXT_PAGE_TOKEN_FIELD, "Ng");
+        Map<String, String> bothMaxAndPageToken = Map
+            .of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "2", ActionConstants.NEXT_PAGE_TOKEN_FIELD, "Ng");
+        RestRequest req1 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(pageTokenOnly).build();
+        RestRequest req2 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(bothMaxAndPageToken).build();
+        GetConversationsRequest gcr1 = GetConversationsRequest.fromRestRequest(req1);
+        GetConversationsRequest gcr2 = GetConversationsRequest.fromRestRequest(req2);
+
+        assert (gcr1.validate() == null && gcr2.validate() == null);
+        assert (gcr1.getFrom() == 6 && gcr2.getFrom() == 6);
+        assert (gcr1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gcr2.getMaxResults() == 2);
+    }
+
+    public void testFromRestRequest_opaquePageTokenTakesPrecedenceOverLegacy() throws IOException {
+        // "Ng" = offset 6, wins over legacy 99
+        Map<String, String> both = Map.of(ActionConstants.NEXT_PAGE_TOKEN_FIELD, "Ng", ActionConstants.NEXT_TOKEN_FIELD, "99");
+        RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(both).build();
+        GetConversationsRequest gcr = GetConversationsRequest.fromRestRequest(req);
+        assert (gcr.validate() == null);
+        assert (gcr.getFrom() == 6);
+    }
+
+    public void testFromRestRequest_invalidOpaquePageToken_thenFail() {
+        Map<String, String> badToken = Map.of(ActionConstants.NEXT_PAGE_TOKEN_FIELD, "!!!not-base64!!!");
+        RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(badToken).build();
+        expectThrows(IllegalArgumentException.class, () -> GetConversationsRequest.fromRestRequest(req));
     }
 }
