@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.GOOGLE_CLOUD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -33,9 +34,12 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.BatchJobStatusMapping;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 
 import lombok.Builder;
 import lombok.Data;
@@ -86,6 +90,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private Map<String, String> headers;
     private String provisionedBy;
     private String connectorId;
+    private BatchJobStatusMapping batchJobStatus;
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(
@@ -106,7 +111,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         String url,
         Map<String, String> headers,
         String provisionedBy,
-        String connectorId
+        String connectorId,
+        BatchJobStatusMapping batchJobStatus
     ) {
         if (!dryRun && !updateConnector) {
 
@@ -120,7 +126,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 throw new IllegalArgumentException("Connector protocol is null");
             }
             boolean isMcpConnector = (protocol.equals(MCP_SSE) || protocol.equals(MCP_STREAMABLE_HTTP));
-            if ((credential == null || credential.isEmpty()) && !isMcpConnector) {
+            // A google_cloud connector may omit credentials ONLY in ADC / Workload Identity mode
+            // (auth_mode=adc). A service-account-key google_cloud connector must still supply a
+            // credential — relaxing for all google_cloud would let an SA connector with a missing
+            // credential slip past here and fail later.
+            boolean isGoogleCloudAdc = protocol.equals(GOOGLE_CLOUD)
+                && parameters != null
+                && GoogleCloudConnector.AUTH_MODE_ADC.equalsIgnoreCase(parameters.get(GoogleCloudConnector.AUTH_MODE_FIELD));
+            boolean allowsEmptyCredential = isMcpConnector || isGoogleCloudAdc;
+            if ((credential == null || credential.isEmpty()) && !allowsEmptyCredential) {
                 throw new IllegalArgumentException("Connector credential is null or empty list");
             }
             if (actions != null) {
@@ -151,6 +165,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.headers = headers;
         this.provisionedBy = provisionedBy;
         this.connectorId = connectorId;
+        this.batchJobStatus = batchJobStatus;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -175,6 +190,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Map<String, String> headers = null;
         String provisionedBy = null;
         String connectorId = null;
+        BatchJobStatusMapping batchJobStatus = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -241,6 +257,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case PROVISIONED_BY_FIELD:
                     provisionedBy = parser.textOrNull();
                     break;
+                case AbstractConnector.BATCH_JOB_STATUS_FIELD:
+                    batchJobStatus = BatchJobStatusMapping.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -264,7 +283,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             url,
             headers,
             provisionedBy,
-            connectorId
+            connectorId,
+            batchJobStatus
         );
     }
 
@@ -318,6 +338,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (connectorId != null) {
             builder.field(CONNECTOR_ID_FIELD, connectorId);
+        }
+        if (batchJobStatus != null) {
+            builder.field(AbstractConnector.BATCH_JOB_STATUS_FIELD, batchJobStatus);
         }
         builder.endObject();
         return builder;
@@ -394,6 +417,14 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID)) {
             output.writeOptionalString(connectorId);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
+            if (batchJobStatus != null) {
+                output.writeBoolean(true);
+                batchJobStatus.writeTo(output);
+            } else {
+                output.writeBoolean(false);
+            }
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -440,5 +471,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.connectorId = streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID)
             ? input.readOptionalString()
             : null;
+        this.batchJobStatus = streamInputVersion.onOrAfter(VERSION_3_9_0) && input.readBoolean() ? new BatchJobStatusMapping(input) : null;
     }
 }

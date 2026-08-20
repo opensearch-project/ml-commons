@@ -249,4 +249,23 @@ public class ToolUtils {
         }
         return modelTensor;
     }
+
+    /**
+     * Batch-job identifiers that are slash-delimited resource paths (e.g. Vertex AI
+     * batchPredictionJobs names) are used verbatim in the derived status/cancel URL, so they must
+     * be exempt from JSON '/' escaping. Plain job names (no '/') are left to normal escaping. This
+     * adds "name" to the NO_ESCAPE_PARAMS list only when the name value is a resource path.
+     *
+     * @param parameters The batch-prediction parameters to inspect and (conditionally) update
+     */
+    public static void markResourcePathNameNoEscape(Map<String, String> parameters) {
+        if (parameters == null) {
+            return;
+        }
+        String name = parameters.get("name");
+        if (name != null && name.contains("/")) {
+            String existingNoEscape = parameters.get(NO_ESCAPE_PARAMS);
+            parameters.put(NO_ESCAPE_PARAMS, existingNoEscape == null || existingNoEscape.isBlank() ? "name" : existingNoEscape + ",name");
+        }
+    }
 }
