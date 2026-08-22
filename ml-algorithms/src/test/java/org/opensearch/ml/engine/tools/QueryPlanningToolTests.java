@@ -915,6 +915,37 @@ public class QueryPlanningToolTests {
     }
 
     @Test
+    public void testRunWithOpenSearchStatusException() throws InterruptedException {
+
+        doAnswer(invocation -> {
+            org.opensearch.core.action.ActionListener<org.opensearch.action.admin.indices.get.GetIndexResponse> listener = invocation
+                .getArgument(1);
+            listener.onFailure(new org.opensearch.OpenSearchStatusException("Forbidden", org.opensearch.core.rest.RestStatus.FORBIDDEN));
+            return null;
+        }).when(indicesAdminClient).getIndex(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client, null, null);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "help me find some books related to wind");
+        parameters.put("index_name", "forbidden_index");
+
+        tool.run(parameters, listener);
+
+        // Should preserve the original OpenSearchStatusException (and its status code) instead of wrapping it
+        assertTrue(future.isCompletedExceptionally());
+        try {
+            future.get();
+            fail("Expected ExecutionException to be thrown");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof org.opensearch.OpenSearchStatusException);
+            assertEquals(org.opensearch.core.rest.RestStatus.FORBIDDEN, ((org.opensearch.OpenSearchStatusException) e.getCause()).status());
+        }
+    }
+
+    @Test
     @SneakyThrows
     public void testGetSampleDocTruncation() throws ExecutionException, InterruptedException {
         mockGetIndexMapping();
