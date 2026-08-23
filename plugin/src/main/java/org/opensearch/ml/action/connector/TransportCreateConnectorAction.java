@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -27,6 +28,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
@@ -34,6 +36,7 @@ import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -112,6 +115,16 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided but MCP feature is disabled, so abort.
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
+            return;
+        }
+        // google_cloud is the protocol string for the Vertex AI connector; gate it behind the opt-in feature flag.
+        if (mlCreateConnectorInput.getProtocol() != null
+            && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.GOOGLE_CLOUD)
+            && !mlFeatureEnabledSetting.isVertexAIConnectorEnabled()) {
+            listener
+                .onFailure(
+                    new OpenSearchStatusException(MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
+                );
             return;
         }
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
