@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_INVOKE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.lang.reflect.Constructor;
@@ -41,6 +42,8 @@ public class StreamingHandlerFactory {
             case LLM_INTERFACE_BEDROCK_CONVERSE:
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return createBedrockHandler(httpClient, connector, parameters);
+            case LLM_INTERFACE_BEDROCK_INVOKE_CLAUDE:
+                return createBedrockInvokeModelHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
                 return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters);
             default:
@@ -63,6 +66,25 @@ public class StreamingHandlerFactory {
             throw new MLException("Bedrock streaming not available - Bedrock SDK not found", e);
         } catch (Exception e) {
             throw new MLException("Failed to initialize Bedrock streaming handler", e);
+        }
+    }
+
+    private static StreamingHandler createBedrockInvokeModelHandler(
+        SdkAsyncHttpClient httpClient,
+        Connector connector,
+        Map<String, String> parameters
+    ) {
+        try {
+            // Use reflection to avoid hard dependency
+            Class<?> handlerClass = Class
+                .forName("org.opensearch.ml.engine.algorithms.remote.streaming.BedrockInvokeModelStreamingHandler");
+            Constructor<?> constructor = handlerClass
+                .getConstructor(SdkAsyncHttpClient.class, Class.forName("org.opensearch.ml.common.connector.AwsConnector"), Map.class);
+            return (StreamingHandler) constructor.newInstance(httpClient, connector, parameters);
+        } catch (ClassNotFoundException e) {
+            throw new MLException("Bedrock InvokeModel streaming not available - Bedrock SDK not found", e);
+        } catch (Exception e) {
+            throw new MLException("Failed to initialize Bedrock InvokeModel streaming handler", e);
         }
     }
 
