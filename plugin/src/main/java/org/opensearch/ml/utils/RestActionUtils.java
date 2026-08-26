@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
 import java.security.AccessController;
+import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -54,8 +55,6 @@ import org.opensearch.transport.client.Client;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 @Log4j2
 public class RestActionUtils {
@@ -89,7 +88,6 @@ public class RestActionUtils {
 
     static final Set<LdapName> adminDn = new HashSet<>();
     static final Set<String> adminUsernames = new HashSet<String>();
-    static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -253,9 +251,19 @@ public class RestActionUtils {
             return false;
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
-                String userContext = objectMapper.writeValueAsString(userObject);
-                final JsonNode node = objectMapper.readTree(userContext);
-                final String userName = node.get("name").asText();
+                // The security plugin's org.opensearch.security.user.User implements Principal, and this
+                // transient is always such a User in production. Read the name directly from the Principal
+                // rather than serializing the bean: it is simpler, and it avoids depending on the bean being
+                // safe to serialize (User#getPrincipal() returns `this`, a self-reference Jackson 3 rejects
+                // by default). See ml-commons issue #4990.
+                if (!(userObject instanceof Principal principal)) {
+                    // Anything else in this transient is a contract violation, not a normal input. Fail loud
+                    // rather than silently deciding this is not an admin on a security-relevant path.
+                    throw new IllegalStateException(
+                        "Expected the security user transient to be a Principal but got " + userObject.getClass().getName()
+                    );
+                }
+                final String userName = principal.getName();
 
                 return isAdminDN(userName);
             });
