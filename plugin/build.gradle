@@ -692,6 +692,12 @@ configurations.all {
     if (FipsBuildParams.isInFipsMode()) {
         exclude group: 'org.bouncycastle', module: 'bc-fips'
     }
+
+    // jackson-core and jackson-dataformat-cbor are provided by OpenSearch in the distribution's
+    // lib/. They arrive transitively (jackson-bom via jackson-databind, and aws-java-sdk-core
+    // via the remote-metadata SDK), and a second copy in the bundle trips jar hell on install.
+    exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+    exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-cbor'
     
     resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
