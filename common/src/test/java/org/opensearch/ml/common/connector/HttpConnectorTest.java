@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector;
 
 import static org.mockito.Mockito.mock;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.supportedProtocols;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,6 +37,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.search.SearchModule;
 
 import com.google.gson.JsonObject;
@@ -67,7 +69,7 @@ public class HttpConnectorTest {
     @Test
     public void constructor_InvalidProtocol() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of " + supportedProtocols());
 
         HttpConnector.builder().protocol("wrong protocol").build();
     }
@@ -1207,5 +1209,94 @@ public class HttpConnectorTest {
         headers.put("Authorization", "Bearer ${credential.secretArn.token}");
 
         AbstractConnector.validateConnectorHeaders(headers, "mcp_sse");
+    }
+
+    // ---- batch_job_status tests ----
+
+    @Test
+    public void batchJobStatus_xContentRoundTrip_preserved() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("google_cloud").build();
+        connector.setBatchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")));
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        Assert.assertTrue(content.contains("batch_job_status"));
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                content
+            );
+        parser.nextToken();
+        HttpConnector restored = new HttpConnector("google_cloud", parser);
+        Assert.assertNotNull(restored.getBatchJobStatus());
+        Assert.assertEquals("state", restored.getBatchJobStatus().getFieldName());
+        Assert.assertEquals("COMPLETED", restored.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+    }
+
+    @Test
+    public void batchJobStatus_streamRoundTrip_preserved() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("google_cloud").build();
+        connector.setBatchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")));
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_9_0);
+        connector.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_9_0);
+
+        HttpConnector deserialized = new HttpConnector(streamInput);
+        Assert.assertNotNull(deserialized.getBatchJobStatus());
+        Assert.assertEquals("state", deserialized.getBatchJobStatus().getFieldName());
+        Assert.assertEquals("COMPLETED", deserialized.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+    }
+
+    @Test
+    public void batchJobStatus_absent_isNull() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("google_cloud").build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_9_0);
+        connector.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_9_0);
+
+        HttpConnector deserialized = new HttpConnector(streamInput);
+        Assert.assertNull(deserialized.getBatchJobStatus());
+    }
+
+    @Test
+    public void batchJobStatus_oldVersionStream_notSerialized() throws IOException {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("google_cloud").build();
+        connector.setBatchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")));
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0); // pre-3.8 stream: field must not be written
+        connector.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+
+        HttpConnector deserialized = new HttpConnector(streamInput);
+        Assert.assertNull(deserialized.getBatchJobStatus());
+    }
+
+    @Test
+    public void update_appliesBatchJobStatus() {
+        HttpConnector connector = HttpConnector.builder().name("test").protocol("google_cloud").build();
+        Assert.assertNull(connector.getBatchJobStatus());
+
+        MLCreateConnectorInput updateContent = MLCreateConnectorInput
+            .builder()
+            .updateConnector(true)
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        connector.update(updateContent);
+
+        Assert.assertNotNull(connector.getBatchJobStatus());
+        Assert.assertEquals("state", connector.getBatchJobStatus().getFieldName());
+        Assert.assertEquals("COMPLETED", connector.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
     }
 }

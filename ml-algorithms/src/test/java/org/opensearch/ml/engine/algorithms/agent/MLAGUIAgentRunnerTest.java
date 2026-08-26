@@ -7,6 +7,8 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -162,6 +164,35 @@ public class MLAGUIAgentRunnerTest {
 
         // Assert - agent_type is set even when llm_interface comes from agent
         assertEquals("ag_ui", params.get("agent_type"));
+    }
+
+    @Test
+    public void testRun_GeminiInterface_FailsFast() {
+        // Arrange - AG-UI agent over the Gemini (google_cloud) interface, which does not weave AG-UI events.
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAGUIAgent")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("test-model-id").build())
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLChatAgentRunner.LLM_INTERFACE, "gemini/v1beta/generatecontent");
+
+        // Act
+        aguiAgentRunner.run(mlAgent, params, agentActionListener, channel);
+
+        // Assert - fails fast with a clear IllegalArgumentException, before any stream opens.
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(agentActionListener).onFailure(errorCaptor.capture());
+        Exception error = errorCaptor.getValue();
+        assertEquals(IllegalArgumentException.class, error.getClass());
+        assertTrue(error.getMessage().contains("not yet supported"));
+        assertTrue(error.getMessage().contains("Gemini"));
+
+        // Execution must NOT proceed: agent_type is never set and no success is emitted.
+        assertNull(params.get("agent_type"));
+        verify(agentActionListener, never()).onResponse(any());
     }
 
     @Test

@@ -52,6 +52,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
@@ -243,6 +244,44 @@ public class MLFeatureEnabledSettingTests {
         mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_enabled", true).build());
 
         assertTrue(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // The Vertex AI (google_cloud) connector is opt-in: the flag defaults to false.
+        assertFalse(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorDynamicUpdate() {
+        // Default is false; construct disabled, then dynamically flip the flag on.
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isVertexAIConnectorEnabled());
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", true).build());
+
+        assertTrue(setting.isVertexAIConnectorEnabled());
     }
 
     @Test

@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.sanitizeForLogging;
@@ -95,6 +96,15 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             String llmInterface = params.get(LLM_INTERFACE);
             if (llmInterface == null && mlAgent.getParameters() != null) {
                 llmInterface = mlAgent.getParameters().get(LLM_INTERFACE);
+            }
+
+            // AG-UI event weaving is not implemented for the Gemini interface yet; fail fast rather than truncating mid-stream.
+            if (LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT.equals(llmInterface)) {
+                listener
+                    .onFailure(
+                        new IllegalArgumentException("AG-UI streaming is not yet supported for the Gemini (google_cloud) LLM interface")
+                    );
+                return;
             }
 
             FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);

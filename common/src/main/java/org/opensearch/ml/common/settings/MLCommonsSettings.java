@@ -585,6 +585,14 @@ public final class MLCommonsSettings {
         "Cannot set pinned: the memory retention feature is not enabled. To enable it, please update the cluster setting "
             + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
 
+    // Feature flag for the Vertex AI (google_cloud) connector. Disabled by default (opt-in): gates connector
+    // creation keyed on the google_cloud protocol behind a cluster-level kill switch pending security review.
+    public static final Setting<Boolean> ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "connector.vertexai_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE =
+        "The Vertex AI (google_cloud) connector is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.getKey();
+
     // Feature flag for global tenant id in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);
