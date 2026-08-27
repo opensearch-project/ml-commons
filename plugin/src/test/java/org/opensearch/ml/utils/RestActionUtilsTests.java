@@ -23,6 +23,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.UI_METADATA_EXCLUDE;
 
 import java.net.InetAddress;
+import java.security.Principal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -317,6 +318,47 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     }
 
     // Need to add a test case to cover non Ldap user
+
+    @Test
+    public void testIsSuperAdminUser_SelfReferencingPrincipal() {
+        // Reproduces the Security plugin's org.opensearch.security.user.User shape: it
+        // implements Principal and its getPrincipal() bean property returns itself. Under
+        // Jackson 3 (tools.jackson), serializing that direct self-reference throws
+        // InvalidDefinitionException instead of returning the user name.
+        ClusterService clusterService = mock(ClusterService.class);
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+
+        when(clusterService.getSettings())
+            .thenReturn(
+                Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "CN=kirk,OU=client,O=client,L=test, C=de").build()
+            );
+        when(client.threadPool()).thenReturn(mock(ThreadPool.class));
+        when(client.threadPool().getThreadContext()).thenReturn(threadContext);
+
+        threadContext
+            .putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, new SelfReferencingPrincipal("CN=kirk,OU=client,O=client,L=test,C=de"));
+
+        boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
+        Assert.assertTrue(isAdmin);
+    }
+
+    private static final class SelfReferencingPrincipal implements Principal {
+        private final String name;
+
+        SelfReferencingPrincipal(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        public Principal getPrincipal() {
+            return this;
+        }
+    }
 
     @Test
     public void testIsSuperAdminUser_NotAdmin() {
