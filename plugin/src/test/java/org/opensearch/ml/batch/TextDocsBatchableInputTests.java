@@ -6,6 +6,7 @@
 package org.opensearch.ml.batch;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -132,6 +133,58 @@ public class TextDocsBatchableInputTests {
     public void toItemsRejectsNullInputWithoutThrowingNpe() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> handler.toItems(null));
         assertTrue(error.getMessage().contains("null"));
+    }
+
+    @Test
+    public void groupKeyIsEqualForRequestsThatDifferOnlyInDocuments() {
+        MLInput a = textInput(null, "cat", "dog");
+        MLInput b = textInput(null, "fish");
+        assertEquals("only the documents differ, so the requests are safe to coalesce", handler.groupKey(a), handler.groupKey(b));
+    }
+
+    @Test
+    public void groupKeyDiffersWhenResultFilterDiffers() {
+        MLInput a = textInput(new ModelResultFilter(false, true, null, null), "x");
+        MLInput b = textInput(new ModelResultFilter(true, false, null, null), "x");
+        assertNotEquals("differing non-payload parameters must not coalesce", handler.groupKey(a), handler.groupKey(b));
+    }
+
+    @Test
+    public void distributeSplitsOneGroupIntoOneOutputPerItemInOrder() {
+        MLOutput batched = tensorOutput("t0", "t1", "t2");
+        List<MLOutput> perItem = handler.distribute(batched);
+        assertEquals(3, perItem.size());
+        for (int i = 0; i < 3; i++) {
+            List<ModelTensors> groups = ((ModelTensorOutput) perItem.get(i)).getMlModelOutputs();
+            assertEquals("each item output is a single-tensor group", 1, groups.size());
+            assertEquals(1, groups.get(0).getMlModelTensors().size());
+            assertEquals("t" + i, groups.get(0).getMlModelTensors().get(0).getName());
+        }
+    }
+
+    @Test
+    public void distributeIsTheInverseOfCombine() {
+        // distribute then combine must reproduce a single flattened group identical to the input.
+        MLOutput batched = tensorOutput(200, "a", "b", "c");
+        MLOutput roundTripped = handler.combine(handler.distribute(batched));
+        ModelTensors group = ((ModelTensorOutput) roundTripped).getMlModelOutputs().get(0);
+        assertEquals(3, group.getMlModelTensors().size());
+        assertEquals("a", group.getMlModelTensors().get(0).getName());
+        assertEquals("c", group.getMlModelTensors().get(2).getName());
+        assertEquals(Integer.valueOf(200), group.getStatusCode());
+    }
+
+    @Test
+    public void distributeCarriesStatusCodeToEachItem() {
+        List<MLOutput> perItem = handler.distribute(tensorOutput(206, "only"));
+        assertEquals(1, perItem.size());
+        assertEquals(Integer.valueOf(206), ((ModelTensorOutput) perItem.get(0)).getMlModelOutputs().get(0).getStatusCode());
+    }
+
+    @Test
+    public void distributeReturnsEmptyForNullModelOutputs() {
+        MLOutput withNull = ModelTensorOutput.builder().mlModelOutputs(null).build();
+        assertTrue(handler.distribute(withNull).isEmpty());
     }
 
     /** One model call's output: a single ModelTensors group with one tensor per doc. */

@@ -28,22 +28,26 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
 
     public static final String MAX_ITEMS_PER_REQUEST_FIELD = "max_items_per_request";
     public static final String MAX_BYTES_PER_REQUEST_FIELD = "max_bytes_per_request";
+    public static final String QUEUE_FIELD = "queue";
 
     public static final int NO_LIMIT = -1;
 
     private final int maxItemsPerRequest;
     private final long maxBytesPerRequest;
+    private final BatchQueueConfig queue;
 
     @Builder(toBuilder = true)
-    public BatchInferenceConfig(Integer maxItemsPerRequest, Long maxBytesPerRequest) {
+    public BatchInferenceConfig(Integer maxItemsPerRequest, Long maxBytesPerRequest, BatchQueueConfig queue) {
         this.maxItemsPerRequest = maxItemsPerRequest == null ? NO_LIMIT : maxItemsPerRequest;
         this.maxBytesPerRequest = maxBytesPerRequest == null ? NO_LIMIT : maxBytesPerRequest;
+        this.queue = queue;
         validate();
     }
 
     public BatchInferenceConfig(StreamInput in) throws IOException {
         this.maxItemsPerRequest = in.readInt();
         this.maxBytesPerRequest = in.readLong();
+        this.queue = in.readBoolean() ? new BatchQueueConfig(in) : null;
     }
 
     private void validate() {
@@ -77,10 +81,20 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
         return maxBytesPerRequest != NO_LIMIT;
     }
 
+    public boolean isQueueEnabled() {
+        return queue != null && queue.isEnabled();
+    }
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeInt(maxItemsPerRequest);
         out.writeLong(maxBytesPerRequest);
+        if (queue != null) {
+            out.writeBoolean(true);
+            queue.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -88,6 +102,9 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
         builder.startObject();
         builder.field(MAX_ITEMS_PER_REQUEST_FIELD, maxItemsPerRequest);
         builder.field(MAX_BYTES_PER_REQUEST_FIELD, maxBytesPerRequest);
+        if (queue != null) {
+            builder.field(QUEUE_FIELD, queue);
+        }
         builder.endObject();
         return builder;
     }
@@ -95,6 +112,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
     public static BatchInferenceConfig parse(XContentParser parser) throws IOException {
         Integer maxItemsPerRequest = null;
         Long maxBytesPerRequest = null;
+        BatchQueueConfig queue = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -108,11 +126,14 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
                 case MAX_BYTES_PER_REQUEST_FIELD:
                     maxBytesPerRequest = parser.longValue();
                     break;
+                case QUEUE_FIELD:
+                    queue = BatchQueueConfig.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new BatchInferenceConfig(maxItemsPerRequest, maxBytesPerRequest);
+        return new BatchInferenceConfig(maxItemsPerRequest, maxBytesPerRequest, queue);
     }
 }

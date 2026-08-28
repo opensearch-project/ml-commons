@@ -5,11 +5,16 @@
 
 package org.opensearch.ml.batch;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -25,6 +30,8 @@ import org.opensearch.ml.common.output.model.ModelTensors;
  */
 public class TextDocsBatchableInput implements BatchableInput {
 
+    private static final List<BatchItem> KEY_PAYLOAD = List.of(new BatchItem("", 0L));
+
     @Override
     public List<BatchItem> toItems(MLInput input) {
         List<String> docs = asTextDocs(input).getDocs();
@@ -36,13 +43,6 @@ public class TextDocsBatchableInput implements BatchableInput {
         return items;
     }
 
-    /**
-     * Rebuilds a sub-batch as a text-docs input: only the documents change, and the rest of the request
-     * is copied unchanged, such as the algorithm parameters and the result filter. Copying is safe only
-     * while those fields mean the same thing for every document, applying to the request as a whole
-     * rather than to a document at a particular position. A field whose meaning depends on where a
-     * document sits in the list cannot be copied this way, and would have to be split and remapped here.
-     */
     @Override
     public MLInput merge(MLInput source, List<BatchItem> items) {
         List<String> docs = new ArrayList<>(items.size());
@@ -54,10 +54,18 @@ public class TextDocsBatchableInput implements BatchableInput {
     }
 
     @Override
+    public String groupKey(MLInput input) {
+        // Key over merge with a placeholder payload, so it always covers exactly the non-payload state merge copies.
+        try (BytesStreamOutput out = new BytesStreamOutput()) {
+            merge(input, KEY_PAYLOAD).writeTo(out);
+            return Base64.getEncoder().encodeToString(BytesReference.toBytes(out.bytes()));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to compute batch group key for text-docs input", e);
+        }
+    }
+
+    @Override
     public MLOutput combine(List<MLOutput> orderedOutputs) {
-        // A remote embedding call returns all of its per-item results in a single group. To make the
-        // reassembled response identical to an un-split call, flatten every sub-batch's results back
-        // into one group, preserving the original input order.
         List<ModelTensor> tensors = new ArrayList<>();
         Integer commonStatusCode = null;
         boolean statusCodeSeen = false;
@@ -90,6 +98,27 @@ public class TextDocsBatchableInput implements BatchableInput {
         ModelTensors combined = ModelTensors.builder().mlModelTensors(tensors).build();
         combined.setStatusCode(commonStatusCode);
         return ModelTensorOutput.builder().mlModelOutputs(List.of(combined)).build();
+    }
+
+    @Override
+    public List<MLOutput> distribute(MLOutput batchedOutput) {
+        List<MLOutput> perItem = new ArrayList<>();
+        List<ModelTensors> groups = asTensorOutput(batchedOutput).getMlModelOutputs();
+        if (groups == null) {
+            return perItem;
+        }
+        for (ModelTensors group : groups) {
+            Integer statusCode = group.getStatusCode();
+            if (group.getMlModelTensors() == null) {
+                continue;
+            }
+            for (ModelTensor tensor : group.getMlModelTensors()) {
+                ModelTensors single = ModelTensors.builder().mlModelTensors(new ArrayList<>(List.of(tensor))).build();
+                single.setStatusCode(statusCode);
+                perItem.add(ModelTensorOutput.builder().mlModelOutputs(new ArrayList<>(List.of(single))).build());
+            }
+        }
+        return perItem;
     }
 
     private TextDocsInputDataSet asTextDocs(MLInput input) {

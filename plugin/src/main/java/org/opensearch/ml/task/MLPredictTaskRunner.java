@@ -44,9 +44,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.batch.BatchInferenceExecutor;
-import org.opensearch.ml.batch.BatchSplitter;
-import org.opensearch.ml.batch.BatchableInputRegistry;
+import org.opensearch.ml.batch.BatchInferenceRouter;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -109,7 +107,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final MLModelManager mlModelManager;
     private final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
-    private final BatchInferenceExecutor batchInferenceExecutor;
+    private final BatchInferenceRouter batchInferenceRouter;
     private volatile boolean autoDeploymentEnabled;
 
     public static final String BUCKET_FIELD = "bucket";
@@ -139,7 +137,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
-        this.batchInferenceExecutor = new BatchInferenceExecutor(new BatchableInputRegistry(), new BatchSplitter());
+        this.batchInferenceRouter = new BatchInferenceRouter(threadPool);
         autoDeploymentEnabled = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
             .getClusterSettings()
@@ -610,13 +608,19 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName));
-                        // If it is offline batch inference, call the model directly. If it is an online predict request,
-                        // go through the batchInferenceExecutor, which splits it when the model defines batch inference limits.
+                        // Offline batch prediction calls the model directly; online predict goes through the router.
                         if (mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)) {
                             predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
                         } else {
-                            batchInferenceExecutor
-                                .execute(mlInput, getBatchInferenceConfig(modelId), predictor, channel, trackPredictDurationListener);
+                            batchInferenceRouter
+                                .route(
+                                    modelId,
+                                    mlInput,
+                                    getBatchInferenceConfig(modelId),
+                                    predictor,
+                                    channel,
+                                    trackPredictDurationListener
+                                );
                         }
                     } else {
                         // long startTime = System.nanoTime();
