@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
@@ -40,6 +41,12 @@ public class GoogleCloudConnector extends HttpConnector {
     public static final String DEFAULT_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
     public static final String AUTHORIZATION_HEADER = "Authorization";
+
+    // Vertex batch_predict URLs embed an API version segment (/v1/ or /v1beta<N>/) used to derive the
+    // status/cancel URL. Validate it at create time so a malformed endpoint fails before a job is submitted
+    // (rather than after, which would orphan a Vertex billing job). Mirrors the runtime check in ConnectorUtils;
+    // duplicated here because common cannot depend on ml-algorithms.
+    private static final Pattern VERTEX_API_VERSION_PATTERN = Pattern.compile("/v1(beta\\d+)?/");
 
     // Runtime-only bearer token set by the executor before each request. Excluded from
     // equals/hashCode and serialization: it is transient per-request state, not connector config.
@@ -110,11 +117,28 @@ public class GoogleCloudConnector extends HttpConnector {
             if (credential != null && (credential.containsKey(PRIVATE_KEY_FIELD) || credential.containsKey(CLIENT_EMAIL_FIELD))) {
                 throw new IllegalArgumentException("auth_mode=adc must not include service-account credentials (private_key/client_email)");
             }
-            return;
+        } else {
+            // Service-account key mode.
+            if (credential == null || !credential.containsKey(PRIVATE_KEY_FIELD) || !credential.containsKey(CLIENT_EMAIL_FIELD)) {
+                throw new IllegalArgumentException("Missing credential");
+            }
         }
-        // Service-account key mode.
-        if (credential == null || !credential.containsKey(PRIVATE_KEY_FIELD) || !credential.containsKey(CLIENT_EMAIL_FIELD)) {
-            throw new IllegalArgumentException("Missing credential");
+        // Batch-predict URL check applies to both auth modes: a malformed endpoint would orphan a
+        // Vertex billing job regardless of how the request was authenticated.
+        validateBatchPredictUrl();
+    }
+
+    private void validateBatchPredictUrl() {
+        if (actions != null) {
+            for (ConnectorAction action : actions) {
+                if (action.getActionType() == ConnectorAction.ActionType.BATCH_PREDICT && action.getUrl() != null) {
+                    if (!VERTEX_API_VERSION_PATTERN.matcher(action.getUrl()).find()) {
+                        throw new IllegalArgumentException(
+                            "Vertex AI batch_predict endpoint must contain a '/v1/' or '/v1beta<N>/' path segment, got: " + action.getUrl()
+                        );
+                    }
+                }
+            }
         }
     }
 

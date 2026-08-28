@@ -141,6 +141,102 @@ public class GoogleCloudConnectorTest {
     }
 
     @Test
+    public void validate_batchPredictUrlMissingVersionSegment_throws() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("batch_predict");
+        exceptionRule.expectMessage("/v1");
+
+        Map<String, String> credential = new HashMap<>();
+        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
+        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
+        ConnectorAction batchAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .method("POST")
+            .url("https://us-central1-aiplatform.googleapis.com/projects/p/locations/l/batchPredictionJobs")
+            .requestBody("{}")
+            .build();
+        GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .name("gcp")
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .credential(credential)
+            .actions(List.of(batchAction))
+            .build();
+    }
+
+    @Test
+    public void validate_batchPredictUrlWithV1_ok() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
+        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
+        ConnectorAction batchAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .method("POST")
+            .url("https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/l/batchPredictionJobs")
+            .requestBody("{}")
+            .build();
+        GoogleCloudConnector connector = GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .name("gcp")
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .credential(credential)
+            .actions(List.of(batchAction))
+            .build();
+        Assert.assertNotNull(connector);
+    }
+
+    @Test
+    public void validate_batchPredictUrlWithV1beta1_ok() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
+        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
+        ConnectorAction batchAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .method("POST")
+            .url("https://us-central1-aiplatform.googleapis.com/v1beta1/projects/p/locations/l/batchPredictionJobs")
+            .requestBody("{}")
+            .build();
+        GoogleCloudConnector connector = GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .name("gcp")
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .credential(credential)
+            .actions(List.of(batchAction))
+            .build();
+        Assert.assertNotNull(connector);
+    }
+
+    @Test
+    public void validate_noBatchPredictAction_ok() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
+        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
+        // A PREDICT action whose URL has no version segment must NOT trigger the batch_predict check.
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("https://us-central1-aiplatform.googleapis.com/projects/p/locations/l/x:generateContent")
+            .requestBody("{}")
+            .build();
+        GoogleCloudConnector connector = GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .name("gcp")
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .credential(credential)
+            .actions(List.of(predictAction))
+            .build();
+        Assert.assertNotNull(connector);
+    }
+
+    @Test
     public void streamInput_RoundTrip() throws IOException {
         Map<String, String> credential = new HashMap<>();
         credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
