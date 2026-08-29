@@ -8,7 +8,6 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
 
@@ -146,7 +145,7 @@ public class MLModelGroupManager {
                                         wrappedListener.onFailure(cause);
                                     } else {
                                         try {
-                                            IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                            IndexResponse indexResponse = r.indexResponse();
                                             log
                                                 .info(
                                                     "Model group creation result: {}, model group id: {}",
@@ -246,10 +245,11 @@ public class MLModelGroupManager {
                     }
                 } else {
                     try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        SearchResponse searchResponse = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         log.info("Model group search complete: {}", searchResponse.getHits().getTotalHits());
                         listener.onResponse(searchResponse);
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         log.error("Failed to parse search response", e);
                         listener
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
@@ -293,7 +293,7 @@ public class MLModelGroupManager {
 
     private void processModelGroupResponse(GetDataObjectResponse response, String modelGroupId, ActionListener<GetResponse> listener) {
         try {
-            GetResponse getResponse = parseGetResponse(response);
+            GetResponse getResponse = response.getResponse();
             if (getResponse == null || !getResponse.isExists()) {
                 listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
                 return;
@@ -303,10 +303,6 @@ public class MLModelGroupManager {
         } catch (Exception e) {
             listener.onFailure(e);
         }
-    }
-
-    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
-        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
     }
 
     private void parseAndRespond(GetResponse getResponse, ActionListener<GetResponse> listener) {

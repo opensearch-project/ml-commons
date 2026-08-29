@@ -9,8 +9,6 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
-import java.io.IOException;
-
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -194,10 +192,10 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
 
     private void processDeleteResponse(DeleteDataObjectResponse deleteDataObjectResponse, ActionListener<DeleteResponse> actionListener) {
         try {
-            DeleteResponse deleteResponse = DeleteResponse.fromXContent(deleteDataObjectResponse.parser());
+            DeleteResponse deleteResponse = deleteDataObjectResponse.deleteResponse();
             log.info("Task deletion result: {}, task id: {}", deleteResponse.getResult(), deleteResponse.getId());
             actionListener.onResponse(deleteResponse);
-        } catch (IOException e) {
+        } catch (Exception e) {
             actionListener.onFailure(e);
         }
     }
