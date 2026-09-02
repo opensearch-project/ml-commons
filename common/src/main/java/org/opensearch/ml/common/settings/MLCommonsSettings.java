@@ -22,6 +22,7 @@ import java.util.regex.PatternSyntaxException;
 
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
 
@@ -152,6 +153,40 @@ public final class MLCommonsSettings {
         .byteSizeSetting(
             ML_PLUGIN_SETTING_PREFIX + "disk_free_space_threshold",
             new ByteSizeValue(5L, ByteSizeUnit.GB),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Double> ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION = Setting
+        .doubleSetting(
+            ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_fraction",
+            0.01,
+            0.0,
+            1.0,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<ByteSizeValue> ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR = Setting
+        .byteSizeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_floor",
+            new ByteSizeValue(64L, ByteSizeUnit.MB),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<ByteSizeValue> ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING = Setting
+        .byteSizeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_ceiling",
+            new ByteSizeValue(512L, ByteSizeUnit.MB),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<TimeValue> ML_COMMONS_BATCH_QUEUE_IDLE_TTL = Setting
+        .positiveTimeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "batch_queue.idle_ttl",
+            TimeValue.timeValueMinutes(5),
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

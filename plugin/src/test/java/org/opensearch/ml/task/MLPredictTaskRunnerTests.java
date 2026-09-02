@@ -9,6 +9,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.spy;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 
 import java.io.IOException;
@@ -176,7 +180,19 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         stats.put(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
 
         Settings settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.getKey(), true).build();
-        ClusterSettings clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE)));
+        ClusterSettings clusterSettings = new ClusterSettings(
+            settings,
+            new HashSet<>(
+                Arrays
+                    .asList(
+                        ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
+                        ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION,
+                        ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR,
+                        ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING,
+                        ML_COMMONS_BATCH_QUEUE_IDLE_TTL
+                    )
+            )
+        );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         this.mlStats = new MLStats(stats);
         mlInputDatasetHandler = spy(new MLInputDatasetHandler(client));

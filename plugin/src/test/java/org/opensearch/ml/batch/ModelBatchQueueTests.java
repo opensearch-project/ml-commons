@@ -6,6 +6,7 @@
 package org.opensearch.ml.batch;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -26,6 +27,7 @@ import org.junit.Test;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -54,6 +56,7 @@ public class ModelBatchQueueTests {
     private BatchSplitter splitter;
     private ThreadPool threadPool;
     private AtomicReference<Runnable> scheduledFlush;
+    private final QueueMemoryBudget budget = new QueueMemoryBudget(Long.MAX_VALUE);
 
     @Before
     public void setUp() {
@@ -157,7 +160,7 @@ public class ModelBatchQueueTests {
 
     @Test
     public void flushesOnCountThresholdAndRoutesEachResultToItsCaller() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(3, null, 10_000L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(3, null, 10_000L), registry, splitter, threadPool, budget);
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -178,7 +181,7 @@ public class ModelBatchQueueTests {
 
     @Test
     public void flushesViaTimerWhenBelowThreshold() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -198,7 +201,7 @@ public class ModelBatchQueueTests {
 
     @Test
     public void multiDocEntryKeepsOrderAndOwnershipAcrossCallers() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         Predictable predictor = model(null, null);
 
         AtomicReference<MLTaskResponse> a = new AtomicReference<>();
@@ -214,7 +217,7 @@ public class ModelBatchQueueTests {
     @Test
     public void oversizeSingleEntryIsSplitButReassembledForItsOneCaller() {
         // One caller with 5 docs against a 2-item limit: 5 items >= 2 flushes, splitter makes 3 sub-batches.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -230,7 +233,7 @@ public class ModelBatchQueueTests {
         // Byte limit only: each 30-byte doc lands in its own sub-batch, so callers do not share a call.
         String docA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; // 30 bytes
         String docB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"; // 30 bytes
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(null, 40L, 10_000L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(null, 40L, 10_000L), registry, splitter, threadPool, budget);
         Predictable predictor = model(null, docB); // fail the sub-batch carrying docB
 
         AtomicReference<MLTaskResponse> a = new AtomicReference<>();
@@ -246,7 +249,7 @@ public class ModelBatchQueueTests {
 
     @Test
     public void notifiesEachListenerExactlyOnce() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
         Predictable predictor = model(null, null);
         AtomicInteger aCount = new AtomicInteger();
         AtomicInteger bCount = new AtomicInteger();
@@ -263,7 +266,7 @@ public class ModelBatchQueueTests {
         // A valid text-docs request and a mismatched-type request land in the same flush. The mismatched
         // one has no handler, so it is dispatched on its own and fails; the valid one is in its own group
         // and still succeeds.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         Predictable predictor = model(null, null);
 
         AtomicReference<MLTaskResponse> aResult = new AtomicReference<>();
@@ -289,7 +292,7 @@ public class ModelBatchQueueTests {
     @Test
     public void aThrowingListenerDoesNotStopOtherCallersFromBeingSettled() {
         // A flush settles many independent callers; one whose listener throws must not strand the rest.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
         Predictable predictor = model(null, null);
 
         AtomicReference<MLTaskResponse> b = new AtomicReference<>();
@@ -311,7 +314,7 @@ public class ModelBatchQueueTests {
             scheduledFlush.set(invocation.getArgument(0));
             return mock(Scheduler.ScheduledCancellable.class);
         });
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         Predictable predictor = model(new AtomicInteger(), null);
 
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a")); // first schedule fails, swallowed
@@ -325,7 +328,7 @@ public class ModelBatchQueueTests {
     public void timerReschedulesAfterFireTimeRejection() {
         // Pool rejection happens when the timer fires, not when schedule() is called, so onRejection (not
         // the schedule() call site) must clear the flag. Otherwise the model's timed flush is stuck off.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         Predictable predictor = model(new AtomicInteger(), null);
 
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a"));
@@ -340,7 +343,7 @@ public class ModelBatchQueueTests {
     @Test
     public void timerReschedulesAfterTheScheduledTaskFails() {
         // If the scheduled flush task fails (onFailure), the flag must be cleared so the timer reschedules.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         Predictable predictor = model(new AtomicInteger(), null);
 
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a"));
@@ -355,7 +358,7 @@ public class ModelBatchQueueTests {
     public void fireTimeRejectionFailsQueuedCallersWithoutDispatchingOnTheSchedulerThread() {
         // Under pool rejection the queue must surface the failure to callers, not run dispatch (which
         // would burn the shared scheduler thread and self-feed a reschedule loop) and not strand them.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         AtomicInteger predictCalls = new AtomicInteger();
         Predictable predictor = model(predictCalls, null);
 
@@ -371,7 +374,7 @@ public class ModelBatchQueueTests {
     public void divergentParametersAreNotCoalescedIntoOneCall() {
         // Two callers to the same model send different result filters. They must not share a model call,
         // or one caller's parameters would be applied to the other's document.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -390,7 +393,7 @@ public class ModelBatchQueueTests {
     public void divergentContentTypeParametersAreNotCoalescedIntoOneCall() {
         // The query-vs-passage content type is the classic leakage hazard: two callers to the same model
         // with different embedding content types must not share a call.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -408,10 +411,77 @@ public class ModelBatchQueueTests {
     }
 
     @Test
+    public void enqueueRejectsWithBackpressureWhenMemoryBudgetIsExhausted() {
+        QueueMemoryBudget tinyBudget = new QueueMemoryBudget(10L);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, tinyBudget);
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+
+        AtomicReference<Exception> err = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err::set), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+
+        assertNotNull("the caller is failed, not silently dropped", err.get());
+        assertTrue(err.get() instanceof OpenSearchRejectedExecutionException);
+        assertEquals("a rejected request never reaches the model", 0, calls.get());
+        assertNull("no timer is scheduled for a rejected request", scheduledFlush.get());
+        assertEquals("a rejected request holds no reservation", 0, tinyBudget.getReservedBytes());
+    }
+
+    @Test
+    public void memoryBudgetIsReleasedAfterFlushSoLaterRequestsAreAdmitted() {
+        QueueMemoryBudget budget30 = new QueueMemoryBudget(30L);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, budget30);
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+
+        String doc = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        AtomicReference<Exception> err1 = new AtomicReference<>();
+        AtomicReference<Exception> err2 = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err1::set), doc));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err2::set), doc));
+
+        assertNull(err1.get());
+        assertNull("the first request released its reservation on flush, admitting the second", err2.get());
+        assertEquals(2, calls.get());
+        assertEquals("nothing stays reserved once both have flushed", 0, budget30.getReservedBytes());
+    }
+
+    @Test
+    public void thresholdFlushCancelsThePendingTimer() {
+        AtomicReference<Scheduler.ScheduledCancellable> timer = new AtomicReference<>();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            scheduledFlush.set(invocation.getArgument(0));
+            Scheduler.ScheduledCancellable cancellable = mock(Scheduler.ScheduledCancellable.class);
+            timer.set(cancellable);
+            return cancellable;
+        });
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
+        Predictable predictor = model(new AtomicInteger(), null);
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a"));
+        assertNotNull(timer.get());
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "b"));
+
+        verify(timer.get()).cancel();
+    }
+
+    @Test
+    public void isIdleTracksPendingEntries() {
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, budget);
+        Predictable predictor = model(new AtomicInteger(), null);
+
+        assertTrue("a fresh queue is idle", queue.isIdle());
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a"));
+        assertFalse("a queue with a pending entry is not idle", queue.isIdle());
+        scheduledFlush.get().run();
+        assertTrue("a drained queue is idle again", queue.isIdle());
+    }
+
+    @Test
     public void unsupportedInputTypeFailsInIsolationConsistentlyWithTheNonQueuedPath() {
         // A model configured for batching must be sent a splittable input type. An unsupported type fails
         // just that entry (isolated), matching the non-queued path, rather than being sent unsplit.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, budget);
         AtomicInteger predictCalls = new AtomicInteger();
         Predictable predictor = model(predictCalls, null);
 

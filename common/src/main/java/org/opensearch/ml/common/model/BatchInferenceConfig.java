@@ -17,6 +17,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
@@ -24,6 +25,7 @@ import lombok.Getter;
  * (count ceiling) and max_bytes_per_request (UTF-8 byte ceiling), either of which can be -1 to disable.
  */
 @Getter
+@EqualsAndHashCode
 public class BatchInferenceConfig implements ToXContentObject, Writeable {
 
     public static final String MAX_ITEMS_PER_REQUEST_FIELD = "max_items_per_request";

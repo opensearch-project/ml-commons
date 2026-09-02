@@ -17,6 +17,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
@@ -27,6 +28,7 @@ import lombok.Getter;
  * call and a failed call fails every caller whose items were in it.
  */
 @Getter
+@EqualsAndHashCode
 public class BatchQueueConfig implements ToXContentObject, Writeable {
 
     public static final String ENABLED_FIELD = "enabled";

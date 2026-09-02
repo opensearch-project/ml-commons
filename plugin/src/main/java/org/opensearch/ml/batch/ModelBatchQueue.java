@@ -15,16 +15,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 
 import lombok.extern.log4j.Log4j2;
@@ -44,20 +46,22 @@ public class ModelBatchQueue {
     private final BatchableInputRegistry registry;
     private final BatchSplitter splitter;
     private final ThreadPool threadPool;
+    private final QueueMemoryBudget budget;
 
     private final ConcurrentLinkedQueue<QueueEntry> queue = new ConcurrentLinkedQueue<>();
-    private final AtomicInteger pendingEntries = new AtomicInteger();
-    private final AtomicLong pendingItems = new AtomicLong();
-    private final AtomicLong pendingBytes = new AtomicLong();
-    private final AtomicBoolean flushing = new AtomicBoolean(false);
+    private final AtomicReference<Totals> totals = new AtomicReference<>(Totals.ZERO);
+    private final AtomicBoolean draining = new AtomicBoolean(false);
     private final AtomicBoolean timerScheduled = new AtomicBoolean(false);
+    private volatile Scheduler.Cancellable scheduledTimer;
+    private volatile long lastUsedNanos = System.nanoTime();
 
     public ModelBatchQueue(
         String modelId,
         BatchInferenceConfig config,
         BatchableInputRegistry registry,
         BatchSplitter splitter,
-        ThreadPool threadPool
+        ThreadPool threadPool,
+        QueueMemoryBudget budget
     ) {
         this.modelId = modelId;
         this.config = config;
@@ -65,20 +69,38 @@ public class ModelBatchQueue {
         this.registry = registry;
         this.splitter = splitter;
         this.threadPool = threadPool;
+        this.budget = budget;
     }
 
     BatchInferenceConfig getConfig() {
         return config;
     }
 
-    public void enqueue(QueueEntry entry) {
-        queue.add(entry);
-        pendingEntries.incrementAndGet();
-        long items = pendingItems.addAndGet(entry.getItemCount());
-        long bytes = pendingBytes.addAndGet(entry.getByteSize());
+    long getLastUsedNanos() {
+        return lastUsedNanos;
+    }
 
-        boolean overCount = config.isItemLimitEnabled() && items >= config.getMaxItemsPerRequest();
-        boolean overBytes = config.isByteLimitEnabled() && bytes >= config.getMaxBytesPerRequest();
+    boolean isIdle() {
+        return totals.get().entries() == 0 && !draining.get();
+    }
+
+    public void enqueue(QueueEntry entry) {
+        lastUsedNanos = System.nanoTime();
+        if (!budget.tryReserve(entry.getByteSize())) {
+            entry
+                .getListener()
+                .onFailure(
+                    new OpenSearchRejectedExecutionException(
+                        "Batch inference queue memory budget is exhausted for model " + modelId + "; retry after backoff"
+                    )
+                );
+            return;
+        }
+        queue.add(entry);
+        Totals current = totals.updateAndGet(t -> t.plus(entry));
+
+        boolean overCount = config.isItemLimitEnabled() && current.items() >= config.getMaxItemsPerRequest();
+        boolean overBytes = config.isByteLimitEnabled() && current.bytes() >= config.getMaxBytesPerRequest();
         if (overCount || overBytes) {
             flush();
         } else {
@@ -89,8 +111,7 @@ public class ModelBatchQueue {
     private void scheduleTimer() {
         if (timerScheduled.compareAndSet(false, true)) {
             try {
-                // AbstractRunnable, not a lambda: onRejection must clear the flag or timed flush stops forever.
-                threadPool.schedule(new AbstractRunnable() {
+                scheduledTimer = threadPool.schedule(new AbstractRunnable() {
                     @Override
                     protected void doRun() {
                         flush();
@@ -123,36 +144,36 @@ public class ModelBatchQueue {
         if (!batch.isEmpty()) {
             dispatch(batch);
         }
-        if (pendingEntries.get() > 0) {
+        if (totals.get().entries() > 0) {
             scheduleTimer();
         }
     }
 
-    // Returns null if another flush is already draining.
     private List<QueueEntry> drain() {
-        if (!flushing.compareAndSet(false, true)) {
+        if (!draining.compareAndSet(false, true)) {
             return null;
         }
         try {
             timerScheduled.set(false);
-            int toDrain = pendingEntries.getAndSet(0);
-            List<QueueEntry> batch = new ArrayList<>(toDrain);
-            long drainedItems = 0L;
+            Scheduler.Cancellable timer = scheduledTimer;
+            if (timer != null) {
+                timer.cancel();
+            }
+            Totals snapshot = totals.getAndSet(Totals.ZERO);
+            List<QueueEntry> batch = new ArrayList<>(snapshot.entries());
             long drainedBytes = 0L;
-            for (int i = 0; i < toDrain; i++) {
+            for (int i = 0; i < snapshot.entries(); i++) {
                 QueueEntry entry = queue.poll();
                 if (entry == null) {
                     break;
                 }
                 batch.add(entry);
-                drainedItems += entry.getItemCount();
                 drainedBytes += entry.getByteSize();
             }
-            pendingItems.addAndGet(-drainedItems);
-            pendingBytes.addAndGet(-drainedBytes);
+            budget.release(drainedBytes);
             return batch;
         } finally {
-            flushing.set(false);
+            draining.set(false);
         }
     }
 
@@ -163,7 +184,6 @@ public class ModelBatchQueue {
         }
     }
 
-    // Only same-group-key requests may share a call, else one caller's parameters leak onto another's docs.
     private void dispatch(List<QueueEntry> batch) {
         Map<String, List<QueueEntry>> groups = new LinkedHashMap<>();
         for (QueueEntry entry : batch) {
@@ -268,9 +288,11 @@ public class ModelBatchQueue {
             });
 
             try {
-                QueueEntry template = group.get(subBatch.get(0).getSourceIndex());
-                MLInput merged = handler.merge(template.getInput(), subBatch);
-                template.getPredictor().asyncPredict(merged, listener, template.getChannel());
+                // Any entry in the group shares the same group key (input type + non-payload params), so the
+                // sub-batch's first source entry is a valid source for the merge template, predictor and channel.
+                QueueEntry firstSourceEntry = group.get(subBatch.get(0).getSourceIndex());
+                MLInput merged = handler.merge(firstSourceEntry.getInput(), subBatch);
+                firstSourceEntry.getPredictor().asyncPredict(merged, listener, firstSourceEntry.getChannel());
             } catch (Exception dispatchError) {
                 listener.onFailure(dispatchError);
             }
@@ -361,6 +383,15 @@ public class ModelBatchQueue {
             entry.getListener().onFailure(failure);
         } catch (Exception e) {
             log.error("Batch queue listener threw while handling a failure for model {}", modelId, e);
+        }
+    }
+
+    private record Totals(int entries, long items, long bytes) {
+
+        static final Totals ZERO = new Totals(0, 0L, 0L);
+
+        Totals plus(QueueEntry entry) {
+            return new Totals(entries + 1, items + entry.getItemCount(), bytes + entry.getByteSize());
         }
     }
 }

@@ -49,6 +49,8 @@ public class QueueEntry {
         this.items = items;
         this.groupKey = groupKey;
         if (items == null) {
+            // No batch handler for this input type, so it can't be decomposed; count it as one request with
+            // unknown size so it still participates in the count threshold and is drained and rejected promptly.
             this.itemCount = 1;
             this.byteSize = 0L;
         } else {

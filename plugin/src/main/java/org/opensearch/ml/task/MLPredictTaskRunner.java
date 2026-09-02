@@ -137,7 +137,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
-        this.batchInferenceRouter = new BatchInferenceRouter(threadPool);
+        this.batchInferenceRouter = new BatchInferenceRouter(threadPool, clusterService, settings);
         autoDeploymentEnabled = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
             .getClusterSettings()

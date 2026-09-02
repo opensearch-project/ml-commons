@@ -7,6 +7,7 @@ package org.opensearch.ml.batch;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,13 +45,33 @@ public class ModelBatchQueueManagerTests {
 
     private ModelBatchQueueManager manager;
     private ThreadPool threadPool;
+    private AtomicReference<Runnable> scheduledFlush;
 
     @Before
     public void setUp() {
         threadPool = mock(ThreadPool.class);
-        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString()))
-            .thenReturn(mock(Scheduler.ScheduledCancellable.class));
-        manager = new ModelBatchQueueManager(new BatchableInputRegistry(), new BatchSplitter(), threadPool);
+        scheduledFlush = new AtomicReference<>();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            scheduledFlush.set(invocation.getArgument(0));
+            return mock(Scheduler.ScheduledCancellable.class);
+        });
+        manager = new ModelBatchQueueManager(
+            new BatchableInputRegistry(),
+            new BatchSplitter(),
+            threadPool,
+            new QueueMemoryBudget(Long.MAX_VALUE),
+            () -> Long.MAX_VALUE
+        );
+    }
+
+    private ModelBatchQueueManager managerWithIdleTtlNanos(long ttlNanos) {
+        return new ModelBatchQueueManager(
+            new BatchableInputRegistry(),
+            new BatchSplitter(),
+            threadPool,
+            new QueueMemoryBudget(Long.MAX_VALUE),
+            () -> ttlNanos
+        );
     }
 
     private Predictable model(AtomicInteger calls) {
@@ -144,16 +166,48 @@ public class ModelBatchQueueManagerTests {
     }
 
     @Test
-    public void changingConfigReplacesQueueForModel() {
+    public void changingConfigReplacesQueueForModelAndDrainsTheOldQueue() {
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls);
 
-        // First request under a high limit sits in the queue (timer only, not flushed here).
-        manager.enqueue("model-1", queued(100, 10_000L), textInput("a"), predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        manager.enqueue("model-1", queued(100, 10_000L), textInput("a"), predictor, null, ActionListener.wrap(a::set, e -> {}));
         assertEquals(0, calls.get());
+        assertNull("first request is still waiting in the queue", a.get());
 
-        // A new config with limit 1 replaces the queue; this request flushes on its own immediately.
-        manager.enqueue("model-1", queued(1, 10_000L), textInput("b"), predictor, null, ActionListener.wrap(r -> {}, e -> {}));
-        assertEquals("replaced queue flushes the new request without pulling in the stranded one", 1, calls.get());
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        manager.enqueue("model-1", queued(1, 10_000L), textInput("b"), predictor, null, ActionListener.wrap(b::set, e -> {}));
+
+        assertEquals("replaced queue is drained separately from the new request", 2, calls.get());
+        assertEquals("the stranded caller receives its own response", ImmutableList.of("a"), resultNames(a.get()));
+        assertEquals(ImmutableList.of("b"), resultNames(b.get()));
+    }
+
+    @Test
+    public void idleSweepEvictsDrainedQueuesButKeepsBusyOnes() {
+        ModelBatchQueueManager m = managerWithIdleTtlNanos(0L);
+        Predictable predictor = model(new AtomicInteger());
+
+        m.enqueue("model-1", queued(100, 10_000L), textInput("a"), predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        assertEquals(1, m.queueCount());
+
+        m.evictIdleQueues();
+        assertEquals("a queue with a pending entry is not evicted", 1, m.queueCount());
+
+        scheduledFlush.get().run();
+        assertEquals("flushing does not by itself remove the queue", 1, m.queueCount());
+
+        m.evictIdleQueues();
+        assertEquals("an idle queue past its TTL is evicted", 0, m.queueCount());
+    }
+
+    private List<String> resultNames(MLTaskResponse response) {
+        List<String> names = new ArrayList<>();
+        for (ModelTensors group : ((ModelTensorOutput) response.getOutput()).getMlModelOutputs()) {
+            for (ModelTensor tensor : group.getMlModelTensors()) {
+                names.add(tensor.getName());
+            }
+        }
+        return names;
     }
 }
