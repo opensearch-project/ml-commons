@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.algorithms;
 
 import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;

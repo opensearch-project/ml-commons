@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.common.transport.search;
 
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
