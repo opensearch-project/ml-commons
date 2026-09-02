@@ -34,10 +34,17 @@ import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
 import ai.djl.ndarray.types.DataType;
+import ai.djl.ndarray.types.Shape;
 import ai.djl.translate.TranslatorContext;
+import ai.djl.util.PairList;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 public class TextSimilarityTranslator extends SentenceTransformerTranslator {
     public final String SIMILARITY_NAME = "similarity";
+    private static final String INPUT_IDS = "input_ids";
+    private static final String ATTENTION_MASK = "attention_mask";
+    private static final String TOKEN_TYPE_IDS = "token_type_ids";
 
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
@@ -48,21 +55,38 @@ public class TextSimilarityTranslator extends SentenceTransformerTranslator {
         Encoding encodings = tokenizer.encode(sentence, context);
         long[] indices = encodings.getIds();
         long[] attentionMask = encodings.getAttentionMask();
-        long[] tokenTypes = encodings.getTypeIds();
 
         NDArray indicesArray = manager.create(indices);
-        indicesArray.setName("input_ids");
+        indicesArray.setName(INPUT_IDS);
 
         NDArray attentionMaskArray = manager.create(attentionMask);
-        attentionMaskArray.setName("attention_mask");
-
-        NDArray tokenTypeArray = manager.create(tokenTypes);
-        tokenTypeArray.setName("token_type_ids");
+        attentionMaskArray.setName(ATTENTION_MASK);
 
         ndList.add(indicesArray);
         ndList.add(attentionMaskArray);
-        ndList.add(tokenTypeArray);
+
+        if (requiresTokenTypeIds(ctx)) {
+            NDArray tokenTypeArray = manager.create(encodings.getTypeIds());
+            tokenTypeArray.setName(TOKEN_TYPE_IDS);
+            ndList.add(tokenTypeArray);
+        }
         return ndList;
+    }
+
+    /**
+     * Determines whether the loaded model expects a token_type_ids input.
+     */
+    private boolean requiresTokenTypeIds(TranslatorContext ctx) {
+        try {
+            PairList<String, Shape> describedInput = ctx.getModel().getBlock().describeInput();
+            if (describedInput == null || describedInput.isEmpty()) {
+                return true;
+            }
+            return describedInput.contains(TOKEN_TYPE_IDS);
+        } catch (Exception e) {
+            log.warn("Failed to inspect model input signature, sending {} by default", TOKEN_TYPE_IDS, e);
+            return true;
+        }
     }
 
     @Override
