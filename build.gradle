@@ -115,6 +115,7 @@ subprojects {
         resolutionStrategy.force "software.amazon.awssdk:kms:${versions.aws}"
         resolutionStrategy.force "software.amazon.awssdk:dynamodb:${versions.aws}"
         resolutionStrategy.force "software.amazon.awssdk:dynamodb-enhanced:${versions.aws}"
+        resolutionStrategy.force "software.amazon.awssdk:sts:${versions.aws}"
         resolutionStrategy.force "org.dafny:DafnyRuntime:4.9.0"
     }
 
