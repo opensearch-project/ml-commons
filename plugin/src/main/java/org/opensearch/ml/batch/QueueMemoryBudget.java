@@ -32,11 +32,16 @@ class QueueMemoryBudget {
         if (bytes <= 0) {
             return true;
         }
-        if (reservedBytes.addAndGet(bytes) > maxBytes) {
-            reservedBytes.addAndGet(-bytes);
-            return false;
+        while (true) {
+            long current = reservedBytes.get();
+            long limit = maxBytes;
+            if (current > limit || bytes > limit - current) {
+                return false;
+            }
+            if (reservedBytes.compareAndSet(current, current + bytes)) {
+                return true;
+            }
         }
-        return true;
     }
 
     void release(long bytes) {

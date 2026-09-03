@@ -7,15 +7,14 @@ package org.opensearch.ml.batch;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import org.opensearch.common.unit.TimeValue;
@@ -48,11 +47,12 @@ public class ModelBatchQueue {
     private final ThreadPool threadPool;
     private final QueueMemoryBudget budget;
 
-    private final ConcurrentLinkedQueue<QueueEntry> queue = new ConcurrentLinkedQueue<>();
-    private final AtomicReference<Totals> totals = new AtomicReference<>(Totals.ZERO);
+    private final Object stateLock = new Object();
+    private final ArrayDeque<QueueEntry> queue = new ArrayDeque<>();
+    private Totals totals = Totals.ZERO;
     private final AtomicBoolean draining = new AtomicBoolean(false);
-    private final AtomicBoolean timerScheduled = new AtomicBoolean(false);
-    private volatile Scheduler.Cancellable scheduledTimer;
+    private boolean timerScheduled;
+    private Scheduler.Cancellable scheduledTimer;
     private volatile long lastUsedNanos = System.nanoTime();
 
     public ModelBatchQueue(
@@ -81,35 +81,51 @@ public class ModelBatchQueue {
     }
 
     boolean isIdle() {
-        return totals.get().entries() == 0 && !draining.get();
+        synchronized (stateLock) {
+            return totals.entries() == 0 && !draining.get();
+        }
     }
 
     public void enqueue(QueueEntry entry) {
-        lastUsedNanos = System.nanoTime();
-        if (!budget.tryReserve(entry.getByteSize())) {
-            entry
-                .getListener()
-                .onFailure(
-                    new OpenSearchRejectedExecutionException(
-                        "Batch inference queue memory budget is exhausted for model " + modelId + "; retry after backoff"
-                    )
-                );
-            return;
-        }
-        queue.add(entry);
-        Totals current = totals.updateAndGet(t -> t.plus(entry));
+        completeEnqueue(entry, offer(entry));
+    }
 
-        boolean overCount = config.isItemLimitEnabled() && current.items() >= config.getMaxItemsPerRequest();
-        boolean overBytes = config.isByteLimitEnabled() && current.bytes() >= config.getMaxBytesPerRequest();
-        if (overCount || overBytes) {
-            flush();
-        } else {
-            scheduleTimer();
+    EnqueueDecision offer(QueueEntry entry) {
+        synchronized (stateLock) {
+            if (!budget.tryReserve(entry.getRetainedByteSize())) {
+                return EnqueueDecision.REJECTED;
+            }
+            lastUsedNanos = System.nanoTime();
+            queue.addLast(entry);
+            totals = totals.plus(entry);
+
+            boolean overCount = config.isItemLimitEnabled() && totals.items() >= config.getMaxItemsPerRequest();
+            boolean overBytes = config.isByteLimitEnabled() && totals.payloadBytes() >= config.getMaxBytesPerRequest();
+            return overCount || overBytes ? EnqueueDecision.FLUSH : EnqueueDecision.SCHEDULE_TIMER;
+        }
+    }
+
+    void completeEnqueue(QueueEntry entry, EnqueueDecision decision) {
+        switch (decision) {
+            case REJECTED:
+                notifyRejected(entry);
+                break;
+            case FLUSH:
+                flush();
+                break;
+            case SCHEDULE_TIMER:
+                scheduleTimer();
+                break;
         }
     }
 
     private void scheduleTimer() {
-        if (timerScheduled.compareAndSet(false, true)) {
+        Exception scheduleFailure = null;
+        synchronized (stateLock) {
+            if (totals.entries() == 0 || timerScheduled) {
+                return;
+            }
+            timerScheduled = true;
             try {
                 scheduledTimer = threadPool.schedule(new AbstractRunnable() {
                     @Override
@@ -119,20 +135,26 @@ public class ModelBatchQueue {
 
                     @Override
                     public void onRejection(Exception e) {
-                        timerScheduled.set(false);
+                        clearTimerState();
                         failPending(e);
                     }
 
                     @Override
                     public void onFailure(Exception e) {
-                        timerScheduled.set(false);
-                        log.warn("Batch flush timer failed for model {}; will retry on next enqueue", modelId, e);
+                        clearTimerState();
+                        log.warn("Batch flush timer failed for model {}; failing pending requests", modelId, e);
+                        failPending(e);
                     }
                 }, TimeValue.timeValueMillis(flushTimeoutMs), REMOTE_PREDICT_THREAD_POOL);
             } catch (Exception e) {
-                timerScheduled.set(false);
-                log.warn("Failed to schedule batch flush timer for model {}; will retry on next enqueue", modelId, e);
+                timerScheduled = false;
+                scheduledTimer = null;
+                scheduleFailure = e;
             }
+        }
+        if (scheduleFailure != null) {
+            log.warn("Failed to schedule batch flush timer for model {}; failing pending requests", modelId, scheduleFailure);
+            failPending(scheduleFailure);
         }
     }
 
@@ -144,7 +166,7 @@ public class ModelBatchQueue {
         if (!batch.isEmpty()) {
             dispatch(batch);
         }
-        if (totals.get().entries() > 0) {
+        if (hasPendingEntries()) {
             scheduleTimer();
         }
     }
@@ -154,23 +176,19 @@ public class ModelBatchQueue {
             return null;
         }
         try {
-            timerScheduled.set(false);
-            Scheduler.Cancellable timer = scheduledTimer;
+            Scheduler.Cancellable timer;
+            List<QueueEntry> batch;
+            synchronized (stateLock) {
+                timerScheduled = false;
+                timer = scheduledTimer;
+                scheduledTimer = null;
+                batch = new ArrayList<>(queue);
+                queue.clear();
+                totals = Totals.ZERO;
+            }
             if (timer != null) {
                 timer.cancel();
             }
-            Totals snapshot = totals.getAndSet(Totals.ZERO);
-            List<QueueEntry> batch = new ArrayList<>(snapshot.entries());
-            long drainedBytes = 0L;
-            for (int i = 0; i < snapshot.entries(); i++) {
-                QueueEntry entry = queue.poll();
-                if (entry == null) {
-                    break;
-                }
-                batch.add(entry);
-                drainedBytes += entry.getByteSize();
-            }
-            budget.release(drainedBytes);
             return batch;
         } finally {
             draining.set(false);
@@ -185,7 +203,7 @@ public class ModelBatchQueue {
     }
 
     private void dispatch(List<QueueEntry> batch) {
-        Map<String, List<QueueEntry>> groups = new LinkedHashMap<>();
+        Map<GroupKey, List<QueueEntry>> groups = new LinkedHashMap<>();
         for (QueueEntry entry : batch) {
             if (entry.getItems() == null) {
                 notifyFailure(entry, unsupportedInputType(entry.getInput()));
@@ -195,7 +213,7 @@ public class ModelBatchQueue {
                 notifyFailure(entry, new IllegalStateException("Could not compute a batch group key for the predict request"));
                 continue;
             }
-            String groupId = entry.getInput().getInputDataset().getInputDataType() + "|" + entry.getGroupKey();
+            GroupKey groupId = new GroupKey(entry.getInput().getInputDataset().getInputDataType(), entry.getGroupKey());
             groups.computeIfAbsent(groupId, k -> new ArrayList<>()).add(entry);
         }
         for (List<QueueEntry> group : groups.values()) {
@@ -370,11 +388,20 @@ public class ModelBatchQueue {
         }
     }
 
+    private void clearTimerState() {
+        synchronized (stateLock) {
+            timerScheduled = false;
+            scheduledTimer = null;
+        }
+    }
+
     private void notifyResponse(QueueEntry entry, MLOutput output) {
         try {
             entry.getListener().onResponse(new MLTaskResponse(output));
         } catch (Exception e) {
             log.error("Batch queue listener threw while handling a response for model {}", modelId, e);
+        } finally {
+            releaseBudget(entry);
         }
     }
 
@@ -383,15 +410,52 @@ public class ModelBatchQueue {
             entry.getListener().onFailure(failure);
         } catch (Exception e) {
             log.error("Batch queue listener threw while handling a failure for model {}", modelId, e);
+        } finally {
+            releaseBudget(entry);
         }
     }
 
-    private record Totals(int entries, long items, long bytes) {
+    private void notifyRejected(QueueEntry entry) {
+        try {
+            entry
+                .getListener()
+                .onFailure(
+                    new OpenSearchRejectedExecutionException(
+                        "Batch inference queue memory budget is exhausted for model " + modelId + "; retry after backoff"
+                    )
+                );
+        } catch (Exception e) {
+            log.error("Batch queue listener threw while handling a rejection for model {}", modelId, e);
+        }
+    }
+
+    private void releaseBudget(QueueEntry entry) {
+        if (entry.markBudgetReleased()) {
+            budget.release(entry.getRetainedByteSize());
+        }
+    }
+
+    private boolean hasPendingEntries() {
+        synchronized (stateLock) {
+            return totals.entries() > 0;
+        }
+    }
+
+    enum EnqueueDecision {
+        REJECTED,
+        FLUSH,
+        SCHEDULE_TIMER
+    }
+
+    private record GroupKey(Object inputType, String parametersKey) {
+    }
+
+    private record Totals(int entries, long items, long payloadBytes) {
 
         static final Totals ZERO = new Totals(0, 0L, 0L);
 
         Totals plus(QueueEntry entry) {
-            return new Totals(entries + 1, items + entry.getItemCount(), bytes + entry.getByteSize());
+            return new Totals(entries + 1, items + entry.getItemCount(), payloadBytes + entry.getPayloadByteSize());
         }
     }
 }

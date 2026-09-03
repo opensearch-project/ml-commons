@@ -162,7 +162,7 @@ public final class MLCommonsSettings {
             ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_fraction",
             0.01,
             0.0,
-            1.0,
+            0.1,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

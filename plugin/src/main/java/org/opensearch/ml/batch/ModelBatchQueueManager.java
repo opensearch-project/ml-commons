@@ -24,9 +24,10 @@ import lombok.extern.log4j.Log4j2;
 /**
  * Owns the per-model ModelBatchQueues and routes predict requests into them. A queue is created lazily on
  * the first request for a queue-enabled model and replaced when that model's queue-relevant config changes;
- * the old queue keeps its timer so any entries left in it still drain. Idle queues are evicted by a periodic
- * sweep so the map does not grow unbounded with transient model IDs. Requests for models with no config or a
- * disabled queue never reach here.
+ * the old queue is flushed after replacement so its callers are not stranded. Admission and idle eviction
+ * both run through the map's per-key compute operation, so a queue cannot be removed between lookup and
+ * enqueue. Idle queues are evicted by a periodic sweep so the map does not grow unbounded with transient
+ * model IDs. Requests for models with no config or a disabled queue never reach here.
  */
 @Log4j2
 public class ModelBatchQueueManager {
@@ -75,30 +76,39 @@ public class ModelBatchQueueManager {
         TransportChannel channel,
         ActionListener<MLTaskResponse> listener
     ) {
-        queueFor(modelId, config).enqueue(toEntry(input, listener, predictor, channel));
-    }
+        QueueEntry entry;
+        try {
+            entry = toEntry(input, listener, predictor, channel);
+        } catch (Exception e) {
+            notifyFailure(listener, e);
+            return;
+        }
 
-    private ModelBatchQueue queueFor(String modelId, BatchInferenceConfig config) {
         ModelBatchQueue[] replaced = new ModelBatchQueue[1];
-        ModelBatchQueue queue = queues.compute(modelId, (id, existing) -> {
-            if (existing != null && existing.getConfig().equals(config)) {
-                return existing;
+        ModelBatchQueue[] target = new ModelBatchQueue[1];
+        ModelBatchQueue.EnqueueDecision[] decision = new ModelBatchQueue.EnqueueDecision[1];
+        queues.compute(modelId, (id, existing) -> {
+            ModelBatchQueue queue = existing;
+            if (queue == null || !queue.getConfig().equals(config)) {
+                replaced[0] = queue; // null on first create; the previous queue when config changed
+                queue = new ModelBatchQueue(id, config, registry, splitter, threadPool, budget);
             }
-            replaced[0] = existing; // null on first create; the previous queue when config changed
-            return new ModelBatchQueue(id, config, registry, splitter, threadPool, budget);
+            target[0] = queue;
+            decision[0] = queue.offer(entry);
+            return queue;
         });
-        // Drain the replaced queue now rather than leaving its callers waiting on an orphaned timer.
-        // Done outside compute() so the dispatch does not run under the map's bin lock.
+
+        // Model calls, timer scheduling and listener callbacks must not run under the map's bin lock.
         if (replaced[0] != null) {
             replaced[0].flush();
         }
-        return queue;
+        target[0].completeEnqueue(entry, decision[0]);
     }
 
     private QueueEntry toEntry(MLInput input, ActionListener<MLTaskResponse> listener, Predictable predictor, TransportChannel channel) {
         BatchableInput handler = registry.get(input);
         if (handler == null) {
-            return new QueueEntry(input, listener, predictor, channel, null, null);
+            throw unsupportedInputType(input);
         }
         List<BatchItem> items = handler.toItems(input);
         String groupKey;
@@ -108,6 +118,24 @@ public class ModelBatchQueueManager {
             groupKey = null;
         }
         return new QueueEntry(input, listener, predictor, channel, items, groupKey);
+    }
+
+    private IllegalArgumentException unsupportedInputType(MLInput input) {
+        Object type = input == null || input.getInputDataset() == null ? "null" : input.getInputDataset().getInputDataType();
+        return new IllegalArgumentException(
+            "This model has batch_inference_config set, so its predict requests must be splittable, but input type "
+                + type
+                + " does not support batch inference. Send a supported input type, or remove "
+                + "batch_inference_config from the model to run requests unsplit."
+        );
+    }
+
+    private void notifyFailure(ActionListener<MLTaskResponse> listener, Exception failure) {
+        try {
+            listener.onFailure(failure);
+        } catch (Exception e) {
+            log.error("Batch queue listener threw while handling a request validation failure", e);
+        }
     }
 
     void evictIdleQueues() {

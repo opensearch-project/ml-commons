@@ -16,6 +16,9 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -199,6 +202,110 @@ public class ModelBatchQueueManagerTests {
 
         m.evictIdleQueues();
         assertEquals("an idle queue past its TTL is evicted", 0, m.queueCount());
+    }
+
+    @Test
+    public void unsupportedInputIsRejectedBeforeItCanConsumeQueueMemory() {
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<Exception> error = new AtomicReference<>();
+        MLInput unsupported = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_SIMILARITY)
+            .inputDataset(new org.opensearch.ml.common.dataset.TextSimilarityInputDataSet("q", ImmutableList.of("d")))
+            .build();
+
+        manager.enqueue("model-1", queued(100, 10_000L), unsupported, model(calls), null, ActionListener.wrap(r -> {}, error::set));
+
+        assertEquals(0, calls.get());
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertEquals("an invalid request should not create a retained per-model queue", 0, manager.queueCount());
+    }
+
+    @Test
+    public void idleEvictionCannotRemoveQueueDuringAdmission() throws Exception {
+        CountDownLatch reserveEntered = new CountDownLatch(1);
+        CountDownLatch allowReserve = new CountDownLatch(1);
+        AtomicBoolean blockReservations = new AtomicBoolean(false);
+        QueueMemoryBudget blockingBudget = new QueueMemoryBudget(Long.MAX_VALUE) {
+            @Override
+            boolean tryReserve(long bytes) {
+                if (!blockReservations.get()) {
+                    return super.tryReserve(bytes);
+                }
+                reserveEntered.countDown();
+                try {
+                    if (!allowReserve.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("timed out waiting to release reservation");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(e);
+                }
+                return super.tryReserve(bytes);
+            }
+        };
+        ModelBatchQueueManager m = new ModelBatchQueueManager(
+            new BatchableInputRegistry(),
+            new BatchSplitter(),
+            threadPool,
+            blockingBudget,
+            () -> 0L
+        );
+        BatchInferenceConfig config = queued(100, 10_000L);
+        m.enqueue("model-1", config, textInput("seed"), model(new AtomicInteger()), null, ActionListener.wrap(r -> {}, e -> {}));
+        scheduledFlush.get().run();
+        assertEquals("the existing queue is idle but still present before the sweep", 1, m.queueCount());
+
+        blockReservations.set(true);
+        AtomicReference<MLTaskResponse> response = new AtomicReference<>();
+        AtomicReference<Throwable> threadFailure = new AtomicReference<>();
+        CountDownLatch evictionStarted = new CountDownLatch(1);
+        CountDownLatch evictionDone = new CountDownLatch(1);
+
+        Thread enqueueThread = new Thread(() -> {
+            try {
+                m
+                    .enqueue(
+                        "model-1",
+                        config,
+                        textInput("a"),
+                        model(new AtomicInteger()),
+                        null,
+                        ActionListener.wrap(response::set, threadFailure::set)
+                    );
+            } catch (Throwable t) {
+                threadFailure.set(t);
+            }
+        });
+        Thread evictionThread = new Thread(() -> {
+            evictionStarted.countDown();
+            try {
+                m.evictIdleQueues();
+            } catch (Throwable t) {
+                threadFailure.set(t);
+            } finally {
+                evictionDone.countDown();
+            }
+        });
+
+        enqueueThread.start();
+        assertTrue(reserveEntered.await(5, TimeUnit.SECONDS));
+        evictionThread.start();
+        assertTrue(evictionStarted.await(5, TimeUnit.SECONDS));
+        assertFalse("eviction must serialize with admission for the same model", evictionDone.await(100, TimeUnit.MILLISECONDS));
+
+        allowReserve.countDown();
+        enqueueThread.join(5_000L);
+        evictionThread.join(5_000L);
+
+        assertFalse(enqueueThread.isAlive());
+        assertFalse(evictionThread.isAlive());
+        assertNull(threadFailure.get());
+        assertEquals("the admitted non-idle queue remains owned by the manager", 1, m.queueCount());
+
+        scheduledFlush.get().run();
+        assertEquals(ImmutableList.of("a"), resultNames(response.get()));
+        assertEquals(0L, blockingBudget.getReservedBytes());
     }
 
     private List<String> resultNames(MLTaskResponse response) {

@@ -19,6 +19,8 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -428,22 +430,128 @@ public class ModelBatchQueueTests {
     }
 
     @Test
-    public void memoryBudgetIsReleasedAfterFlushSoLaterRequestsAreAdmitted() {
-        QueueMemoryBudget budget30 = new QueueMemoryBudget(30L);
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, budget30);
+    public void memoryBudgetIsReleasedAfterCompletionSoLaterRequestsAreAdmitted() {
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
-
         String doc = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        QueueEntry first = entry(predictor, ActionListener.wrap(r -> {}, e -> {}), doc);
+        QueueMemoryBudget exactBudget = new QueueMemoryBudget(first.getRetainedByteSize());
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, exactBudget);
+
         AtomicReference<Exception> err1 = new AtomicReference<>();
         AtomicReference<Exception> err2 = new AtomicReference<>();
-        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err1::set), doc));
+        first = entry(predictor, ActionListener.wrap(r -> {}, err1::set), doc);
+        queue.enqueue(first);
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err2::set), doc));
 
         assertNull(err1.get());
         assertNull("the first request released its reservation on flush, admitting the second", err2.get());
         assertEquals(2, calls.get());
-        assertEquals("nothing stays reserved once both have flushed", 0, budget30.getReservedBytes());
+        assertEquals("nothing stays reserved once both have completed", 0, exactBudget.getReservedBytes());
+    }
+
+    @Test
+    public void retainedSizeIncludesRequestAndItemOverheadWithoutChangingPayloadSize() {
+        QueueEntry entry = entry(model(null, null), ActionListener.wrap(r -> {}, e -> {}), "abc");
+
+        assertEquals(3L, entry.getPayloadByteSize());
+        assertEquals(
+            3L + QueueEntry.ESTIMATED_ENTRY_OVERHEAD_BYTES + QueueEntry.ESTIMATED_ITEM_OVERHEAD_BYTES,
+            entry.getRetainedByteSize()
+        );
+    }
+
+    @Test
+    public void unsupportedEntryHasNonZeroRetainedSize() {
+        QueueEntry entry = new QueueEntry(textInput("a"), ActionListener.wrap(r -> {}, e -> {}), model(null, null), null, null, null);
+
+        assertEquals(0L, entry.getPayloadByteSize());
+        assertEquals(QueueEntry.ESTIMATED_ENTRY_OVERHEAD_BYTES, entry.getRetainedByteSize());
+    }
+
+    @Test
+    public void memoryBudgetRemainsReservedUntilRemotePredictionSettles() {
+        AtomicReference<ActionListener<MLTaskResponse>> remoteListener = new AtomicReference<>();
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                remoteListener.set(listener);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+        QueueEntry entry = entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a");
+        QueueMemoryBudget inFlightBudget = new QueueMemoryBudget(entry.getRetainedByteSize());
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, inFlightBudget);
+
+        queue.enqueue(entry);
+
+        assertNotNull(remoteListener.get());
+        assertEquals(
+            "dispatch must not release memory still retained by the in-flight callback",
+            entry.getRetainedByteSize(),
+            inFlightBudget.getReservedBytes()
+        );
+
+        ModelTensorOutput output = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                ImmutableList.of(ModelTensors.builder().mlModelTensors(ImmutableList.of(ModelTensor.builder().name("a").build())).build())
+            )
+            .build();
+        remoteListener.get().onResponse(new MLTaskResponse(output));
+
+        assertEquals(0L, inFlightBudget.getReservedBytes());
+    }
+
+    @Test
+    public void enqueueAndDrainCannotObservePartiallyAdmittedEntry() throws Exception {
+        CountDownLatch reserveEntered = new CountDownLatch(1);
+        CountDownLatch allowReserve = new CountDownLatch(1);
+        QueueMemoryBudget blockingBudget = new QueueMemoryBudget(Long.MAX_VALUE) {
+            @Override
+            boolean tryReserve(long bytes) {
+                reserveEntered.countDown();
+                try {
+                    if (!allowReserve.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("timed out waiting to release reservation");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(e);
+                }
+                return super.tryReserve(bytes);
+            }
+        };
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, blockingBudget);
+        AtomicReference<MLTaskResponse> response = new AtomicReference<>();
+        QueueEntry entry = entry(model(null, null), ActionListener.wrap(response::set, e -> {}), "a");
+
+        Thread enqueueThread = new Thread(() -> queue.enqueue(entry));
+        Thread flushThread = new Thread(queue::flush);
+        enqueueThread.start();
+        assertTrue(reserveEntered.await(5, TimeUnit.SECONDS));
+        flushThread.start();
+        allowReserve.countDown();
+        enqueueThread.join(5_000L);
+        flushThread.join(5_000L);
+        queue.flush();
+
+        assertFalse(enqueueThread.isAlive());
+        assertFalse(flushThread.isAlive());
+        assertNotNull("the entry is drained and completed rather than stranded between queue and totals", response.get());
+        assertEquals(0L, blockingBudget.getReservedBytes());
     }
 
     @Test
