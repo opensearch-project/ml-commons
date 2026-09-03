@@ -42,7 +42,7 @@ buildscript {
     dependencies {
         classpath "${opensearch_group}.gradle:build-tools:${opensearch_version}"
         classpath "gradle.plugin.com.dorongold.plugins:task-tree:1.5"
-        classpath "com.diffplug.spotless:spotless-plugin-gradle:6.25.0"
+        classpath "com.diffplug.spotless:spotless-plugin-gradle:8.10.1"
         configurations.all {
             resolutionStrategy {
                 force("org.eclipse.platform:org.eclipse.core.runtime:3.29.0") // for spotless transitive dependency CVE (for 3.26.100)
@@ -125,11 +125,21 @@ subprojects {
 
     apply plugin: 'com.diffplug.spotless'
 
+    // Only wire the Eclipse JDT step when a spotless task is actually being run, so non-spotless
+    // Gradle invocations (test, assemble) don't provision the formatter at configuration time.
+    def runningSpotlessTask = gradle.startParameter.taskNames.any { it.toLowerCase(Locale.ROOT).contains('spotless') }
+
     spotless {
         java {
             removeUnusedImports()
             importOrder 'java', 'javax', 'org', 'com'
-            eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://ci.opensearch.org/")).configFile rootProject.file('.eclipseformat.xml')
+            // Pin 4.29 explicitly: spotless 8.10.0+ ships an embedded lockfile for it, so the
+            // formatter resolves from Maven Central through the mirror below instead of querying a
+            // P2 update site at configuration time. Keep withP2Mirrors so any non-lockfile fallback
+            // still hits the ci.opensearch.org mirror rather than the eclipse.org origin.
+            if (runningSpotlessTask) {
+                eclipse('4.29').withP2Mirrors(Map.of("https://download.eclipse.org/", "https://ci.opensearch.org/")).configFile rootProject.file('.eclipseformat.xml')
+            }
         }
     }
 }
