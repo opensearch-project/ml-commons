@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.lang.reflect.Constructor;
@@ -42,6 +43,7 @@ public class StreamingHandlerFactory {
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return createBedrockHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
+            case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
                 return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);

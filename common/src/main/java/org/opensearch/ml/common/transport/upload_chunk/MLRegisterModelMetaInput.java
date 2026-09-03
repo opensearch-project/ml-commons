@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.upload_chunk;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
@@ -86,6 +87,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
     private Boolean isHidden;
 
     private Map<String, String> modelInterface;
+    private String modelId;
 
     @Builder(toBuilder = true)
     public MLRegisterModelMetaInput(
@@ -108,7 +110,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         Boolean isAddAllBackendRoles,
         Boolean doesVersionCreateModelGroup,
         Boolean isHidden,
-        Map<String, String> modelInterface
+        Map<String, String> modelInterface,
+        String modelId
     ) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
@@ -174,6 +177,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         this.doesVersionCreateModelGroup = doesVersionCreateModelGroup;
         this.isHidden = isHidden;
         this.modelInterface = modelInterface;
+        this.modelId = modelId;
     }
 
     public MLRegisterModelMetaInput(StreamInput in) throws IOException {
@@ -228,6 +232,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 this.modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
+        this.modelId = streamInputVersion.onOrAfter(VERSION_3_9_0) ? in.readOptionalString() : null;
     }
 
     @Override
@@ -301,6 +306,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
+            out.writeOptionalString(modelId);
+        }
     }
 
     @Override
@@ -354,6 +362,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         if (modelInterface != null) {
             builder.field(MLModel.INTERFACE_FIELD, modelInterface);
         }
+        if (modelId != null) {
+            builder.field(MLModel.MODEL_ID_FIELD, modelId);
+        }
         builder.endObject();
         return builder;
     }
@@ -379,6 +390,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
         Map<String, String> modelInterface = null;
+        String modelId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -387,6 +399,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case MODEL_NAME_FIELD:
                     name = parser.text();
+                    break;
+                case MLModel.MODEL_ID_FIELD:
+                    modelId = parser.text();
                     break;
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text());
@@ -481,7 +496,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
             isAddAllBackendRoles,
             doesVersionCreateModelGroup,
             isHidden,
-            modelInterface
+            modelInterface,
+            modelId
         );
     }
 

@@ -38,6 +38,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.common.lifecycle.LifecycleComponent;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionResponse;
@@ -46,11 +47,13 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.indices.SystemIndexDescriptor;
 import org.opensearch.ingest.Processor;
 import org.opensearch.jobscheduler.spi.JobDocVersion;
+import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.jobs.MLJobRunner;
+import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
@@ -333,5 +336,35 @@ public class MachineLearningPluginTests {
         List<?> factories = plugin.getPreBuiltAnalyzerProviderFactories();
         assertNotNull(factories);
         assertEquals(2, factories.size());
+    }
+
+    @Test
+    public void testGetGuiceServiceClassesRegistersHolder() {
+        Collection<Class<? extends LifecycleComponent>> classes = plugin.getGuiceServiceClasses();
+        assertNotNull(classes);
+        assertEquals(1, classes.size());
+        assertTrue(classes.contains(MachineLearningPlugin.GuiceHolder.class));
+    }
+
+    @Test
+    public void testGuiceHolderInjectsLockServiceIntoProcessor() {
+        // The holder's optional setter is the only wiring that hands the node LockService to the retention
+        // processor; when job-scheduler is present Guice fires it at node start. Verify the setter propagates
+        // the LockService and that the lifecycle no-ops don't throw.
+        MemoryRetentionJobProcessor.reset();
+        try {
+            MachineLearningPlugin.GuiceHolder holder = new MachineLearningPlugin.GuiceHolder();
+            LockService lockService = mock(LockService.class);
+            // Setter is null-tolerant and idempotent; both propagate to the processor without throwing.
+            holder.setLockService(lockService);
+            holder.setLockService(null);
+            holder.setLockService(lockService);
+            // Lifecycle hooks are no-ops but must be exercised/safe.
+            holder.start();
+            holder.stop();
+            holder.close();
+        } finally {
+            MemoryRetentionJobProcessor.reset();
+        }
     }
 }

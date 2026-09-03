@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_REQUIRED_PARAMS;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 
@@ -499,6 +500,65 @@ public class ToolUtilsTest {
         Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, booleanOutput);
         assertEquals(expectedMap, result.getDataAsMap());
         assertEquals(booleanOutput, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @Test
+    public void testMarkResourcePathNameNoEscape_WithSlashResourcePath() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("name", "projects/p/locations/l/batchPredictionJobs/1");
+
+        ToolUtils.markResourcePathNameNoEscape(parameters);
+
+        assertTrue(parameters.containsKey(NO_ESCAPE_PARAMS));
+        assertTrue(parameters.get(NO_ESCAPE_PARAMS).contains("name"));
+    }
+
+    @Test
+    public void testMarkResourcePathNameNoEscape_WithPlainName() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("name", "my-job");
+
+        ToolUtils.markResourcePathNameNoEscape(parameters);
+
+        assertFalse(parameters.containsKey(NO_ESCAPE_PARAMS));
+    }
+
+    @Test
+    public void testMarkResourcePathNameNoEscape_WithNoNameKey() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("other", "value");
+
+        ToolUtils.markResourcePathNameNoEscape(parameters);
+
+        assertFalse(parameters.containsKey(NO_ESCAPE_PARAMS));
+    }
+
+    @Test
+    public void testMarkResourcePathNameNoEscape_AppendsToExistingNoEscapeParams() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("name", "projects/p/locations/l/batchPredictionJobs/1");
+        parameters.put(NO_ESCAPE_PARAMS, "foo");
+
+        ToolUtils.markResourcePathNameNoEscape(parameters);
+
+        assertEquals("foo,name", parameters.get(NO_ESCAPE_PARAMS));
+    }
+
+    @Test
+    public void testMarkResourcePathNameNoEscape_WithBlankExistingNoEscapeParams() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("name", "projects/p/locations/l/batchPredictionJobs/1");
+        parameters.put(NO_ESCAPE_PARAMS, "");
+
+        ToolUtils.markResourcePathNameNoEscape(parameters);
+
+        assertEquals("name", parameters.get(NO_ESCAPE_PARAMS));
+    }
+
+    @Test
+    public void testMarkResourcePathNameNoEscape_WithNullParameters() {
+        // Should not throw
+        ToolUtils.markResourcePathNameNoEscape(null);
     }
 
     @Test

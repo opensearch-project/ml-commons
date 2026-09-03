@@ -20,6 +20,7 @@ import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
@@ -62,6 +63,8 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelMetaResponse> listener) {
         MLRegisterModelMetaRequest registerModelMetaRequest = MLRegisterModelMetaRequest.fromActionRequest(request);
         MLRegisterModelMetaInput mlUploadInput = registerModelMetaRequest.getMlRegisterModelMetaInput();
+
+        MLResourceIdUtils.validateCustomModelId(mlUploadInput.getModelId());
 
         if (StringUtils.isEmpty(mlUploadInput.getModelGroupId())) {
 

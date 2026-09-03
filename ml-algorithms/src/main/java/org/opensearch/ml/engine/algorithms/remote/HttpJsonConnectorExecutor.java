@@ -15,7 +15,6 @@ import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,10 +28,10 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -87,6 +86,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private volatile List<String> trustedConnectorEndpointsRegex;
+
+    private final CertificateProcessor certificateProcessor = new CertificateProcessor();
+    // Cache manager for client lifecycle management
+    private final MLHttpClientCacheManager cacheManager = new MLHttpClientCacheManager();
 
     @Setter
     @Getter
@@ -205,38 +208,43 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     @VisibleForTesting
     protected SdkAsyncHttpClient getHttpClient() {
-        if (httpClientRef.get() == null) {
-            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
-            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
-            if (skipSslVerificationValue) {
-                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
-            }
-            log
-                .info(
-                    "HttpJsonConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
-                    connector.getName(),
-                    maxConnection,
-                    super.getConnectorClientConfig().getConnectionTimeout(),
-                    super.getConnectorClientConfig().getReadTimeout()
-                );
-            this.httpClientRef
-                .compareAndSet(
-                    null,
-                    MLHttpClientFactory
-                        .getAsyncHttpClient(
-                            connectionTimeout,
-                            readTimeout,
-                            maxConnection,
-                            connectorPrivateIpEnabled,
-                            connectorTrustedPrivateEndpoints,
-                            connectorRestrictedIpPatterns,
-                            skipSslVerificationValue
-                        )
-                );
-        }
-        return httpClientRef.get();
+        // Use cache manager for client lifecycle management
+        SdkAsyncHttpClient httpClient = cacheManager
+            .getOrCreateHttpClient(connector, super.getConnectorClientConfig(), client, this::createHttpClient);
+
+        // Store in inherited httpClientRef for compatibility with AbstractConnectorExecutor.close()
+        // This ensures proper resource cleanup when the executor is closed
+        super.httpClientRef.set(httpClient);
+
+        return httpClient;
+    }
+
+    /**
+     * Create a new HTTP client with current configuration.
+     */
+    private SdkAsyncHttpClient createHttpClient() {
+        return MLHttpClientCacheManager
+            .createHttpClient(
+                connector,
+                super.getConnectorClientConfig(),
+                certificateProcessor,
+                connectorPrivateIpEnabled,
+                connectorTrustedPrivateEndpoints,
+                connectorRestrictedIpPatterns
+            );
+    }
+
+    /**
+     * Override close() to properly clean up resources managed by the cache manager.
+     * This prevents resource leaks by ensuring both the cache manager and inherited
+     * httpClientRef are properly closed.
+     */
+    @Override
+    public void close() {
+        // Close the cache manager first to handle any deferred cleanup
+        cacheManager.close();
+
+        // Call parent close() to handle inherited httpClientRef
+        super.close();
     }
 }

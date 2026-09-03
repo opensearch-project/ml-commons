@@ -111,6 +111,8 @@ public class MemoryContainerConstants {
     // REST API paths
     public static final String BASE_MEMORY_CONTAINERS_PATH = "/_plugins/_ml/memory_containers";
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
+    // Cluster-wide on-demand trigger for the memory retention job (runs the real, per-policy delete pipeline).
+    public static final String EXECUTE_MEMORY_RETENTION_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_retention/_execute";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String PARAMETER_DELETE_ALL_MEMORIES = "delete_all_memories";
     public static final String PARAMETER_DELETE_MEMORIES = "delete_memories";
@@ -130,6 +132,12 @@ public class MemoryContainerConstants {
     public static final String DELETE_MEMORIES_BY_QUERY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_delete_by_query";
     public static final String SEMANTIC_SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/long-term/_semantic_search";
     public static final String HYBRID_SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/long-term/_hybrid_search";
+    // Retention dry-run: preview what the scheduled retention job would delete, without deleting.
+    public static final String RETENTION_DRY_RUN_PATH = BASE_MEMORY_CONTAINERS_PATH
+        + "/{"
+        + PARAMETER_MEMORY_CONTAINER_ID
+        + "}/_retention/_dry_run";
+    public static final String RETENTION_DRY_RUN_ALL_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_retention/_dry_run";
 
     // Memory types are defined in MemoryType enum
     // Memory strategy types are defined in MemoryStrategyType enum

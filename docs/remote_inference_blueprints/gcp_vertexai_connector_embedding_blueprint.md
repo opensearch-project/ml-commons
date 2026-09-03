@@ -1,3 +1,12 @@
+> **⚠️ No longer the recommended approach.** This blueprint uses the generic `http` protocol
+> with a **manually generated, short-lived access token** that you must refresh by hand (see
+> Step 8). ml-commons now provides a first-class `google_cloud` connector protocol that mints
+> and refreshes the OAuth2 token automatically (service-account key or ADC / Workload
+> Identity). For new deployments use
+> [`gcp_vertexai_embedding_blueprint.md`](./gcp_vertexai_embedding_blueprint.md) instead. The
+> instructions below are retained as a legacy/fallback for versions predating the
+> `google_cloud` protocol.
+
 ### GCP VertexAI Embedding Connector Blueprint:
 
 ## 1. Add VertexAI endpoint to trusted URLs:

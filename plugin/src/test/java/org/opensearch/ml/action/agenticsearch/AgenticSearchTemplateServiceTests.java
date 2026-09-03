@@ -12,6 +12,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -112,7 +115,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
-        service.register("missing_tmpl", "my-index", "desc", null, listener);
+        service.register("missing_tmpl", "my-index", "desc", null, null, listener);
 
         ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(ex.capture());
@@ -133,7 +136,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
-        service.register("tmpl", "my-index", "desc", null, listener);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
 
         ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(ex.capture());
@@ -161,7 +164,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
-        service.register("tmpl", "my-index", "desc", null, listener);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
 
         ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
         verify(listener).onResponse(captor.capture());
@@ -178,6 +181,259 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         @SuppressWarnings("unchecked")
         Map<String, Object> size = (Map<String, Object>) schema.get("size");
         assertEquals(Boolean.FALSE, size.get("required"));
+    }
+
+    @Test
+    public void register_existingId_failsConflict() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onFailure(new org.opensearch.index.engine.VersionConflictEngineException(null, "tmpl", "already exists"));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        assertStatus(listener, RestStatus.CONFLICT, "already exists");
+    }
+
+    @Test
+    public void register_setsOpTypeCreate() throws Exception {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        ArgumentCaptor<IndexRequest> reqCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        verify(client).index(reqCaptor.capture(), any());
+        assertEquals(org.opensearch.action.DocWriteRequest.OpType.CREATE, reqCaptor.getValue().opType());
+    }
+
+    @Test
+    public void register_withProvidedSchema_storesItWithoutDeriving() throws Exception {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        // A caller-supplied schema is stored as sent, not derived. lex_query is marked
+        // optional here though the body makes it required, so the stored value confirms
+        // the provided schema was used.
+        Map<String, Object> provided = ImmutableMap
+            .of(
+                "lex_query",
+                ImmutableMap.of("type", "string", "required", false),
+                "size",
+                ImmutableMap.of("type", "number", "required", false)
+            );
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        Map<String, Object> schema = captor.getValue().getParamSchema();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> lex = (Map<String, Object>) schema.get("lex_query");
+        assertEquals(Boolean.FALSE, lex.get("required"));
+    }
+
+    @Test
+    public void register_withInvalidProvidedSchema_failsValidation() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+
+        // An enum value that does not fit the declared numeric type is rejected before store.
+        Map<String, Object> provided = ImmutableMap
+            .of("size", ImmutableMap.of("type", "number", "enum", java.util.Arrays.asList("not-a-number")));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    @Test
+    public void register_withProvidedSchema_preflightRenderFailure_propagates() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        // Params exist in the body, but rendering throws, so pre-flight fails and
+        // nothing is stored.
+        when(scriptService.compile(any(Script.class), any())).thenThrow(new IllegalArgumentException("bad mustache"));
+
+        Map<String, Object> provided = ImmutableMap.of("lex_query", ImmutableMap.of("type", "string", "required", true));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        assertTrue(ex.getValue().getMessage().contains("failed to render"));
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    @Test
+    public void register_withProvidedSchema_unknownParam_failsBadRequest() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+
+        // A param the Mustache body does not reference is rejected before store.
+        Map<String, Object> provided = ImmutableMap.of("not_in_body", ImmutableMap.of("type", "string", "required", false));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        assertTrue(ex.getValue().getMessage().contains("not a parameter of template body"));
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    // ---- structural enrichment ---------------------------------------------
+
+    @Test
+    public void applyStructuralEnrichment_boolAndArrayGetGenericDescriptions() {
+        // Array and boolean params carry no locatable clause, so they get a generic
+        // type-only description.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("flag", specMap("boolean", false, ""));
+        schema.put("extra", specMap("array", false, ""));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+
+        service.applyStructuralEnrichment(schema, markers, new LinkedHashMap<>(), null);
+
+        assertEquals("Set to true to enable the optional flag clause.", descOf(schema, "flag"));
+        assertEquals("A JSON array or object passed as a raw JSON string.", descOf(schema, "extra"));
+    }
+
+    @Test
+    public void applyStructuralEnrichment_doesNotOverwriteCallerDescriptionOrEnum() {
+        // A param that already carries a description and an enum is left untouched, even
+        // though its slot would otherwise classify as a sort order with an asc/desc enum.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        Map<String, Object> sortOrder = specMap("string", false, "Caller-set sort direction.");
+        sortOrder.put("enum", Arrays.asList("ASC", "DESC"));
+        schema.put("sort_order", sortOrder);
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Object marker = markers.renderParams().get("sort_order");
+        Map<String, Object> rendered = ImmutableMap.of("sort", List.of(ImmutableMap.of("price", ImmutableMap.of("order", marker))));
+
+        service.applyStructuralEnrichment(schema, markers, rendered, null);
+
+        assertEquals("Caller-set sort direction.", descOf(schema, "sort_order"));
+        assertEquals(Arrays.asList("ASC", "DESC"), ((Map<?, ?>) schema.get("sort_order")).get("enum"));
+    }
+
+    @Test
+    public void register_enrichmentRuns_addsDescriptionFromRender() {
+        // End-to-end through register: the marker render locates lex_query in a match on
+        // title, so the stored schema gets a full-text description.
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderEchoesMarkerIntoMatch();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Full-text query matched against the title field.", descOf(captor.getValue().getParamSchema(), "lex_query"));
+    }
+
+    @Test
+    public void register_enrichmentRenderFails_stillStoresBaseSchema() {
+        // If enrichment's marker render is not parseable, enrichment is skipped and the base
+        // derived schema is stored; registration must still succeed (never fail on enrichment).
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderMarkerFailsSampleSucceeds();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("", descOf(captor.getValue().getParamSchema(), "lex_query"));
+    }
+
+    @Test
+    public void register_derivesTemplateDescriptionWhenCallerOmitsIt() {
+        // No caller description: the derive path assembles a template-level one from the
+        // body's recovered clauses (here, a full-text match on title).
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderEchoesMarkerIntoMatch();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", null, null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Full-text search over title.", captor.getValue().getDescription());
+    }
+
+    @Test
+    public void register_keepsCallerDescriptionOverDerived() {
+        // A caller-supplied description always wins over the derived one.
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderEchoesMarkerIntoMatch();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "Caller-authored description.", null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Caller-authored description.", captor.getValue().getDescription());
     }
 
     // ---- update: optimistic concurrency ------------------------------------
@@ -483,6 +739,76 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
             l.onResponse(response);
             return null;
         }).when(clusterAdminClient).getStoredScript(any(GetStoredScriptRequest.class), any());
+    }
+
+    private void stubStoreSucceeds() {
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+    }
+
+    /**
+     * Render stub where the marker (all-filled) render returns invalid JSON so enrichment
+     * degrades, while sample-value renders (pre-flight, defaults) stay valid so registration
+     * still succeeds.
+     */
+    private void stubRenderMarkerFailsSampleSucceeds() {
+        TemplateScript.Factory factory = mock(TemplateScript.Factory.class);
+        when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
+        when(factory.newInstance(any())).thenAnswer((Answer<TemplateScript>) inv -> {
+            Map<String, Object> params = inv.getArgument(0);
+            TemplateScript ts = mock(TemplateScript.class);
+            when(ts.execute()).thenReturn(firstStringMarker(params) != null ? "NOT JSON" : "{\"query\":{\"match_all\":{}}}");
+            return ts;
+        });
+    }
+
+    /**
+     * Render stub where the marker render echoes the first string marker into a match on
+     * title, so enrichment locates that param and writes a full-text description.
+     */
+    private void stubRenderEchoesMarkerIntoMatch() {
+        TemplateScript.Factory factory = mock(TemplateScript.Factory.class);
+        when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
+        when(factory.newInstance(any())).thenAnswer((Answer<TemplateScript>) inv -> {
+            Map<String, Object> params = inv.getArgument(0);
+            TemplateScript ts = mock(TemplateScript.class);
+            String marker = firstStringMarker(params);
+            when(ts.execute())
+                .thenReturn(marker != null ? "{\"query\":{\"match\":{\"title\":\"" + marker + "\"}}}" : "{\"query\":{\"match_all\":{}}}");
+            return ts;
+        });
+    }
+
+    private static String firstStringMarker(Map<String, Object> params) {
+        for (Object v : params.values()) {
+            if (v instanceof String && ((String) v).startsWith(TemplateStructureAnalyzer.MARKER_PREFIX)) {
+                return (String) v;
+            }
+        }
+        return null;
+    }
+
+    private static Map<String, Object> specMap(String type, boolean required, String description) {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("type", type);
+        spec.put("required", required);
+        if (description != null) {
+            spec.put("description", description);
+        }
+        return spec;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String descOf(Map<String, Object> schema, String param) {
+        return (String) ((Map<String, Object>) schema.get(param)).get("description");
     }
 
     private void stubIndexMapping(Map<String, Object> mappingSource) {

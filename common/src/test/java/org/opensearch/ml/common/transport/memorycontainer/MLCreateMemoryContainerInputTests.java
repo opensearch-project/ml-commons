@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.memorycontainer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -584,5 +585,43 @@ public class MLCreateMemoryContainerInputTests {
 
         assertNotNull(input);
         assertEquals(mixedRoles, input.getBackendRoles());
+    }
+
+    @Test
+    public void parse_withCustomMemoryContainerId() throws Exception {
+        String json = "{\"name\":\"session-memory\",\"memory_container_id\":\"session-memory\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLCreateMemoryContainerInput parsed = MLCreateMemoryContainerInput.parse(parser);
+        assertEquals("session-memory", parsed.getMemoryContainerId());
+    }
+
+    @Test
+    public void toXContent_WithCustomMemoryContainerId() throws IOException {
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
+            .builder()
+            .name("session-memory")
+            .memoryContainerId("session-memory")
+            .build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        input.toXContent(builder, EMPTY_PARAMS);
+        assertTrue(TestHelper.xContentBuilderToString(builder).contains("\"memory_container_id\":\"session-memory\""));
+    }
+
+    @Test
+    public void writeToAndReadFrom_withCustomMemoryContainerId() throws IOException {
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
+            .builder()
+            .name("session-memory")
+            .memoryContainerId("session-memory")
+            .build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_9_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_9_0);
+        assertEquals("session-memory", new MLCreateMemoryContainerInput(in).getMemoryContainerId());
     }
 }

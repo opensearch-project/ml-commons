@@ -10,6 +10,8 @@ import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
+import static org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -65,6 +67,7 @@ public class MLAgent implements ToXContentObject, Writeable {
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONTEXT_MANAGEMENT = CommonValue.VERSION_3_5_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_AGENT_ID = VERSION_3_9_0;
 
     private String name;
     private String type;
@@ -83,6 +86,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private ContextManagementTemplate contextManagement;
     private String tenantId;
     private String provisionedBy;
+    private String agentId;
 
     @Builder(toBuilder = true)
     public MLAgent(
@@ -101,7 +105,8 @@ public class MLAgent implements ToXContentObject, Writeable {
         String contextManagementName,
         ContextManagementTemplate contextManagement,
         String tenantId,
-        String provisionedBy
+        String provisionedBy,
+        String agentId
     ) {
         this.name = name;
         this.type = type;
@@ -120,6 +125,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.contextManagement = contextManagement;
         this.tenantId = tenantId;
         this.provisionedBy = provisionedBy;
+        this.agentId = agentId;
         validate();
     }
 
@@ -156,6 +162,46 @@ public class MLAgent implements ToXContentObject, Writeable {
             contextManagementName,
             contextManagement,
             tenantId,
+            null,
+            null
+        );
+    }
+
+    public MLAgent(
+        String name,
+        String type,
+        String description,
+        LLMSpec llm,
+        MLAgentModelSpec model,
+        List<MLToolSpec> tools,
+        Map<String, String> parameters,
+        MLMemorySpec memory,
+        Instant createdTime,
+        Instant lastUpdateTime,
+        String appType,
+        Boolean isHidden,
+        String contextManagementName,
+        ContextManagementTemplate contextManagement,
+        String tenantId,
+        String provisionedBy
+    ) {
+        this(
+            name,
+            type,
+            description,
+            llm,
+            model,
+            tools,
+            parameters,
+            memory,
+            createdTime,
+            lastUpdateTime,
+            appType,
+            isHidden,
+            contextManagementName,
+            contextManagement,
+            tenantId,
+            provisionedBy,
             null
         );
     }
@@ -250,6 +296,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+        this.agentId = streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_AGENT_ID) ? input.readOptionalString() : null;
         validate();
     }
 
@@ -312,6 +359,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
             out.writeOptionalString(provisionedBy);
+        }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_AGENT_ID)) {
+            out.writeOptionalString(agentId);
         }
     }
 
@@ -406,6 +456,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         ContextManagementTemplate contextManagement = null;
         String tenantId = null;
         String provisionedBy = null;
+        String agentId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -413,6 +464,9 @@ public class MLAgent implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
+                case AGENT_ID_FIELD:
+                    agentId = parser.text();
+                    break;
                 case AGENT_NAME_FIELD:
                     name = parser.text();
                     break;
@@ -490,6 +544,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             .contextManagement(contextManagement)
             .tenantId(tenantId)
             .provisionedBy(provisionedBy)
+            .agentId(agentId)
             .build();
     }
 

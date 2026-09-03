@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -761,5 +762,44 @@ public class MLRegisterModelInputTest {
         streamInput.setVersion(VERSION_3_5_0);
         MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
         assertNull(deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void builder_WithCustomModelId() {
+        MLRegisterModelInput withModelId = input.toBuilder().modelId("text_embedding_v1").build();
+        assertEquals("text_embedding_v1", withModelId.getModelId());
+    }
+
+    @Test
+    public void toXContent_WithCustomModelId() throws Exception {
+        MLRegisterModelInput withModelId = input.toBuilder().modelId("text_embedding_v1").build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        withModelId.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"model_id\":\"text_embedding_v1\""));
+    }
+
+    @Test
+    public void parse_WithCustomModelId() throws Exception {
+        String json = "{\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\",\"model_id\":\"text_embedding_v1\"}";
+        testParseFromJsonString(
+            "modelName",
+            "version",
+            true,
+            json,
+            parsedInput -> { assertEquals("text_embedding_v1", parsedInput.getModelId()); }
+        );
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithCustomModelId() throws IOException {
+        MLRegisterModelInput inputWithModelId = input.toBuilder().modelId("text_embedding_v1").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_9_0);
+        inputWithModelId.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_9_0);
+        MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
+        assertEquals("text_embedding_v1", deserialized.getModelId());
     }
 }

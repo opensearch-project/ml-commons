@@ -699,6 +699,97 @@ public class TransportAddMemoriesActionTests {
     }
 
     @Test
+    public void testDoExecute_SessionCreationWithNullOwnerId_SecurityDisabled() {
+        // Regression test: on a security-disabled cluster there is no authenticated user, so owner_id is null.
+        // The session-summary path previously built the session document with
+        // Map.of(OWNER_ID_FIELD, input.getOwnerId(), ...), and Map.of rejects null values, throwing an NPE the
+        // moment a container had an LLM configured. This verifies the session is created successfully and the
+        // owner_id field is simply omitted when null.
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+        // No session_id - triggers session creation
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getPinned()).thenReturn(null);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn(null); // security disabled: no authenticated user
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-123"); // required so the summary/session path runs
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock summarizeMessages - invokes the listener synchronously, which runs the (previously NPE-throwing) path
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(3);
+            listener.onResponse("Session summary");
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            IndexRequest indexRequest = invocation.getArgument(1);
+            if (indexRequest.index().equals("session-index")) {
+                when(indexResponse.getId()).thenReturn("session-123");
+            } else {
+                when(indexResponse.getId()).thenReturn("working-mem-123");
+            }
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Pre-fix, the null owner_id in Map.of threw an NPE inside the summary listener's onResponse, which
+        // ActionListener.wrap routes to onFailure. Post-fix the flow completes: both writes happen and onResponse
+        // is called, never onFailure.
+        verify(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2))
+            .indexData(any(MemoryConfiguration.class), indexRequestCaptor.capture(), any());
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+        verify(actionListener, org.mockito.Mockito.never()).onFailure(any());
+
+        // The session document must omit owner_id when it is null (rather than storing a null value).
+        IndexRequest sessionRequest = indexRequestCaptor
+            .getAllValues()
+            .stream()
+            .filter(r -> "session-index".equals(r.index()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("expected a write to the session index"));
+        Map<String, Object> sessionSource = sessionRequest.sourceAsMap();
+        assertFalse("owner_id must be omitted from the session doc when null", sessionSource.containsKey("owner_id"));
+        assertEquals("container-123", sessionSource.get("memory_container_id"));
+        assertEquals("Session summary", sessionSource.get("summary"));
+    }
+
+    @Test
     public void testDoExecute_SessionCreation_SummarizeFailure() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
 

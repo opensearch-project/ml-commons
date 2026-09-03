@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
@@ -35,6 +36,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STA
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 
 import java.util.Set;
 
@@ -87,11 +89,13 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                             ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
                             ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                            ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED,
                             ML_COMMONS_MCP_CONNECTOR_ENABLED,
                             ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                             ML_COMMONS_STREAM_ENABLED,
                             ML_COMMONS_MAX_JSON_SIZE,
                             ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
+                            ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED,
                             ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
                             ML_COMMONS_AG_UI_ENABLED,
                             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX

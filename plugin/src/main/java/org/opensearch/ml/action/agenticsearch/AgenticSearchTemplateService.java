@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -41,6 +42,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
@@ -97,17 +99,28 @@ public class AgenticSearchTemplateService {
     // ---- Register (derive + validate + store) ------------------------------
 
     /**
-     * Register a template for filling: derive its param-schema and store it.
+     * Register a template for filling: derive or accept its param-schema and store it.
      *
      * @param templateId the {@code _scripts} template name (also the doc id)
      * @param index the target index (for field-name enums)
-     * @param description optional human description
+     * @param description optional human description; when null, the derive path assembles a
+     *     template-level one from the body's recovered clauses (used for multi-template selection)
+     * @param providedSchema a caller-supplied param-schema. When non-null it is validated
+     *     and pre-flight rendered against the body, then stored without derivation. When
+     *     null the schema is derived from the body and index mapping.
      * @param user the caller, captured by the transport action before it stashed the
      *     thread context (reading it here would be too late — the stash below drops the
      *     security-user transient); may be null when security is disabled
      * @param listener yields the stored {@link AgenticSearchTemplate}
      */
-    public void register(String templateId, String index, String description, User user, ActionListener<AgenticSearchTemplate> listener) {
+    public void register(
+        String templateId,
+        String index,
+        String description,
+        Map<String, Object> providedSchema,
+        User user,
+        ActionListener<AgenticSearchTemplate> listener
+    ) {
         try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<AgenticSearchTemplate> wrapped = ActionListener.runBefore(listener, ctx::restore);
 
@@ -116,10 +129,26 @@ public class AgenticSearchTemplateService {
                 // 2. Fetch the index mapping for field-name enums.
                 fetchFlattenedMapping(index, ActionListener.wrap(mappingFields -> {
                     try {
-                        // 3. Derive the schema: parse-tree for names/types/required,
-                        // mapping for field-name enums (a param whose name is *_field
-                        // or that targets a field can only choose an existing field).
-                        Map<String, Object> paramSchema = deriveSchema(body, mappingFields);
+                        Map<String, Object> paramSchema;
+                        String derivedDescription = null;
+                        if (providedSchema != null) {
+                            // Caller-supplied schema: check it is internally consistent
+                            // (types, enums) and references only params the body declares,
+                            // then pre-flight render below. The schema is stored as sent.
+                            validateParamSchema(providedSchema);
+                            rejectUnknownParams(providedSchema, body);
+                            paramSchema = providedSchema;
+                        } else {
+                            // 3. Derive the schema: parse-tree for names/types/required,
+                            // mapping for field-name enums (a param whose name is *_field
+                            // or that targets a field can only choose an existing field).
+                            paramSchema = deriveSchema(body, mappingFields);
+                            // Enrich the derived schema with descriptions and
+                            // fixed-value enums recovered from where each param renders, and
+                            // derive a template-level description for multi-template selection.
+                            // Best-effort: on any failure the base derivation stands.
+                            derivedDescription = enrichStructurally(body, paramSchema);
+                        }
                         // 4. Pre-flight validate: render all-filled + required-only.
                         preflightValidate(body, paramSchema);
 
@@ -128,7 +157,7 @@ public class AgenticSearchTemplateService {
                             .builder()
                             .templateId(templateId)
                             .indexBinding(index)
-                            .description(description)
+                            .description(description != null ? description : derivedDescription)
                             .paramSchema(paramSchema)
                             .createdTime(now)
                             .lastUpdatedTime(now)
@@ -149,14 +178,28 @@ public class AgenticSearchTemplateService {
     private void storeTemplate(AgenticSearchTemplate template, ActionListener<Boolean> listener) {
         mlIndicesHandler.initMLIndexIfAbsent(MLIndex.AGENTIC_SEARCH_TEMPLATES, ActionListener.wrap(created -> {
             try {
+                // CREATE opType so a duplicate template id conflicts instead of overwriting.
                 IndexRequest indexRequest = new IndexRequest(INDEX)
                     .id(template.getTemplateId())
+                    .opType(DocWriteRequest.OpType.CREATE)
                     .source(template.toXContent(jsonXContent.contentBuilder(), ToXContentObject.EMPTY_PARAMS))
                     .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(indexRequest, ActionListener.wrap(r -> {
                     log.info("Registered agentic search template: {}", template.getTemplateId());
                     listener.onResponse(true);
-                }, listener::onFailure));
+                }, e -> {
+                    if (e instanceof VersionConflictEngineException) {
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Agentic search template already exists: " + template.getTemplateId(),
+                                    RestStatus.CONFLICT
+                                )
+                            );
+                    } else {
+                        listener.onFailure(e);
+                    }
+                }));
             } catch (Exception e) {
                 listener.onFailure(e);
             }
@@ -191,6 +234,106 @@ public class AgenticSearchTemplateService {
             }
         }
         return schema;
+    }
+
+    /**
+     * Enrich a derived schema in place with a description and a fixed-value enum per
+     * param, recovered from where each param renders in the body (see
+     * {@link TemplateStructureAnalyzer}). Best-effort: any failure, or a body that will not
+     * render to parseable JSON, leaves the base derivation untouched. Only writes an empty
+     * description and only adds an enum a param does not already carry, so a field-name enum
+     * from {@link #deriveSchema} is preserved.
+     */
+    String enrichStructurally(String body, Map<String, Object> schema) {
+        try {
+            TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+            Map<String, Object> rendered = renderToMap(body, markers.renderParams());
+            if (rendered == null) {
+                return null;
+            }
+            // Render with optionals omitted so an optional param's slot shows the body's own
+            // default; read that value at the param's (stable) path below.
+            Map<String, Object> defaults = renderToMap(body, sampleParams(schema, true));
+            applyStructuralEnrichment(schema, markers, rendered, defaults);
+            // Derive a one-line template-level description (capabilities grouped by clause)
+            // for multi-template selection. Null when no role is recovered.
+            return TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered);
+        } catch (Exception e) {
+            log.warn("Structural enrichment skipped: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Apply the facts recovered from the rendered trees to the schema in place. Split from
+     * {@link #enrichStructurally} so the mutation logic is testable without a cluster: the
+     * caller owns rendering, this owns locate + per-param enrichment.
+     */
+    void applyStructuralEnrichment(
+        Map<String, Object> schema,
+        TemplateStructureAnalyzer.MarkerSet markers,
+        Map<String, Object> rendered,
+        Map<String, Object> defaults
+    ) {
+        Map<String, TemplateStructureAnalyzer.Located> located = TemplateStructureAnalyzer.locate(rendered, markers);
+        for (Map.Entry<String, Object> entry : schema.entrySet()) {
+            if (!(entry.getValue() instanceof Map)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> spec = (Map<String, Object>) entry.getValue();
+            enrichParam(entry.getKey(), spec, located.get(entry.getKey()), rendered, defaults);
+        }
+    }
+
+    /** Apply the recovered enum and description to one param, respecting values already set. */
+    private void enrichParam(
+        String param,
+        Map<String, Object> spec,
+        TemplateStructureAnalyzer.Located located,
+        Map<String, Object> rendered,
+        Map<String, Object> defaults
+    ) {
+        Object existing = spec.get(MustacheTemplateAnalyzer.DESCRIPTION_KEY);
+        boolean hasDescription = existing instanceof String && !((String) existing).isEmpty();
+        String type = spec.get(MustacheTemplateAnalyzer.TYPE_KEY) instanceof String
+            ? (String) spec.get(MustacheTemplateAnalyzer.TYPE_KEY)
+            : MustacheTemplateAnalyzer.TYPE_STRING;
+
+        // Array and boolean params carry no single clause or field, so describe them from
+        // their type alone (no marker to locate).
+        if (!hasDescription && MustacheTemplateAnalyzer.TYPE_ARRAY.equals(type)) {
+            spec.put(MustacheTemplateAnalyzer.DESCRIPTION_KEY, "A JSON array or object passed as a raw JSON string.");
+            return;
+        }
+        if (!hasDescription && MustacheTemplateAnalyzer.TYPE_BOOLEAN.equals(type)) {
+            spec.put(MustacheTemplateAnalyzer.DESCRIPTION_KEY, "Set to true to enable the optional " + param + " clause.");
+            return;
+        }
+
+        if (located == null) {
+            return;
+        }
+        TemplateStructureAnalyzer.Facts facts = TemplateStructureAnalyzer.classify(located, rendered);
+
+        // A closed-vocabulary slot becomes an enum: only for a string param with no enum yet,
+        // so a field-name enum from deriveSchema is left as is.
+        List<String> vocab = TemplateStructureAnalyzer.vocabEnum(facts);
+        if (vocab != null && MustacheTemplateAnalyzer.TYPE_STRING.equals(type) && !spec.containsKey(MustacheTemplateAnalyzer.ENUM_KEY)) {
+            spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(vocab));
+        }
+
+        if (hasDescription) {
+            return;
+        }
+        Object defaultValue = null;
+        if (Boolean.FALSE.equals(spec.get(MustacheTemplateAnalyzer.REQUIRED_KEY)) && located.isStablePath() && defaults != null) {
+            defaultValue = TemplateStructureAnalyzer.valueAt(defaults, located.path);
+        }
+        String description = TemplateStructureAnalyzer.describe(facts, defaultValue);
+        if (description != null) {
+            spec.put(MustacheTemplateAnalyzer.DESCRIPTION_KEY, description);
+        }
     }
 
     /** Heuristic: a param that selects a field (named "field", "sort_by", or ending in _field). */
@@ -232,6 +375,29 @@ public class AgenticSearchTemplateService {
             parser.map();
         } catch (Exception e) {
             throw new IllegalArgumentException("Template rendered invalid JSON (" + label + "): " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Render the body with the given params and return the parsed JSON, or null on any
+     * failure. Unlike {@link #renderAndCheckJson} this never throws: structural enrichment is
+     * best-effort, so a body that will not render simply yields no enrichment.
+     */
+    private Map<String, Object> renderToMap(String body, Map<String, Object> params) {
+        try {
+            Script script = new Script(ScriptType.INLINE, "mustache", body, Collections.emptyMap());
+            TemplateScript.Factory factory = scriptService.compile(script, TemplateScript.CONTEXT);
+            String rendered = factory.newInstance(params).execute();
+            try (
+                XContentParser parser = MediaTypeRegistry.JSON
+                    .xContent()
+                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, rendered)
+            ) {
+                return parser.map();
+            }
+        } catch (Exception e) {
+            log.debug("Structural render did not produce parseable JSON: {}", e.getMessage());
+            return null;
         }
     }
 
@@ -547,6 +713,26 @@ public class AgenticSearchTemplateService {
             merged.put(name, mergedSpec);
         }
         return merged;
+    }
+
+    /**
+     * Reject any param in a caller-supplied schema that the Mustache body does not
+     * reference. Such a param can never be filled or rendered. This applies the same
+     * guard {@link #mergeParamSchema} uses for a schema edit, so register and update
+     * enforce the same contract.
+     */
+    void rejectUnknownParams(Map<String, Object> paramSchema, String body) {
+        Map<String, Object> bodyParams = MustacheTemplateAnalyzer.derive(body);
+        for (String name : paramSchema.keySet()) {
+            if (!bodyParams.containsKey(name)) {
+                throw new IllegalArgumentException(
+                    "param '"
+                        + name
+                        + "' is not a parameter of template body; "
+                        + "cannot register params that the Mustache body never references"
+                );
+            }
+        }
     }
 
     /**

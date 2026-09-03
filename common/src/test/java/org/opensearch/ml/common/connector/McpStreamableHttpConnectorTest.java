@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.supportedProtocols;
 import static org.opensearch.ml.common.connector.RetryBackoffPolicy.CONSTANT;
 
 import java.io.IOException;
@@ -50,7 +51,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void constructor_InvalidProtocol() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of " + supportedProtocols());
 
         McpStreamableHttpConnector.builder().protocol("wrong protocol").build();
     }
@@ -188,7 +189,17 @@ public class McpStreamableHttpConnectorTest {
         updatedCredential.put("new_key", "new_value");
         List<String> updatedBackendRoles = List.of("role3", "role4");
         AccessMode updatedAccessMode = AccessMode.PRIVATE;
-        ConnectorClientConfig updatedClientConfig = new ConnectorClientConfig(40, 40000, 40000, 20, 20, 5, CONSTANT, null);
+        ConnectorClientConfig updatedClientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(40)
+            .connectionTimeout(40000)
+            .readTimeout(40000)
+            .retryBackoffMillis(20)
+            .retryTimeoutSeconds(20)
+            .maxRetryTimes(5)
+            .retryBackoffPolicy(CONSTANT)
+            .skipSslVerification(null)
+            .build();
         String updatedUrl = "https://updated.test.com";
         Map<String, String> updatedHeaders = new HashMap<>();
         updatedHeaders.put("new_header", "new_header_value");
@@ -277,7 +288,17 @@ public class McpStreamableHttpConnectorTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("endpoint", "/custom/endpoint");
 
-        ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30, 30, 10, 10, -1, RetryBackoffPolicy.CONSTANT, null);
+        ConnectorClientConfig clientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(30)
+            .connectionTimeout(30)
+            .readTimeout(30)
+            .retryBackoffMillis(10)
+            .retryTimeoutSeconds(10)
+            .maxRetryTimes(-1)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .skipSslVerification(null)
+            .build();
 
         return McpStreamableHttpConnector
             .builder()

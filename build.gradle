@@ -115,6 +115,7 @@ subprojects {
         resolutionStrategy.force "software.amazon.awssdk:kms:${versions.aws}"
         resolutionStrategy.force "software.amazon.awssdk:dynamodb:${versions.aws}"
         resolutionStrategy.force "software.amazon.awssdk:dynamodb-enhanced:${versions.aws}"
+        resolutionStrategy.force "software.amazon.awssdk:sts:${versions.aws}"
         resolutionStrategy.force "org.dafny:DafnyRuntime:4.9.0"
     }
 
@@ -128,7 +129,7 @@ subprojects {
         java {
             removeUnusedImports()
             importOrder 'java', 'javax', 'org', 'com'
-            eclipse().configFile rootProject.file('.eclipseformat.xml')
+            eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://ci.opensearch.org/")).configFile rootProject.file('.eclipseformat.xml')
         }
     }
 }

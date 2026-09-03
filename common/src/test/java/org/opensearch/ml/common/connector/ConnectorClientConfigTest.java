@@ -14,6 +14,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
 
@@ -81,6 +82,46 @@ public class ConnectorClientConfigTest {
     }
 
     @Test
+    public void writeTo_ReadFromStream_onOrAfterMtlsVersionThenProcessMtlsOptions() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_9_0);
+        config.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(CommonValue.VERSION_3_9_0);
+        ConnectorClientConfig readConfig = ConnectorClientConfig.fromStream(input);
+
+        Assert.assertEquals(Boolean.TRUE, readConfig.getMutualTlsEnabled());
+        Assert.assertEquals("PEM", readConfig.getKeystoreType());
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_beforeMtlsVersionThenNotProcessMtlsOptions() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig
+            .builder()
+            .maxConnections(10)
+            .skipSslVerification(true)
+            .mutualTlsEnabled(true)
+            .keystoreType("PEM")
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_8_0);
+        config.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(CommonValue.VERSION_3_8_0);
+        ConnectorClientConfig readConfig = ConnectorClientConfig.fromStream(input);
+
+        // Fields that predate the mTLS gate still round-trip
+        Assert.assertEquals(Integer.valueOf(10), readConfig.getMaxConnections());
+        Assert.assertEquals(Boolean.TRUE, readConfig.getSkipSslVerification());
+        // mTLS fields are not written to pre-3.9.0 nodes
+        Assert.assertNull(readConfig.getMutualTlsEnabled());
+        Assert.assertNull(readConfig.getKeystoreType());
+    }
+
+    @Test
     public void toXContent() throws IOException {
         ConnectorClientConfig config = ConnectorClientConfig
             .builder()
@@ -92,6 +133,8 @@ public class ConnectorClientConfigTest {
             .maxRetryTimes(789)
             .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
             .skipSslVerification(true)
+            .mutualTlsEnabled(true)
+            .keystoreType("PEM")
             .build();
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -99,14 +142,30 @@ public class ConnectorClientConfigTest {
         String content = TestHelper.xContentBuilderToString(builder);
 
         String expectedJson = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
-            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true}";
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true,"
+            + "\"mutual_tls_enabled\":true,\"keystore_type\":\"PEM\"}";
         Assert.assertEquals(expectedJson, content);
+    }
+
+    @Test
+    public void toXContent_mtlsFieldsUnset_OmittedFromOutput() throws IOException {
+        // mutualTlsEnabled and keystoreType have no defaults so that connector configs which never
+        // mention mTLS are not polluted with the fields.
+        ConnectorClientConfig config = ConnectorClientConfig.builder().maxConnections(10).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        config.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert.assertFalse("mutual_tls_enabled should be omitted when unset", content.contains("mutual_tls_enabled"));
+        Assert.assertFalse("keystore_type should be omitted when unset", content.contains("keystore_type"));
     }
 
     @Test
     public void parse() throws IOException {
         String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000,"
-            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true}";
+            + "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789,\"retry_backoff_policy\":\"constant\",\"skip_ssl_verification\":true,"
+            + "\"mutual_tls_enabled\":true,\"keystore_type\":\"PKCS12\"}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -126,6 +185,8 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(789), config.getMaxRetryTimes());
         Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
         Assert.assertEquals(Boolean.TRUE, config.getSkipSslVerification());
+        Assert.assertEquals(Boolean.TRUE, config.getMutualTlsEnabled());
+        Assert.assertEquals("PKCS12", config.getKeystoreType());
     }
 
     @Test

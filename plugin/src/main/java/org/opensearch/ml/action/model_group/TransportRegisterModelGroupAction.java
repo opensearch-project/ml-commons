@@ -17,6 +17,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -76,6 +77,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, createModelGroupInput.getTenantId(), listener)) {
             return;
         }
+        MLResourceIdUtils.validateCustomDocumentId(createModelGroupInput.getModelGroupId(), "model group id");
         mlModelGroupManager.createModelGroup(createModelGroupInput, ActionListener.wrap(modelGroupId -> {
             listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name()));
         }, ex -> {

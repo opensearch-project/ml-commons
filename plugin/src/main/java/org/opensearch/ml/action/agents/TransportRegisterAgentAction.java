@@ -42,11 +42,13 @@ import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -91,6 +93,8 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
+
+        MLResourceIdUtils.validateCustomDocumentId(mlAgent.getAgentId(), "agent id");
 
         if (mlAgent.getMemory() != null
             && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(mlAgent.getMemory().getType())
@@ -196,7 +200,15 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
                 parameters.put(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD, conversationAgentId);
                 MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
-                registerAgentToIndex(updatedAgent, tenantId, listener);
+                registerAgentToIndex(
+                    updatedAgent,
+                    tenantId,
+                    ActionListener
+                        .wrap(
+                            listener::onResponse,
+                            parentFailure -> deleteOrphanedConversationAgent(conversationAgentId, tenantId, parentFailure, listener)
+                        )
+                );
             }, listener::onFailure));
         } else {
             registerAgentToIndex(mlAgent, tenantId, listener);
@@ -216,6 +228,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             .createdTime(now)
             .lastUpdateTime(now)
             .isHidden(isHiddenAgent)
+            .agentId(null)
             .build();
 
         registerAgentToIndex(
@@ -225,31 +238,69 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         );
     }
 
+    private void deleteOrphanedConversationAgent(
+        String conversationAgentId,
+        String tenantId,
+        Exception parentFailure,
+        ActionListener<MLRegisterAgentResponse> listener
+    ) {
+        log
+            .warn(
+                "Plan-execute-and-reflect agent registration failed after creating conversation agent {}; attempting cleanup",
+                conversationAgentId,
+                parentFailure
+            );
+        ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
+        ActionListener<MLRegisterAgentResponse> failureListener = ActionListener.runBefore(listener, context::restore);
+        try {
+            sdkClient
+                .deleteDataObjectAsync(
+                    DeleteDataObjectRequest.builder().index(ML_AGENT_INDEX).id(conversationAgentId).tenantId(tenantId).build()
+                )
+                .whenComplete((response, deleteThrowable) -> {
+                    if (deleteThrowable != null) {
+                        log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, deleteThrowable);
+                    } else {
+                        log.info("Deleted orphaned conversation agent {} after parent registration failure", conversationAgentId);
+                    }
+                    failureListener.onFailure(parentFailure);
+                });
+        } catch (Exception e) {
+            log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, e);
+            failureListener.onFailure(parentFailure);
+        }
+    }
+
     private void registerAgentToIndex(MLAgent mlAgent, String tenantId, ActionListener<MLRegisterAgentResponse> listener) {
+        String agentId = mlAgent.getAgentId();
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    sdkClient
-                        .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()
-                        )
-                        .whenComplete((r, throwable) -> {
-                            context.restore();
-                            if (throwable != null) {
-                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                log.error("Failed to index ML agent", cause);
-                                listener.onFailure(cause);
-                            } else {
-                                try {
-                                    IndexResponse indexResponse = r.indexResponse();
-                                    log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
-                                    MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
-                                    listener.onResponse(response);
-                                } catch (Exception e) {
-                                    listener.onFailure(e);
-                                }
+                    PutDataObjectRequest.Builder putRequestBuilder = PutDataObjectRequest
+                        .builder()
+                        .index(ML_AGENT_INDEX)
+                        .tenantId(tenantId)
+                        .dataObject(mlAgent);
+                    if (agentId != null) {
+                        putRequestBuilder.id(agentId).overwriteIfExists(false);
+                    }
+                    sdkClient.putDataObjectAsync(putRequestBuilder.build()).whenComplete((r, throwable) -> {
+                        context.restore();
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to index ML agent", cause);
+                            listener.onFailure(MLResourceIdUtils.toDocumentAlreadyExistsException(agentId, "agent id", cause));
+                        } else {
+                            try {
+                                IndexResponse indexResponse = r.indexResponse();
+                                log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
+                                MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
+                                listener.onResponse(response);
+                            } catch (Exception e) {
+                                listener.onFailure(e);
                             }
-                        });
+                        }
+                    });
                 } catch (Exception e) {
                     log.error("Failed to index ML agent", e);
                     listener.onFailure(e);

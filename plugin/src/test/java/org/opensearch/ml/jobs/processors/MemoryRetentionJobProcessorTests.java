@@ -6,6 +6,7 @@
 package org.opensearch.ml.jobs.processors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -18,12 +19,15 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ORPHAN_SWEEP_BASELINE_TIME_FIELD;
 
 import java.lang.reflect.Field;
@@ -32,15 +36,20 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.search.TotalHits;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -61,12 +70,16 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.jobscheduler.spi.LockModel;
+import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
 import org.opensearch.search.DocValueFormat;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.search.aggregations.bucket.composite.CompositeAggregation;
+import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -89,9 +102,16 @@ public class MemoryRetentionJobProcessorTests {
 
     private MemoryRetentionJobProcessor processor;
 
+    // A mock LockService wired into the processor for every test. By default acquiring the cluster-wide lock
+    // succeeds (returns a non-null LockModel), renewal echoes the lock, and release succeeds. Individual tests
+    // that exercise contention override acquireLockWithId to return null.
+    private LockService lockService;
+    private LockModel lockModel;
+
     @Before
     public void setUp() {
         MemoryRetentionJobProcessor.reset();
+        MemoryRetentionJobProcessor.setLockService(null);
 
         // Default settings: multi-tenancy disabled, throttle = 1 second
         Settings settings = Settings
@@ -114,6 +134,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -144,7 +165,56 @@ public class MemoryRetentionJobProcessorTests {
             return null;
         }).when(threadPool).schedule(any(Runnable.class), any(TimeValue.class), anyString());
 
+        // Lock renewal scheduling: return a no-op cancellable and do NOT auto-run (renewal is periodic; running
+        // it inline would recurse). Tests that assert renewal drive it explicitly.
+        lenient()
+            .when(threadPool.scheduleWithFixedDelay(any(Runnable.class), any(TimeValue.class), anyString()))
+            .thenReturn(mock(Scheduler.Cancellable.class));
+
+        // Wire a mock cluster-wide LockService: acquire succeeds, renew echoes, release succeeds.
+        // LockModel is final and cannot be mocked, so use a real instance.
+        lockService = mock(LockService.class);
+        lockModel = new LockModel(".plugins-ml-jobs", "MEMORY_RETENTION", java.time.Instant.ofEpochMilli(0L), 120L, false);
+        lenient().doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        lenient().doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+        // Teardown deletes the lock by id (unconditional), not release(lockModel) — see finishRun().
+        lenient().doAnswer(invocation -> {
+            ActionListener<Boolean> l = invocation.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(lockService).deleteLock(anyString(), isA(ActionListener.class));
+        MemoryRetentionJobProcessor.setLockService(lockService);
+
         processor = MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool);
+    }
+
+    @After
+    public void tearDown() {
+        MemoryRetentionJobProcessor.setLockService(null);
+        MemoryRetentionJobProcessor.reset();
+    }
+
+    /**
+     * Invokes the async {@link MemoryRetentionJobProcessor#triggerRun(ActionListener)} and returns the
+     * synchronously-reported status. All stubs in these tests complete their listeners inline, so the status
+     * is always available by the time triggerRun returns.
+     */
+    private TriggerStatus triggerRunSync() {
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        AtomicReference<Exception> errorRef = new AtomicReference<>();
+        processor.triggerRun(ActionListener.wrap(statusRef::set, errorRef::set));
+        if (errorRef.get() != null) {
+            throw new RuntimeException(errorRef.get());
+        }
+        return statusRef.get();
     }
 
     @Test
@@ -155,8 +225,412 @@ public class MemoryRetentionJobProcessorTests {
     }
 
     @Test
-    public void testRunSkipsWhenMultiTenancyEnabled() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build();
+    public void testTriggerRunReturnsRemoteMetadataStore() {
+        // RFC #4859: multi-tenancy no longer gates the job (local-metadata MT runs tenant-isolated). The trigger
+        // skips only when a REMOTE metadata store is configured, returning REMOTE_METADATA_STORE.
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_metadata_type", "AWSOpenSearchService").build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
+
+        TriggerStatus status = triggerRunSync();
+
+        assertEquals(TriggerStatus.REMOTE_METADATA_STORE, status);
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        // Gating short-circuits before any lock is requested.
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunReturnsRetentionDisabled() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.memory.retention_enabled", false)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
+
+        TriggerStatus status = triggerRunSync();
+
+        assertEquals(TriggerStatus.RETENTION_DISABLED, status);
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunReturnsTriggeredThenAlreadyRunning() throws Exception {
+        // First trigger: kick off the pipeline but never let it complete, so isRunning stays true.
+        // We stub search to NOT invoke the listener, leaving the job "in progress".
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        TriggerStatus first = triggerRunSync();
+        assertEquals(TriggerStatus.TRIGGERED, first);
+
+        // Second trigger while the first is still in progress must be rejected without double-running.
+        // The per-node isRunning guard short-circuits before a second lock acquisition is attempted.
+        TriggerStatus second = triggerRunSync();
+        assertEquals(TriggerStatus.ALREADY_RUNNING, second);
+
+        // Only the first trigger initiated a container search.
+        verify(client, org.mockito.Mockito.times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        // The cluster-wide lock was acquired exactly once (for the first, still-in-progress run) and never
+        // released, since that run never completed.
+        verify(lockService, org.mockito.Mockito.times(1))
+            .acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunReturnsTriggeredAndCompletesGuardReleased() {
+        // Empty containers -> pipeline completes synchronously, isRunning is reset, so a second trigger works.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+        // Guard released on completion -> a subsequent trigger is TRIGGERED again, not ALREADY_RUNNING.
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+
+        // Each completed run releases the cluster-wide lock exactly once (two runs -> two deletes).
+        verify(lockService, org.mockito.Mockito.times(2)).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunReturnsAlreadyRunningWhenLockHeldClusterWide() {
+        // Simulate another node (or the scheduler) already holding the cluster-wide lock: acquire yields null.
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(null);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.ALREADY_RUNNING, triggerRunSync());
+
+        // No pipeline started, and the per-node guard was released so a later trigger can proceed.
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        // Confirm the guard is free: with the lock now acquirable again, a second trigger is TRIGGERED.
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testTriggerRunReportsFailureWhenLockAcquisitionFails() {
+        // Lock acquisition errors: the run must not start, the per-node guard must be released, and the
+        // failure must be reported to the listener (so the transport layer can surface a 500).
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onFailure(new RuntimeException("lock index unavailable"));
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        AtomicReference<Exception> errorRef = new AtomicReference<>();
+        processor.triggerRun(ActionListener.wrap(statusRef::set, errorRef::set));
+
+        assertNotNull(errorRef.get());
+        assertEquals(null, statusRef.get());
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // Guard released: a subsequent trigger (lock now acquirable) is TRIGGERED, not ALREADY_RUNNING.
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(3);
+            l.onResponse(lockModel);
+            return null;
+        }).when(lockService).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testTriggerRunRunsWithoutLockServiceWhenUnavailable() {
+        // No cluster-wide LockService wired (e.g. job-scheduler absent): the run degrades to per-node
+        // exclusion and still executes the pipeline.
+        MemoryRetentionJobProcessor.setLockService(null);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+        verify(client, atLeastOnce()).search(any(SearchRequest.class), isA(ActionListener.class));
+        // Restore for tearDown symmetry / other assertions.
+        MemoryRetentionJobProcessor.setLockService(lockService);
+    }
+
+    @Test
+    public void testRunSwallowsSynchronousKickoffFailureAndReleasesGuard() {
+        // Make the very first container search throw synchronously on the calling thread, so
+        // resolveContainersWithPolicies(null) throws inside kickOffPipeline()'s try block.
+        doThrow(new RuntimeException("synchronous kickoff boom")).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // run() (scheduled path) must NOT propagate the exception (fire-and-forget semantics).
+        processor.run();
+
+        // The guard and lock must have been released before the failure was reported, so retention is not
+        // permanently wedged: switch search to succeed and confirm a subsequent trigger is TRIGGERED.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testTriggerRunReportsSynchronousKickoffFailure() {
+        // The on-demand path relies on triggerRun() reporting the failure via its listener (so the transport
+        // layer can surface a 500) while still having released the guard and lock first.
+        doThrow(new RuntimeException("synchronous kickoff boom")).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        AtomicReference<Exception> errorRef = new AtomicReference<>();
+        processor.triggerRun(ActionListener.wrap(statusRef::set, errorRef::set));
+
+        assertNotNull(errorRef.get());
+        assertEquals("synchronous kickoff boom", errorRef.get().getMessage());
+        // The lock acquired for this run must have been released (deleted by id) on the failure path.
+        verify(lockService, atLeastOnce()).deleteLock(anyString(), isA(ActionListener.class));
+
+        // Guard released despite the failure.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testSynchronousThrowOnContinuationSearchStillReleasesLockAndGuard() {
+        // Regression for the pipeline-continuation leak: the first container search returns a full page (so
+        // the pipeline continues into a SECOND search dispatch), and that second dispatch throws synchronously.
+        // The run must still tear down (delete the lock, reset the guard) rather than leaving the lock-renewal
+        // task alive to renew the cluster-wide lock forever.
+        AtomicInteger searchCalls = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            int n = searchCalls.incrementAndGet();
+            if (n == 1) {
+                // A full page (CONTAINER_PAGE_SIZE=100) of no-config containers: processContainer skips each
+                // (no config field), the chain runs to the end of the page and, because a full page implies
+                // more, re-enters resolveContainersWithPolicies -> second search dispatch.
+                SearchHit[] page = new SearchHit[100];
+                for (int i = 0; i < page.length; i++) {
+                    page[i] = createHitWithSource("c" + i, Map.of());
+                }
+                SearchResponse full = mock(SearchResponse.class);
+                when(full.getHits()).thenReturn(new SearchHits(page, new TotalHits(page.length, TotalHits.Relation.EQUAL_TO), Float.NaN));
+                ActionListener<SearchResponse> listener = invocation.getArgument(1);
+                listener.onResponse(full);
+                return null;
+            }
+            // Second (continuation) search dispatch throws synchronously on the calling thread.
+            throw new RuntimeException("synchronous continuation boom");
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // Scheduled path swallows; the point is the teardown side effects.
+        processor.run();
+
+        // Lock released (deleted) and guard freed: a subsequent empty-container trigger is TRIGGERED, not
+        // ALREADY_RUNNING, proving the run did not wedge.
+        verify(lockService, atLeastOnce()).deleteLock(anyString(), isA(ActionListener.class));
+        searchCalls.set(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+    }
+
+    @Test
+    public void testLockRenewalRunnableRenewsLockAndAdvancesCurrentLock() throws Exception {
+        // Keep the pipeline in flight (search never completes) so the run holds the lock and does not tear it
+        // down before we drive one renewal tick.
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        // renewLock returns a fresh, higher-version model (distinct instance) that currentLock should adopt.
+        LockModel renewed = new LockModel(".plugins-ml-jobs", "MEMORY_RETENTION", java.time.Instant.ofEpochMilli(60000L), 120L, false);
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onResponse(renewed);
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+        assertSame("the run should be holding the freshly acquired lock", lockModel, currentLock(processor));
+
+        // Capture the periodic renewal task registered via scheduleWithFixedDelay and drive one tick by hand.
+        ArgumentCaptor<Runnable> cap = ArgumentCaptor.forClass(Runnable.class);
+        verify(threadPool).scheduleWithFixedDelay(cap.capture(), any(TimeValue.class), anyString());
+        cap.getValue().run();
+
+        verify(lockService, atLeastOnce()).renewLock(any(LockModel.class), isA(ActionListener.class));
+        assertSame("currentLock must advance to the renewed (higher-version) model", renewed, currentLock(processor));
+    }
+
+    @Test
+    public void testFinishRunCancelsRenewalBeforeDeletingLock() throws Exception {
+        // Hold a concrete cancellable so we can assert the teardown ordering.
+        Scheduler.Cancellable cancellable = mock(Scheduler.Cancellable.class);
+        when(threadPool.scheduleWithFixedDelay(any(Runnable.class), any(TimeValue.class), anyString())).thenReturn(cancellable);
+        // Empty containers -> pipeline completes synchronously, so finishRun() runs on this thread.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+
+        // Ordering contract (see finishRun): the renewal task is cancelled BEFORE the lock is deleted, to
+        // minimise the window in which an in-flight renewal can race the delete.
+        InOrder order = inOrder(cancellable, lockService);
+        order.verify(cancellable).cancel();
+        order.verify(lockService).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRenewalReturningNullSetsLockLostAndFinishRunSkipsDeleteLock() throws Exception {
+        // Keep the run in flight so it holds the lock; then drive a renewal that returns null (the lock doc
+        // could not be advanced -- likely expired and possibly re-acquired elsewhere under the same id).
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onResponse(null);
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+        assertFalse("lockLost starts false for a fresh acquisition", lockLost(processor));
+
+        ArgumentCaptor<Runnable> cap = ArgumentCaptor.forClass(Runnable.class);
+        verify(threadPool).scheduleWithFixedDelay(cap.capture(), any(TimeValue.class), anyString());
+        cap.getValue().run();
+        assertTrue("a null renewal must flag lockLost", lockLost(processor));
+
+        // finishRun() must now SKIP deleteLock: the doc may belong to a different, still-live run.
+        invokeFinishRun(processor);
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRenewalFailureSetsLockLostAndFinishRunSkipsDeleteLock() throws Exception {
+        // Same contract as the null case, but via the renewLock onFailure arm.
+        doAnswer(invocation -> null).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<LockModel> l = invocation.getArgument(1);
+            l.onFailure(new RuntimeException("renew failed"));
+            return null;
+        }).when(lockService).renewLock(any(LockModel.class), isA(ActionListener.class));
+
+        assertEquals(TriggerStatus.TRIGGERED, triggerRunSync());
+
+        ArgumentCaptor<Runnable> cap = ArgumentCaptor.forClass(Runnable.class);
+        verify(threadPool).scheduleWithFixedDelay(cap.capture(), any(TimeValue.class), anyString());
+        cap.getValue().run();
+        assertTrue("a failed renewal must flag lockLost", lockLost(processor));
+
+        invokeFinishRun(processor);
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testWatchdogReclaimsGuardWithoutTouchingClusterLock() throws Exception {
+        // Option C: a leaked per-node guard (held longer than any real run could last) is reclaimed by the
+        // watchdog reclaiming ONLY the per-node guard. It must NOT acquire, renew, or delete the cluster-wide
+        // lock -- a still-live run on another node may own it, and deleting it here would let a competing run
+        // start and cascade.
+        setIsRunning(processor, true);
+        setRunStartMillis(processor, System.currentTimeMillis() - stuckTimeoutMillis(processor) - TimeUnit.HOURS.toMillis(1));
+
+        processor.run();
+
+        assertFalse("watchdog must clear the per-node guard", isRunningFlag(processor));
+        assertEquals("watchdog must clear the start-time stamp", Long.MIN_VALUE, runStartMillis(processor));
+        // No run was started and the cluster-wide lock was left entirely untouched.
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(lockService, never()).deleteLock(anyString(), isA(ActionListener.class));
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testTriggerRunSkipsForRemoteOpenSearch() {
+        assertTriggerSkipsForRemoteMetadataType("RemoteOpenSearch");
+    }
+
+    @Test
+    public void testTriggerRunSkipsForAWSDynamoDB() {
+        assertTriggerSkipsForRemoteMetadataType("AWSDynamoDB");
+    }
+
+    @Test
+    public void testTriggerRunSkipsForAWSOpenSearchService() {
+        assertTriggerSkipsForRemoteMetadataType("AWSOpenSearchService");
+    }
+
+    /**
+     * Shared body for the REMOTE_METADATA_STORE trigger tests: with the given remote metadata type configured, the
+     * trigger must short-circuit to REMOTE_METADATA_STORE before any registry scan or lock acquisition.
+     */
+    private void assertTriggerSkipsForRemoteMetadataType(String remoteType) {
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_metadata_type", remoteType).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, gatingSettingsSet()));
+
+        AtomicReference<TriggerStatus> statusRef = new AtomicReference<>();
+        processor
+            .triggerRun(ActionListener.wrap(statusRef::set, e -> fail("unexpected failure for " + remoteType + ": " + e.getMessage())));
+
+        assertEquals("remote metadata type " + remoteType + " must skip", TriggerStatus.REMOTE_METADATA_STORE, statusRef.get());
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(lockService, never()).acquireLockWithId(anyString(), any(Long.class), anyString(), isA(ActionListener.class));
+    }
+
+    private java.util.Set<Setting<?>> gatingSettingsSet() {
+        return new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+    }
+
+    @Test
+    public void testRunExecutesWhenMultiTenancyEnabled() {
+        // RFC #4859: the retention job is a single cluster-wide, system-context janitor. Multi-tenancy no longer
+        // gates it; it must schedule/run and scan the global container registry regardless of the MT setting.
+        // Tenant isolation is achieved per-container via the memory_container_id filter (see the isolation test),
+        // not by refusing to run under MT.
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .build();
         when(clusterService.getSettings()).thenReturn(settings);
         java.util.Set<Setting<?>> s = new java.util.HashSet<>(
             java.util.Arrays
@@ -164,6 +638,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -174,10 +649,149 @@ public class MemoryRetentionJobProcessorTests {
         );
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
 
+        // Return empty containers
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
         processor.run();
 
-        // Should not search for containers when multi-tenancy is enabled
+        // The job must scan the global container registry even when multi-tenancy is enabled.
+        verify(client, atLeastOnce()).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRunSkipsWhenRemoteMetadataStoreConfigured() {
+        // RFC #4859: when a REMOTE metadata store is configured (e.g. AWS OpenSearch Serverless / DynamoDB), the
+        // container registry lives outside the local cluster, so the native-client janitor cannot enumerate it and
+        // would silently clean nothing. The job must skip entirely (no registry scan) rather than run against an
+        // empty local registry. Local-metadata multi-tenancy is unaffected (see testRunExecutesWhenMultiTenancyEnabled).
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.remote_metadata_type", "AWSOpenSearchService")
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.REMOTE_METADATA_TYPE
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
+
+        processor.run();
+
+        // The job must NOT scan the container registry when metadata is stored remotely.
         verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testMultiTenancyTenantIsolationViaContainerIdFilter() {
+        // RFC #4859 tenant-isolation guard: every per-container search/delete issued by a single cluster-wide run
+        // MUST be scoped by termQuery(memory_container_id, <containerId>). Container ids are globally unique in the
+        // shared registry and each maps to exactly one tenant, so this transitively confines every physical-index
+        // read/delete to that container's own tenant. If any future per-container query drops the container_id term,
+        // it would leak/delete across tenants in the shared default index; this test fails in that case.
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .put("plugins.ml_commons.memory.retention_enabled", true)
+            .put("plugins.ml_commons.memory.retention_job_throttle_seconds", 1)
+            .build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        java.util.Set<Setting<?>> s = new java.util.HashSet<>(
+            java.util.Arrays
+                .asList(
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS
+                )
+        );
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, s));
+
+        final String containerId = "tenant-a-container";
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            containerId,
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", 7, null)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        java.util.List<SearchRequest> perContainerSearches = new java.util.ArrayList<>();
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    listener.onResponse(emptySearchResponse());
+                }
+            } else {
+                // Record every non-registry (per-container) search and return expired sessions to drive deletes.
+                perContainerSearches.add(request);
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                SearchHit hit1 = createHitWithSource("expired-session-1", Map.of("last_updated_time", oldTimestamp));
+                SearchHits sessionHits = new SearchHits(new SearchHit[] { hit1 }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+                SearchResponse sessionResponse = mock(SearchResponse.class);
+                when(sessionResponse.getHits()).thenReturn(sessionHits);
+                listener.onResponse(sessionResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        java.util.List<DeleteByQueryRequest> deleteByQueryRequests = new java.util.ArrayList<>();
+        BulkByScrollResponse cascadeResponse = mock(BulkByScrollResponse.class);
+        lenient().when(cascadeResponse.getDeleted()).thenReturn(1L);
+        doAnswer(invocation -> {
+            deleteByQueryRequests.add(invocation.getArgument(1));
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(cascadeResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(BulkRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // Every per-container search must be scoped by the container id term (never the registry index).
+        assertTrue("expected at least one per-container search", perContainerSearches.size() > 0);
+        for (SearchRequest req : perContainerSearches) {
+            String q = req.source().query().toString();
+            assertTrue("per-container search query must filter on memory_container_id: " + q, q.contains(MEMORY_CONTAINER_ID_FIELD));
+            assertTrue("per-container search query must reference container id " + containerId + ": " + q, q.contains(containerId));
+        }
+
+        // Every delete-by-query must likewise be scoped by the container id term.
+        assertTrue("expected at least one delete-by-query", deleteByQueryRequests.size() > 0);
+        for (DeleteByQueryRequest dbq : deleteByQueryRequests) {
+            String q = dbq.getSearchRequest().source().query().toString();
+            assertTrue("delete-by-query must filter on memory_container_id: " + q, q.contains(MEMORY_CONTAINER_ID_FIELD));
+            assertTrue("delete-by-query must reference container id " + containerId + ": " + q, q.contains(containerId));
+        }
     }
 
     @Test
@@ -194,6 +808,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -236,6 +851,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -1624,6 +2240,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -2533,6 +3150,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -2602,6 +3220,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -2904,6 +3523,7 @@ public class MemoryRetentionJobProcessorTests {
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT,
                     MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT,
@@ -3087,5 +3707,233 @@ public class MemoryRetentionJobProcessorTests {
 
         assertNotNull("collectOldestDocIds should have completed synchronously", result.get());
         assertEquals("collectOldestDocIds must not collect more than the per-run cap", cap, result.get().size());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Guard-leak regression tests: the isRunning guard must always reset, even when a run fails on a
+    // thread that no ActionListener wraps, so retention can never silently wedge until node restart.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void testGuardResetsAfterMidRunThrowInScheduledContinuation() throws Exception {
+        // The primary leak vector: after a container with deletions, the chain resumes inside a
+        // threadPool.schedule() continuation that runs on the GENERIC pool, OUTSIDE any listener. A
+        // synchronous throw there (modeled here as the orphan-sweep search rejecting work) used to be
+        // swallowed by the executor, leaving isRunning stuck true forever. Emulate real executor
+        // isolation by swallowing the runnable's throw the way ThreadPool.schedule would, so this test
+        // reproduces the production leak rather than masking it behind the synchronous default mock.
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            try {
+                runnable.run();
+            } catch (Throwable ignored) {
+                // A real scheduled executor routes this to the uncaught-exception handler, not the caller.
+            }
+            return null;
+        }).when(threadPool).schedule(any(Runnable.class), any(TimeValue.class), anyString());
+
+        SearchResponse containerSearchResponse = createContainerSearchResponse(
+            "container-time",
+            "test-prefix",
+            true,
+            createRetentionPolicyMap("sessions", 7, null)
+        );
+
+        AtomicInteger containerSearchCount = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_MEMORY_CONTAINER_INDEX)) {
+                if (containerSearchCount.getAndIncrement() == 0) {
+                    // First container-index search returns one container with deletions, which drives
+                    // the chain into scheduleNext() and then into the scheduled orphan-sweep search.
+                    listener.onResponse(containerSearchResponse);
+                } else {
+                    // Second container-index search is the orphan sweep, reached inside the scheduled
+                    // continuation. Throw synchronously to simulate an unhandled mid-run failure.
+                    throw new RuntimeException("injected orphan-sweep failure inside scheduled continuation");
+                }
+            } else {
+                // Session search returns 3 expired sessions so container-0 reports deletions.
+                long oldTimestamp = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+                SearchHit hit1 = createHitWithSource("expired-session-1", Map.of("last_updated_time", oldTimestamp));
+                SearchHit hit2 = createHitWithSource("expired-session-2", Map.of("last_updated_time", oldTimestamp));
+                SearchHit hit3 = createHitWithSource("expired-session-3", Map.of("last_updated_time", oldTimestamp));
+                SearchHits sessionHits = new SearchHits(
+                    new SearchHit[] { hit1, hit2, hit3 },
+                    new TotalHits(3, TotalHits.Relation.EQUAL_TO),
+                    Float.NaN
+                );
+                SearchResponse sessionResponse = mock(SearchResponse.class);
+                when(sessionResponse.getHits()).thenReturn(sessionHits);
+                listener.onResponse(sessionResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        BulkByScrollResponse cascadeResponse = mock(BulkByScrollResponse.class);
+        lenient().when(cascadeResponse.getDeleted()).thenReturn(10L);
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(cascadeResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), isA(ActionListener.class));
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        lenient().when(bulkResponse.hasFailures()).thenReturn(false);
+        lenient().when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(BulkRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        // The mid-run throw was reached (orphan-sweep search was attempted) ...
+        assertTrue("orphan-sweep search should have been attempted inside the continuation", containerSearchCount.get() >= 2);
+        // ... and despite it, the guard was released so the next scheduled run is not blocked.
+        assertFalse("isRunning must reset after a mid-run throw in the scheduled continuation", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared once the guard is released", Long.MIN_VALUE, runStartMillis(processor));
+
+        // Prove recovery end-to-end: a subsequent invocation is NOT skipped as "already in progress".
+        AtomicBoolean recoverySearched = new AtomicBoolean(false);
+        doAnswer(invocation -> {
+            recoverySearched.set(true);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        processor.run();
+        assertTrue("a fresh run after a leak must proceed, not skip", recoverySearched.get());
+        assertFalse("isRunning must be false after the recovering run completes", isRunningFlag(processor));
+    }
+
+    @Test
+    public void testGuardResetsWhenInitialSearchThrows() throws Exception {
+        // A synchronous throw from the very first search (kicked off directly inside run()) must be
+        // caught and reset the guard via the run() try/catch.
+        doAnswer(invocation -> { throw new RuntimeException("injected initial search failure"); })
+            .when(client)
+            .search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        assertFalse("isRunning must reset when the initial container search throws", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared", Long.MIN_VALUE, runStartMillis(processor));
+    }
+
+    @Test
+    public void testStuckGuardWatchdogClearsGuardAndNextRunRecovers() throws Exception {
+        // Simulate a previously leaked guard: isRunning stuck true, acquired longer ago than any real
+        // run could last. The watchdog in run() must CLEAR the guard and skip THIS invocation (it must
+        // not take over and start a competing run), then the NEXT invocation must proceed cleanly.
+        setIsRunning(processor, true);
+        setRunStartMillis(processor, System.currentTimeMillis() - stuckTimeoutMillis(processor) - TimeUnit.HOURS.toMillis(1));
+
+        AtomicBoolean searched = new AtomicBoolean(false);
+        doAnswer(invocation -> {
+            searched.set(true);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(emptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        // First invocation: detects the leak, clears the guard, and does NOT start a run.
+        processor.run();
+        assertFalse("watchdog must not start a competing run on the stuck-guard invocation", searched.get());
+        assertFalse("isRunning must be cleared by the watchdog", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared by the watchdog", Long.MIN_VALUE, runStartMillis(processor));
+
+        // Second invocation: guard is free, so this one runs normally.
+        processor.run();
+        assertTrue("the next scheduled run after a cleared leak must proceed", searched.get());
+        assertFalse("isRunning must be false after the recovering run completes", isRunningFlag(processor));
+        assertEquals("runStartMillis must be cleared after recovery", Long.MIN_VALUE, runStartMillis(processor));
+    }
+
+    @Test
+    public void testStuckGuardTimeoutScalesWithConfiguredInterval() {
+        // Liveness floor, not a run timeout: max(24h floor, 2 × interval). The floor keeps the detection
+        // window generous on short intervals; the interval multiple widens it on long intervals so a
+        // legitimately long-running weekly-interval run isn't false-flagged as stuck. With the DEFAULT 24h
+        // interval, 2 × 24h = 48h beats the 24h floor. The floor only binds for intervals <= 12h.
+        assertEquals("default 24h interval -> 2 × interval (48h) wins", TimeUnit.HOURS.toMillis(48), processor.stuckGuardTimeoutMillis());
+
+        // 1h interval: 2 × 1h = 2h, floored up to 24h.
+        Settings shortInterval = Settings
+            .builder()
+            .put(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.getKey(), 1)
+            .build();
+        clusterService.getClusterSettings().applySettings(shortInterval);
+        assertEquals("1h interval -> 24h floor wins over 2h", TimeUnit.HOURS.toMillis(24), processor.stuckGuardTimeoutMillis());
+
+        // 72h (3d) interval: 2 × 72h = 144h.
+        Settings longInterval = Settings
+            .builder()
+            .put(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.getKey(), 72)
+            .build();
+        clusterService.getClusterSettings().applySettings(longInterval);
+        assertEquals("72h interval -> 2 × interval (144h) wins", TimeUnit.HOURS.toMillis(144), processor.stuckGuardTimeoutMillis());
+    }
+
+    public void testRecentGuardIsNotStolenByWatchdog() throws Exception {
+        // A genuinely in-flight run (guard acquired just now) must still cause a concurrent invocation
+        // to skip — the watchdog must not steal a healthy run.
+        setIsRunning(processor, true);
+        setRunStartMillis(processor, System.currentTimeMillis());
+
+        processor.run();
+
+        verify(client, never()).search(any(SearchRequest.class), isA(ActionListener.class));
+        assertTrue("a healthy in-flight guard must remain held", isRunningFlag(processor));
+    }
+
+    private boolean isRunningFlag(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("isRunning");
+        f.setAccessible(true);
+        return ((AtomicBoolean) f.get(p)).get();
+    }
+
+    private void setIsRunning(MemoryRetentionJobProcessor p, boolean value) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("isRunning");
+        f.setAccessible(true);
+        ((AtomicBoolean) f.get(p)).set(value);
+    }
+
+    private long runStartMillis(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("runStartMillis");
+        f.setAccessible(true);
+        return ((AtomicLong) f.get(p)).get();
+    }
+
+    private void setRunStartMillis(MemoryRetentionJobProcessor p, long value) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("runStartMillis");
+        f.setAccessible(true);
+        ((AtomicLong) f.get(p)).set(value);
+    }
+
+    private long stuckTimeoutMillis(MemoryRetentionJobProcessor p) {
+        return p.stuckGuardTimeoutMillis();
+    }
+
+    @SuppressWarnings("unchecked")
+    private LockModel currentLock(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("currentLock");
+        f.setAccessible(true);
+        return ((AtomicReference<LockModel>) f.get(p)).get();
+    }
+
+    private boolean lockLost(MemoryRetentionJobProcessor p) throws Exception {
+        Field f = MemoryRetentionJobProcessor.class.getDeclaredField("lockLost");
+        f.setAccessible(true);
+        return f.getBoolean(p);
+    }
+
+    private void invokeFinishRun(MemoryRetentionJobProcessor p) throws Exception {
+        Method m = MemoryRetentionJobProcessor.class.getDeclaredMethod("finishRun");
+        m.setAccessible(true);
+        m.invoke(p);
     }
 }

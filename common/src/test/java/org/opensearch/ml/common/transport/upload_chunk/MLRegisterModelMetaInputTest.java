@@ -6,7 +6,9 @@
 package org.opensearch.ml.common.transport.upload_chunk;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -16,8 +18,12 @@ import java.util.function.Function;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
@@ -77,6 +83,7 @@ public class MLRegisterModelMetaInputTest {
             false,
             false,
             false,
+            null,
             null
         );
     }
@@ -181,8 +188,52 @@ public class MLRegisterModelMetaInputTest {
             false,
             false,
             false,
+            null,
             null
         );
         readInputStream(remoteInput);
+    }
+
+    @Test
+    public void builder_WithCustomModelId() {
+        MLRegisterModelMetaInput withModelId = mLRegisterModelMetaInput.toBuilder().modelId("text_embedding_v1").build();
+        assertEquals("text_embedding_v1", withModelId.getModelId());
+    }
+
+    @Test
+    public void toXContent_WithCustomModelId() throws Exception {
+        MLRegisterModelMetaInput withModelId = mLRegisterModelMetaInput.toBuilder().modelId("text_embedding_v1").build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        withModelId.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"model_id\":\"text_embedding_v1\""));
+    }
+
+    @Test
+    public void parse_WithCustomModelId() throws Exception {
+        String json = "{\"name\":\"Model Name\",\"function_name\":\"BATCH_RCF\",\"model_group_id\":\"model_group_id\","
+            + "\"version\":\"1.0\",\"description\":\"Model Description\",\"model_format\":\"TORCH_SCRIPT\","
+            + "\"model_state\":\"DEPLOYING\",\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\","
+            + "\"model_config\":{\"model_type\":\"Model Type\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
+            + "\"additional_config\":{\"test_key\":\"test_value\"},\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"pooling_mode\":\"MEAN\"},\"total_chunks\":2,"
+            + "\"model_id\":\"text_embedding_v1\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLRegisterModelMetaInput parsedInput = MLRegisterModelMetaInput.parse(parser);
+        assertEquals("text_embedding_v1", parsedInput.getModelId());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithCustomModelId() throws IOException {
+        MLRegisterModelMetaInput inputWithModelId = mLRegisterModelMetaInput.toBuilder().modelId("text_embedding_v1").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_9_0);
+        inputWithModelId.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_9_0);
+        MLRegisterModelMetaInput deserialized = new MLRegisterModelMetaInput(streamInput);
+        assertEquals("text_embedding_v1", deserialized.getModelId());
     }
 }
