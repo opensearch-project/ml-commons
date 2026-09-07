@@ -93,9 +93,6 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
             .orElse(MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT);
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
 
-        // Resolved before the try block on purpose: an invalid certificate configuration must surface
-        // its own actionable MLValidationException rather than being wrapped in the generic
-        // "Unexpected error while getting MCP tools" below, which would hide the reason.
         SSLContext sslContext = MLSslContextFactory
             .create(super.getConnectorClientConfig(), connector.getDecryptedCredential(), certificateProcessor);
 
@@ -117,9 +114,7 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                 .builder(mcpServerUrl)
                 .jsonMapper(JSON_MAPPER)
                 .endpoint(endpoint)
-                // Set on the transport builder rather than inside customizeClient: the SDK applies the
-                // customizer eagerly and then overwrites connectTimeout with its own 10s default in
-                // build(), so a value set on the client builder never takes effect.
+                // On the transport builder: build() overwrites connectTimeout set on the client builder.
                 .connectTimeout(connectionTimeout)
                 .customizeClient(clientBuilder -> {
                     clientBuilder.followRedirects(HttpClient.Redirect.NORMAL);

@@ -28,10 +28,6 @@ import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLValidationException;
 
-/**
- * Unit tests for {@link MLSslContextFactory}, which adapts the certificate managers built by
- * {@link CertificateProcessor} into the SSLContext required by the JDK's HTTP client.
- */
 public class MLSslContextFactoryTest {
 
     private CertificateProcessor certificateProcessor;
@@ -54,10 +50,6 @@ public class MLSslContextFactoryTest {
         credentials.put(CLIENT_CERT_PEM_FIELD, loadCertificateFromFile("test-client-cert.pem"));
         credentials.put(CLIENT_KEY_PEM_FIELD, loadCertificateFromFile("test-client-key-pkcs8.pem"));
     }
-
-    // ========== NO CUSTOMIZATION REQUIRED ==========
-    // A null return tells the caller to leave the JDK client's default SSLContext alone, which is what
-    // preserves the pre-existing behaviour for connectors that opt into neither mTLS nor skip-verification.
 
     @Test
     public void testCreate_NullConfig_ReturnsNull() {
@@ -96,8 +88,6 @@ public class MLSslContextFactoryTest {
         );
     }
 
-    // ========== MUTUAL TLS ==========
-
     @Test
     public void testCreate_MutualTlsWithValidPemCertificates_ReturnsSslContext() throws IOException {
         ConnectorClientConfig config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
@@ -127,8 +117,6 @@ public class MLSslContextFactoryTest {
         ConnectorClientConfig config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
         credentials.put(CLIENT_CERT_PEM_FIELD, loadCertificateFromFile("test-client-cert.pem"));
 
-        // The actionable validation message must survive rather than being swallowed - this is the
-        // behaviour that replaces the previous silent no-op on MCP connectors.
         MLValidationException exception = assertThrows(
             "A missing private key must be reported, not ignored",
             MLValidationException.class,
@@ -172,8 +160,6 @@ public class MLSslContextFactoryTest {
         );
     }
 
-    // ========== SKIP SSL VERIFICATION ==========
-
     @Test
     public void testCreate_SkipSslVerification_ReturnsSslContext() {
         ConnectorClientConfig config = ConnectorClientConfig.builder().skipSslVerification(true).build();
@@ -194,8 +180,4 @@ public class MLSslContextFactoryTest {
         );
     }
 
-    // Note: that the trust-all manager genuinely skips both chain validation *and* hostname
-    // verification (i.e. that it extends X509ExtendedTrustManager rather than the plain interface)
-    // is proven by a real TLS handshake against a hostname-mismatched server in
-    // MLSslContextFactoryTlsHandshakeTest, which is far stronger evidence than inspecting types here.
 }

@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.http.HttpClient;
+import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +39,7 @@ import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.httpclient.MLSslContextFactory;
 import org.opensearch.ml.engine.MLStaticMockBase;
 
 import io.modelcontextprotocol.client.McpClient;
@@ -141,20 +144,18 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
         assertThrows(UnsupportedOperationException.class, () -> exec.getUserRateLimiterMap());
     }
 
-    // ========== TLS CONFIGURATION (issue #4971) ==========
-    // Before this wiring existed, TLS settings in client_config were parsed and then silently
-    // dropped for MCP connectors. These tests pin the settings actually reaching the JDK HTTP client
-    // that the MCP transport is built on.
+    /** Config the executor handed to MLSslContextFactory, captured for assertions. */
+    private ConnectorClientConfig capturedConfig;
 
     /**
-     * Captures the customizeClient consumer the executor installs, applies it to a mock
-     * HttpClient.Builder, and returns that builder so the caller can assert on what was configured.
+     * Drives getMcpToolSpecs with MLSslContextFactory stubbed, applies the captured customizeClient
+     * consumer to a mock HttpClient.Builder, and returns that builder.
      *
-     * <p>Also asserts the connect timeout is set on the <em>transport</em> builder. The MCP SDK runs
-     * the client customizer eagerly and then overwrites connectTimeout with its own 10s default in
-     * build(), so setting it on the client builder would silently have no effect.
+     * <p>Stubbing the factory keeps these tests about wiring: the exact instance the factory returns
+     * must be the one installed on the client. What the factory produces for a given config is
+     * covered by MLSslContextFactoryTest and MLSslContextFactoryTlsHandshakeTest.
      */
-    private HttpClient.Builder captureClientCustomization() {
+    private HttpClient.Builder captureClientCustomization(SSLContext factoryResult) {
         HttpClient.Builder clientBuilder = mock(HttpClient.Builder.class);
         HttpClientSseClientTransport.Builder transportBuilder = mock(HttpClientSseClientTransport.Builder.class);
 
@@ -168,52 +169,60 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
         when(mcpClient.initialize()).thenReturn(null);
         when(mcpClient.listTools()).thenReturn(new McpSchema.ListToolsResult(List.of(), null));
 
+        ArgumentCaptor<ConnectorClientConfig> configCaptor = ArgumentCaptor.forClass(ConnectorClientConfig.class);
+
         try (
+            MockedStatic<MLSslContextFactory> mockedFactory = mockStatic(MLSslContextFactory.class);
             MockedStatic<HttpClientSseClientTransport> mockedTransport = mockStatic(HttpClientSseClientTransport.class);
             MockedStatic<McpClient> mockedClient = mockStatic(McpClient.class)
         ) {
+            mockedFactory.when(() -> MLSslContextFactory.create(any(), any(), any())).thenReturn(factoryResult);
             mockedTransport.when(() -> HttpClientSseClientTransport.builder(anyString())).thenReturn(transportBuilder);
             mockedClient.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
 
             new McpConnectorExecutor(mockConnector).getMcpToolSpecs();
-        }
 
-        // The timeout must reach the transport builder, which is the only place the SDK honours it.
-        verify(transportBuilder).connectTimeout(any());
-        verify(clientBuilder, never()).connectTimeout(any());
+            mockedFactory.verify(() -> MLSslContextFactory.create(configCaptor.capture(), any(), any()));
+        }
+        capturedConfig = configCaptor.getValue();
+
+        // The SDK overwrites connectTimeout in build(), so it must be set on the transport builder.
+        verify(transportBuilder).connectTimeout(Duration.ofSeconds(30));
 
         ArgumentCaptor<Consumer<HttpClient.Builder>> captor = ArgumentCaptor.forClass(Consumer.class);
         verify(transportBuilder).customizeClient(captor.capture());
         captor.getValue().accept(clientBuilder);
+
+        // Asserted only after accept(), otherwise the mock has no interactions and this cannot fail.
+        verify(clientBuilder, never()).connectTimeout(any());
         return clientBuilder;
     }
 
     @Test
     public void getMcpToolSpecs_defaultConfig_doesNotOverrideSslContext() {
-        // No TLS options requested, so the JDK client keeps its default SSLContext untouched.
-        HttpClient.Builder clientBuilder = captureClientCustomization();
+        HttpClient.Builder clientBuilder = captureClientCustomization(null);
 
         verify(clientBuilder, never()).sslContext(any());
+        Assert.assertNotEquals(Boolean.TRUE, capturedConfig.getMutualTlsEnabled());
+        Assert.assertNotEquals(Boolean.TRUE, capturedConfig.getSkipSslVerification());
     }
 
     @Test
-    public void getMcpToolSpecs_skipSslVerification_installsSslContext() {
+    public void getMcpToolSpecs_skipSslVerification_installsSslContext() throws Exception {
         when(mockConnector.getConnectorClientConfig())
             .thenReturn(ConnectorClientConfig.builder().connectionTimeout(30).readTimeout(30).skipSslVerification(true).build());
+        SSLContext expected = SSLContext.getInstance("TLS");
+        expected.init(null, null, null);
 
-        HttpClient.Builder clientBuilder = captureClientCustomization();
+        HttpClient.Builder clientBuilder = captureClientCustomization(expected);
 
-        verify(clientBuilder).sslContext(any(SSLContext.class));
+        // The exact instance the factory produced must be the one installed.
+        verify(clientBuilder).sslContext(same(expected));
+        Assert.assertEquals(Boolean.TRUE, capturedConfig.getSkipSslVerification());
     }
 
-    /**
-     * The headline case for issue #4971: a valid mutual-TLS configuration must actually reach the
-     * transport. Without this, a regression that stopped building the SSLContext for mTLS - while
-     * leaving the skip-ssl path intact - would keep every other test green and silently restore the
-     * original no-op behaviour.
-     */
     @Test
-    public void getMcpToolSpecs_validMutualTlsConfig_installsSslContext() throws IOException {
+    public void getMcpToolSpecs_validMutualTlsConfig_installsSslContext() throws Exception {
         Map<String, String> credentials = new HashMap<>();
         credentials.put(CertificateProcessor.CLIENT_CERT_PEM_FIELD, readFixture("mtls-client-cert.pem"));
         credentials.put(CertificateProcessor.CLIENT_KEY_PEM_FIELD, readFixture("mtls-client-key.pem"));
@@ -223,10 +232,13 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
             .thenReturn(
                 ConnectorClientConfig.builder().connectionTimeout(30).readTimeout(30).mutualTlsEnabled(true).keystoreType("PEM").build()
             );
+        SSLContext expected = SSLContext.getInstance("TLS");
+        expected.init(null, null, null);
 
-        HttpClient.Builder clientBuilder = captureClientCustomization();
+        HttpClient.Builder clientBuilder = captureClientCustomization(expected);
 
-        verify(clientBuilder).sslContext(any(SSLContext.class));
+        verify(clientBuilder).sslContext(same(expected));
+        Assert.assertEquals(Boolean.TRUE, capturedConfig.getMutualTlsEnabled());
     }
 
     private String readFixture(String filename) throws IOException {
@@ -236,11 +248,6 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
         }
     }
 
-    /**
-     * A misconfigured certificate must surface its own actionable message. Previously the setting was
-     * ignored outright; it must not now be replaced by the generic "Unexpected error while getting
-     * MCP tools" wrapper, which would hide why the connector failed.
-     */
     @Test
     public void getMcpToolSpecs_invalidMutualTlsConfig_throwsActionableValidationException() {
         when(mockConnector.getDecryptedCredential()).thenReturn(new HashMap<>());

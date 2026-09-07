@@ -8,6 +8,8 @@ package org.opensearch.ml.common.httpclient;
 import static org.opensearch.secure_sm.AccessController.doPrivileged;
 
 import java.net.Socket;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 
@@ -25,14 +27,10 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * Builds the {@link SSLContext} used by consumers that talk to remote services through the JDK's
- * {@code java.net.http.HttpClient} - currently the MCP connector transports.
- *
- * <p>The AWS-SDK based path ({@link MLHttpClientFactory}) accepts {@code KeyManager[]}/
- * {@code TrustManager[]} directly through its own provider hooks, so it never needs an
- * {@code SSLContext}. The JDK client exposes no such hook and only accepts a fully assembled
- * {@code SSLContext}, so this class adapts the managers produced by {@link CertificateProcessor}
- * into one. TLS behaviour is otherwise kept deliberately identical between the two paths.
+ * Builds the {@link SSLContext} used by the MCP connector transports, which reach remote services
+ * through the JDK's {@code java.net.http.HttpClient}. {@link MLHttpClientFactory} takes
+ * {@code KeyManager[]}/{@code TrustManager[]} directly through the AWS SDK's provider hooks; the JDK
+ * client only accepts an assembled {@code SSLContext}.
  */
 @Log4j2
 public final class MLSslContextFactory {
@@ -40,17 +38,9 @@ public final class MLSslContextFactory {
     private MLSslContextFactory() {}
 
     /**
-     * Builds the SSLContext implied by the connector client configuration.
+     * Builds the SSLContext implied by the connector client configuration, or {@code null} when no
+     * TLS customization is requested so the caller keeps the JDK client's default context.
      *
-     * <p>Returns {@code null} when the configuration asks for no TLS customization at all, so the
-     * caller leaves the JDK client's default SSLContext untouched. That keeps connectors which do
-     * not opt into mutual TLS or {@code skip_ssl_verification} on exactly the behaviour they had
-     * before this class existed.
-     *
-     * @param config the connector client configuration, may be null
-     * @param decryptedCredentials the decrypted connector credentials holding the certificate material
-     * @param certificateProcessor processor used to validate the config and build the TLS managers
-     * @return the SSLContext to install on the client, or null if no customization is required
      * @throws MLValidationException if the mutual TLS configuration is invalid
      */
     public static SSLContext create(
@@ -62,12 +52,9 @@ public final class MLSslContextFactory {
             return null;
         }
 
-        // resolveMtls returns null when mutual TLS is disabled, and rejects the
-        // mutual_tls_enabled + skip_ssl_verification combination outright.
         CertificateProcessor.MtlsManagers mtlsManagers = certificateProcessor.resolveMtls(config, decryptedCredentials);
 
         if (mtlsManagers != null) {
-            log.debug("Building mutual TLS SSLContext for the JDK HTTP client");
             return buildContext(mtlsManagers.getKeyManagers(), mtlsManagers.getTrustManagers(), "mutual TLS");
         }
 
@@ -83,19 +70,13 @@ public final class MLSslContextFactory {
         return null;
     }
 
-    /**
-     * Assembles an SSLContext from the given managers. Wrapped in {@code doPrivileged} to mirror
-     * {@link MLHttpClientFactory}, since SSLContext initialization reads security properties that
-     * plugin code is not otherwise granted.
-     */
     private static SSLContext buildContext(KeyManager[] keyManagers, TrustManager[] trustManagers, String description) {
         return doPrivileged(() -> {
             try {
                 SSLContext sslContext = SSLContext.getInstance("TLS");
                 sslContext.init(keyManagers, trustManagers, null);
-                log.debug("Created {} SSLContext for the JDK HTTP client", description);
                 return sslContext;
-            } catch (Exception e) {
+            } catch (NoSuchAlgorithmException | KeyManagementException e) {
                 log.error("Failed to build {} SSLContext: {}", description, e.getMessage());
                 throw new MLException("Failed to build " + description + " SSLContext: " + e.getMessage(), e);
             }
@@ -103,15 +84,10 @@ public final class MLSslContextFactory {
     }
 
     /**
-     * Trust manager that accepts any peer certificate, backing {@code skip_ssl_verification}.
-     *
-     * <p>This deliberately extends {@link X509ExtendedTrustManager} rather than implementing the
-     * plain {@code X509TrustManager}. The JDK's HTTP client always sets the endpoint identification
-     * algorithm to "HTTPS", and hostname verification is performed inside the trust manager. A plain
-     * {@code X509TrustManager} would be wrapped by the JDK in a delegate that still runs that
-     * hostname check, so {@code skip_ssl_verification} would only half apply - certificate chains
-     * accepted, but hostname mismatches still rejected. Extending the abstract class means these
-     * no-op overrides are the ones actually invoked, and verification is genuinely skipped.
+     * Extends {@link X509ExtendedTrustManager} rather than implementing {@code X509TrustManager} on
+     * purpose: the JDK performs hostname verification inside the trust manager, so a plain
+     * implementation would be wrapped in a delegate that still enforces it, leaving
+     * {@code skip_ssl_verification} only half applied.
      */
     private static final class TrustAllX509TrustManager extends X509ExtendedTrustManager {
 
