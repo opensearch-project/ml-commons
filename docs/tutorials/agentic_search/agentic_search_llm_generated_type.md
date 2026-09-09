@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Agentic search with a llmGenerated query type
+title: Getting Started with Agentic Search in OpenSearch
 parent: Agentic search
 nav_order: 30
 ---
@@ -499,7 +499,7 @@ You can see the match query with aggregation clause generated:
 }
 ```
 
-```json
+
 ## Next steps
 
 This is an experimental feature. See the following GitHub issues for information about future enhancements:
