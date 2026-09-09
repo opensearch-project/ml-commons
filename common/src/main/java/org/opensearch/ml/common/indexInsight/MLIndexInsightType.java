@@ -11,6 +11,8 @@ public enum MLIndexInsightType {
     STATISTICAL_DATA,
     FIELD_DESCRIPTION,
     LOG_RELATED_INDEX_CHECK,
+    INDEX_CORRELATION,
+    PATTERN_TYPE_CACHE,
     ALL;
 
     public static MLIndexInsightType fromString(String type) {
