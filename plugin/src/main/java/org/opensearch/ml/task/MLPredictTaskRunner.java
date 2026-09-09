@@ -461,7 +461,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 mlModelManager.trackPredictDuration(modelId, startTime);
                                 internalListener.onResponse(output);
                             }
-                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener);
                     } else {
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
@@ -478,7 +478,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     return;
                 } catch (Exception e) {
                     log.error("Failed to predict model " + modelId, e);
-                    handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
+                    handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName);
                     return;
                 }
             } else if (FunctionName.needDeployFirst(algorithm)) {
@@ -603,5 +603,23 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 );
             }
         }
+    }
+
+    boolean shouldTrackRemoteFailure(Exception e) {
+        // Don't track failures for user configuration issues
+        if (e instanceof IllegalArgumentException) {
+            return false;
+        }
+
+        // Don't track any 4xx client errors (user/configuration issues)
+        if (e instanceof OpenSearchStatusException) {
+            RestStatus status = ((OpenSearchStatusException) e).status();
+            if (status.getStatus() >= 400 && status.getStatus() < 500) {
+                return false;
+            }
+        }
+
+        // Track failures for infrastructure/service issues
+        return true;
     }
 }
