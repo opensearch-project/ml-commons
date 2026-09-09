@@ -28,8 +28,8 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
-import org.opensearch.action.admin.indices.get.GetIndexRequest;
-import org.opensearch.action.admin.indices.get.GetIndexResponse;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.IndicesOptions;
@@ -363,20 +363,20 @@ public class QueryPlanningTool implements WithModelTool {
 
     private void getIndexMappingAsync(String indexName, ActionListener<String> listener) {
         try {
-            GetIndexRequest getIndexRequest = new GetIndexRequest()
+            GetMappingsRequest getMappingsRequest = new GetMappingsRequest()
                 .indices(indexName)
                 .indicesOptions(IndicesOptions.strictExpand())
                 .local(false)
                 .clusterManagerNodeTimeout(DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT);
 
-            client.admin().indices().getIndex(getIndexRequest, new ActionListener<GetIndexResponse>() {
+            client.admin().indices().getMappings(getMappingsRequest, new ActionListener<GetMappingsResponse>() {
                 @Override
-                public void onResponse(GetIndexResponse getIndexResponse) {
+                public void onResponse(GetMappingsResponse getMappingsResponse) {
                     try {
                         // When indexName is a wildcard pattern or alias, the response keys are
                         // concrete index names, not the original pattern/alias. Pick the first
                         // mapping since indices matching a pattern/alias generally share the same mapping.
-                        Map<String, MappingMetadata> mappings = getIndexResponse.mappings();
+                        Map<String, MappingMetadata> mappings = getMappingsResponse.mappings();
                         if (mappings == null || mappings.isEmpty()) {
                             listener
                                 .onFailure(
