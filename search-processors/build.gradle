@@ -19,7 +19,6 @@ plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
-    id 'com.diffplug.spotless' version '6.23.0'
 }
 
 repositories {
@@ -77,11 +76,26 @@ jacocoTestCoverageVerification {
 
 check.dependsOn jacocoTestCoverageVerification
 
-spotless {
-    java {
-        removeUnusedImports()
-        importOrder 'java', 'javax', 'org', 'com'
+// Spotless 8.10.x (the pinned Eclipse-JDT toolchain) requires a Java 17+ runtime to even
+// resolve/apply its Gradle plugin. Skip it on older JDKs (e.g. the Java 11 CI matrix) so
+// non-spotless builds don't fail at configuration time. Formatting still runs on Java 17+.
+if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
+    apply plugin: 'com.diffplug.spotless'
 
-        eclipse().configFile rootProject.file('.eclipseformat.xml')
+    // Only wire the Eclipse JDT step when a spotless task is actually being run.
+    def runningSpotlessTask = gradle.startParameter.taskNames.any { it.toLowerCase(Locale.ROOT).contains('spotless') }
+
+    spotless {
+        java {
+            removeUnusedImports()
+            importOrder 'java', 'javax', 'org', 'com'
+
+            // Pin 4.27 explicitly: spotless 8.10.0+ ships an embedded lockfile for it so the
+            // formatter resolves from Maven Central instead of a P2 update site. 4.27 keeps
+            // formatting identical to the eclipse() default of the previous spotless version.
+            if (runningSpotlessTask) {
+                eclipse('4.27').configFile rootProject.file('.eclipseformat.xml')
+            }
+        }
     }
 }
