@@ -94,7 +94,7 @@ if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
             // formatter resolves from Maven Central instead of a P2 update site. 4.27 keeps
             // formatting identical to the eclipse() default of the previous spotless version.
             if (runningSpotlessTask) {
-                eclipse('4.27').configFile rootProject.file('.eclipseformat.xml')
+                eclipse('4.27').withP2Mirrors(Map.of("https://download.eclipse.org/", "https://ci.opensearch.org/")).configFile rootProject.file('.eclipseformat.xml')
             }
         }
     }
