@@ -735,6 +735,7 @@ configurations.all {
     resolutionStrategy.force "com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}"
     resolutionStrategy.force 'com.networknt:json-schema-validator:3.0.2'
     resolutionStrategy.force "org.yaml:snakeyaml:${versions.snakeyaml}"
+    resolutionStrategy.force "org.snakeyaml:snakeyaml-engine:${versions.snakeyaml_engine}"
     resolutionStrategy.force "com.fasterxml.jackson.dataformat:jackson-dataformat-smile:${versions.jackson}"
     resolutionStrategy.force "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${versions.jackson}"
     resolutionStrategy.force "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:${versions.jackson}"
