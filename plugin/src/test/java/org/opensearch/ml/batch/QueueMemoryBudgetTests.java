@@ -15,7 +15,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.junit.Test;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class QueueMemoryBudgetTests extends OpenSearchTestCase {
