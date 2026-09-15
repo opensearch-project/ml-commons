@@ -60,6 +60,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
@@ -1063,5 +1064,41 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
+    }
+
+    // Issue #4999: models stored before the space_type requirement (#3786) must still be deletable.
+    @Test
+    public void testDeleteLegacyRemoteModel_withoutSpaceType_Success() throws IOException, InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        String legacySource = "{"
+            + "\"name\":\"legacy_remote_text_embedding_model\","
+            + "\"algorithm\":\"REMOTE\","
+            + "\"model_state\":\"REGISTERED\","
+            + "\"connector_id\":\"test_connector_id\","
+            + "\"model_config\":{"
+            + "\"model_type\":\"TEXT_EMBEDDING\","
+            + "\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\""
+            + "}"
+            + "}";
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, new BytesArray(legacySource), null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(deleteResponse.getId(), captor.getValue().getId());
+        assertEquals(deleteResponse.getResult(), captor.getValue().getResult());
     }
 }
