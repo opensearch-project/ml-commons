@@ -298,4 +298,17 @@ public class MLCommonsSettingsTests {
             .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), validRegex).build());
         assertEquals(validRegex, result);
     }
+
+    @Test
+    public void testBatchQueueMemoryFractionAcceptsMaximum() {
+        double value = MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(), 0.1).build());
+        assertEquals(0.1, value, 0.0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBatchQueueMemoryFractionRejectsAboveMaximum() {
+        MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(), 0.11).build());
+    }
 }
