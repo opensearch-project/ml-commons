@@ -25,7 +25,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.DocWriteResponse.Result;
@@ -556,15 +555,10 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener, Mockito.atLeast(0)).onFailure(argumentCaptor.capture());
-        for (Exception failure : argumentCaptor.getAllValues()) {
-            assertFalse(
-                "Update of a mutual TLS connector must not be rejected for missing certificates: " + failure.getMessage(),
-                String.valueOf(failure.getMessage()).contains("Credentials are required")
-                    || String.valueOf(failure.getMessage()).contains("client_cert_pem")
-            );
-        }
+        // Assert the update actually succeeded rather than merely that no certificate message
+        // appeared: any unrelated failure carries none of those strings and would pass silently.
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        verify(actionListener, never()).onFailure(any());
     }
 
     /** Otherwise an update would be a way around the check performed at create time. */
@@ -615,6 +609,8 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     private void stubStoredConnector(ConnectorClientConfig clientConfig, Map<String, String> credential) {
+        // Without this the mock denies access and doExecute never reaches the mutual TLS validation.
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(5);
             listener
@@ -647,6 +643,12 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     private void stubUpdateSucceeds() {
+        // updateUndeployedConnector searches for models using the connector before updating it.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
+            searchListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
