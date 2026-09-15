@@ -33,9 +33,11 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -61,6 +63,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportCreateConnectorAction extends HandledTransportAction<ActionRequest, MLCreateConnectorResponse> {
+    private static final CertificateProcessor CERTIFICATE_PROCESSOR = new CertificateProcessor();
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final SdkClient sdkClient;
@@ -142,6 +145,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
             Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+            // Fail fast: otherwise an invalid mutual TLS configuration is only caught at execution
+            // time, and then on every single request the connector serves.
+            validateMutualTlsConfig(connector);
 
             User user = RestActionUtils.getUserContext(client);
             String connectorId = mlCreateConnectorInput.getConnectorId();
@@ -221,6 +227,19 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             listener.onFailure(e);
         });
         connector.encrypt(mlEngine::encrypt, connector.getTenantId(), encryptSuccessfulListener);
+    }
+
+    /**
+     * Rejects an invalid mutual TLS configuration. MLValidationException carries no REST status, so
+     * it surfaces as 500; translating it keeps a malformed request a 400, consistent with the other
+     * validation in this action.
+     */
+    private static void validateMutualTlsConfig(Connector connector) {
+        try {
+            CERTIFICATE_PROCESSOR.validateCertificateConfig(connector.getConnectorClientConfig(), connector.getCredential());
+        } catch (MLValidationException e) {
+            throw new IllegalArgumentException(e.getMessage(), e);
+        }
     }
 
     private void validateRequest4AccessControl(MLCreateConnectorInput input, User user) {

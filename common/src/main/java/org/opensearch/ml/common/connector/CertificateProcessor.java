@@ -519,19 +519,33 @@ public class CertificateProcessor {
     }
 
     /**
-     * Validates the mutual TLS configuration: SSL verification consistency, presence of the
-     * certificate material required by the configured keystore type, and absence of conflicting
-     * (non certificate-based) authentication methods.
-     *
-     * @param config The connector client configuration
-     * @param credentials The connector credentials
-     * @throws MLValidationException if the mutual TLS configuration is invalid
+     * True when the credential entry exists and carries something. Presence alone is not enough: a
+     * connector created with an empty value - a shell variable that never got set, say - would pass
+     * validation and then fail on every request instead. Blank is checked rather than parsed, so
+     * this stays valid whether the credentials are encrypted or not.
      */
-    void validateCertificateConfig(ConnectorClientConfig config, Map<String, String> credentials) {
-        if (!Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
-            return; // No validation needed if mTLS is disabled
-        }
+    private static boolean hasText(Map<String, String> credentials, String field) {
+        String value = credentials.get(field);
+        return value != null && !value.trim().isEmpty();
+    }
 
+    /**
+     * Validates the parts of the mutual TLS configuration that stand on their own, without needing
+     * the credentials: currently that mutual TLS and {@code skip_ssl_verification} are not both
+     * enabled.
+     *
+     * <p>Connector update needs this narrower check because the stored connector it validates has
+     * had its credentials stripped, so certificate presence cannot be judged there. The conflicting
+     * combination still has to be rejected, otherwise an update would be a way around the check
+     * performed at create time.
+     *
+     * @param config The connector client configuration, may be null
+     * @throws MLValidationException if mutual TLS is combined with skipped SSL verification
+     */
+    public void validateMutualTlsSettings(ConnectorClientConfig config) {
+        if (config == null || !Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
+            return;
+        }
         if (Boolean.TRUE.equals(config.getSkipSslVerification())) {
             throw new MLValidationException(
                 "skip_ssl_verification cannot be enabled together with mutual_tls_enabled. Disabling server "
@@ -541,6 +555,27 @@ public class CertificateProcessor {
                     + ") instead of skipping SSL verification."
             );
         }
+    }
+
+    /**
+     * Validates the mutual TLS configuration: SSL verification consistency, presence of the
+     * certificate material required by the configured keystore type, and absence of conflicting
+     * (non certificate-based) authentication methods.
+     *
+     * <p>Only the presence of credential entries is checked, never their contents, so this is safe
+     * to call before or after encryption. That lets connector create reject an invalid configuration
+     * up front rather than failing on every execution.
+     *
+     * @param config The connector client configuration, may be null
+     * @param credentials The connector credentials
+     * @throws MLValidationException if the mutual TLS configuration is invalid
+     */
+    public void validateCertificateConfig(ConnectorClientConfig config, Map<String, String> credentials) {
+        if (config == null || !Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
+            return; // No validation needed if mTLS is disabled
+        }
+
+        validateMutualTlsSettings(config);
 
         if (credentials == null || credentials.isEmpty()) {
             throw new MLValidationException("Credentials are required when mutual TLS is enabled");
@@ -550,7 +585,7 @@ public class CertificateProcessor {
 
         switch (keystoreType) {
             case PEM:
-                boolean hasPemContent = credentials.containsKey(CLIENT_CERT_PEM_FIELD) && credentials.containsKey(CLIENT_KEY_PEM_FIELD);
+                boolean hasPemContent = hasText(credentials, CLIENT_CERT_PEM_FIELD) && hasText(credentials, CLIENT_KEY_PEM_FIELD);
                 if (!hasPemContent) {
                     throw new MLValidationException(
                         "For PEM keystore, provide both " + CLIENT_CERT_PEM_FIELD + " and " + CLIENT_KEY_PEM_FIELD
@@ -558,7 +593,7 @@ public class CertificateProcessor {
                 }
                 break;
             case PKCS12:
-                boolean hasPkcs12Content = credentials.containsKey(CLIENT_CERT_PKCS12_FIELD);
+                boolean hasPkcs12Content = hasText(credentials, CLIENT_CERT_PKCS12_FIELD);
                 if (!hasPkcs12Content) {
                     throw new MLValidationException("For PKCS12 keystore, provide " + CLIENT_CERT_PKCS12_FIELD);
                 }
