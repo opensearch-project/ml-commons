@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -337,48 +338,55 @@ public class MLSyncUpCron implements Runnable {
                         Map<String, List<String>> newPlanningWorkerNodes = new HashMap<>();
                         for (SearchHit hit : hits) {
                             String modelId = hit.getId();
-                            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-                            if (sourceAsMap.containsKey(CommonValue.TENANT_ID_FIELD)) {
-                                tenantIds.put(modelId, (String) sourceAsMap.get(CommonValue.TENANT_ID_FIELD));
-                            }
-                            FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
-                            MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
-                            Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
-                                ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
-                                : null;
-                            int planningWorkerNodeCount = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                                ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                                : 0;
-                            int currentWorkerNodeCountInIndex = sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                                ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                                : 0;
-                            boolean deployToAllNodes = sourceAsMap.containsKey(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
-                                && (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD);
-                            List<String> planningWorkNodes = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODES_FIELD)
-                                ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
-                                : new ArrayList<>();
-                            if (deployToAllNodes) {
-                                DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
-                                planningWorkerNodeCount = eligibleNodes.length;
-                                List<String> eligibleNodeIds = Arrays
-                                    .stream(eligibleNodes)
-                                    .map(DiscoveryNode::getId)
-                                    .collect(Collectors.toList());
-                                if (eligibleNodeIds.size() != planningWorkNodes.size() || !eligibleNodeIds.containsAll(planningWorkNodes)) {
-                                    newPlanningWorkerNodes.put(modelId, eligibleNodeIds);
+                            try {
+                                Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+                                if (sourceAsMap.containsKey(CommonValue.TENANT_ID_FIELD)) {
+                                    tenantIds.put(modelId, (String) sourceAsMap.get(CommonValue.TENANT_ID_FIELD));
                                 }
-                            }
-                            MLModelState mlModelState = getNewModelState(
-                                deployingModels,
-                                modelWorkerNodes,
-                                modelId,
-                                state,
-                                lastUpdateTime,
-                                planningWorkerNodeCount,
-                                currentWorkerNodeCountInIndex
-                            );
-                            if (mlModelState != null) {
-                                newModelStates.put(modelId, mlModelState);
+                                FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
+                                MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
+                                Long lastUpdateTime = parseLastUpdateTime(modelId, sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD));
+                                int planningWorkerNodeCount = parseIntOrDefault(
+                                    sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD),
+                                    0
+                                );
+                                int currentWorkerNodeCountInIndex = parseIntOrDefault(
+                                    sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD),
+                                    0
+                                );
+                                boolean deployToAllNodes = sourceAsMap.containsKey(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
+                                    && (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD);
+                                List<String> planningWorkNodes = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODES_FIELD)
+                                    ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
+                                    : new ArrayList<>();
+                                if (deployToAllNodes) {
+                                    DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
+                                    planningWorkerNodeCount = eligibleNodes.length;
+                                    List<String> eligibleNodeIds = Arrays
+                                        .stream(eligibleNodes)
+                                        .map(DiscoveryNode::getId)
+                                        .collect(Collectors.toList());
+                                    if (eligibleNodeIds.size() != planningWorkNodes.size()
+                                        || !eligibleNodeIds.containsAll(planningWorkNodes)) {
+                                        newPlanningWorkerNodes.put(modelId, eligibleNodeIds);
+                                    }
+                                }
+                                MLModelState mlModelState = getNewModelState(
+                                    deployingModels,
+                                    modelWorkerNodes,
+                                    modelId,
+                                    state,
+                                    lastUpdateTime,
+                                    planningWorkerNodeCount,
+                                    currentWorkerNodeCountInIndex
+                                );
+                                if (mlModelState != null) {
+                                    newModelStates.put(modelId, mlModelState);
+                                }
+                            } catch (Exception e) {
+                                // Skip this model only. A single unparseable document must not prevent the
+                                // remaining models in this batch from being refreshed.
+                                log.error("Failed to parse model [{}] while refreshing model state, skipping it", modelId, e);
                             }
                         }
                         bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes, tenantIds);
@@ -413,11 +421,14 @@ public class MLSyncUpCron implements Runnable {
             return MLModelState.DEPLOYING;
         }
         int currentWorkerNodeCount = modelWorkerNodes.containsKey(modelId) ? modelWorkerNodes.get(modelId).size() : 0;
-        if (currentWorkerNodeCount == 0
-            && state != MLModelState.DEPLOY_FAILED
-            && !(state == MLModelState.DEPLOYING
-                && lastUpdateTime != null
-                && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
+        long now = Instant.now().toEpochMilli();
+        // A last update time in the future must not be treated as a live grace window, otherwise the model
+        // can never be reconciled out of DEPLOYING.
+        boolean withinDeployGracePeriod = state == MLModelState.DEPLOYING
+            && lastUpdateTime != null
+            && lastUpdateTime <= now
+            && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > now;
+        if (currentWorkerNodeCount == 0 && state != MLModelState.DEPLOY_FAILED && !withinDeployGracePeriod) {
             // If model not deployed to any node and no node is deploying the model, then set model state as DEPLOY_FAILED
             return MLModelState.DEPLOY_FAILED;
         }
@@ -445,6 +456,41 @@ public class MLSyncUpCron implements Runnable {
             }
         }
         return null;
+    }
+
+    /**
+     * Reads {@code last_updated_time} from a model document.
+     *
+     * The field is mapped as {@code "type": "date", "format": "strict_date_time||epoch_millis"}, so a
+     * document may legitimately carry either epoch millis or an ISO-8601 string. Returns null when the
+     * value is absent or cannot be interpreted, which callers treat as "unknown".
+     */
+    private static Long parseLastUpdateTime(String modelId, Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number) {
+            return ((Number) raw).longValue();
+        }
+        if (raw instanceof String) {
+            String value = (String) raw;
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException ignored) {
+                try {
+                    return Instant.parse(value).toEpochMilli();
+                } catch (DateTimeParseException ignored2) {
+                    // fall through to the warning below
+                }
+            }
+        }
+        log.warn("Ignoring unparseable {} [{}] on model [{}]", MLModel.LAST_UPDATED_TIME_FIELD, raw, modelId);
+        return null;
+    }
+
+    /** Reads an integer counter that may be stored as any numeric type. */
+    private static int parseIntOrDefault(Object raw, int defaultValue) {
+        return raw instanceof Number ? ((Number) raw).intValue() : defaultValue;
     }
 
     private void bulkUpdateModelState(
