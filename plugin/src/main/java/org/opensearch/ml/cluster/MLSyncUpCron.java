@@ -348,10 +348,12 @@ public class MLSyncUpCron implements Runnable {
                                 MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
                                 Long lastUpdateTime = parseLastUpdateTime(modelId, sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD));
                                 int planningWorkerNodeCount = parseIntOrDefault(
+                                    modelId,
                                     sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD),
                                     0
                                 );
                                 int currentWorkerNodeCountInIndex = parseIntOrDefault(
+                                    modelId,
                                     sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD),
                                     0
                                 );
@@ -423,11 +425,12 @@ public class MLSyncUpCron implements Runnable {
         }
         int currentWorkerNodeCount = modelWorkerNodes.containsKey(modelId) ? modelWorkerNodes.get(modelId).size() : 0;
         long now = Instant.now().toEpochMilli();
-        // A last update time in the future must not be treated as a live grace window, otherwise the model
-        // can never be reconciled out of DEPLOYING.
+        // The grace window is bounded on both sides. A far-future last update time must expire so the
+        // model can be reconciled out of DEPLOYING, while a small forward skew is tolerated: the
+        // timestamp is written by the deploying node but compared against the cluster manager's clock.
         boolean withinDeployGracePeriod = state == MLModelState.DEPLOYING
             && lastUpdateTime != null
-            && lastUpdateTime <= now
+            && lastUpdateTime < now + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS
             && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > now;
         if (currentWorkerNodeCount == 0 && state != MLModelState.DEPLOY_FAILED && !withinDeployGracePeriod) {
             // If model not deployed to any node and no node is deploying the model, then set model state as DEPLOY_FAILED
@@ -491,9 +494,18 @@ public class MLSyncUpCron implements Runnable {
         return null;
     }
 
-    /** Reads an integer counter that may be stored as any numeric type. */
-    private static int parseIntOrDefault(Object raw, int defaultValue) {
-        return raw instanceof Number ? ((Number) raw).intValue() : defaultValue;
+    /**
+     * Reads an integer counter. These fields are mapped as {@code integer}, so a non-numeric value is
+     * malformed rather than an alternate representation, and is reported before falling back.
+     */
+    private static int parseIntOrDefault(String modelId, Object raw, int defaultValue) {
+        if (raw instanceof Number) {
+            return ((Number) raw).intValue();
+        }
+        if (raw != null) {
+            log.warn("Ignoring non-numeric worker node count [{}] on model [{}]", raw, modelId);
+        }
+        return defaultValue;
     }
 
     private void bulkUpdateModelState(

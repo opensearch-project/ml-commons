@@ -24,6 +24,8 @@ import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -447,60 +449,63 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         assertTrue(bulkRequestCaptor.getValue().requests().toString().contains("DEPLOY_FAILED"));
     }
 
-    public void testRefreshModelState_IsoStringLastUpdateTime_ParsedAndMarkedDeployFailed() throws IOException {
-        // last_updated_time is mapped as "strict_date_time||epoch_millis", so an ISO-8601 string is a legal
-        // stored value and must be parsed rather than cast.
+    public void testRefreshModelState_IsoStringLastUpdateTime_ParsedAndTreatedAsInGrace() throws Exception {
+        // Uses a timestamp INSIDE the grace window so the assertion distinguishes a parsed value from one
+        // that silently fell through to null: if parsing failed, the model would be marked DEPLOY_FAILED.
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         Map<String, Set<String>> deployingModels = new HashMap<>();
+        String isoNow = OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.UTC).toString();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
             actionListener
-                .onResponse(
-                    createSearchModelResponseWithRawLastUpdateTime(
-                        "modelId",
-                        "tenantId",
-                        MLModelState.DEPLOYING,
-                        2,
-                        null,
-                        "2020-01-01T00:00:00.000Z"
-                    )
-                );
+                .onResponse(createSearchModelResponseWithRawLastUpdateTime("modelId", "tenantId", MLModelState.DEPLOYING, 2, null, isoNow));
             return null;
         }).when(client).search(any(), any());
 
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
 
-        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
-        verify(client, times(1)).bulk(bulkRequestCaptor.capture(), any());
-        assertTrue(bulkRequestCaptor.getValue().requests().toString().contains("DEPLOY_FAILED"));
+        verify(client, times(1)).search(any(), any());
+        verify(client, never()).bulk(any(), any());
     }
 
-    public void testRefreshModelState_OffsetDateTimeLastUpdateTime_ParsedAndMarkedDeployFailed() throws IOException {
-        // strict_date_time permits a numeric offset, not just the Z suffix. Instant.parse rejects those on
-        // JDK 11, so the parser must accept them for the value not to be silently dropped.
+    public void testRefreshModelState_OffsetDateTimeLastUpdateTime_ParsedAndTreatedAsInGrace() throws Exception {
+        // strict_date_time permits a numeric offset, not just the Z suffix. Uses an in-grace timestamp so a
+        // parse failure would surface as an unwanted DEPLOY_FAILED update rather than passing silently.
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         Map<String, Set<String>> deployingModels = new HashMap<>();
+        String offsetNow = OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.ofHoursMinutes(5, 30)).toString();
+        assertTrue("expected a +05:30 offset in [" + offsetNow + "]", offsetNow.contains("+05:30"));
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
             actionListener
                 .onResponse(
-                    createSearchModelResponseWithRawLastUpdateTime(
-                        "modelId",
-                        "tenantId",
-                        MLModelState.DEPLOYING,
-                        2,
-                        null,
-                        "2020-01-01T00:00:00.000+05:30"
-                    )
+                    createSearchModelResponseWithRawLastUpdateTime("modelId", "tenantId", MLModelState.DEPLOYING, 2, null, offsetNow)
                 );
             return null;
         }).when(client).search(any(), any());
 
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
 
-        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
-        verify(client, times(1)).bulk(bulkRequestCaptor.capture(), any());
-        assertTrue(bulkRequestCaptor.getValue().requests().toString().contains("DEPLOY_FAILED"));
+        verify(client, times(1)).search(any(), any());
+        verify(client, never()).bulk(any(), any());
+    }
+
+    public void testRefreshModelState_ForwardClockSkew_StillWithinGracePeriod() throws Exception {
+        // last_updated_time is written by the deploying node but compared against the cluster manager's
+        // clock, so a small forward skew must not cause a mid-deploy model to be marked DEPLOY_FAILED.
+        Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
+        Map<String, Set<String>> deployingModels = new HashMap<>();
+        long skewedFuture = Instant.now().toEpochMilli() + 5_000;
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYING, 2, null, skewedFuture));
+            return null;
+        }).when(client).search(any(), any());
+
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
+
+        verify(client, times(1)).search(any(), any());
+        verify(client, never()).bulk(any(), any());
     }
 
     public void testRefreshModelState_UnparseableLastUpdateTime_TreatedAsUnknown() throws IOException {
