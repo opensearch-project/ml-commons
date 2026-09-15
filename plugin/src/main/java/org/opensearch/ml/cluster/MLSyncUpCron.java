@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -478,7 +479,9 @@ public class MLSyncUpCron implements Runnable {
                 return Long.parseLong(value);
             } catch (NumberFormatException ignored) {
                 try {
-                    return Instant.parse(value).toEpochMilli();
+                    // OffsetDateTime rather than Instant: strict_date_time permits a numeric offset
+                    // (for example 2020-01-01T00:00:00.000+05:30), which Instant.parse rejects on JDK 11.
+                    return OffsetDateTime.parse(value).toInstant().toEpochMilli();
                 } catch (DateTimeParseException ignored2) {
                     // fall through to the warning below
                 }
