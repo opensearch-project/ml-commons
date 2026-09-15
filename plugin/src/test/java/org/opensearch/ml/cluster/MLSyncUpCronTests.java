@@ -475,6 +475,34 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         assertTrue(bulkRequestCaptor.getValue().requests().toString().contains("DEPLOY_FAILED"));
     }
 
+    public void testRefreshModelState_OffsetDateTimeLastUpdateTime_ParsedAndMarkedDeployFailed() throws IOException {
+        // strict_date_time permits a numeric offset, not just the Z suffix. Instant.parse rejects those on
+        // JDK 11, so the parser must accept them for the value not to be silently dropped.
+        Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
+        Map<String, Set<String>> deployingModels = new HashMap<>();
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener
+                .onResponse(
+                    createSearchModelResponseWithRawLastUpdateTime(
+                        "modelId",
+                        "tenantId",
+                        MLModelState.DEPLOYING,
+                        2,
+                        null,
+                        "2020-01-01T00:00:00.000+05:30"
+                    )
+                );
+            return null;
+        }).when(client).search(any(), any());
+
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
+
+        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        verify(client, times(1)).bulk(bulkRequestCaptor.capture(), any());
+        assertTrue(bulkRequestCaptor.getValue().requests().toString().contains("DEPLOY_FAILED"));
+    }
+
     public void testRefreshModelState_UnparseableLastUpdateTime_TreatedAsUnknown() throws IOException {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         Map<String, Set<String>> deployingModels = new HashMap<>();
