@@ -14,6 +14,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Add GCP Vertex AI connector with automatic OAuth2 token management via `google_cloud` auth strategy ([#4921](https://github.com/opensearch-project/ml-commons/pull/4921))
 * Add on-demand memory retention execution and support for self-hosted multi-tenancy ([#4973](https://github.com/opensearch-project/ml-commons/pull/4973))
 * Add dynamic retention job interval updates and dry-run API for memory retention ([#4952](https://github.com/opensearch-project/ml-commons/pull/4952))
+* Enable unified agent API by default ([#4951](https://github.com/opensearch-project/ml-commons/pull/4951))
 
 ### Bug Fixes
 
