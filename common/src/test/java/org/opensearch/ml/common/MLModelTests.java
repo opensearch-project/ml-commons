@@ -8,6 +8,7 @@ package org.opensearch.ml.common;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -22,9 +23,11 @@ import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
@@ -602,5 +605,33 @@ public class MLModelTests {
         streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLModel deserialized = new MLModel(streamInput);
         assertNull(deserialized.getProvisionedBy());
+    }
+
+    // Issue #4999: documents stored before the space_type requirement (#3786) must still parse back.
+    @Test
+    public void parseRemoteModel_legacyStoredDocWithoutSpaceType() throws IOException {
+        String legacySource = "{"
+            + "\"name\":\"legacy_remote_text_embedding_model\","
+            + "\"algorithm\":\"REMOTE\","
+            + "\"model_version\":\"19\","
+            + "\"model_state\":\"DEPLOY_FAILED\","
+            + "\"connector_id\":\"test_connector_id\","
+            + "\"model_group_id\":\"test_model_group_id\","
+            + "\"model_config\":{"
+            + "\"model_type\":\"TEXT_EMBEDDING\","
+            + "\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\""
+            + "}"
+            + "}";
+        try (
+            XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, legacySource)
+        ) {
+            parser.nextToken();
+            MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
+            assertEquals("legacy_remote_text_embedding_model", parsed.getName());
+            assertNotNull(parsed.getModelConfig());
+            assertEquals("TEXT_EMBEDDING", parsed.getModelConfig().getModelType());
+            assertNull(((BaseModelConfig) parsed.getModelConfig()).getAdditionalConfig());
+        }
     }
 }

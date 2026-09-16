@@ -398,7 +398,7 @@ public final class MLCommonsSettings {
 
     // This setting is to enable/disable unified agent API (agent registration with model creation and standardized execution interface)
     public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     // This setting enables/disables the agentic search template CRUD APIs (register/get/update/delete/list).
     // Disabled by default pending security review of the new APIs.
@@ -745,7 +745,7 @@ public final class MLCommonsSettings {
 
     private static void validateRegexSafety(String regex) {
         // Reject nested quantifiers or backreferences
-        if (regex.matches(".*\\([^)]*[*+?]\\)[*+?{].*") || regex.matches(".*\\\\[1-9].*")) {
+        if (regex.matches(".*\\([^)]*[*+?]\\)[*+].*") || regex.matches(".*\\\\[1-9].*")) {
             throw new IllegalArgumentException(
                 "Regex pattern contains nested quantifiers or backreferences that may cause ReDoS: " + regex
             );
