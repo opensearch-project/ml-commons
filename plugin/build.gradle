@@ -754,6 +754,10 @@ configurations.all {
     resolutionStrategy.force "io.netty:netty-transport-native-unix-common:${versions.netty}"
     resolutionStrategy.force "org.apache.logging.log4j:log4j-api:${versions.log4j}"
     resolutionStrategy.force "org.apache.logging.log4j:log4j-core:${versions.log4j}"
+    // OpenSearch core pulls jspecify:1.0.1 directly and jspecify:1.0.0 transitively via log4j 2.25.x
+    // (log4j-api -> jspecify). Under fail-on-version-conflict this collision fails the yamlRestTest
+    // compile classpath; align to the version core declares directly.
+    resolutionStrategy.force "org.jspecify:jspecify:1.0.1"
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
