@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -230,11 +231,29 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_searchAllTools_parseIOException() throws IOException {
+    public void test_searchAllTools_skipsToolMissingType() throws IOException {
+        SearchHit validHit = createSearchResultResponse().getHits().getHits()[0];
+        setupSearchResponse(new SearchHit[] { validHit, createMissingTypeSearchHit(1, "MissingTypeTool") });
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
+        mcpToolsHelper.searchAllTools(actionListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<McpToolRegisterInput>> argumentCaptor = ArgumentCaptor.forClass(List.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(1, argumentCaptor.getValue().size());
+        assertEquals("ListIndexTool", argumentCaptor.getValue().get(0).getName());
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void test_searchAllTools_allUnparseableTools_returnsEmpty() throws IOException {
         setupMalformedJsonResponse();
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchAllTools(actionListener);
-        verifyCompositeIOException(actionListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<McpToolRegisterInput>> argumentCaptor = ArgumentCaptor.forClass(List.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().isEmpty());
+        verify(actionListener, never()).onFailure(any());
     }
 
     @Test
@@ -324,15 +343,28 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     }
 
     private void setupMalformedJsonResponse() throws IOException {
+        setupSearchResponse(new SearchHit[] { createMalformedSearchHit(0, "ListIndexTool") });
+    }
+
+    private SearchHit createMalformedSearchHit(int docId, String id) {
         String malformedJson =
             "{\"name\":\"test\",\"type\":\"test\",\"description\":\"test\",\"parameters\":{},\"attributes\":{},\"version\":1,\"malformed\":}";
-        SearchHit[] hits = new SearchHit[1];
-        hits[0] = new SearchHit(0, "ListIndexTool", null, null).sourceRef(new BytesArray(malformedJson.getBytes()));
-        hits[0].version(1L);
+        SearchHit hit = new SearchHit(docId, id, null, null).sourceRef(new BytesArray(malformedJson.getBytes()));
+        hit.version(1L);
+        return hit;
+    }
 
+    private SearchHit createMissingTypeSearchHit(int docId, String id) {
+        String missingTypeJson = "{\"name\":\"test\",\"description\":\"test\",\"parameters\":{},\"attributes\":{},\"version\":1}";
+        SearchHit hit = new SearchHit(docId, id, null, null).sourceRef(new BytesArray(missingTypeJson.getBytes()));
+        hit.version(1L);
+        return hit;
+    }
+
+    private void setupSearchResponse(SearchHit[] hits) {
         SearchResponse searchResponse = new SearchResponse(
             new InternalSearchResponse(
-                new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
+                new SearchHits(hits, new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO), 1.0f),
                 InternalAggregations.EMPTY,
                 new Suggest(Collections.emptyList()),
                 new SearchProfileShardResults(Collections.emptyMap()),
