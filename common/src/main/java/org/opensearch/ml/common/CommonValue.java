@@ -95,6 +95,13 @@ public class CommonValue {
 
     // Resource type used in resource-access-control
     public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
+    public static final String ML_MODEL_RESOURCE_TYPE = "ml-model";
+    /**
+     * Field stamped on model metadata documents to mark them as resources. Model chunks share
+     * {@link #ML_MODEL_INDEX} but are not resources, and the resource-sharing framework has no way to skip a
+     * document other than failing to resolve its type — so only the metadata document carries this field.
+     */
+    public static final String RESOURCE_TYPE_FIELD = "resource_type";
 
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");
