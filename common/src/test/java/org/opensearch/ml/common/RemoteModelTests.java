@@ -39,7 +39,7 @@ public class RemoteModelTests {
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\",\"algorithm\":\"REMOTE\""
+            "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\",\"resource_type\":\"ml-model\",\"algorithm\":\"REMOTE\""
                 + ",\"model_version\":\"1.0.0\",\"description\":\"test model\","
                 + "\"connector_id\":\"test_connector_id\"}",
             mlModelContent
@@ -62,7 +62,7 @@ public class RemoteModelTests {
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
 
-        String expectedConnectorResponse = "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\","
+        String expectedConnectorResponse = "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\",\"resource_type\":\"ml-model\","
             + "\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\",\"description\":\"test model\","
             + "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
             + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
