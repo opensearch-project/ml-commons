@@ -24,6 +24,8 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Fix models stuck in DEPLOYING state when a single model document fails to parse during sync-up ([#5012](https://github.com/opensearch-project/ml-commons/pull/5012))
 * Fix V1 conversational agent with native function calling leaving unresolved `tool_descriptions`/`tool_names` placeholders ([#4931](https://github.com/opensearch-project/ml-commons/pull/4931))
 * Defer `.plugins-ml-jobs` index creation until rolling upgrade completes and gate retention job on `retention_enabled` ([#4937](https://github.com/opensearch-project/ml-commons/pull/4937))
+* Use exact-match queries for id-based lookups so removing one MCP tool no longer deletes tools with similar names and connectors with hyphenated ids remain deletable and updatable ([#5034](https://github.com/opensearch-project/ml-commons/pull/5034))
+* Require a non-blank name when registering an MCP tool ([#5034](https://github.com/opensearch-project/ml-commons/pull/5034))
 
 ### Infrastructure
 

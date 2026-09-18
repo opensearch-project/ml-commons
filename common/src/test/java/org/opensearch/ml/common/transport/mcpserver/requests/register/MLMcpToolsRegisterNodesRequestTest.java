@@ -81,6 +81,43 @@ public class MLMcpToolsRegisterNodesRequestTest {
         assertTrue(request.validate().validationErrors().get(0).contains("tools list can not be null"));
     }
 
+    /**
+     * The tool name is the document id in the MCP tools index and is what the duplicate-detection lookup queries, so a
+     * missing name must be rejected here with a clear message rather than failing deep inside the query layer. See
+     * https://github.com/opensearch-project/ml-commons/issues/5032.
+     */
+    @Test
+    public void testValidateWithMissingToolName() {
+        List<McpToolRegisterInput> toolsWithoutName = List
+            .of(new McpToolRegisterInput(null, "metric_analyzer", "no name supplied", null, null, null, null));
+        MLMcpToolsRegisterNodesRequest request = new MLMcpToolsRegisterNodesRequest(nodeIds, toolsWithoutName);
+
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull("Should return validation error", exception);
+        assertEquals(1, exception.validationErrors().size());
+        assertTrue(exception.validationErrors().get(0).contains("tool name can not be null or blank"));
+    }
+
+    @Test
+    public void testValidateWithBlankToolName() {
+        List<McpToolRegisterInput> toolsWithBlankName = List
+            .of(new McpToolRegisterInput("   ", "metric_analyzer", "blank name", null, null, null, null));
+        MLMcpToolsRegisterNodesRequest request = new MLMcpToolsRegisterNodesRequest(nodeIds, toolsWithBlankName);
+
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull("Should return validation error", exception);
+        assertTrue(exception.validationErrors().get(0).contains("tool name can not be null or blank"));
+    }
+
+    @Test
+    public void testValidateWithValidToolName() {
+        List<McpToolRegisterInput> validTools = List
+            .of(new McpToolRegisterInput("vfy-list-tool", "ListIndexTool", "has a name", null, null, null, null));
+        MLMcpToolsRegisterNodesRequest request = new MLMcpToolsRegisterNodesRequest(nodeIds, validTools);
+
+        assertNull("Should not return a validation error", request.validate());
+    }
+
     @Test
     public void testParse_AllFields() throws Exception {
         String jsonStr = "{\n"

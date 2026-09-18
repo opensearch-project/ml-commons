@@ -181,7 +181,9 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     ) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        boolQueryBuilder.must(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+        // Exact match on the keyword subfield. An analysed match query on the `connector_id` text field splits on '-'
+        // and lowercases, so any model referencing a connector id that shares a single token would block this update.
+        boolQueryBuilder.must(QueryBuilders.termQuery(MLModel.CONNECTOR_ID_KEYWORD_FIELD, connectorId));
         boolQueryBuilder.must(QueryBuilders.idsQuery().addIds(mlModelManager.getAllModelIds()));
         sourceBuilder.query(boolQueryBuilder);
 
