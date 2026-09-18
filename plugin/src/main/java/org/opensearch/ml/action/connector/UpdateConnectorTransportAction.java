@@ -130,17 +130,27 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             // connector will actually have once the update is applied. The update parse path
                             // skips MLCreateConnectorInput's validation block, so neither check has run yet.
                             String updatedProtocol = mlUpdateConnectorAction.getUpdateContent().getProtocol();
-                            if (updatedProtocol != null) {
-                                ConnectorProtocols.validateProtocol(updatedProtocol);
-                                ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                            // Reported through the listener directly rather than by throwing. A throw here would
+                            // be routed to the enclosing listener's failure consumer, which logs it as a
+                            // permission denial, so an operator debugging a rejected protocol would be told the
+                            // wrong thing.
+                            try {
+                                if (updatedProtocol != null) {
+                                    ConnectorProtocols.validateProtocol(updatedProtocol);
+                                    ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                                }
+                                ConnectorProtocolValidator
+                                    .validateMutualTlsSupportedAfterUpdate(
+                                        connector.getProtocol(),
+                                        connector.getConnectorClientConfig(),
+                                        updatedProtocol,
+                                        mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                    );
+                            } catch (Exception e) {
+                                log.error("Rejected connector update for connector id {}", connectorId, e);
+                                listener.onFailure(e);
+                                return;
                             }
-                            ConnectorProtocolValidator
-                                .validateMutualTlsSupportedAfterUpdate(
-                                    connector.getProtocol(),
-                                    connector.getConnectorClientConfig(),
-                                    updatedProtocol,
-                                    mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
-                                );
 
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 

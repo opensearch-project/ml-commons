@@ -349,17 +349,25 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     // supported-protocol and feature-flag checks the connector API applies, using the value
                     // the connector will have once the update is applied.
                     String updatedProtocol = updateModelInput.getConnector().getProtocol();
-                    if (updatedProtocol != null) {
-                        ConnectorProtocols.validateProtocol(updatedProtocol);
-                        ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                    // See the matching comment in UpdateConnectorTransportAction: reported through the
+                    // listener so the rejection is not logged as a permission denial.
+                    try {
+                        if (updatedProtocol != null) {
+                            ConnectorProtocols.validateProtocol(updatedProtocol);
+                            ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                        }
+                        ConnectorProtocolValidator
+                            .validateMutualTlsSupportedAfterUpdate(
+                                connector.getProtocol(),
+                                connector.getConnectorClientConfig(),
+                                updatedProtocol,
+                                updateModelInput.getConnector().getConnectorClientConfig()
+                            );
+                    } catch (Exception e) {
+                        log.error("Rejected inline connector update for model {}", modelId, e);
+                        wrappedListener.onFailure(e);
+                        return;
                     }
-                    ConnectorProtocolValidator
-                        .validateMutualTlsSupportedAfterUpdate(
-                            connector.getProtocol(),
-                            connector.getConnectorClientConfig(),
-                            updatedProtocol,
-                            updateModelInput.getConnector().getConnectorClientConfig()
-                        );
 
                     connector.update(updateModelInput.getConnector());
 
