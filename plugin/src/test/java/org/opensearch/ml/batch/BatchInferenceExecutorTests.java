@@ -113,7 +113,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(responseFor(subInput));
         });
 
-        executor.execute(input, null, predictor, null, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+        executor.execute("m", input, null, predictor, null, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
 
         assertSame(input, seen.get()); // no config -> original input, no rebuild
         assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
@@ -130,7 +130,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(responseFor(subInput));
         });
 
-        executor.execute(input, config, predictor, null, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+        executor.execute("m", input, config, predictor, null, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
 
         assertEquals(1, invocations.get()); // single call, split computed exactly once
         assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
@@ -146,7 +146,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(responseFor(subInput));
         });
 
-        executor.execute(textInput("a", "b", "c", "d", "e"), config, predictor, null, ActionListener.wrap(result::set, e -> {
+        executor.execute("m", textInput("a", "b", "c", "d", "e"), config, predictor, null, ActionListener.wrap(result::set, e -> {
             throw new AssertionError(e);
         }));
 
@@ -165,7 +165,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(responseFor(subInput));
         });
 
-        executor.execute(input, config, predictor, null, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+        executor.execute("m", input, config, predictor, null, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
 
         assertSame(input, seen.get()); // original input, no rebuild
         assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
@@ -183,7 +183,7 @@ public class BatchInferenceExecutorTests {
             }
         });
 
-        executor.execute(textInput("ok", "bad", "ok2"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("ok", "bad", "ok2"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, failure::set));
 
@@ -201,14 +201,9 @@ public class BatchInferenceExecutorTests {
             listener.onFailure(new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS));
         });
 
-        executor
-            .execute(
-                textInput("a", "b"),
-                config,
-                predictor,
-                null,
-                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
-            );
+        executor.execute("m", textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed");
+        }, failure::set));
 
         assertEquals("2 sub-batches, one attempt each", 2, attempts.get());
         assertEquals(2, failure.get().getSuppressed().length);
@@ -226,7 +221,7 @@ public class BatchInferenceExecutorTests {
             listener.onResponse(responseFor(subInput));
         });
 
-        executor.execute(textInput("ok", "boom"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("ok", "boom"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, e -> {
             completions.incrementAndGet();
@@ -245,17 +240,12 @@ public class BatchInferenceExecutorTests {
         AtomicInteger completions = new AtomicInteger(0);
         Predictable predictor = model((subInput, listener) -> { throw new IllegalStateException("dispatch failed"); });
 
-        executor
-            .execute(
-                textInput("a", "b"),
-                config,
-                predictor,
-                null,
-                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, e -> {
-                    completions.incrementAndGet();
-                    failure.set(e);
-                })
-            );
+        executor.execute("m", textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed");
+        }, e -> {
+            completions.incrementAndGet();
+            failure.set(e);
+        }));
 
         assertEquals("listener must be completed exactly once", 1, completions.get());
         assertEquals(2, failure.get().getSuppressed().length);
@@ -266,14 +256,20 @@ public class BatchInferenceExecutorTests {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
         AtomicReference<Exception> failure = new AtomicReference<>();
         AtomicInteger completions = new AtomicInteger(0);
+        // Each sub-batch returns one tensor per doc, so the counts line up and it is combine() that rejects
+        // the mismatched status codes.
         Predictable predictor = model((subInput, listener) -> {
             int statusCode = docsOf(subInput).contains("a") ? 200 : 206;
-            ModelTensors group = ModelTensors.builder().mlModelTensors(new ArrayList<>()).build();
+            List<ModelTensor> tensors = new ArrayList<>();
+            for (String doc : docsOf(subInput)) {
+                tensors.add(ModelTensor.builder().name(doc).build());
+            }
+            ModelTensors group = ModelTensors.builder().mlModelTensors(tensors).build();
             group.setStatusCode(statusCode);
             listener.onResponse(new MLTaskResponse(ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(group)).build()));
         });
 
-        executor.execute(textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed on merge");
         }, e -> {
             completions.incrementAndGet();
@@ -282,6 +278,123 @@ public class BatchInferenceExecutorTests {
 
         assertEquals("listener must be completed exactly once", 1, completions.get());
         assertTrue(failure.get() instanceof IllegalStateException);
+    }
+
+    // A model call that answers with a fixed number of tensors, whatever the sub-batch held.
+    private static MLTaskResponse fixedSizeResponse(int tensorCount) {
+        List<ModelTensor> tensors = new ArrayList<>();
+        for (int i = 0; i < tensorCount; i++) {
+            tensors.add(ModelTensor.builder().name("t" + i).build());
+        }
+        return new MLTaskResponse(
+            ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(ModelTensors.builder().mlModelTensors(tensors).build())).build()
+        );
+    }
+
+    @Test
+    public void subBatchReturningMoreResultsThanItemsFailsTheRequest() {
+        // 6 docs split into 3 sub-batches of 2, against a model that always answers with 3 tensors. Combining
+        // these would return 9 embeddings for 6 documents, with each sub-batch's extra shifting the rest.
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(2).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        AtomicInteger completions = new AtomicInteger(0);
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(3)));
+
+        executor.execute("m", textInput("s", "ss", "sss", "ssss", "sssss", "ssssss"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("misaligned results must not be returned as a successful response");
+        }, e -> {
+            completions.incrementAndGet();
+            failure.set(e);
+        }));
+
+        assertEquals("listener must be completed exactly once", 1, completions.get());
+        assertTrue(failure.get().getMessage().contains("Model returned 3 results for a sub-batch of 2 items"));
+    }
+
+    @Test
+    public void subBatchReturningFewerResultsThanItemsFailsTheRequest() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(3).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(1)));
+
+        executor.execute("m", textInput("a", "b", "c", "d", "e", "f"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("a short result list must not be returned as a success");
+        }, failure::set));
+
+        assertTrue(failure.get().getMessage().contains("Model returned 1 results for a sub-batch of 3 items"));
+    }
+
+    @Test
+    public void trailingExtraResultFailsInsteadOfDisplacingLaterResults() {
+        // A provider that answers honestly per input and appends one extra vector. Unsplit that trailing extra
+        // is harmlessly ignored, but per sub-batch it lands mid-list and shifts every result after it — which is
+        // how a wrong vector ends up indexed into a knn_vector field with no error anywhere.
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(2).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> {
+            List<ModelTensor> tensors = new ArrayList<>();
+            for (String doc : docsOf(subInput)) {
+                tensors.add(ModelTensor.builder().name(doc).build());
+            }
+            tensors.add(ModelTensor.builder().name("extra").build());
+            listener
+                .onResponse(
+                    new MLTaskResponse(
+                        ModelTensorOutput
+                            .builder()
+                            .mlModelOutputs(ImmutableList.of(ModelTensors.builder().mlModelTensors(tensors).build()))
+                            .build()
+                    )
+                );
+        });
+
+        executor.execute("m", textInput("s", "ss", "sss"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("must not return " + resultNames(r) + " for 3 documents");
+        }, failure::set));
+
+        // Both sub-batches came back one result long, so both are reported.
+        assertEquals(2, failure.get().getSuppressed().length);
+        assertTrue(failure.get().getMessage().contains("Model returned 3 results for a sub-batch of 2 items"));
+        assertTrue(failure.get().getMessage().contains("Model returned 2 results for a sub-batch of 1 items"));
+    }
+
+    @Test
+    public void countMismatchInOneSubBatchStillFailsWithTheOtherSubBatchesAligned() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(1).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        AtomicInteger completions = new AtomicInteger(0);
+        Predictable predictor = model((subInput, listener) -> {
+            if (docsOf(subInput).contains("skipped")) {
+                listener.onResponse(fixedSizeResponse(0));
+            } else {
+                listener.onResponse(responseFor(subInput));
+            }
+        });
+
+        executor.execute("m", textInput("ok", "skipped", "ok2"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("one misaligned sub-batch must fail the whole request");
+        }, e -> {
+            completions.incrementAndGet();
+            failure.set(e);
+        }));
+
+        assertEquals("listener must be completed exactly once", 1, completions.get());
+        assertEquals("a lone misalignment is reported as is", 0, failure.get().getSuppressed().length);
+        assertTrue(failure.get() instanceof IllegalStateException);
+    }
+
+    @Test
+    public void alignedSubBatchesAreStillCombinedNormally() {
+        // The count check must not reject the ordinary case: one result per item in every sub-batch.
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(2).build();
+        AtomicReference<MLTaskResponse> result = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(responseFor(subInput)));
+
+        executor.execute("m", textInput("a", "b", "c"), config, predictor, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError(e);
+        }));
+
+        assertEquals(ImmutableList.of("a", "b", "c"), resultNames(result.get()));
     }
 
     @Test
@@ -294,14 +407,9 @@ public class BatchInferenceExecutorTests {
             listener.onFailure(new RuntimeException("boom"));
         });
 
-        executor
-            .execute(
-                textInput("a", "b"),
-                config,
-                predictor,
-                null,
-                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
-            );
+        executor.execute("m", textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed");
+        }, failure::set));
 
         // 2 sub-batches, each attempted exactly once
         assertEquals(2, attempts.get());
@@ -320,6 +428,7 @@ public class BatchInferenceExecutorTests {
 
         executor
             .execute(
+                "m",
                 input,
                 config,
                 predictor,
@@ -346,7 +455,7 @@ public class BatchInferenceExecutorTests {
             }
         });
 
-        executor.execute(textInput("bad1", "ok", "bad2"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("bad1", "ok", "bad2"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, e -> {
             completions.incrementAndGet();
@@ -373,7 +482,7 @@ public class BatchInferenceExecutorTests {
             }
         });
 
-        executor.execute(textInput("forbidden", "down"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("forbidden", "down"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, failure::set));
 
@@ -393,7 +502,7 @@ public class BatchInferenceExecutorTests {
             }
         });
 
-        executor.execute(textInput("first", "second"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("first", "second"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, failure::set));
 
@@ -410,14 +519,9 @@ public class BatchInferenceExecutorTests {
             (subInput, listener) -> listener.onFailure(new OpenSearchStatusException("forbidden", RestStatus.FORBIDDEN))
         );
 
-        executor
-            .execute(
-                textInput("a", "b"),
-                config,
-                predictor,
-                null,
-                ActionListener.wrap(r -> { throw new AssertionError("should have failed"); }, failure::set)
-            );
+        executor.execute("m", textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("should have failed");
+        }, failure::set));
 
         Exception error = failure.get();
         assertEquals(2, error.getSuppressed().length);
@@ -436,7 +540,7 @@ public class BatchInferenceExecutorTests {
             }
         });
 
-        executor.execute(textInput("ok", "bad"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("ok", "bad"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed");
         }, failure::set));
 
@@ -458,7 +562,7 @@ public class BatchInferenceExecutorTests {
         });
 
         // "ok" settles first (dispatched first, in list order); "bad" settles last.
-        executor.execute(textInput("ok", "bad"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("ok", "bad"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("should have failed, not combined a partial result");
         }, failure::set));
 
@@ -479,7 +583,7 @@ public class BatchInferenceExecutorTests {
         });
 
         // "bad" settles first (dispatched first, in list order); "ok" succeeds afterwards.
-        executor.execute(textInput("bad", "ok"), config, predictor, null, ActionListener.wrap(r -> {
+        executor.execute("m", textInput("bad", "ok"), config, predictor, null, ActionListener.wrap(r -> {
             throw new AssertionError("must not respond when a sub-batch failed");
         }, e -> {
             completions.incrementAndGet();

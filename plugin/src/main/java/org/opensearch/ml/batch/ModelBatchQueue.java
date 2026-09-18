@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.batch;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 
 import java.util.ArrayDeque;
@@ -86,12 +88,20 @@ public class ModelBatchQueue {
         }
     }
 
-    public void enqueue(QueueEntry entry) {
-        completeEnqueue(entry, offer(entry));
+    /** Returns false when the request was not queued and the caller must run it itself; see TOO_LARGE. */
+    public boolean enqueue(QueueEntry entry) {
+        EnqueueDecision decision = offer(entry);
+        completeEnqueue(entry, decision);
+        return decision != EnqueueDecision.TOO_LARGE;
     }
 
     EnqueueDecision offer(QueueEntry entry) {
         synchronized (stateLock) {
+            // Checked before reserving: a request bigger than the whole node budget can never be admitted, so
+            // it is handed back to run unqueued instead of being rejected with a retry that could never succeed.
+            if (budget.exceedsCapacity(entry.getRetainedByteSize())) {
+                return EnqueueDecision.TOO_LARGE;
+            }
             if (!budget.tryReserve(entry.getRetainedByteSize())) {
                 return EnqueueDecision.REJECTED;
             }
@@ -107,6 +117,22 @@ public class ModelBatchQueue {
 
     void completeEnqueue(QueueEntry entry, EnqueueDecision decision) {
         switch (decision) {
+            case TOO_LARGE:
+                // Left to the caller to run unqueued; nothing was reserved and nothing is pending for it here.
+                // Warned rather than debugged: the request still succeeds, but coalescing is silently not happening
+                // for it, and if the budget is misconfigured that is true of every request to this model forever.
+                log
+                    .warn(
+                        "Predict request for model {} retains an estimated {} bytes, more than the whole node batch "
+                            + "queue budget of {} bytes, so it runs unqueued. Raise {} or {} to let requests this "
+                            + "size be coalesced.",
+                        modelId,
+                        entry.getRetainedByteSize(),
+                        budget.getMaxBytes(),
+                        ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(),
+                        ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey()
+                    );
+                break;
             case REJECTED:
                 notifyRejected(entry);
                 break;
@@ -336,16 +362,7 @@ public class ModelBatchQueue {
     }
 
     private void place(BatchableInput handler, List<BatchItem> subBatch, MLOutput output, List<MLOutput[]> results) {
-        List<MLOutput> perItem = handler.distribute(output);
-        if (perItem.size() != subBatch.size()) {
-            throw new IllegalStateException(
-                "Model returned "
-                    + perItem.size()
-                    + " results for a sub-batch of "
-                    + subBatch.size()
-                    + " items, so results cannot be routed back to their callers"
-            );
-        }
+        List<MLOutput> perItem = handler.distributeExactly(output, subBatch.size());
         for (int i = 0; i < subBatch.size(); i++) {
             BatchItem item = subBatch.get(i);
             results.get(item.getSourceIndex())[item.getPositionInSource()] = perItem.get(i);
@@ -442,6 +459,8 @@ public class ModelBatchQueue {
     }
 
     enum EnqueueDecision {
+        /** Bigger than the whole node budget; not queued and not reserved, the caller runs it unqueued. */
+        TOO_LARGE,
         REJECTED,
         FLUSH,
         SCHEDULE_TIMER
