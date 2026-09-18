@@ -321,9 +321,11 @@ public class MetricsCorrelation extends DLModelExecute {
                 new String[] { MLModel.MODEL_CONTENT_FIELD }
             );
 
+        // `name` is an analysed text field, so a term query for the literal "METRICS_CORRELATION" never matches: the
+        // analyser lowercases it to `metrics_correlation`. Query the keyword subfield for an exact match instead.
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
             .boolQuery()
-            .should(termQuery(MLModel.MODEL_NAME_FIELD, FunctionName.METRICS_CORRELATION.name()))
+            .should(termQuery(MLModel.MODEL_NAME_FIELD + ".keyword", FunctionName.METRICS_CORRELATION.name()))
             .should(termQuery(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION));
         searchSourceBuilder.query(boolQueryBuilder);
         return new SearchRequest().source(searchSourceBuilder).indices(CommonValue.ML_MODEL_INDEX);
