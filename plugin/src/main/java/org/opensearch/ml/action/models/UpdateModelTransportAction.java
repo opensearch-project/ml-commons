@@ -141,6 +141,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, tenantId, null, excludes, ActionListener.wrap(mlModel -> {
+                if (mlModel == null) {
+                    wrappedListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Failed to find model to update with the provided model id: " + modelId,
+                                RestStatus.NOT_FOUND
+                            )
+                        );
+                    return;
+                }
                 if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
                     if (!isModelDeploying(mlModel.getModelState())) {
                         FunctionName functionName = mlModel.getAlgorithm();
@@ -228,15 +238,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             );
                     }
                 }
-            },
-                e -> wrappedListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            "Failed to find model to update with the provided model id: " + modelId,
-                            RestStatus.NOT_FOUND
-                        )
-                    )
-            ));
+            }, e -> wrappedListener.onFailure(e)));
         } catch (Exception e) {
             log.error("Failed to update ML model for {}", modelId, e);
             actionListener.onFailure(e);
