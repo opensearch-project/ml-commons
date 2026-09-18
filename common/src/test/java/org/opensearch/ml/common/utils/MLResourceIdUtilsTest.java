@@ -59,6 +59,22 @@ public class MLResourceIdUtilsTest {
         MLResourceIdUtils.validateCustomModelId("a".repeat(MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH + 1));
     }
 
+    /**
+     * Guards https://github.com/opensearch-project/ml-commons/issues/5032: exact-match reference guards such as the
+     * "is this connector still used by a model?" check query the `.keyword` subfield, which carries the
+     * `ignore_above: 256` default. An id longer than that would not be indexed there at all, so the guard would return
+     * zero hits and fail open. Raising this limit past 256 therefore requires revisiting those guards.
+     */
+    @Test
+    public void maxDocumentIdLength_matchesKeywordIgnoreAboveDefault() {
+        assertEquals(256, MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH);
+    }
+
+    @Test
+    public void validateCustomModelId_acceptsMaxLengthId() {
+        MLResourceIdUtils.validateCustomModelId("a".repeat(MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH));
+    }
+
     @Test
     public void validateCustomModelId_acceptsValidId() {
         MLResourceIdUtils.validateCustomModelId("text_embedding_v1");

@@ -20,7 +20,22 @@ import org.opensearch.index.engine.VersionConflictEngineException;
  */
 public final class MLResourceIdUtils {
 
-    public static final int MAX_DOCUMENT_ID_LENGTH = 512;
+    /**
+     * Maximum length of a user-specified resource id, in UTF-8 bytes.
+     *
+     * Kept at 256 to match the `ignore_above: 256` default that OpenSearch applies to dynamically mapped `keyword`
+     * subfields (and that the ML index mappings use for id-like fields). Ids longer than that would not be indexed into
+     * the `.keyword` subfield at all, so exact-match reference guards such as the "is this connector still used by a
+     * model?" check in DeleteConnectorTransportAction would silently return zero hits and fail open.
+     *
+     * Note the units differ: this limit is checked in UTF-8 bytes, while `ignore_above` is compared against the
+     * character count. The two coincide only because {@link #CUSTOM_DOCUMENT_ID_PATTERN} restricts ids to ASCII. If that
+     * pattern is ever widened to non-ASCII characters, this bound must be re-derived in characters.
+     *
+     * Raising this value requires revisiting those guards. OpenSearch independently rejects any document id over 512
+     * bytes, which is where the original limit came from.
+     */
+    public static final int MAX_DOCUMENT_ID_LENGTH = 256;
 
     /**
      * Allowed characters for user-specified document IDs used in REST path segments.

@@ -114,6 +114,12 @@ public class MLModel implements ToXContentObject {
     public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
+    /**
+     * Keyword subfield of {@link #CONNECTOR_ID_FIELD}. Use this for exact-match lookups: `connector_id` is dynamically
+     * mapped as an analysed `text` field, so a match query on it splits ids on '-' (and lowercases them) and matches
+     * unrelated models that merely share a token.
+     */
+    public static final String CONNECTOR_ID_KEYWORD_FIELD = CONNECTOR_ID_FIELD + ".keyword";
     public static final String GUARDRAILS_FIELD = "guardrails";
     public static final String INTERFACE_FIELD = "interface";
     public static final String BATCH_INFERENCE_CONFIG_FIELD = "batch_inference_config";

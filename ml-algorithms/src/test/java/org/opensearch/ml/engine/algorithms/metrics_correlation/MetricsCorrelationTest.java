@@ -337,11 +337,12 @@ public class MetricsCorrelationTest {
         BoolQueryBuilder boolQueryBuilder = (BoolQueryBuilder) generatedSearchSource.query();
         assertEquals(2, boolQueryBuilder.should().size());
 
-        // Verify name query
+        // Verify name query. It must target the keyword subfield: `name` is analysed, so a term query for the literal
+        // "METRICS_CORRELATION" would be lowercased to `metrics_correlation` at index time and never match.
         assertTrue(boolQueryBuilder.should().get(0) instanceof TermQueryBuilder);
         TermQueryBuilder nameQueryBuilder = (TermQueryBuilder) boolQueryBuilder.should().get(0);
         assertEquals(expectedNameQuery, nameQueryBuilder.value());
-        assertEquals(MLModel.MODEL_NAME_FIELD, nameQueryBuilder.fieldName());
+        assertEquals(MLModel.MODEL_NAME_FIELD + ".keyword", nameQueryBuilder.fieldName());
 
         // Verify version query
         assertTrue(boolQueryBuilder.should().get(1) instanceof TermQueryBuilder);

@@ -44,6 +44,10 @@ import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -297,6 +301,45 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         verify(actionListener).onResponse(any(UpdateResponse.class));
+    }
+
+    /**
+     * Regression test for https://github.com/opensearch-project/ml-commons/issues/5032: the "is this connector still
+     * referenced?" guard used an analysed match query on the `connector_id` text field, so a connector whose custom id
+     * merely shared a token with a referenced id became un-updatable, blocking credential rotation.
+     */
+    @Test
+    public void testUpdateConnector_ReferenceGuardUsesExactTermQuery() {
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<SearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(searchRequestCaptor.capture(), isA(ActionListener.class));
+        QueryBuilder query = searchRequestCaptor.getValue().source().query();
+        assertTrue("Expected BoolQueryBuilder but got: " + query.getClass().getSimpleName(), query instanceof BoolQueryBuilder);
+        // Locate the clause by type rather than by position: the order of the must() calls is an implementation detail.
+        TermQueryBuilder connectorIdClause = ((BoolQueryBuilder) query)
+            .must()
+            .stream()
+            .filter(TermQueryBuilder.class::isInstance)
+            .map(TermQueryBuilder.class::cast)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No TermQueryBuilder among the must clauses: " + query));
+        assertEquals(MLModel.CONNECTOR_ID_KEYWORD_FIELD, connectorIdClause.fieldName());
+        assertEquals(TEST_CONNECTOR_ID, connectorIdClause.value());
     }
 
     @Test
