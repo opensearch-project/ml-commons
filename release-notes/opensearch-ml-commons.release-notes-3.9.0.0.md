@@ -14,6 +14,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Add GCP Vertex AI connector with automatic OAuth2 token management via `google_cloud` auth strategy ([#4921](https://github.com/opensearch-project/ml-commons/pull/4921))
 * Add on-demand memory retention execution and support for self-hosted multi-tenancy ([#4973](https://github.com/opensearch-project/ml-commons/pull/4973))
 * Add dynamic retention job interval updates and dry-run API for memory retention ([#4952](https://github.com/opensearch-project/ml-commons/pull/4952))
+* Enable unified agent API by default ([#4951](https://github.com/opensearch-project/ml-commons/pull/4951))
 
 ### Bug Fixes
 
@@ -22,6 +23,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Fix false-positive ReDoS rejection of safe connector endpoint regex patterns ([#4972](https://github.com/opensearch-project/ml-commons/pull/4972))
 * Fix models stuck in DEPLOYING state when a single model document fails to parse during sync-up ([#5012](https://github.com/opensearch-project/ml-commons/pull/5012))
 * Fix V1 conversational agent with native function calling leaving unresolved `tool_descriptions`/`tool_names` placeholders ([#4931](https://github.com/opensearch-project/ml-commons/pull/4931))
+* Defer `.plugins-ml-jobs` index creation until rolling upgrade completes and gate retention job on `retention_enabled` ([#4937](https://github.com/opensearch-project/ml-commons/pull/4937))
 
 ### Infrastructure
 
@@ -33,3 +35,4 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Force snakeyaml_engine version alignment in ml-commons ([#5007](https://github.com/opensearch-project/ml-commons/pull/5007))
 * Update ml-commons build.sh to include `publishPluginZipPublicationToMavenLocal` for neural-search ([#5004](https://github.com/opensearch-project/ml-commons/pull/5004))
 * Use Jackson 3.x for JSON processing ([#4981](https://github.com/opensearch-project/ml-commons/pull/4981))
+* Rename resource sharing feature flag to the non-experimental key ([#5013](https://github.com/opensearch-project/ml-commons/pull/5013))
