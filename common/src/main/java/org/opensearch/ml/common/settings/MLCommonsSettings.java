@@ -249,6 +249,14 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "local_model.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    /**
+     * Backend-role and access-mode based control over model groups. Superseded by the security plugin's resource
+     * sharing and access control, which authorizes each model by the access level it is shared at, and slated for
+     * removal in 4.0 along with model-group-derived access. It is not marked deprecated yet: existing models cannot be
+     * migrated to per-model sharing until the security plugin's migrate endpoint can inherit a parent's owner and
+     * recipients and restrict a migration to part of an index, so this setting is still the only working control for
+     * them. See docs/model_access_control.md.
+     */
     public static final Setting<Boolean> ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "model_access_control_enabled",
