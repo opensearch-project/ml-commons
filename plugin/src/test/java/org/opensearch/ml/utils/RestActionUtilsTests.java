@@ -23,6 +23,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.UI_METADATA_EXCLUDE;
 
 import java.net.InetAddress;
+import java.security.Principal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -310,7 +311,8 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
 
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "CN=kirk,OU=client,O=client,L=test,C=de"));
+        threadContext
+            .putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, new SelfReferentialUser("CN=kirk,OU=client,O=client,L=test,C=de"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertTrue(isAdmin);
@@ -328,10 +330,95 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "nonAdmin"));
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, new SelfReferentialUser("nonAdmin"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertFalse(isAdmin);
+    }
+
+    // On security < 3.9 the User transient is not a Principal but a plain bean exposing getName().
+    // isSuperAdminUser must fall back to the JSON read and still resolve admin / non-admin correctly,
+    // so a backport stays version-safe. LegacyUser stands in for that bean.
+    @Test
+    public void testIsSuperAdminUser_withNonPrincipalBean_usesJsonFallback() {
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.getSettings())
+            .thenReturn(
+                Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "CN=kirk,OU=client,O=client,L=test, C=de").build()
+            );
+
+        Assert.assertTrue(isSuperAdminUserFor(clusterService, new LegacyUser("CN=kirk,OU=client,O=client,L=test,C=de")));
+        Assert.assertFalse(isSuperAdminUserFor(clusterService, new LegacyUser("nonAdmin")));
+    }
+
+    /** Runs isSuperAdminUser with the given object in a fresh OPENDISTRO_SECURITY_USER transient
+     * (transients are write-once, so each call needs its own ThreadContext). */
+    private boolean isSuperAdminUserFor(ClusterService clusterService, Object userObject) {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(mock(ThreadPool.class));
+        when(client.threadPool().getThreadContext()).thenReturn(threadContext);
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, userObject);
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
+    }
+
+    // A transient that is neither a Principal nor a bean with a name is malformed. isSuperAdminUser must
+    // fail loud rather than silently deciding this is not an admin on a security-relevant path.
+    @Test
+    public void testIsSuperAdminUser_withNamelessTransient_throws() {
+        ClusterService clusterService = mock(ClusterService.class);
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+
+        when(clusterService.getSettings())
+            .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
+        when(client.threadPool()).thenReturn(mock(ThreadPool.class));
+        when(client.threadPool().getThreadContext()).thenReturn(threadContext);
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("foo", "bar"));
+
+        Assert.assertThrows(IllegalStateException.class, () -> RestActionUtils.isSuperAdminUser(clusterService, client));
+    }
+
+    /**
+     * A minimal stand-in for security < 3.9's {@code org.opensearch.security.user.User}: a plain bean that
+     * exposes {@code getName()} and is not a {@link Principal} (there is no {@code getPrincipal()} before
+     * 3.9). This is the shape {@code isSuperAdminUser} reads through the JSON fallback. See ml-commons #4990.
+     */
+    private static class LegacyUser {
+        private final String name;
+
+        private LegacyUser(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+    }
+
+    /**
+     * A minimal stand-in for the security plugin's {@code org.opensearch.security.user.User},
+     * which implements {@link Principal} and returns {@code this} from {@link #getPrincipal()}
+     * (a direct self-reference). This is the shape that the real {@code User} object has in the
+     * {@code _opendistro_security_user} thread-context transient on a security-enabled cluster,
+     * and is what {@code isSuperAdminUser} reads the name from directly. See ml-commons issue #4990.
+     */
+    private static class SelfReferentialUser implements Principal {
+        private final String name;
+
+        private SelfReferentialUser(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        // Mirrors org.opensearch.security.user.User#getPrincipal(), which returns `this`.
+        public Principal getPrincipal() {
+            return this;
+        }
     }
 
     @Test
