@@ -47,6 +47,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -63,6 +64,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -343,6 +345,22 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             );
                         return;
                     }
+                    // A model's inline connector can have its protocol changed here, so apply the same
+                    // supported-protocol and feature-flag checks the connector API applies, using the value
+                    // the connector will have once the update is applied.
+                    String updatedProtocol = updateModelInput.getConnector().getProtocol();
+                    if (updatedProtocol != null) {
+                        ConnectorProtocols.validateProtocol(updatedProtocol);
+                        ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                    }
+                    ConnectorProtocolValidator
+                        .validateMutualTlsSupportedAfterUpdate(
+                            connector.getProtocol(),
+                            connector.getConnectorClientConfig(),
+                            updatedProtocol,
+                            updateModelInput.getConnector().getConnectorClientConfig()
+                        );
+
                     connector.update(updateModelInput.getConnector());
 
                     // Only validate headers if connector actions were modified in this update

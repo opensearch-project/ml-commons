@@ -36,6 +36,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -43,6 +44,7 @@ import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -123,6 +125,23 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                     if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
+                            // An update may change the protocol, so the protocol is validated against the
+                            // supported list and against its opt-in feature flag here, using the value the
+                            // connector will actually have once the update is applied. The update parse path
+                            // skips MLCreateConnectorInput's validation block, so neither check has run yet.
+                            String updatedProtocol = mlUpdateConnectorAction.getUpdateContent().getProtocol();
+                            if (updatedProtocol != null) {
+                                ConnectorProtocols.validateProtocol(updatedProtocol);
+                                ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                            }
+                            ConnectorProtocolValidator
+                                .validateMutualTlsSupportedAfterUpdate(
+                                    connector.getProtocol(),
+                                    connector.getConnectorClientConfig(),
+                                    updatedProtocol,
+                                    mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                );
+
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 
                             // Only validate headers if actions were modified in this update

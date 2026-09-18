@@ -26,8 +26,10 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.DocWriteResponse.Result;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
@@ -42,10 +44,13 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -557,4 +562,104 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
         return searchResponse;
     }
+
+    /**
+     * A connector's protocol can be changed by an update, so a protocol whose opt-in feature flag is off must
+     * be rejected there too. Gating only creation lets the flag be sidestepped by creating an allowed protocol
+     * and switching it afterwards.
+     */
+    @Test
+    public void testUpdateConnectorRejectsSwitchToDisabledProtocol() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build());
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testUpdateConnectorAllowsSwitchToEnabledProtocol() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build());
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubSearchReturnsNoModels();
+        stubUpdateSucceeds();
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+    }
+
+    /**
+     * The update parse path skips the create-time validation block, so without an explicit check an update can
+     * store an unsupported protocol string. Every later read of that document then fails to resolve a connector
+     * class, leaving the connector permanently unusable.
+     */
+    @Test
+    public void testUpdateConnectorRejectsUnsupportedProtocol() {
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol("not_a_real_protocol").build());
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
+    /**
+     * mutual_tls_enabled is accepted on every protocol but only honoured by the non-streaming http executor.
+     * Accepting it elsewhere reports a transport protection back to the operator that is never applied, so the
+     * request has to fail instead.
+     */
+    @Test
+    public void testUpdateConnectorRejectsMutualTlsOnUnsupportedProtocol() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                    .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build())
+                    .build()
+            );
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("Mutual TLS is not supported"));
+    }
+
+    private void stubSearchReturnsNoModels() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    private void stubUpdateSucceeds() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
 }
