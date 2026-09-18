@@ -6,7 +6,9 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RESOURCE_TYPE;
 import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
+import static org.opensearch.ml.common.CommonValue.RESOURCE_TYPE_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
@@ -536,6 +538,11 @@ public class MLModel implements ToXContentObject {
         }
         if (modelGroupId != null) {
             builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
+        }
+        if (chunkNumber == null) {
+            // Marks the metadata document as the model resource. Chunks live in the same index and must not receive
+            // resource-sharing records, and the framework can only skip a document whose type it cannot resolve.
+            builder.field(RESOURCE_TYPE_FIELD, ML_MODEL_RESOURCE_TYPE);
         }
         if (algorithm != null) {
             builder.field(ALGORITHM_FIELD, algorithm);

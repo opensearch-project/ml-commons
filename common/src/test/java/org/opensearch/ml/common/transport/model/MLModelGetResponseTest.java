@@ -64,6 +64,7 @@ public class MLModelGetResponseTest {
         String jsonStr = builder.toString();
         assertEquals(
             "{\"name\":\"model\","
+                + "\"resource_type\":\"ml-model\","
                 + "\"algorithm\":\"KMEANS\","
                 + "\"model_version\":\"1.0.0\","
                 + "\"model_content\":\"content\","
