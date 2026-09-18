@@ -94,6 +94,11 @@ public class CommonValue {
     public static final String ML_INDEX_INSIGHT_STORAGE_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_storage.json";
 
     // Resource type used in resource-access-control
+    /**
+     * Model groups were the shareable unit before models became shareable in their own right. Sharing a group is
+     * deprecated and the type registration is slated for removal in 4.0; share models instead. See
+     * docs/model_access_control.md for the migration path.
+     */
     public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
     public static final String ML_MODEL_RESOURCE_TYPE = "ml-model";
     /**

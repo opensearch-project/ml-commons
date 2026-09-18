@@ -11,8 +11,49 @@ We have implemented backend role-based access in which members of the same back-
 
 Note: 
 - Model access control is an experimental feature. If you see any bug or have any suggestion, feel free to cut Github issue.
+- **Superseded.** Everything on this page — `plugins.ml_commons.model_access_control_enabled`, model-group access modes, and backend-role based access — is superseded by the security plugin's resource sharing and access control, and is slated for removal in 4.0. Models are now shareable in their own right; see [Resource sharing for models](#resource-sharing-for-models) below. The setting itself is not marked deprecated yet, because existing models cannot be migrated to per-model sharing until the migrate endpoint gains the two capabilities listed in that section.
 
 
+
+## Resource sharing for models
+
+The security plugin's resource sharing and access control authorizes a resource by the access level it is shared at, rather than by backend-role overlap. ml-commons registers two resource types with it:
+
+| Resource type | Index | Status |
+|---|---|---|
+| `ml-model` | `.plugins-ml-model` | current — models are the shareable unit |
+| `ml-model-group` | `.plugins-ml-model-group` | deprecated, registration removed in 4.0 |
+
+Model documents carry a `resource_type` field that marks them as resources. Model chunks live in the same index and deliberately omit it, so they receive no sharing records.
+
+A model declares its group as a parent, so a model written under a system subject inherits the group's owner, and a permission check on a model falls back to the group. Parent inheritance does not extend to search: which models a search returns is decided by each model's own sharing record.
+
+### Enabling it
+
+```
+PUT /_cluster/settings
+{
+  "persistent": {
+    "plugins.security.resource_sharing.enabled": true,
+    "plugins.security.resource_sharing.protected_types": ["ml-model"]
+  }
+}
+```
+
+Access levels for `ml-model` are `ml_read_only` (get and predict), `ml_read_write` (adds update, deploy and undeploy) and `ml_full_access` (adds delete and the ability to share).
+
+### Migrating existing models
+
+**Migrate before adding `ml-model` to `protected_types`.** A protected type requires every model to have a sharing record. Models registered before the type was protected have none, so they return 403 to every caller, including the user who registered them, until they are migrated.
+
+Migration has to derive each model's owner and recipients from its model group, because model documents do not carry a populated owner — `MLModel` declares a `user` field and the index maps it, but registration does not fill it in. It also has to skip chunk documents, which share the model index.
+
+Both capabilities are being added to the security plugin's migrate endpoint:
+
+- inherit `created_by` and `share_with` from the parent's sharing record — <https://github.com/opensearch-project/security/issues/6525>
+- restrict a migration to a subset of an index — <https://github.com/opensearch-project/security/issues/6526>
+
+Until those ship there is no supported migration for existing models, which is why `ml-model` is not protected by default. Newly registered models are unaffected: they receive a sharing record on write.
 
 ## Setup
 
