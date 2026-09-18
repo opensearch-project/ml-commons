@@ -50,6 +50,7 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -580,6 +581,122 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue().getMessage().contains("cannot use ${parameters.*} placeholders for security reasons"));
+    }
+
+    /**
+     * ConnectorAccessControlHelper strips credentials before handing the connector over, so a stored
+     * mutual TLS connector arrives here with none. Validating certificate presence unconditionally
+     * would reject every update to a working connector, including one that only changes a
+     * description.
+     */
+    @Test
+    public void testUpdate_mutualTlsConnector_withCredentialsStripped_isAccepted() {
+        stubStoredConnector(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build(), null);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).description("just a description change").build());
+        stubUpdateSucceeds();
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        // Assert the update actually succeeded rather than merely that no certificate message
+        // appeared: any unrelated failure carries none of those strings and would pass silently.
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    /** Otherwise an update would be a way around the check performed at create time. */
+    @Test
+    public void testUpdate_addingSkipSslVerification_isRejected() {
+        stubStoredConnector(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build(), null);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .connectorClientConfig(
+                        ConnectorClientConfig.builder().mutualTlsEnabled(true).skipSslVerification(true).keystoreType("PEM").build()
+                    )
+                    .build()
+            );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception failure = argumentCaptor.getValue();
+        assertTrue("Expected IllegalArgumentException, got: " + failure.getClass(), failure instanceof IllegalArgumentException);
+        assertTrue(failure.getMessage(), failure.getMessage().contains("skip_ssl_verification"));
+    }
+
+    /** When the update does supply credentials, their completeness can and should be judged. */
+    @Test
+    public void testUpdate_withIncompleteCredentials_isRejected() {
+        stubStoredConnector(null, null);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .credential(Map.of("client_cert_pem", "cert"))
+                    .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build())
+                    .build()
+            );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception failure = argumentCaptor.getValue();
+        assertTrue("Expected IllegalArgumentException, got: " + failure.getClass(), failure instanceof IllegalArgumentException);
+        assertTrue(failure.getMessage(), failure.getMessage().contains("client_key_pem"));
+    }
+
+    private void stubStoredConnector(ConnectorClientConfig clientConfig, Map<String, String> credential) {
+        // Without this the mock denies access and doExecute never reaches the mutual TLS validation.
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener
+                .onResponse(
+                    HttpConnector
+                        .builder()
+                        .name("test")
+                        .protocol("http")
+                        .version("1")
+                        .credential(credential)
+                        .connectorClientConfig(clientConfig)
+                        .parameters(Map.of("param1", "value1"))
+                        .actions(
+                            Arrays
+                                .asList(
+                                    ConnectorAction
+                                        .builder()
+                                        .actionType(ConnectorAction.ActionType.PREDICT)
+                                        .method("POST")
+                                        .url("https://api.openai.com/v1/chat/completions")
+                                        .headers(Map.of("Content-Type", "application/json"))
+                                        .requestBody("{\"model\": \"${parameters.model}\"}")
+                                        .build()
+                                )
+                        )
+                        .build()
+                );
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+    }
+
+    private void stubUpdateSucceeds() {
+        // updateUndeployedConnector searches for models using the connector before updating it.
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
+            searchListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
     }
 
     private SearchResponse noneEmptySearchResponse() throws IOException {

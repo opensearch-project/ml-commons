@@ -35,7 +35,10 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.CertificateProcessor;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -64,6 +67,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateConnectorTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
+    private static final CertificateProcessor CERTIFICATE_PROCESSOR = new CertificateProcessor();
     final Client client;
     final SdkClient sdkClient;
 
@@ -133,6 +137,10 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                     AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
                                 }
                             }
+                            // Before encrypt(): reject an invalid mutual TLS configuration up front rather
+                            // than on every request the updated connector serves.
+                            validateMutualTlsConfig(connector, updateContent);
+
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
                                 connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                                 connector.setLastUpdateTime(Instant.now());
@@ -171,6 +179,31 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         } catch (Exception e) {
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Rejects an invalid mutual TLS configuration. MLValidationException carries no REST status, so
+     * it surfaces as 500; translating it keeps a malformed request a 400, consistent with the other
+     * validation in this action.
+     *
+     * <p>The connector being updated arrives with its credentials stripped by
+     * {@code ConnectorAccessControlHelper#getConnector}, so certificate presence can only be judged
+     * when this update supplies credentials of its own. Otherwise the certificates may well be
+     * stored and simply invisible here, and only the credential-independent settings are checked -
+     * validating presence unconditionally would reject every update to a working mutual TLS
+     * connector.
+     */
+    private static void validateMutualTlsConfig(Connector connector, MLCreateConnectorInput updateContent) {
+        try {
+            Map<String, String> credential = updateContent.getCredential();
+            if (credential != null && !credential.isEmpty()) {
+                CERTIFICATE_PROCESSOR.validateCertificateConfig(connector.getConnectorClientConfig(), credential);
+            } else {
+                CERTIFICATE_PROCESSOR.validateMutualTlsSettings(connector.getConnectorClientConfig());
+            }
+        } catch (MLValidationException e) {
+            throw new IllegalArgumentException(e.getMessage(), e);
         }
     }
 

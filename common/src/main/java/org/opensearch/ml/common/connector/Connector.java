@@ -215,6 +215,9 @@ public interface Connector extends ToXContentObject, Writeable {
 
     Map<String, String> getDecryptedCredential();
 
+    /** The raw credential map, which may still be encrypted. Needed to validate config before encryption. */
+    Map<String, String> getCredential();
+
     default Map<String, String> getHeadersWithRuntimeParameters(Map<String, String> runtimeParameters) {
         return getDecryptedHeaders();
     }
