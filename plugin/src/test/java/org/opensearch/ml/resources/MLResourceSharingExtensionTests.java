@@ -35,7 +35,8 @@ public class MLResourceSharingExtensionTests {
     }
 
     private static ResourceProvider providerFor(Set<ResourceProvider> providers, String resourceType) {
-        return providers.stream()
+        return providers
+            .stream()
             .filter(p -> resourceType.equals(p.resourceType()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("No provider registered for " + resourceType));
