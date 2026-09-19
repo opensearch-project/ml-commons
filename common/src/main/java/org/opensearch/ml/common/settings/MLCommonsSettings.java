@@ -744,8 +744,18 @@ public final class MLCommonsSettings {
         );
 
     private static void validateRegexSafety(String regex) {
-        // Reject nested quantifiers or backreferences
-        if (regex.matches(".*\\([^)]*[*+?]\\)[*+].*") || regex.matches(".*\\\\[1-9].*")) {
+        // Reject nested quantifiers or backreferences. The outer quantifier set intentionally includes '{':
+        // a counted repetition of a group that already contains a quantifier, such as "(a+){1,1000}", is the
+        // shape that actually backtracks exponentially. '?' is excluded because "(a+)?" matches at most once
+        // and cannot blow up, so rejecting it only produced false positives on patterns like "(:\d+)?".
+        //
+        // This is a deliberately shallow check: it only sees the character immediately before the closing
+        // paren, so a nested form such as "((a+)){1,1000}" still gets through. Tightening it structurally was
+        // tried and rejected - it also flags legitimate patterns like "([a-z0-9-]+\.){1,5}", and persisted
+        // cluster settings are re-validated on restart, so a new false positive would break upgrades. The
+        // setting is admin-only, so treat this as a guard against operator error rather than a security
+        // boundary; a match-time budget on Connector#validateResolvedEndpoint is the robust fix.
+        if (regex.matches(".*\\([^)]*[*+?]\\)[*+{].*") || regex.matches(".*\\\\[1-9].*")) {
             throw new IllegalArgumentException(
                 "Regex pattern contains nested quantifiers or backreferences that may cause ReDoS: " + regex
             );
