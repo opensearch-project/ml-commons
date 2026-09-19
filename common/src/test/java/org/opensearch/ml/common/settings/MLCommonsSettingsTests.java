@@ -339,4 +339,35 @@ public class MLCommonsSettingsTests {
         MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex).build());
     }
+
+    /**
+     * A counted repetition of a group that already contains a quantifier backtracks exponentially, so it must
+     * be rejected. This is the shape {@link #testValidateRegexSafety_boundedQuantifier_success()} does not
+     * cover: there the "{1,5}" sits *inside* the group, which is harmless, so that test passes either way.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testValidateRegexSafety_countedRepetitionOfQuantifiedGroup_throwsException() {
+        List<String> invalidRegex = List.of("^https://host(a+){1,1000}/.*$");
+        MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex).build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testValidateRegexSafety_openEndedRepetitionOfQuantifiedGroup_throwsException() {
+        List<String> invalidRegex = List.of("^https://host(a+){1,}/.*$");
+        MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex).build());
+    }
+
+    /**
+     * The default trusted-endpoint patterns are validated by the same validator, so a tightening of the guard
+     * must not reject any of them.
+     */
+    @Test
+    public void testValidateRegexSafety_defaultTrustedEndpointPatterns_success() {
+        List<String> defaults = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(Settings.EMPTY);
+        List<String> result = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), defaults).build());
+        assertEquals(defaults, result);
+    }
 }
