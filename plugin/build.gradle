@@ -414,7 +414,7 @@ def configureClusterPlugins(cluster, jobSchedZip, securityZip, securityEnabled) 
                 node.setting "plugins.security.system_indices.enabled",                "true"
                 if (System.getProperty("resource_sharing.enabled") == "true") {
                     node.setting "plugins.security.resource_sharing.enabled", "true"
-                    node.setting("plugins.security.resource_sharing.protected_types", "[\"ml-model-group\"]")
+                    node.setting("plugins.security.resource_sharing.protected_types", "[\"ml-model-group\", \"ml-model\"]")
                 }
             }
         }
