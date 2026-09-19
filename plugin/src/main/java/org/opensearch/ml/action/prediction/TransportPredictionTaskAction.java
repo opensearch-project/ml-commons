@@ -181,10 +181,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         User userInfo
     ) {
         modelAccessControlHelper
-            .validateModelGroupAccess(
+            .validateModelAccess(
                 userInfo,
                 mlFeatureEnabledSetting,
                 mlPredictionTaskRequest.getTenantId(),
+                mlPredictionTaskRequest.getModelId(),
                 mlModel.getModelGroupId(),
                 MLPredictionTaskAction.NAME,
                 client,

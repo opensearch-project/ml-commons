@@ -179,10 +179,11 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 }
                             } else {
                                 modelAccessControlHelper
-                                    .validateModelGroupAccess(
+                                    .validateModelAccess(
                                         user,
                                         mlFeatureEnabledSetting,
                                         tenantId,
+                                        modelId,
                                         mlModel.getModelGroupId(),
                                         MLUpdateModelAction.NAME,
                                         client,

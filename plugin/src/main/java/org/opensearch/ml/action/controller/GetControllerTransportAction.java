@@ -96,8 +96,9 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                         mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                             Boolean isHidden = mlModel.getIsHidden();
                             modelAccessControlHelper
-                                .validateModelGroupAccess(
+                                .validateModelAccess(
                                     user,
+                                    modelId,
                                     mlModel.getModelGroupId(),
                                     MLControllerGetAction.NAME,
                                     client,

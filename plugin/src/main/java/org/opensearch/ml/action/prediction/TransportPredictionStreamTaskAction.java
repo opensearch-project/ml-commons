@@ -170,12 +170,13 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                         throw new UnsupportedOperationException("Streaming is not supported for local model.");
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
-                    // Validate user access to model group
+                    // Validate user access to the model
                     modelAccessControlHelper
-                        .validateModelGroupAccess(
+                        .validateModelAccess(
                             userInfo,
                             mlFeatureEnabledSetting,
                             tenantId,
+                            modelId,
                             mlModel.getModelGroupId(),
                             MLPredictionStreamTaskAction.NAME,
                             client,
