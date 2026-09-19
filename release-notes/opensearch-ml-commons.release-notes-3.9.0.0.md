@@ -26,10 +26,21 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Defer `.plugins-ml-jobs` index creation until rolling upgrade completes and gate retention job on `retention_enabled` ([#4937](https://github.com/opensearch-project/ml-commons/pull/4937))
 * Use exact-match queries for id-based lookups so removing one MCP tool no longer deletes tools with similar names and connectors with hyphenated ids remain deletable and updatable ([#5034](https://github.com/opensearch-project/ml-commons/pull/5034))
 * Require a non-blank name when registering an MCP tool ([#5034](https://github.com/opensearch-project/ml-commons/pull/5034))
+* Fix HTTP 500 on model register/deploy against security 3.9+ clusters by avoiding a Jackson 3 self-reference cycle in `isSuperAdminUser` ([#4994](https://github.com/opensearch-project/ml-commons/pull/4994))
+* Fail batch inference when a sub-batch result count does not match its item count, and tighten `batch_queue` setting and `batch_inference_config` validation ([#5040](https://github.com/opensearch-project/ml-commons/pull/5040))
+* Pin `google_cloud` connector `token_uri` to the default HTTPS port so a signed JWT cannot be sent to a non-default port ([#5041](https://github.com/opensearch-project/ml-commons/pull/5041))
+* Reject counted repetition of a quantified group in trusted-endpoint regex validation ([#5042](https://github.com/opensearch-project/ml-commons/pull/5042))
+* Delete the auto-created model when unified agent registration fails, instead of leaving an orphaned model holding the request credentials ([#5043](https://github.com/opensearch-project/ml-commons/pull/5043))
+* Read the stored script and target index mapping as the calling user when registering an agentic search template ([#5044](https://github.com/opensearch-project/ml-commons/pull/5044))
+* Validate connector protocol, opt-in protocol settings, and `mutual_tls_enabled` on connector update, model register with inline connector, and model update — not only on connector create ([#5045](https://github.com/opensearch-project/ml-commons/pull/5045))
 
 ### Infrastructure
 
 * Ignore flaky `RestChatAgentWithMcpConnectorIT.testChatAgentWithMcpStreamableHttpConnector` test ([#4943](https://github.com/opensearch-project/ml-commons/pull/4943))
+* Use the admin client for the retention job index in `RestMemoryRetentionJobIntervalIT` ([#5024](https://github.com/opensearch-project/ml-commons/pull/5024))
+* Skip the gRPC integration test when test files are not present ([#4970](https://github.com/opensearch-project/ml-commons/pull/4970))
+* Onboard the issue dedupe GitHub workflow ([#4804](https://github.com/opensearch-project/ml-commons/pull/4804))
+* Bump `1password/load-secrets-action` to v5.0.1 ([#4984](https://github.com/opensearch-project/ml-commons/pull/4984))
 
 ### Maintenance
 
@@ -38,3 +49,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Update ml-commons build.sh to include `publishPluginZipPublicationToMavenLocal` for neural-search ([#5004](https://github.com/opensearch-project/ml-commons/pull/5004))
 * Use Jackson 3.x for JSON processing ([#4981](https://github.com/opensearch-project/ml-commons/pull/4981))
 * Rename resource sharing feature flag to the non-experimental key ([#5013](https://github.com/opensearch-project/ml-commons/pull/5013))
+* Force jspecify to 1.0.1 to fix yamlRestTest dependency conflict ([#5023](https://github.com/opensearch-project/ml-commons/pull/5023))
+* Add Eclipse P2 mirror to avoid `download.eclipse.org` outages ([#4980](https://github.com/opensearch-project/ml-commons/pull/4980))
+* Guard `eclipse()` to spotless tasks and keep the P2 mirror on the pinned version ([#5001](https://github.com/opensearch-project/ml-commons/pull/5001))
+* Add `ci.opensearch.org/m2/` mirror for plugin resolution ([#4949](https://github.com/opensearch-project/ml-commons/pull/4949))
