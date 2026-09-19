@@ -96,9 +96,11 @@ public class ConnectorProtocolValidator {
      * {@code mutual_tls_enabled} stranded on a protocol that cannot apply it. This validates the combination
      * the connector will actually end up with.
      * <p>
-     * It stays quiet when the stored connector was <em>already</em> in that unsupported state, so an unrelated
-     * edit to a connector created before this check existed is not blocked. Only newly created bad
-     * combinations are rejected.
+     * It stays quiet when the stored connector was <em>already</em> in that unsupported state <em>and</em> the
+     * request leaves its protocol alone, so an unrelated edit to a connector created before this check existed
+     * is not blocked. Grandfathering does not extend to moving such a connector onto a <em>different</em>
+     * unsupported protocol: that is a state the request itself creates, and permitting it would let the
+     * misleading {@code mutual_tls_enabled} be carried around indefinitely.
      */
     public static void validateMutualTlsSupportedAfterUpdate(
         String storedProtocol,
@@ -106,7 +108,8 @@ public class ConnectorProtocolValidator {
         String updatedProtocol,
         ConnectorClientConfig updatedConfig
     ) {
-        if (requestsUnsupportedMutualTls(storedProtocol, storedConfig)) {
+        boolean protocolUnchanged = updatedProtocol == null || updatedProtocol.equals(storedProtocol);
+        if (protocolUnchanged && requestsUnsupportedMutualTls(storedProtocol, storedConfig)) {
             return;
         }
         validateMutualTlsSupported(

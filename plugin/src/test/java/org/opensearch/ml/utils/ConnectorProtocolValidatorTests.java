@@ -140,4 +140,29 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
     public void testMutualTlsAfterUpdate_noChangeIsAllowed() {
         ConnectorProtocolValidator.validateMutualTlsSupportedAfterUpdate(ConnectorProtocols.HTTP, mtls(true), null, null);
     }
+
+    /**
+     * Grandfathering covers edits that leave the protocol alone, not moving an already-bad connector onto a
+     * different protocol that also cannot apply mutual TLS - that target state is created by the request.
+     */
+    public void testMutualTlsAfterUpdate_rejectsMoveBetweenUnsupportedProtocols() {
+        IllegalArgumentException e = expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMutualTlsSupportedAfterUpdate(ConnectorProtocols.AWS_SIGV4, mtls(true), ConnectorProtocols.GOOGLE_CLOUD, null)
+        );
+        assertTrue(e.getMessage().contains(ConnectorProtocols.GOOGLE_CLOUD));
+    }
+
+    /** Restating the stored protocol is not a move, so it stays grandfathered. */
+    public void testMutualTlsAfterUpdate_allowsRestatingSameUnsupportedProtocol() {
+        ConnectorProtocolValidator
+            .validateMutualTlsSupportedAfterUpdate(ConnectorProtocols.AWS_SIGV4, mtls(true), ConnectorProtocols.AWS_SIGV4, null);
+    }
+
+    /** A legacy bad connector can still be moved onto http, which does apply mutual TLS. */
+    public void testMutualTlsAfterUpdate_allowsMoveFromUnsupportedProtocolToHttp() {
+        ConnectorProtocolValidator
+            .validateMutualTlsSupportedAfterUpdate(ConnectorProtocols.AWS_SIGV4, mtls(true), ConnectorProtocols.HTTP, null);
+    }
 }
