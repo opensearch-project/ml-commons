@@ -70,6 +70,7 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -383,6 +384,14 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             log.error("Connector endpoint is required when creating a remote model without connector id!");
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
+        // An inline connector establishes a protocol just as the connector API does, so it has to honour the
+        // same opt-in feature flags. Otherwise a gated protocol is reachable by attaching it to a model.
+        ConnectorProtocolValidator.validateProtocolEnabled(registerModelInput.getConnector().getProtocol(), mlFeatureEnabledSetting);
+        ConnectorProtocolValidator
+            .validateMutualTlsSupported(
+                registerModelInput.getConnector().getProtocol(),
+                registerModelInput.getConnector().getConnectorClientConfig()
+            );
         // check if the connector url is trusted
         // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
         // model, so no need to verify the connector endpoint as trusted or not

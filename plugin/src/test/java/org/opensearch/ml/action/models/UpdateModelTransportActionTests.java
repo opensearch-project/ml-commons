@@ -16,8 +16,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -62,6 +64,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -72,6 +75,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -1659,6 +1663,76 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     // TODO: Add UT to make sure that version incremented successfully.
+    /**
+     * A model's inline connector can have its protocol changed here, so the feature-flag gate has to apply on
+     * this path too - otherwise a disabled protocol is reachable by updating a model instead of a connector.
+     */
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorGatedProtocolRejected() throws InterruptedException {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.REGISTERED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
+
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .connector(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build())
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+    }
+
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorGatedMcpStreamableProtocolRejected() throws InterruptedException {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.REGISTERED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
+
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .connector(
+                        MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP).build()
+                    )
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+    }
+
     private MLModel prepareMLModel(String functionName, MLModelState modelState, boolean isHidden) throws IllegalArgumentException {
         MLModel mlModel;
         switch (functionName) {
