@@ -167,10 +167,18 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    // The floor and the ceiling clamp the fraction of heap the batch queue may retain, so both are bounded below
+    // by 1 byte: a zero or negative bound would clamp the budget to nothing and reject every queued predict
+    // request for the life of the node, reported as a 429 that no amount of backoff could clear.
+    private static final ByteSizeValue MIN_BATCH_QUEUE_MEMORY_BOUND = new ByteSizeValue(1L, ByteSizeUnit.BYTES);
+    private static final ByteSizeValue MAX_BATCH_QUEUE_MEMORY_BOUND = new ByteSizeValue(Long.MAX_VALUE, ByteSizeUnit.BYTES);
+
     public static final Setting<ByteSizeValue> ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR = Setting
         .byteSizeSetting(
             ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_floor",
             new ByteSizeValue(64L, ByteSizeUnit.MB),
+            MIN_BATCH_QUEUE_MEMORY_BOUND,
+            MAX_BATCH_QUEUE_MEMORY_BOUND,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -179,14 +187,19 @@ public final class MLCommonsSettings {
         .byteSizeSetting(
             ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_ceiling",
             new ByteSizeValue(512L, ByteSizeUnit.MB),
+            MIN_BATCH_QUEUE_MEMORY_BOUND,
+            MAX_BATCH_QUEUE_MEMORY_BOUND,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
 
+    // Lower bound of one second rather than positiveTimeSetting's zero: a zero TTL makes every sweep evict every
+    // queue, so a queue would never survive long enough to coalesce anything.
     public static final Setting<TimeValue> ML_COMMONS_BATCH_QUEUE_IDLE_TTL = Setting
-        .positiveTimeSetting(
+        .timeSetting(
             ML_PLUGIN_SETTING_PREFIX + "batch_queue.idle_ttl",
             TimeValue.timeValueMinutes(5),
+            TimeValue.timeValueSeconds(1),
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

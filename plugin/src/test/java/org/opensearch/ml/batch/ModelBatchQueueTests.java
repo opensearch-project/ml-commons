@@ -414,19 +414,108 @@ public class ModelBatchQueueTests {
 
     @Test
     public void enqueueRejectsWithBackpressureWhenMemoryBudgetIsExhausted() {
+        String doc = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+        // Room for one entry and no more, and a threshold high enough that the first entry stays pending, so the
+        // second is rejected because the budget is held rather than because it is too large to ever admit.
+        long oneEntry = entry(predictor, ActionListener.wrap(r -> {}, e -> {}), doc).getRetainedByteSize();
+        QueueMemoryBudget fullBudget = new QueueMemoryBudget(oneEntry + 1);
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, fullBudget);
+
+        AtomicReference<Exception> admittedErr = new AtomicReference<>();
+        AtomicReference<Exception> err = new AtomicReference<>();
+        assertTrue(queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, admittedErr::set), doc)));
+        assertTrue(
+            "a request rejected for backpressure is settled here, not handed back to run unqueued",
+            queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err::set), doc))
+        );
+
+        assertNull("the admitted request is unaffected", admittedErr.get());
+        assertNotNull("the caller is failed, not silently dropped", err.get());
+        assertTrue(err.get() instanceof OpenSearchRejectedExecutionException);
+        assertEquals("a rejected request never reaches the model", 0, calls.get());
+        assertEquals("a rejected request holds no reservation of its own", oneEntry, fullBudget.getReservedBytes());
+    }
+
+    @Test
+    public void requestTooLargeForTheWholeBudgetIsHandedBackToRunUnqueued() {
+        // No amount of backoff frees enough budget for this request, so failing it with a retryable 429 would be
+        // a permanent rejection. The queue declines it and the router runs it through the splitter instead.
         QueueMemoryBudget tinyBudget = new QueueMemoryBudget(10L);
         ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, tinyBudget);
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
         AtomicReference<Exception> err = new AtomicReference<>();
-        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err::set), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        AtomicReference<MLTaskResponse> response = new AtomicReference<>();
+        boolean queued = queue.enqueue(entry(predictor, ActionListener.wrap(response::set, err::set), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
 
-        assertNotNull("the caller is failed, not silently dropped", err.get());
-        assertTrue(err.get() instanceof OpenSearchRejectedExecutionException);
-        assertEquals("a rejected request never reaches the model", 0, calls.get());
-        assertNull("no timer is scheduled for a rejected request", scheduledFlush.get());
-        assertEquals("a rejected request holds no reservation", 0, tinyBudget.getReservedBytes());
+        assertFalse("the caller must be told to run the request itself", queued);
+        assertNull("the listener is left for the caller to settle", err.get());
+        assertNull(response.get());
+        assertEquals("the queue does not call the model for a request it declined", 0, calls.get());
+        assertNull("no timer is scheduled for a request that was never queued", scheduledFlush.get());
+        assertEquals("a declined request holds no reservation", 0, tinyBudget.getReservedBytes());
+    }
+
+    @Test
+    public void resultCountMismatchFailsTheCallersInsteadOfMisroutingResults() {
+        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
+        // Two single-doc callers coalesce into one call, and the model answers with three tensors.
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                List<ModelTensor> tensors = new ArrayList<>();
+                for (int i = 0; i < 3; i++) {
+                    tensors.add(ModelTensor.builder().name("t" + i).build());
+                }
+                listener
+                    .onResponse(
+                        new MLTaskResponse(
+                            ModelTensorOutput
+                                .builder()
+                                .mlModelOutputs(ImmutableList.of(ModelTensors.builder().mlModelTensors(tensors).build()))
+                                .build()
+                        )
+                    );
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue
+            .enqueue(
+                entry(
+                    predictor,
+                    ActionListener.wrap(r -> { throw new AssertionError("must not receive a misrouted result"); }, aErr::set),
+                    "a"
+                )
+            );
+        queue
+            .enqueue(
+                entry(
+                    predictor,
+                    ActionListener.wrap(r -> { throw new AssertionError("must not receive a misrouted result"); }, bErr::set),
+                    "b"
+                )
+            );
+
+        assertTrue(aErr.get().getMessage().contains("Model returned 3 results for a sub-batch of 2 items"));
+        assertTrue(bErr.get().getMessage().contains("Model returned 3 results for a sub-batch of 2 items"));
     }
 
     @Test

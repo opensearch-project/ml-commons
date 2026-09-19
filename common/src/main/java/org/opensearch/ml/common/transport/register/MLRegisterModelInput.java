@@ -558,7 +558,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     provisionedBy = parser.textOrNull();
                     break;
                 case BATCH_INFERENCE_CONFIG_FIELD:
-                    batchInferenceConfig = BatchInferenceConfig.parse(parser);
+                    // Strict: this is caller-supplied API input, so a typo is reported rather than ignored.
+                    batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
                     break;
                 default:
                     parser.skipChildren();
@@ -720,7 +721,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     provisionedBy = parser.textOrNull();
                     break;
                 case BATCH_INFERENCE_CONFIG_FIELD:
-                    batchInferenceConfig = BatchInferenceConfig.parse(parser);
+                    // Strict: this is caller-supplied API input, so a typo is reported rather than ignored.
+                    batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
                     break;
                 default:
                     parser.skipChildren();

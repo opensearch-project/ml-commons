@@ -13,6 +13,7 @@ import java.util.List;
 
 import org.junit.Test;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
 
@@ -369,5 +370,58 @@ public class MLCommonsSettingsTests {
         List<String> result = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), defaults).build());
         assertEquals(defaults, result);
+    }
+
+    // A zero or negative bound would clamp the batch queue's memory budget to nothing, rejecting every queued
+    // predict request for the life of the node with a 429 that no backoff could clear.
+    @Test(expected = IllegalArgumentException.class)
+    public void testBatchQueueMemoryCeilingRejectsNegativeValue() {
+        MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey(), "-1b").build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBatchQueueMemoryCeilingRejectsZero() {
+        MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey(), "0b").build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBatchQueueMemoryFloorRejectsNegativeValue() {
+        MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey(), "-1b").build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBatchQueueMemoryFloorRejectsZero() {
+        MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey(), "0b").build());
+    }
+
+    @Test
+    public void testBatchQueueMemoryBoundsAcceptPositiveValues() {
+        ByteSizeValue ceiling = MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey(), "1gb").build());
+        assertEquals(new ByteSizeValue(1L, ByteSizeUnit.GB), ceiling);
+
+        ByteSizeValue floor = MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey(), "32mb").build());
+        assertEquals(new ByteSizeValue(32L, ByteSizeUnit.MB), floor);
+    }
+
+    // A zero TTL makes every sweep evict every queue, so no queue survives long enough to coalesce anything.
+    @Test(expected = IllegalArgumentException.class)
+    public void testBatchQueueIdleTtlRejectsZero() {
+        MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL.getKey(), "0s").build());
+    }
+
+    @Test
+    public void testBatchQueueIdleTtlAcceptsOneSecond() {
+        assertEquals(
+            TimeValue.timeValueSeconds(1),
+            MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL
+                .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL.getKey(), "1s").build())
+        );
     }
 }

@@ -123,6 +123,25 @@ public class MLModelTests {
     }
 
     @Test
+    public void parse_KeepsStoredModelReadableWhenBatchInferenceConfigHasUnknownFields() throws IOException {
+        // Reading a stored model must stay lenient: an unknown field means it was written by a version that knows
+        // about something this node does not, and rejecting it here would make the model document unreadable and
+        // break get/delete/deploy/predict for it. Unknown fields are only rejected on the register-model API path.
+        String json = "{\"name\":\"m\",\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\","
+            + "\"batch_inference_config\":{\"max_items_per_request\":8,\"some_future_field\":{\"a\":1},"
+            + "\"queue\":{\"enabled\":true,\"some_future_queue_field\":7}}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+
+        MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
+
+        assertEquals(8, parsed.getBatchInferenceConfig().getMaxItemsPerRequest());
+        assertEquals(true, parsed.getBatchInferenceConfig().isQueueEnabled());
+    }
+
+    @Test
     public void readInputStream_Success() throws IOException {
         readInputStream(mlModel);
     }

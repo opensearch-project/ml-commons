@@ -75,7 +75,13 @@ public class BatchQueueConfig implements ToXContentObject, Writeable {
         return builder;
     }
 
+    /** Lenient: skips unknown fields, so a stored model written by a newer version stays readable. */
     public static BatchQueueConfig parse(XContentParser parser) throws IOException {
+        return parse(parser, false);
+    }
+
+    /** See {@link BatchInferenceConfig#parse(XContentParser, boolean)} for when rejectUnknownFields applies. */
+    public static BatchQueueConfig parse(XContentParser parser, boolean rejectUnknownFields) throws IOException {
         Boolean enabled = null;
         Long flushTimeoutMs = null;
 
@@ -92,6 +98,19 @@ public class BatchQueueConfig implements ToXContentObject, Writeable {
                     flushTimeoutMs = parser.longValue();
                     break;
                 default:
+                    if (rejectUnknownFields) {
+                        // flush_timeout instead of flush_timeout_ms would otherwise be accepted silently and leave
+                        // every request waiting the default timeout.
+                        throw new IllegalArgumentException(
+                            "Unsupported field ["
+                                + fieldName
+                                + "] in the batch_inference_config queue block. Supported fields are ["
+                                + ENABLED_FIELD
+                                + ", "
+                                + FLUSH_TIMEOUT_MS_FIELD
+                                + "]."
+                        );
+                    }
                     parser.skipChildren();
                     break;
             }

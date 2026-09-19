@@ -111,7 +111,17 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
         return builder;
     }
 
+    /** Lenient: skips unknown fields, so a stored model written by a newer version stays readable. */
     public static BatchInferenceConfig parse(XContentParser parser) throws IOException {
+        return parse(parser, false);
+    }
+
+    /**
+     * rejectUnknownFields belongs on the API input path, where an unknown field is a caller's typo worth reporting
+     * rather than silently leaving a limit at its default. It must stay off when reading a stored model: a field a
+     * newer version added would otherwise make that model document unreadable to this node.
+     */
+    public static BatchInferenceConfig parse(XContentParser parser, boolean rejectUnknownFields) throws IOException {
         Integer maxItemsPerRequest = null;
         Long maxBytesPerRequest = null;
         BatchQueueConfig queue = null;
@@ -129,9 +139,22 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
                     maxBytesPerRequest = parser.longValue();
                     break;
                 case QUEUE_FIELD:
-                    queue = BatchQueueConfig.parse(parser);
+                    queue = BatchQueueConfig.parse(parser, rejectUnknownFields);
                     break;
                 default:
+                    if (rejectUnknownFields) {
+                        throw new IllegalArgumentException(
+                            "Unsupported field ["
+                                + fieldName
+                                + "] in batch_inference_config. Supported fields are ["
+                                + MAX_ITEMS_PER_REQUEST_FIELD
+                                + ", "
+                                + MAX_BYTES_PER_REQUEST_FIELD
+                                + ", "
+                                + QUEUE_FIELD
+                                + "]."
+                        );
+                    }
                     parser.skipChildren();
                     break;
             }
