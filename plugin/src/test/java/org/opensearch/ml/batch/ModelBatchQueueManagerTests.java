@@ -214,11 +214,42 @@ public class ModelBatchQueueManagerTests {
             .inputDataset(new org.opensearch.ml.common.dataset.TextSimilarityInputDataSet("q", ImmutableList.of("d")))
             .build();
 
-        manager.enqueue("model-1", queued(100, 10_000L), unsupported, model(calls), null, ActionListener.wrap(r -> {}, error::set));
+        boolean handled = manager
+            .enqueue("model-1", queued(100, 10_000L), unsupported, model(calls), null, ActionListener.wrap(r -> {}, error::set));
 
+        assertTrue("an invalid request is settled here, not handed back to the caller", handled);
         assertEquals(0, calls.get());
         assertTrue(error.get() instanceof IllegalArgumentException);
         assertEquals("an invalid request should not create a retained per-model queue", 0, manager.queueCount());
+    }
+
+    @Test
+    public void requestTooLargeForTheBudgetIsHandedBackWithoutSettlingTheListener() {
+        ModelBatchQueueManager tightManager = new ModelBatchQueueManager(
+            new BatchableInputRegistry(),
+            new BatchSplitter(),
+            threadPool,
+            new QueueMemoryBudget(10L),
+            () -> Long.MAX_VALUE
+        );
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> response = new AtomicReference<>();
+
+        boolean handled = tightManager
+            .enqueue(
+                "model-1",
+                queued(100, 10_000L),
+                textInput("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+                model(calls),
+                null,
+                ActionListener.wrap(response::set, error::set)
+            );
+
+        assertFalse("the caller must run a request the queue can never admit", handled);
+        assertNull("the listener is left untouched for the caller", error.get());
+        assertNull(response.get());
+        assertEquals(0, calls.get());
     }
 
     @Test
