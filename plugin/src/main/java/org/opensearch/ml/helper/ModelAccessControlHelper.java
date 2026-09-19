@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RESOURCE_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 import java.util.Collections;
@@ -91,6 +92,79 @@ public class ModelAccessControlHelper {
             ExistsQueryBuilder.class,
             RangeQueryBuilder.class
         );
+
+    /**
+     * Authorizes an action on an existing model.
+     * <p>
+     * When {@code ml-model} is a protected resource type, the model's own sharing record is the authority. The
+     * provider declares the model group as the model's parent, so a group-level share still grants access through
+     * inheritance - a group share is not lost by moving to per-model authorization. Clusters that have not protected
+     * models fall back to the model-group check, which is the pre-resource-sharing behavior.
+     * <p>
+     * Creating a model is not covered here: there is no model to authorize against yet, so registration authorizes
+     * write access on the destination group instead.
+     */
+    public void validateModelAccess(
+        User user,
+        String modelId,
+        String modelGroupId,
+        String action,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
+        if (shouldUseResourceAuthz(ML_MODEL_RESOURCE_TYPE)) {
+            verifyResourceAccess(user, modelId, ML_MODEL_RESOURCE_TYPE, action, listener);
+            return;
+        }
+        validateModelGroupAccess(user, modelGroupId, action, client, listener);
+    }
+
+    /** SdkClient-aware variant of {@link #validateModelAccess(User, String, String, String, Client, ActionListener)}. */
+    public void validateModelAccess(
+        User user,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        String tenantId,
+        String modelId,
+        String modelGroupId,
+        String action,
+        Client client,
+        SdkClient sdkClient,
+        ActionListener<Boolean> listener
+    ) {
+        if (shouldUseResourceAuthz(ML_MODEL_RESOURCE_TYPE)) {
+            verifyResourceAccess(user, modelId, ML_MODEL_RESOURCE_TYPE, action, listener);
+            return;
+        }
+        validateModelGroupAccess(user, mlFeatureEnabledSetting, tenantId, modelGroupId, action, client, sdkClient, listener);
+    }
+
+    /**
+     * Single place that turns a resource-sharing verdict into either {@code true} or a 403, so the message and the
+     * fail-closed behavior are identical for every resource type and call site.
+     */
+    private void verifyResourceAccess(User user, String resourceId, String resourceType, String action, ActionListener<Boolean> listener) {
+        var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        resourceSharingClient.verifyAccess(resourceId, resourceType, action, ActionListener.wrap(isAuthorized -> {
+            if (!isAuthorized) {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "User "
+                                + (user == null ? "" : user.getName())
+                                + " is not authorized to perform action "
+                                + action
+                                + " on "
+                                + resourceType
+                                + " id: "
+                                + resourceId,
+                            RestStatus.FORBIDDEN
+                        )
+                    );
+                return;
+            }
+            listener.onResponse(true);
+        }, listener::onFailure));
+    }
 
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
     public void validateModelGroupAccess(User user, String modelGroupId, String action, Client client, ActionListener<Boolean> listener) {

@@ -205,8 +205,9 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
                 modelAccessControlHelper
-                    .validateModelGroupAccess(
+                    .validateModelAccess(
                         user,
+                        modelId,
                         model.getModelGroupId(),
                         MLCancelBatchJobAction.NAME,
                         client,
