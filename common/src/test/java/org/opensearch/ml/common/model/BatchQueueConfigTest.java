@@ -91,4 +91,27 @@ public class BatchQueueConfigTest {
         assertTrue(parsed.isEnabled());
         assertEquals(BatchQueueConfig.DEFAULT_FLUSH_TIMEOUT_MS, parsed.getFlushTimeoutMs());
     }
+
+    @Test
+    public void rejectsUnknownFieldOnTheApiInputPath() throws IOException {
+        // flush_timeout instead of flush_timeout_ms would otherwise be accepted and leave the 50 ms default.
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported field [flush_timeout]");
+        BatchQueueConfig.parse(jsonParser("{\"enabled\":true,\"flush_timeout\":2000}"), true);
+    }
+
+    @Test
+    public void skipsUnknownFieldWhenReadingAStoredModel() throws IOException {
+        BatchQueueConfig parsed = BatchQueueConfig.parse(jsonParser("{\"enabled\":true,\"some_future_field\":2000}"));
+        assertTrue(parsed.isEnabled());
+        assertEquals(BatchQueueConfig.DEFAULT_FLUSH_TIMEOUT_MS, parsed.getFlushTimeoutMs());
+    }
+
+    private static XContentParser jsonParser(String json) throws IOException {
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        return parser;
+    }
 }
