@@ -2515,6 +2515,20 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 listener.onResponse(buildDryRunResult(ctx));
                 return;
             }
+            // Retention being enabled only means the job is allowed to run; the job document the scheduler drives
+            // must also exist. Registration happens on a cluster state change and can be deferred or fail (for
+            // example when the jobs index cannot be created), leaving retention enabled but inert - and the dry-run
+            // then reports deletions for a job that will never execute. The counts are still reported rather than
+            // short-circuited to zero, so an operator sees both that the policy matches documents and that the job
+            // is missing.
+            if (!clusterService.state().metadata().hasIndex(ML_JOBS_INDEX)) {
+                ctx.warnings
+                    .add(
+                        "retention is enabled but no scheduled retention job was found ("
+                            + ML_JOBS_INDEX
+                            + " does not exist); the job will not run until it is scheduled, so nothing would be deleted"
+                    );
+            }
             if (MemoryRetentionDryRunResult.POLICY_SOURCE_NONE.equals(policySource)) {
                 ctx.warnings.add("container has no retention policy and no cluster defaults apply; nothing would be deleted");
             }

@@ -19,6 +19,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -525,6 +526,37 @@ public class MemoryRetentionDryRunTests {
         assertEquals("none", result.getPolicySource());
         assertEquals(0, result.getTotalWouldDelete());
         assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("no retention policy and no cluster defaults")));
+        assertNoDeletes();
+    }
+
+    @Test
+    public void testWarnsWhenRetentionJobNotScheduled() {
+        // Retention enabled but the jobs index does not exist, so no job was ever scheduled (issue #5065).
+        lenient().when(clusterService.state().metadata().hasIndex(ML_JOBS_INDEX)).thenReturn(false);
+        MemoryConfiguration config = sessionConfig(7, 2);
+        mockSessionsWouldEvict();
+
+        MemoryRetentionDryRunResult result = run(config, null);
+
+        assertTrue(
+            "expected the unscheduled-job warning",
+            result.getWarnings().stream().anyMatch(w -> w.contains("no scheduled retention job was found"))
+        );
+        // Counts are still reported, not zeroed: the operator needs both halves of the picture.
+        assertEquals(14, result.getTotalWouldDelete());
+        assertNoDeletes();
+    }
+
+    @Test
+    public void testNoWarningWhenRetentionJobScheduled() {
+        // setUp() stubs hasIndex -> true for every index, so the jobs index is present here.
+        MemoryConfiguration config = sessionConfig(7, 2);
+        mockSessionsWouldEvict();
+
+        MemoryRetentionDryRunResult result = run(config, null);
+
+        assertFalse(result.getWarnings().stream().anyMatch(w -> w.contains("no scheduled retention job was found")));
+        assertEquals(14, result.getTotalWouldDelete());
         assertNoDeletes();
     }
 
