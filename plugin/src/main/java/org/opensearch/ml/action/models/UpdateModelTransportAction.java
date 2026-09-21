@@ -355,6 +355,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         if (updatedProtocol != null) {
                             ConnectorProtocols.validateProtocol(updatedProtocol);
                             ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                            // Connector.update() overwrites the protocol in place, so this would persist a model
+                            // whose connector document says MCP while holding inference fields. Reading it back
+                            // resolves the concrete class from that protocol, producing an MCP connector whose
+                            // action accessors are unimplemented - the model becomes permanently unusable.
+                            if (ConnectorProtocols.isMcpProtocol(updatedProtocol)) {
+                                throw new OpenSearchStatusException(
+                                    "Cannot change this model's connector to MCP protocol [" + updatedProtocol + "].",
+                                    RestStatus.BAD_REQUEST
+                                );
+                            }
                         }
                         ConnectorProtocolValidator
                             .validateMutualTlsSupportedAfterUpdate(
@@ -447,15 +457,35 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     mlFeatureEnabledSetting,
                     ActionListener.wrap(hasNewConnectorPermission -> {
                         if (hasNewConnectorPermission) {
-                            updateModelWithRegisteringToAnotherModelGroup(
-                                modelId,
-                                newModelGroupId,
-                                tenantId,
-                                user,
-                                updateModelInput,
-                                wrappedListener,
-                                isUpdateModelCache
-                            );
+                            // The new connector has to be one a model can predict with. Model register rejects MCP
+                            // connectors for that reason; without the same check here a model could be registered
+                            // against an http connector and then re-pointed at an MCP one, which only surfaces as
+                            // an UnsupportedOperationException at deploy or predict time.
+                            mlModelManager.getConnector(newConnectorId, tenantId, ActionListener.wrap(newConnector -> {
+                                if (ConnectorProtocols.isMcpProtocol(newConnector.getProtocol())) {
+                                    log.error("Rejected update of model {} onto MCP connector {}", modelId, newConnectorId);
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Cannot update this model to use MCP connector: " + newConnectorId,
+                                                RestStatus.BAD_REQUEST
+                                            )
+                                        );
+                                    return;
+                                }
+                                updateModelWithRegisteringToAnotherModelGroup(
+                                    modelId,
+                                    newModelGroupId,
+                                    tenantId,
+                                    user,
+                                    updateModelInput,
+                                    wrappedListener,
+                                    isUpdateModelCache
+                                );
+                            }, e -> {
+                                log.error("Failed to load new connector {} while updating model {}", newConnectorId, modelId, e);
+                                wrappedListener.onFailure(e);
+                            }));
                         } else {
                             wrappedListener
                                 .onFailure(

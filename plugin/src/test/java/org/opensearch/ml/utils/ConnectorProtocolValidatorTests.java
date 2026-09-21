@@ -75,6 +75,16 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
         ConnectorProtocolValidator.validateProtocolEnabled(ConnectorProtocols.MCP_STREAMABLE_HTTP, mlFeatureEnabledSetting);
     }
 
+    /** The gate matches MCP case-insensitively, so an odd spelling cannot slip past a disabled flag. */
+    public void testProtocolEnabled_mcpProtocolRejectedRegardlessOfCase() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator.validateProtocolEnabled("MCP_SSE", mlFeatureEnabledSetting)
+        );
+        assertEquals(RestStatus.FORBIDDEN, e.status());
+    }
+
     // ---- validateMutualTlsSupported ----------------------------------------
 
     public void testMutualTls_nullAndDisabledInputsAreIgnored() {
