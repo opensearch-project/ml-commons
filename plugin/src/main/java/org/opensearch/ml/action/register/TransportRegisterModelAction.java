@@ -299,6 +299,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                             // createConnector returns null when the stored document cannot be
                                             // parsed, so say that plainly instead of dereferencing it below.
                                             if (connector == null) {
+                                                log
+                                                    .error(
+                                                        "Failed to read connector {} while registering a model",
+                                                        registerModelInput.getConnectorId()
+                                                    );
                                                 listener
                                                     .onFailure(
                                                         new OpenSearchStatusException(

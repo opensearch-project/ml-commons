@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -714,6 +715,36 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to read connector: updated_test_connector_id", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    /**
+     * updated_connector is unreachable from REST but is wire-serialized, so a transport caller can set it and
+     * have it written straight into the model's connector field.
+     */
+    @Test
+    public void testUpdateRemoteModelWithUpdatedConnectorSetToMcpRejected() {
+        MLUpdateModelInput updateInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .updatedConnector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+
+        transportUpdateModelAction.doExecute(task, MLUpdateModelRequest.builder().updateModelInput(updateInput).build(), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Cannot update this model to use an MCP connector.", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+        verify(mlModelManager, never()).getModel(any(), any(), any(), any(), isA(ActionListener.class));
     }
 
     private void assertNewStandAloneConnectorRejectedAsMcp(Connector newConnector) {

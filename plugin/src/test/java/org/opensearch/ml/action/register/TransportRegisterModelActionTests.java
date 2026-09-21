@@ -975,6 +975,61 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to read connector: mockConnectorId", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    /**
+     * The newly reachable combination: supplying an interface used to skip the connector lookup entirely, so a
+     * request naming a connector that cannot be resolved returned 200 and a model with a dangling reference.
+     */
+    @Test
+    public void test_execute_registerRemoteModel_withConnectorId_lookupFailureReportedWhenModelInterfaceProvided() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getModelInterface()).thenReturn(Map.of("input", "{}"));
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        OpenSearchStatusException lookupFailure = new OpenSearchStatusException(
+            "Failed to find connector:mockConnectorId",
+            RestStatus.NOT_FOUND
+        );
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onFailure(lookupFailure);
+            return null;
+        }).when(mlModelManager).getConnector(eq("mockConnectorId"), any(), isA(ActionListener.class));
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(lookupFailure, argumentCaptor.getValue());
+        verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
+    }
+
+    /** Same combination, for a connector document that exists but cannot be parsed. */
+    @Test
+    public void test_execute_registerRemoteModel_withConnectorId_unreadableConnectorReportedWhenModelInterfaceProvided() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getModelInterface()).thenReturn(Map.of("input", "{}"));
+        stubConnectorLookup(null);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to read connector: mockConnectorId", argumentCaptor.getValue().getMessage());
+        verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
     }
 
     private void assertConnectorIdRejectedAsMcp(Connector storedConnector) {

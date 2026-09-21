@@ -671,6 +671,56 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
     }
 
+    /**
+     * Supplying actions for an MCP connector used to reach connector.getActions() on the MCP instance, which
+     * throws, and the failure surfaced through the enclosing handler as a permission-denied style error.
+     */
+    @Test
+    public void testUpdateConnectorRejectsActionsOnMcpConnector() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .actions(
+                        List
+                            .of(
+                                ConnectorAction
+                                    .builder()
+                                    .actionType(ConnectorAction.ActionType.PREDICT)
+                                    .method("POST")
+                                    .url("https://api.openai.com/v1/chat/completions")
+                                    .build()
+                            )
+                    )
+                    .build()
+            );
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener
+                .onResponse(
+                    McpConnector
+                        .builder()
+                        .name("mcp")
+                        .protocol(ConnectorProtocols.MCP_SSE)
+                        .url("https://api.openai.com/mcp")
+                        .credential(Map.of("api_key", "credential_value"))
+                        .build()
+                );
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals("Connector actions are not supported for protocol [mcp_sse].", captor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
     /** Switching between the two MCP protocols keeps the same document shape, so it stays allowed. */
     @Test
     public void testUpdateConnectorAllowsSwitchBetweenMcpProtocols() {

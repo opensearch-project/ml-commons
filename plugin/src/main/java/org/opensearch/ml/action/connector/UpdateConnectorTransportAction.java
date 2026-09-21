@@ -174,6 +174,20 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
 
                             // Only validate headers if actions were modified in this update
                             MLCreateConnectorInput updateContent = mlUpdateConnectorAction.getUpdateContent();
+                            // An MCP connector has no actions, so reading them below throws. update() also silently
+                            // drops any actions supplied for one, so the request is meaningless either way - say so
+                            // rather than failing as an unclassified error.
+                            if (updateContent.getActions() != null && ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                log.error("Rejected actions on MCP connector update for connector id {}", connectorId);
+                                listener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Connector actions are not supported for protocol [" + connector.getProtocol() + "].",
+                                            RestStatus.BAD_REQUEST
+                                        )
+                                    );
+                                return;
+                            }
                             if (updateContent.getActions() != null && connector.getActions() != null) {
                                 for (ConnectorAction action : connector.getActions()) {
                                     Map<String, String> headers = action.getHeaders();

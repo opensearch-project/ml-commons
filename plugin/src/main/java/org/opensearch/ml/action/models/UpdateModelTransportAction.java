@@ -135,6 +135,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
+        // updatedConnector is written straight into the model's connector field, and it is wire-serialized, so a
+        // transport caller can set it even though the REST layer clears it. Checked here, before the inline-connector
+        // path sets it itself further down, so only a caller-supplied value is inspected.
+        if (updateModelInput.getUpdatedConnector() != null
+            && ConnectorProtocols.isMcpProtocol(updateModelInput.getUpdatedConnector().getProtocol())) {
+            log.error("Rejected update of model {} with an MCP connector", modelId);
+            actionListener
+                .onFailure(new OpenSearchStatusException("Cannot update this model to use an MCP connector.", RestStatus.BAD_REQUEST));
+            return;
+        }
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
@@ -464,6 +474,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             mlModelManager.getConnector(newConnectorId, tenantId, ActionListener.wrap(newConnector -> {
                                 // createConnector returns null when the stored document cannot be parsed.
                                 if (newConnector == null) {
+                                    log.error("Failed to read connector {} while updating model {}", newConnectorId, modelId);
                                     wrappedListener
                                         .onFailure(
                                             new OpenSearchStatusException(
