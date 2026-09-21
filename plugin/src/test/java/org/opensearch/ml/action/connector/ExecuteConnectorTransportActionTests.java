@@ -195,6 +195,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
                 .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
                 .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.MCP_SSE);
+        // Authorization runs first: the protocol is only reported to a caller allowed to see the connector.
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
             listener.onResponse(connector);
@@ -210,7 +212,6 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             captor.getValue().getMessage()
         );
         assertEquals(org.opensearch.core.rest.RestStatus.BAD_REQUEST, org.opensearch.ExceptionsHelper.status(captor.getValue()));
-        verify(connectorAccessControlHelper, times(0)).validateConnectorAccess(eq(client), any());
     }
 
     public void testExecute_WithCustomConnectorAction() {

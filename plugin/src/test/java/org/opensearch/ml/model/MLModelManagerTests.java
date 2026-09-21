@@ -102,6 +102,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.shard.ShardId;
@@ -115,12 +116,14 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataType;
@@ -1235,6 +1238,34 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(listener).onFailure(exception.capture());
         assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
         assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception.getValue()));
+    }
+
+    /**
+     * createConnector rethrows IllegalArgumentException deliberately - an unsupported or missing protocol is a bad
+     * request. Wrapping every exception from the read would turn that 400 into a 500.
+     */
+    public void testGetConnector_illegalArgumentStaysBadRequest() throws IOException {
+        GetResponse getResponse = prepareConnectorWithoutProtocol();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        ActionListener<Connector> listener = mock(ActionListener.class);
+
+        modelManager.getConnector("connectorId", null, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+    }
+
+    /** A stored connector document with no protocol, which makes createConnector raise IllegalArgumentException. */
+    private GetResponse prepareConnectorWithoutProtocol() {
+        BytesReference bytesReference = new BytesArray("{\"name\":\"no-protocol\"}");
+        GetResult getResult = new GetResult(CommonValue.ML_CONNECTOR_INDEX, "connectorId", 1L, 1L, 1L, true, bytesReference, null, null);
+        return new GetResponse(getResult);
     }
 
     public void testDeployModel_ModelAlreadyDeployed() {

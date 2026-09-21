@@ -355,6 +355,26 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             );
                         return;
                     }
+                    // The stored connector is already MCP, which means this model predates the checks that now
+                    // refuse to attach one. Patching it cannot produce a usable model - the document carries MCP
+                    // fields, so relabelling its protocol just moves the breakage - and supplying actions reads
+                    // getActions() on it below, which is unimplemented and escapes as a 500. Same invariant as the
+                    // connector API applies to a protocol crossing, stated from the other side.
+                    if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                        log.error("Rejected inline connector update for model {} backed by an MCP connector", modelId);
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Cannot update the inline connector of model "
+                                        + modelId
+                                        + ": it is an MCP connector [protocol "
+                                        + connector.getProtocol()
+                                        + "], which cannot back a model. Register the model against an inference connector instead.",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
+                        return;
+                    }
                     // A model's inline connector can have its protocol changed here, so apply the same
                     // supported-protocol and feature-flag checks the connector API applies, using the value
                     // the connector will have once the update is applied.

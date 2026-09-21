@@ -97,21 +97,23 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             .doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
             String finalConnectorAction = connectorAction;
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
-                // An MCP connector defines no actions, so the executor selected for its protocol cannot build a
-                // payload for one - the accessors are unimplemented and escape as a 500. MCP connectors are
-                // reached through the agent and MCP tool APIs, not through connector execute.
-                if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
-                    log.error("Rejected execute on MCP connector {}", connectorId);
-                    actionListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "Cannot execute an MCP connector: protocol [" + connector.getProtocol() + "] defines no executable action.",
-                                RestStatus.BAD_REQUEST
-                            )
-                        );
-                    return;
-                }
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
+                    // An MCP connector defines no actions, so the executor selected for its protocol cannot build a
+                    // payload for one - the accessors are unimplemented and escape as a 500. MCP connectors are
+                    // reached through the agent and MCP tool APIs, not through connector execute.
+                    if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                        log.error("Rejected execute on MCP connector {}", connectorId);
+                        actionListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Cannot execute an MCP connector: protocol ["
+                                        + connector.getProtocol()
+                                        + "] defines no executable action.",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
+                        return;
+                    }
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
                     ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
                         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader

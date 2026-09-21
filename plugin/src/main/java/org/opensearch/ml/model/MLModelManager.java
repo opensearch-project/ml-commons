@@ -1595,18 +1595,12 @@ public class MLModelManager {
             wrappedListener.onFailure(e);
         });
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
-            if (rejectMcpBackedRemoteModel(mlModel, wrappedListener)) {
-                return;
-            }
             setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
             return;
         }
         log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
         getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
             mlModel.setConnector(connector);
-            if (rejectMcpBackedRemoteModel(mlModel, wrappedListener)) {
-                return;
-            }
             setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
         }, wrappedListener::onFailure));
@@ -1649,6 +1643,11 @@ public class MLModelManager {
     }
 
     private void setupParamsAndPredictable(String modelId, MLModel mlModel, ActionListener<String> listener) {
+        // Guarded here rather than at the deploy entry points: every path that builds a predictor for a model -
+        // deploy, cache refresh, controller deploy/undeploy - comes through this method.
+        if (rejectMcpBackedRemoteModel(mlModel, listener)) {
+            return;
+        }
         Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
         ActionListener<Predictable> wrappedListener = ActionListener.wrap(r -> {
             modelCacheHelper.setPredictor(modelId, r);
@@ -2307,9 +2306,14 @@ public class MLModelManager {
                                     return;
                                 }
                                 listener.onResponse(connector);
+                            } catch (IllegalArgumentException e) {
+                                // createConnector rethrows these deliberately - an unsupported or missing protocol
+                                // is a bad request, and wrapping it would turn a 400 into a 500.
+                                log.error("Failed to parse connector:{}", connectorId, e);
+                                listener.onFailure(e);
                             } catch (Exception e) {
-                                // Wrapped so the caller gets a connector-shaped error instead of whatever the
-                                // parser happened to throw, which would surface as an unclassified 500.
+                                // Anything else is a document we cannot read; report that rather than whatever the
+                                // parser happened to throw, which reaches the caller as an unclassified 500.
                                 log.error("Failed to parse connector:{}", connectorId, e);
                                 listener
                                     .onFailure(

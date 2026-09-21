@@ -747,6 +747,37 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         verify(mlModelManager, never()).getModel(any(), any(), any(), any(), isA(ActionListener.class));
     }
 
+    /**
+     * A model whose inline connector is already MCP predates the checks that refuse to attach one. Patching it
+     * cannot help, and supplying actions reads getActions() on the MCP instance, which is unimplemented.
+     */
+    @Test
+    public void testUpdateRemoteModelWithExistingMcpInlineConnectorRejected() {
+        MLModel mcpBackedModel = prepareMLModel("REMOTE_INTERNAL");
+        mcpBackedModel
+            .setConnector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            );
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mcpBackedModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("it is an MCP connector"));
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
     private void assertNewStandAloneConnectorRejectedAsMcp(Connector newConnector) {
         MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
