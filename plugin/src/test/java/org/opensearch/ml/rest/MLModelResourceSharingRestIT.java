@@ -213,10 +213,9 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
         // A sharing record exists for the model and for neither of its chunks. Chunks share the model index but carry
         // no resource_type, so they resolve to no provider and are skipped by the index listener.
         //
-        // This asserts on the sharing index rather than through GET _plugins/_security/api/resource/list, because that
-        // API returns {"resources":[]} here even though the record and the document's all_shared_principals are both
-        // correct - tracked separately; it is a read-path problem in the security plugin, not something this suite can
-        // assert around.
+        // Asserted on the sharing index rather than through GET _plugins/_security/api/resource/list because absence is
+        // the point here: the list API reports what a caller can reach, so it cannot show that a chunk has no record of
+        // its own. Reading the index needs the super-admin certificate, which is why this is not a public-API check.
         assertTrue("the model must have a sharing record", hasSharingRecord(modelId));
         assertFalse("chunk 0 must not have a sharing record", hasSharingRecord(modelId + "_0"));
         assertFalse("chunk 1 must not have a sharing record", hasSharingRecord(modelId + "_1"));
