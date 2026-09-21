@@ -21,8 +21,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
- * Cross-request queue settings within batch_inference_config: whether to coalesce concurrent predict
- * requests to a model into shared calls, and how long to wait before flushing (flush_timeout_ms).
+ * Settings for the dynamic_batching block within batch_inference_config: whether to coalesce concurrent
+ * predict requests to a model into shared calls, and how long to wait before flushing (flush_timeout_ms).
  * Disabled by default. Enable only for a model whose callers send homogeneous requests (same input type
  * and parameters) and whose output is one tensor per input, since coalesced requests share one model
  * call and a failed call fails every caller whose items were in it.
@@ -104,7 +104,9 @@ public class BatchQueueConfig implements ToXContentObject, Writeable {
                         throw new IllegalArgumentException(
                             "Unsupported field ["
                                 + fieldName
-                                + "] in the batch_inference_config queue block. Supported fields are ["
+                                + "] in the batch_inference_config "
+                                + BatchInferenceConfig.DYNAMIC_BATCHING_FIELD
+                                + " block. Supported fields are ["
                                 + ENABLED_FIELD
                                 + ", "
                                 + FLUSH_TIMEOUT_MS_FIELD

@@ -74,7 +74,7 @@ public class BatchInferenceRouterTests {
         return BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(96)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
+            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
             .build();
     }
 
@@ -118,7 +118,7 @@ public class BatchInferenceRouterTests {
         BatchInferenceConfig config = BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(2)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
+            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
             .build();
         MLInput fiveDocs = MLInput
             .builder()

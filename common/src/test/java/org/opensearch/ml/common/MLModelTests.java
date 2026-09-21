@@ -129,7 +129,7 @@ public class MLModelTests {
         // break get/delete/deploy/predict for it. Unknown fields are only rejected on the register-model API path.
         String json = "{\"name\":\"m\",\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\","
             + "\"batch_inference_config\":{\"max_items_per_request\":8,\"some_future_field\":{\"a\":1},"
-            + "\"dynamic_batching\":{\"enabled\":true,\"some_future_queue_field\":7}}}";
+            + "\"dynamic_batching\":{\"enabled\":true,\"some_future_dynamic_batching_field\":7}}}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
@@ -138,7 +138,7 @@ public class MLModelTests {
         MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
 
         assertEquals(8, parsed.getBatchInferenceConfig().getMaxItemsPerRequest());
-        assertEquals(true, parsed.getBatchInferenceConfig().isQueueEnabled());
+        assertEquals(true, parsed.getBatchInferenceConfig().isDynamicBatchingEnabled());
     }
 
     @Test

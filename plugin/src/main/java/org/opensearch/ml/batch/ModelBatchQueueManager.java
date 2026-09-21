@@ -65,7 +65,7 @@ public class ModelBatchQueueManager {
     }
 
     public boolean shouldQueue(BatchInferenceConfig config) {
-        return config != null && config.isQueueEnabled();
+        return config != null && config.isDynamicBatchingEnabled();
     }
 
     /**

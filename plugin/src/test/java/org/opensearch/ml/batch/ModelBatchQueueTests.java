@@ -156,7 +156,7 @@ public class ModelBatchQueueTests {
             .builder()
             .maxItemsPerRequest(maxItems)
             .maxBytesPerRequest(maxBytes)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
+            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
             .build();
     }
 

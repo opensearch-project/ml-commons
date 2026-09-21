@@ -67,7 +67,7 @@ public class ModelBatchQueue {
     ) {
         this.modelId = modelId;
         this.config = config;
-        this.flushTimeoutMs = config.getQueue().getFlushTimeoutMs();
+        this.flushTimeoutMs = config.getDynamicBatching().getFlushTimeoutMs();
         this.registry = registry;
         this.splitter = splitter;
         this.threadPool = threadPool;

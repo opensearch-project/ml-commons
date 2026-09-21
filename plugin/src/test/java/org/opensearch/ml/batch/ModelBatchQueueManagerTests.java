@@ -121,7 +121,7 @@ public class ModelBatchQueueManagerTests {
         return BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(maxItems)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
+            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
             .build();
     }
 
