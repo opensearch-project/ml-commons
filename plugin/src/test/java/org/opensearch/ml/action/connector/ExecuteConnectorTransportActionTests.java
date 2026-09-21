@@ -18,6 +18,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
@@ -26,6 +27,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -178,9 +180,16 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
 
         action.doExecute(task, request, actionListener);
 
-        // When access is denied, no action should be taken on the listener
+        // Denial has to be reported. This previously asserted that neither callback fired, which is what left the
+        // request hanging until the client timed out.
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
         verify(actionListener, times(0)).onResponse(any());
-        verify(actionListener, times(0)).onFailure(any());
+        assertEquals(
+            "You don't have permission to execute this connector, connector id: test_connector_id",
+            captor.getValue().getMessage()
+        );
+        assertEquals(RestStatus.FORBIDDEN, ExceptionsHelper.status(captor.getValue()));
     }
 
     public void testExecute_WithCustomConnectorAction() {
