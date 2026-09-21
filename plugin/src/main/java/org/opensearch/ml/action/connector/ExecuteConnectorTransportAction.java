@@ -8,6 +8,7 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.CONNECTOR_ACTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -16,6 +17,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -121,6 +123,17 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                         actionListener.onFailure(e);
                     });
                     connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
+                } else {
+                    // Without this the listener is never completed on denial, so the request hangs until the client
+                    // gives up instead of reporting that access was refused.
+                    log.error("You don't have permission to execute this connector, connector id: {}", connectorId);
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "You don't have permission to execute this connector, connector id: " + connectorId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
                 }
             }, e -> {
                 log.error("Failed to get connector " + connectorId, e);
