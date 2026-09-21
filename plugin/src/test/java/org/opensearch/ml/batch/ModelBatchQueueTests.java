@@ -38,7 +38,7 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
-import org.opensearch.ml.common.model.BatchQueueConfig;
+import org.opensearch.ml.common.model.DynamicBatchingConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -156,7 +156,7 @@ public class ModelBatchQueueTests {
             .builder()
             .maxItemsPerRequest(maxItems)
             .maxBytesPerRequest(maxBytes)
-            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
             .build();
     }
 

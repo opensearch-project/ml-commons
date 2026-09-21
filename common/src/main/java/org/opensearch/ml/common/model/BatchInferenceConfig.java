@@ -36,10 +36,10 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
 
     private final int maxItemsPerRequest;
     private final long maxBytesPerRequest;
-    private final BatchQueueConfig dynamicBatching;
+    private final DynamicBatchingConfig dynamicBatching;
 
     @Builder(toBuilder = true)
-    public BatchInferenceConfig(Integer maxItemsPerRequest, Long maxBytesPerRequest, BatchQueueConfig dynamicBatching) {
+    public BatchInferenceConfig(Integer maxItemsPerRequest, Long maxBytesPerRequest, DynamicBatchingConfig dynamicBatching) {
         this.maxItemsPerRequest = maxItemsPerRequest == null ? NO_LIMIT : maxItemsPerRequest;
         this.maxBytesPerRequest = maxBytesPerRequest == null ? NO_LIMIT : maxBytesPerRequest;
         this.dynamicBatching = dynamicBatching;
@@ -49,7 +49,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
     public BatchInferenceConfig(StreamInput in) throws IOException {
         this.maxItemsPerRequest = in.readInt();
         this.maxBytesPerRequest = in.readLong();
-        this.dynamicBatching = in.readBoolean() ? new BatchQueueConfig(in) : null;
+        this.dynamicBatching = in.readBoolean() ? new DynamicBatchingConfig(in) : null;
     }
 
     private void validate() {
@@ -124,7 +124,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
     public static BatchInferenceConfig parse(XContentParser parser, boolean rejectUnknownFields) throws IOException {
         Integer maxItemsPerRequest = null;
         Long maxBytesPerRequest = null;
-        BatchQueueConfig dynamicBatching = null;
+        DynamicBatchingConfig dynamicBatching = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -139,7 +139,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
                     maxBytesPerRequest = parser.longValue();
                     break;
                 case DYNAMIC_BATCHING_FIELD:
-                    dynamicBatching = BatchQueueConfig.parse(parser, rejectUnknownFields);
+                    dynamicBatching = DynamicBatchingConfig.parse(parser, rejectUnknownFields);
                     break;
                 default:
                     if (rejectUnknownFields) {

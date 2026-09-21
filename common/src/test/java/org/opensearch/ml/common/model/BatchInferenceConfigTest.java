@@ -169,7 +169,7 @@ public class BatchInferenceConfigTest {
         BatchInferenceConfig config = BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(96)
-            .dynamicBatching(BatchQueueConfig.builder().enabled(false).flushTimeoutMs(10L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(false).flushTimeoutMs(10L).build())
             .build();
         assertFalse(config.isDynamicBatchingEnabled());
     }
@@ -179,7 +179,7 @@ public class BatchInferenceConfigTest {
         BatchInferenceConfig original = BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(96)
-            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(10L).build())
             .build();
         BytesStreamOutput out = new BytesStreamOutput();
         original.writeTo(out);
@@ -203,7 +203,7 @@ public class BatchInferenceConfigTest {
             .builder()
             .maxItemsPerRequest(96)
             .maxBytesPerRequest(4096L)
-            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(25L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(25L).build())
             .build();
         XContentBuilder builder = XContentType.JSON.contentBuilder();
         original.toXContent(builder, ToXContent.EMPTY_PARAMS);

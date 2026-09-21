@@ -31,7 +31,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
-import org.opensearch.ml.common.model.BatchQueueConfig;
+import org.opensearch.ml.common.model.DynamicBatchingConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -121,7 +121,7 @@ public class ModelBatchQueueManagerTests {
         return BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(maxItems)
-            .dynamicBatching(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
             .build();
     }
 
