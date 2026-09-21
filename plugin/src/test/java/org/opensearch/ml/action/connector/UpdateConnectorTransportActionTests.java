@@ -26,6 +26,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.DocWriteResponse.Result;
@@ -56,6 +57,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
@@ -634,6 +636,63 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         when(updateRequest.getUpdateContent())
             .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build());
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubSearchReturnsNoModels();
+        stubUpdateSucceeds();
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+    }
+
+    /**
+     * Switching an existing connector across the MCP boundary rewrites which class its stored document parses
+     * back into: an MCP document carries no actions, an inference one does. The document keeps the fields of the
+     * old family, so the connector - and any model referencing it - is read back as a shape whose accessors are
+     * missing or unimplemented. The "models are still using this connector" guard does not catch it, because it
+     * only considers deployed models.
+     */
+    @Test
+    public void testUpdateConnectorRejectsSwitchToMcpProtocol() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_SSE).build());
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(
+            "Cannot change connector protocol from [http] to [mcp_sse]: an MCP connector and an inference connector are not interchangeable.",
+            captor.getValue().getMessage()
+        );
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
+    /** Switching between the two MCP protocols keeps the same document shape, so it stays allowed. */
+    @Test
+    public void testUpdateConnectorAllowsSwitchBetweenMcpProtocols() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP).build());
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        // The stored connector is already MCP, so this update stays on the same side of the boundary.
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener
+                .onResponse(
+                    McpConnector
+                        .builder()
+                        .name("mcp")
+                        .protocol(ConnectorProtocols.MCP_SSE)
+                        .url("https://api.openai.com/mcp")
+                        .credential(Map.of("api_key", "credential_value"))
+                        .build()
+                );
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
         stubSearchReturnsNoModels();
         stubUpdateSucceeds();
 

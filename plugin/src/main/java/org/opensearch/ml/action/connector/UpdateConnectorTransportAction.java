@@ -138,6 +138,24 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 if (updatedProtocol != null) {
                                     ConnectorProtocols.validateProtocol(updatedProtocol);
                                     ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                                    // Crossing the MCP boundary changes which class the stored document parses back
+                                    // into - an MCP connector carries no actions, an inference one does - while the
+                                    // document keeps the fields of the old family. The connector, and any model
+                                    // referencing it, is then read back as a shape whose accessors are missing or
+                                    // unimplemented. The "models are still using this connector" check below does not
+                                    // cover this: it only looks at deployed models, so a connector referenced solely
+                                    // by a registered-but-undeployed model passes it.
+                                    if (ConnectorProtocols.isMcpProtocol(updatedProtocol) != ConnectorProtocols
+                                        .isMcpProtocol(connector.getProtocol())) {
+                                        throw new OpenSearchStatusException(
+                                            "Cannot change connector protocol from ["
+                                                + connector.getProtocol()
+                                                + "] to ["
+                                                + updatedProtocol
+                                                + "]: an MCP connector and an inference connector are not interchangeable.",
+                                            RestStatus.BAD_REQUEST
+                                        );
+                                    }
                                 }
                                 ConnectorProtocolValidator
                                     .validateMutualTlsSupportedAfterUpdate(

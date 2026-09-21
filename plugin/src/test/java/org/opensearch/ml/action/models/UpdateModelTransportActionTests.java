@@ -694,6 +694,28 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
     }
 
+    /** An unparseable incoming connector reads back as null; report it instead of dereferencing it. */
+    @Test
+    public void testUpdateRemoteModelWithUnreadableNewConnectorReported() {
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(null);
+            return null;
+        }).when(mlModelManager).getConnector(eq("updated_test_connector_id"), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to read connector: updated_test_connector_id", argumentCaptor.getValue().getMessage());
+    }
+
     private void assertNewStandAloneConnectorRejectedAsMcp(Connector newConnector) {
         MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {

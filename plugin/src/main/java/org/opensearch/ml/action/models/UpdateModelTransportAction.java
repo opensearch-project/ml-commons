@@ -462,6 +462,17 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             // against an http connector and then re-pointed at an MCP one, which only surfaces as
                             // an UnsupportedOperationException at deploy or predict time.
                             mlModelManager.getConnector(newConnectorId, tenantId, ActionListener.wrap(newConnector -> {
+                                // createConnector returns null when the stored document cannot be parsed.
+                                if (newConnector == null) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Failed to read connector: " + newConnectorId,
+                                                RestStatus.INTERNAL_SERVER_ERROR
+                                            )
+                                        );
+                                    return;
+                                }
                                 if (ConnectorProtocols.isMcpProtocol(newConnector.getProtocol())) {
                                     log.error("Rejected update of model {} onto MCP connector {}", modelId, newConnectorId);
                                     wrappedListener

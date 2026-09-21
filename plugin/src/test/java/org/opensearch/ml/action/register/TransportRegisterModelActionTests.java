@@ -959,6 +959,24 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(argumentCaptor.getValue()));
     }
 
+    /** An unparseable stored connector reads back as null; say so rather than dereferencing it. */
+    @Test
+    public void test_execute_registerRemoteModel_withConnectorId_unreadableConnectorReported() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getModelInterface()).thenReturn(null);
+        stubConnectorLookup(null);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to read connector: mockConnectorId", argumentCaptor.getValue().getMessage());
+    }
+
     private void assertConnectorIdRejectedAsMcp(Connector storedConnector) {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);

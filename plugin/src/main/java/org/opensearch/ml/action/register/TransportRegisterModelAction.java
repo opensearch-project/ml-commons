@@ -296,6 +296,18 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                         registerModelInput.getConnectorId(),
                                         registerModelInput.getTenantId(),
                                         ActionListener.wrap(connector -> {
+                                            // createConnector returns null when the stored document cannot be
+                                            // parsed, so say that plainly instead of dereferencing it below.
+                                            if (connector == null) {
+                                                listener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            "Failed to read connector: " + registerModelInput.getConnectorId(),
+                                                            RestStatus.INTERNAL_SERVER_ERROR
+                                                        )
+                                                    );
+                                                return;
+                                            }
                                             // Checked by protocol rather than by type: mcp_streamable_http is a
                                             // sibling of McpConnector, not a subclass, and an instanceof check
                                             // lets it through to a preset model interface lookup that reads its
