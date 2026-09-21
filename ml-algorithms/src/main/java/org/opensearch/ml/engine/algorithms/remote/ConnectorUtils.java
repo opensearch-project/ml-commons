@@ -179,6 +179,12 @@ public class ConnectorUtils {
         return mlInput;
     }
 
+    // Parameters that every built-in request template interpolates inside a JSON string, so a value that
+    // happens to be a JSON object or array must still be escaped rather than spliced in raw - otherwise it
+    // ends the string early and either breaks the payload or injects structure into it. A caller that
+    // deliberately interpolates one of these in a raw JSON position can still opt out via no_escape_params.
+    private static final Set<String> ALWAYS_ESCAPE_PARAMS = Set.of("system_prompt");
+
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
         if (inputData.getParameters() == null) {
             return;
@@ -196,13 +202,16 @@ public class ConnectorUtils {
             inputData.getParameters().forEach((key, value) -> {
                 if (value == null) {
                     newParameters.put(key, null);
+                } else if (noEscapParamSet.contains(key)) {
+                    // the caller opted this parameter out of escaping
+                    newParameters.put(key, value);
+                } else if (ALWAYS_ESCAPE_PARAMS.contains(key)) {
+                    newParameters.put(key, escapeJson(value));
                 } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
                     // no need to escape if it's already valid json
                     newParameters.put(key, value);
-                } else if (!noEscapParamSet.contains(key)) {
-                    newParameters.put(key, escapeJson(value));
                 } else {
-                    newParameters.put(key, value);
+                    newParameters.put(key, escapeJson(value));
                 }
             });
             inputData.setParameters(newParameters);
