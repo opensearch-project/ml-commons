@@ -1628,6 +1628,10 @@ public class MLModelManager {
                 mlModel.getModelId(),
                 mlModel.getConnector().getProtocol()
             );
+        // deployModel has already put this model into DEPLOYING in the node-local cache. Leaving it there makes
+        // isModelRunningOnNode true, so the next deploy attempt is refused as a duplicate task and the operator
+        // never sees this message again. Same cleanup the model-content-hash rejection does.
+        removeModel(mlModel.getModelId());
         listener
             .onFailure(
                 new OpenSearchStatusException(

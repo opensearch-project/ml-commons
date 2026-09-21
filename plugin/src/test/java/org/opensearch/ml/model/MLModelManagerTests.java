@@ -1238,6 +1238,54 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(listener).onFailure(exception.capture());
         assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
         assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception.getValue()));
+        // Without this the model stays DEPLOYING in the node cache and the next deploy is refused as a duplicate.
+        verify(modelCacheHelper).removeModel(modelId);
+    }
+
+    /** Same rejection when the connector is fetched by id rather than carried inline on the model. */
+    public void testDeployModel_McpBackedRemoteModelRejected_connectorFetchedById() {
+        MLModel mcpBackedModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connectorId("mcpConnectorId")
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mcpBackedModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Connector> connectorListener = invocation.getArgument(2);
+            connectorListener
+                .onResponse(
+                    McpConnector
+                        .builder()
+                        .name("mcp")
+                        .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+                        .url("https://api.openai.com/mcp")
+                        .credential(Map.of("key", "value"))
+                        .build()
+                );
+            return null;
+        }).when(modelManager).getConnector(eq("mcpConnectorId"), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
+        verify(modelCacheHelper).removeModel(modelId);
     }
 
     /**
