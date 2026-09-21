@@ -103,6 +103,27 @@ public class ModelAccessControlHelper {
      * <p>
      * Creating a model is not covered here: there is no model to authorize against yet, so registration authorizes
      * write access on the destination group instead.
+     * <p>
+     * <b>When model-group-derived access is removed in 4.0</b>, this method collapses. {@code modelGroupId} and
+     * {@code client} exist only to fetch and evaluate the group document, so both go, along with
+     * {@code mlFeatureEnabledSetting}, {@code tenantId} and {@code sdkClient} on the overload below - which exists
+     * solely because the group lookup needs them. The two overloads become one
+     * {@code validateModelAccess(user, modelId, action, listener)}. Three things have to be decided rather than
+     * inherited when that happens:
+     * <ul>
+     *   <li>the else-branch has to say directly that no security plugin or an unprotected type means no per-resource
+     *       authorization. Today that outcome comes from {@code validateModelGroupAccess} returning true when
+     *       {@code isSecurityEnabledAndModelAccessControlEnabled} is false, and that method will be gone.</li>
+     *   <li>the overload's multi-tenancy short-circuit returns true outright on the assumption that tenancy is the
+     *       access control. That is a group-path assumption; whether tenant isolation supersedes per-model sharing or
+     *       composes with it needs an explicit answer before the branch is kept or dropped.</li>
+     *   <li>dropping the {@code ml-model-group} registration removes {@code parentType} from the model provider, and
+     *       with it the inheritance that lets a group-level share grant model access. Group shares must be
+     *       materialized onto models first, or access silently narrows at upgrade - the same dependency as the
+     *       migration work in opensearch-project/security issues 6525 and 6526.</li>
+     * </ul>
+     * GA on its own changes nothing here: resource sharing stays opt-in per cluster, and the security plugin can be
+     * absent, so the branch itself is still needed.
      */
     public void validateModelAccess(
         User user,
@@ -119,7 +140,11 @@ public class ModelAccessControlHelper {
         validateModelGroupAccess(user, modelGroupId, action, client, listener);
     }
 
-    /** SdkClient-aware variant of {@link #validateModelAccess(User, String, String, String, Client, ActionListener)}. */
+    /**
+     * SdkClient-aware variant of {@link #validateModelAccess(User, String, String, String, Client, ActionListener)}.
+     * Its extra parameters serve the model-group fallback only; see that method for what happens to this overload when
+     * model-group-derived access is removed in 4.0.
+     */
     public void validateModelAccess(
         User user,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
