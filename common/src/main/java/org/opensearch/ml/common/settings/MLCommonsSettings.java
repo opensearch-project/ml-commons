@@ -22,7 +22,6 @@ import java.util.regex.PatternSyntaxException;
 
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
 
@@ -157,9 +156,9 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final Setting<Double> ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION = Setting
+    public static final Setting<Double> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE = Setting
         .doubleSetting(
-            ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_fraction",
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.size",
             0.01,
             0.0,
             0.1,
@@ -167,39 +166,28 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    // The floor and the ceiling clamp the fraction of heap the batch queue may retain, so both are bounded below
+    // The floor and the ceiling clamp the fraction of heap the dynamic batching queue may retain, so both are bounded below
     // by 1 byte: a zero or negative bound would clamp the budget to nothing and reject every queued predict
     // request for the life of the node, reported as a 429 that no amount of backoff could clear.
-    private static final ByteSizeValue MIN_BATCH_QUEUE_MEMORY_BOUND = new ByteSizeValue(1L, ByteSizeUnit.BYTES);
-    private static final ByteSizeValue MAX_BATCH_QUEUE_MEMORY_BOUND = new ByteSizeValue(Long.MAX_VALUE, ByteSizeUnit.BYTES);
+    private static final ByteSizeValue MIN_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(1L, ByteSizeUnit.BYTES);
+    private static final ByteSizeValue MAX_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(Long.MAX_VALUE, ByteSizeUnit.BYTES);
 
-    public static final Setting<ByteSizeValue> ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR = Setting
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN = Setting
         .byteSizeSetting(
-            ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_floor",
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.size.min",
             new ByteSizeValue(64L, ByteSizeUnit.MB),
-            MIN_BATCH_QUEUE_MEMORY_BOUND,
-            MAX_BATCH_QUEUE_MEMORY_BOUND,
+            MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
+            MAX_DYNAMIC_BATCHING_MEMORY_BOUND,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
 
-    public static final Setting<ByteSizeValue> ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING = Setting
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX = Setting
         .byteSizeSetting(
-            ML_PLUGIN_SETTING_PREFIX + "batch_queue.memory_ceiling",
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.size.max",
             new ByteSizeValue(512L, ByteSizeUnit.MB),
-            MIN_BATCH_QUEUE_MEMORY_BOUND,
-            MAX_BATCH_QUEUE_MEMORY_BOUND,
-            Setting.Property.NodeScope,
-            Setting.Property.Dynamic
-        );
-
-    // Lower bound of one second rather than positiveTimeSetting's zero: a zero TTL makes every sweep evict every
-    // queue, so a queue would never survive long enough to coalesce anything.
-    public static final Setting<TimeValue> ML_COMMONS_BATCH_QUEUE_IDLE_TTL = Setting
-        .timeSetting(
-            ML_PLUGIN_SETTING_PREFIX + "batch_queue.idle_ttl",
-            TimeValue.timeValueMinutes(5),
-            TimeValue.timeValueSeconds(1),
+            MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
+            MAX_DYNAMIC_BATCHING_MEMORY_BOUND,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

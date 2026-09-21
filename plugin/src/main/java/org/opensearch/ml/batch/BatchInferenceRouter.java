@@ -5,13 +5,11 @@
 
 package org.opensearch.ml.batch;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN;
 
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -37,26 +35,24 @@ public class BatchInferenceRouter {
     private volatile double memoryFraction;
     private volatile long memoryFloorBytes;
     private volatile long memoryCeilingBytes;
-    private volatile long idleTtlNanos;
 
     public BatchInferenceRouter(ThreadPool threadPool, ClusterService clusterService, Settings settings) {
         BatchableInputRegistry registry = new BatchableInputRegistry();
         BatchSplitter splitter = new BatchSplitter();
         this.executor = new BatchInferenceExecutor(registry, splitter);
 
-        ByteSizeValue floor = ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.get(settings);
-        ByteSizeValue ceiling = ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.get(settings);
+        ByteSizeValue floor = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.get(settings);
+        ByteSizeValue ceiling = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.get(settings);
         validateMemoryBounds(floor, ceiling);
 
-        this.memoryFraction = ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.get(settings);
+        this.memoryFraction = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.get(settings);
         this.memoryFloorBytes = floor.getBytes();
         this.memoryCeilingBytes = ceiling.getBytes();
-        this.idleTtlNanos = ML_COMMONS_BATCH_QUEUE_IDLE_TTL.get(settings).nanos();
 
         QueueMemoryBudget budget = new QueueMemoryBudget(clampBudget(memoryFraction, memoryFloorBytes, memoryCeilingBytes));
 
         ClusterSettings clusterSettings = clusterService.getClusterSettings();
-        clusterSettings.addSettingsUpdateConsumer(ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION, value -> {
+        clusterSettings.addSettingsUpdateConsumer(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE, value -> {
             memoryFraction = value;
             budget.setMaxBytes(clampBudget(memoryFraction, memoryFloorBytes, memoryCeilingBytes));
         });
@@ -64,8 +60,8 @@ public class BatchInferenceRouter {
         // validation time instead of silently clamping the budget to an unusable value.
         clusterSettings
             .addSettingsUpdateConsumer(
-                ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR,
-                ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING,
+                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN,
+                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX,
                 (newFloor, newCeiling) -> {
                     memoryFloorBytes = newFloor.getBytes();
                     memoryCeilingBytes = newCeiling.getBytes();
@@ -73,17 +69,8 @@ public class BatchInferenceRouter {
                 },
                 BatchInferenceRouter::validateMemoryBounds
             );
-        clusterSettings.addSettingsUpdateConsumer(ML_COMMONS_BATCH_QUEUE_IDLE_TTL, value -> idleTtlNanos = value.nanos());
 
-        this.queueManager = new ModelBatchQueueManager(registry, splitter, threadPool, budget, () -> idleTtlNanos);
-
-        // Cancel the manager's idle-eviction sweep on node shutdown so the recurring task does not outlive the node.
-        clusterService.addLifecycleListener(new LifecycleListener() {
-            @Override
-            public void beforeStop() {
-                queueManager.close();
-            }
-        });
+        this.queueManager = new ModelBatchQueueManager(registry, splitter, threadPool, budget);
     }
 
     BatchInferenceRouter(BatchInferenceExecutor executor, ModelBatchQueueManager queueManager) {
@@ -120,11 +107,11 @@ public class BatchInferenceRouter {
     static void validateMemoryBounds(ByteSizeValue floorBytes, ByteSizeValue ceilingBytes) {
         if (ceilingBytes.getBytes() < floorBytes.getBytes()) {
             throw new IllegalArgumentException(
-                ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey()
+                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey()
                     + " ["
                     + ceilingBytes
                     + "] must be at least "
-                    + ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey()
+                    + ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey()
                     + " ["
                     + floorBytes
                     + "]"

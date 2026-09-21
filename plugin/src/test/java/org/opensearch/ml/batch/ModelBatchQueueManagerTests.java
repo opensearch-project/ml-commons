@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -62,18 +63,7 @@ public class ModelBatchQueueManagerTests {
             new BatchableInputRegistry(),
             new BatchSplitter(),
             threadPool,
-            new QueueMemoryBudget(Long.MAX_VALUE),
-            () -> Long.MAX_VALUE
-        );
-    }
-
-    private ModelBatchQueueManager managerWithIdleTtlNanos(long ttlNanos) {
-        return new ModelBatchQueueManager(
-            new BatchableInputRegistry(),
-            new BatchSplitter(),
-            threadPool,
-            new QueueMemoryBudget(Long.MAX_VALUE),
-            () -> ttlNanos
+            new QueueMemoryBudget(Long.MAX_VALUE)
         );
     }
 
@@ -187,21 +177,15 @@ public class ModelBatchQueueManagerTests {
     }
 
     @Test
-    public void idleSweepEvictsDrainedQueuesButKeepsBusyOnes() {
-        ModelBatchQueueManager m = managerWithIdleTtlNanos(0L);
+    public void emptyQueueIsRemovedAfterFlushButKeptWhilePending() {
         Predictable predictor = model(new AtomicInteger());
 
-        m.enqueue("model-1", queued(100, 10_000L), textInput("a"), predictor, null, ActionListener.wrap(r -> {}, e -> {}));
-        assertEquals(1, m.queueCount());
+        manager.enqueue("model-1", queued(100, 10_000L), textInput("a"), predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        assertEquals("a queue with a pending entry is retained", 1, manager.queueCount());
 
-        m.evictIdleQueues();
-        assertEquals("a queue with a pending entry is not evicted", 1, m.queueCount());
-
+        // The timer flush drains the only entry, leaving the queue empty; it is removed rather than kept around.
         scheduledFlush.get().run();
-        assertEquals("flushing does not by itself remove the queue", 1, m.queueCount());
-
-        m.evictIdleQueues();
-        assertEquals("an idle queue past its TTL is evicted", 0, m.queueCount());
+        assertEquals("a queue is removed as soon as a flush drains it empty", 0, manager.queueCount());
     }
 
     @Test
@@ -229,8 +213,7 @@ public class ModelBatchQueueManagerTests {
             new BatchableInputRegistry(),
             new BatchSplitter(),
             threadPool,
-            new QueueMemoryBudget(10L),
-            () -> Long.MAX_VALUE
+            new QueueMemoryBudget(10L)
         );
         AtomicInteger calls = new AtomicInteger();
         AtomicReference<Exception> error = new AtomicReference<>();
@@ -250,10 +233,43 @@ public class ModelBatchQueueManagerTests {
         assertNull("the listener is left untouched for the caller", error.get());
         assertNull(response.get());
         assertEquals(0, calls.get());
+        assertEquals("a too-large request must not leave an empty queue behind", 0, tightManager.queueCount());
     }
 
     @Test
-    public void idleEvictionCannotRemoveQueueDuringAdmission() throws Exception {
+    public void rejectedRequestDoesNotLeaveAnEmptyQueue() {
+        // Budget exhausted: request fits capacity but cannot be reserved, so it is REJECTED.
+        QueueMemoryBudget exhaustedBudget = new QueueMemoryBudget(Long.MAX_VALUE) {
+            @Override
+            boolean tryReserve(long bytes) {
+                return false;
+            }
+        };
+        ModelBatchQueueManager m = new ModelBatchQueueManager(
+            new BatchableInputRegistry(),
+            new BatchSplitter(),
+            threadPool,
+            exhaustedBudget
+        );
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        boolean handled = m
+            .enqueue(
+                "model-1",
+                queued(100, 10_000L),
+                textInput("a"),
+                model(new AtomicInteger()),
+                null,
+                ActionListener.wrap(r -> {}, error::set)
+            );
+
+        assertTrue("a rejected request is settled here, not handed back to the caller", handled);
+        assertTrue(error.get() instanceof OpenSearchRejectedExecutionException);
+        assertEquals("a rejected request must not leave an empty queue behind", 0, m.queueCount());
+    }
+
+    @Test
+    public void idleRemovalCannotRemoveQueueDuringAdmission() throws Exception {
         CountDownLatch reserveEntered = new CountDownLatch(1);
         CountDownLatch allowReserve = new CountDownLatch(1);
         AtomicBoolean blockReservations = new AtomicBoolean(false);
@@ -279,13 +295,10 @@ public class ModelBatchQueueManagerTests {
             new BatchableInputRegistry(),
             new BatchSplitter(),
             threadPool,
-            blockingBudget,
-            () -> 0L
+            blockingBudget
         );
         BatchInferenceConfig config = queued(100, 10_000L);
         m.enqueue("model-1", config, textInput("seed"), model(new AtomicInteger()), null, ActionListener.wrap(r -> {}, e -> {}));
-        scheduledFlush.get().run();
-        assertEquals("the existing queue is idle but still present before the sweep", 1, m.queueCount());
 
         blockReservations.set(true);
         AtomicReference<MLTaskResponse> response = new AtomicReference<>();
@@ -311,7 +324,7 @@ public class ModelBatchQueueManagerTests {
         Thread evictionThread = new Thread(() -> {
             evictionStarted.countDown();
             try {
-                m.evictIdleQueues();
+                m.removeIfIdleForTest("model-1");
             } catch (Throwable t) {
                 threadFailure.set(t);
             } finally {
@@ -323,7 +336,7 @@ public class ModelBatchQueueManagerTests {
         assertTrue(reserveEntered.await(5, TimeUnit.SECONDS));
         evictionThread.start();
         assertTrue(evictionStarted.await(5, TimeUnit.SECONDS));
-        assertFalse("eviction must serialize with admission for the same model", evictionDone.await(100, TimeUnit.MILLISECONDS));
+        assertFalse("removal must serialize with admission for the same model", evictionDone.await(100, TimeUnit.MILLISECONDS));
 
         allowReserve.countDown();
         enqueueThread.join(5_000L);
