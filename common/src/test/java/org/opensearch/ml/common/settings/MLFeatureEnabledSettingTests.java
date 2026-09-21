@@ -53,6 +53,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
