@@ -229,7 +229,7 @@ public class BatchInferenceConfigTest {
 
     @Test
     public void rejectsUnknownFieldInsideQueueBlockOnTheApiInputPath() throws IOException {
-        XContentParser parser = jsonParser("{\"max_items_per_request\":2,\"queue\":{\"enabled\":true,\"flushTimeoutMs\":100}}");
+        XContentParser parser = jsonParser("{\"max_items_per_request\":2,\"dynamic_batching\":{\"enabled\":true,\"flushTimeoutMs\":100}}");
 
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Unsupported field [flushTimeoutMs]");
@@ -240,7 +240,11 @@ public class BatchInferenceConfigTest {
     public void skipsUnknownFieldWhenReadingAStoredModel() throws IOException {
         // Lenient by default so a field added by a newer version cannot make a stored model unreadable here.
         BatchInferenceConfig parsed = BatchInferenceConfig
-            .parse(jsonParser("{\"max_items_per_request\":2,\"some_future_field\":{\"a\":1},\"queue\":{\"enabled\":true,\"future\":7}}"));
+            .parse(
+                jsonParser(
+                    "{\"max_items_per_request\":2,\"some_future_field\":{\"a\":1},\"dynamic_batching\":{\"enabled\":true,\"future\":7}}"
+                )
+            );
 
         assertEquals(2, parsed.getMaxItemsPerRequest());
         assertTrue(parsed.isQueueEnabled());

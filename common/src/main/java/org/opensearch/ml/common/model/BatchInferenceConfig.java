@@ -30,7 +30,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
 
     public static final String MAX_ITEMS_PER_REQUEST_FIELD = "max_items_per_request";
     public static final String MAX_BYTES_PER_REQUEST_FIELD = "max_bytes_per_request";
-    public static final String QUEUE_FIELD = "queue";
+    public static final String DYNAMIC_BATCHING_FIELD = "dynamic_batching";
 
     public static final int NO_LIMIT = -1;
 
@@ -105,7 +105,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
         builder.field(MAX_ITEMS_PER_REQUEST_FIELD, maxItemsPerRequest);
         builder.field(MAX_BYTES_PER_REQUEST_FIELD, maxBytesPerRequest);
         if (queue != null) {
-            builder.field(QUEUE_FIELD, queue);
+            builder.field(DYNAMIC_BATCHING_FIELD, queue);
         }
         builder.endObject();
         return builder;
@@ -138,7 +138,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
                 case MAX_BYTES_PER_REQUEST_FIELD:
                     maxBytesPerRequest = parser.longValue();
                     break;
-                case QUEUE_FIELD:
+                case DYNAMIC_BATCHING_FIELD:
                     queue = BatchQueueConfig.parse(parser, rejectUnknownFields);
                     break;
                 default:
@@ -151,7 +151,7 @@ public class BatchInferenceConfig implements ToXContentObject, Writeable {
                                 + ", "
                                 + MAX_BYTES_PER_REQUEST_FIELD
                                 + ", "
-                                + QUEUE_FIELD
+                                + DYNAMIC_BATCHING_FIELD
                                 + "]."
                         );
                     }
