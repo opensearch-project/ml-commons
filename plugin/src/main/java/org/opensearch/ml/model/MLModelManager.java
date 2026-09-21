@@ -125,6 +125,7 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLException;
@@ -1594,15 +1595,57 @@ public class MLModelManager {
             wrappedListener.onFailure(e);
         });
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
+            if (rejectMcpBackedRemoteModel(mlModel, wrappedListener)) {
+                return;
+            }
             setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
             return;
         }
         log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
         getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
             mlModel.setConnector(connector);
+            if (rejectMcpBackedRemoteModel(mlModel, wrappedListener)) {
+                return;
+            }
             setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
         }, wrappedListener::onFailure));
+    }
+
+    /**
+     * A remote model cannot predict through an MCP connector: the connector defines no actions, so the executor
+     * chosen for its protocol has nothing to invoke and every accessor it needs throws. Registration and update
+     * now refuse to attach one, but documents written before those checks existed are still out there, and
+     * deploying them used to succeed and then fail as an unclassified 500 on the first predict. Failing the deploy
+     * instead reports the problem once, at the point the operator can act on it.
+     *
+     * @return true if the model was rejected and the listener has been failed
+     */
+    private boolean rejectMcpBackedRemoteModel(MLModel mlModel, ActionListener<String> listener) {
+        if (FunctionName.REMOTE != mlModel.getAlgorithm() || mlModel.getConnector() == null) {
+            return false;
+        }
+        if (!ConnectorProtocols.isMcpProtocol(mlModel.getConnector().getProtocol())) {
+            return false;
+        }
+        log
+            .error(
+                "Model {} is backed by an MCP connector with protocol {}, which cannot serve predict requests",
+                mlModel.getModelId(),
+                mlModel.getConnector().getProtocol()
+            );
+        listener
+            .onFailure(
+                new OpenSearchStatusException(
+                    "Model "
+                        + mlModel.getModelId()
+                        + " is backed by an MCP connector [protocol "
+                        + mlModel.getConnector().getProtocol()
+                        + "], which defines no predict action. Point the model at an inference connector instead.",
+                    RestStatus.BAD_REQUEST
+                )
+            );
+        return true;
     }
 
     private void setupParamsAndPredictable(String modelId, MLModel mlModel, ActionListener<String> listener) {
@@ -2250,10 +2293,31 @@ public class MLModelManager {
                             ) {
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector connector = Connector.createConnector(parser);
+                                if (connector == null) {
+                                    // createConnector swallows a parse failure and returns null; callers
+                                    // dereference the result, so report it rather than handing over a null.
+                                    log.error("Failed to read connector {}: the stored document could not be parsed", connectorId);
+                                    listener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Failed to read connector: " + connectorId,
+                                                RestStatus.INTERNAL_SERVER_ERROR
+                                            )
+                                        );
+                                    return;
+                                }
                                 listener.onResponse(connector);
                             } catch (Exception e) {
-                                log.error("Failed to parse connector:{}", connectorId);
-                                listener.onFailure(e);
+                                // Wrapped so the caller gets a connector-shaped error instead of whatever the
+                                // parser happened to throw, which would surface as an unclassified 500.
+                                log.error("Failed to parse connector:{}", connectorId, e);
+                                listener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Failed to read connector: " + connectorId,
+                                            RestStatus.INTERNAL_SERVER_ERROR
+                                        )
+                                    );
                             }
                         } else {
                             listener

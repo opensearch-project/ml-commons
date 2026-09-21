@@ -1032,6 +1032,50 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
     }
 
+    /**
+     * uploadModel() persists a connector for any function name, not just REMOTE, so a non-remote registration
+     * carrying one used to store it unvalidated and without a connector-access check.
+     */
+    @Test
+    public void test_execute_registerNonRemoteModel_withConnectorIdRejected() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.KMEANS);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "A connector or connector_id can only be used with function_name [REMOTE], but this request uses [KMEANS].",
+            argumentCaptor.getValue().getMessage()
+        );
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+        verify(mlModelManager, never()).registerMLModel(any(), any());
+    }
+
+    /** Same for an inline connector on a non-remote registration. */
+    @Test
+    public void test_execute_registerNonRemoteModel_withInlineConnectorRejected() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(input.getConnector()).thenReturn(mcpSseConnector());
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "A connector or connector_id can only be used with function_name [REMOTE], but this request uses [TEXT_EMBEDDING].",
+            argumentCaptor.getValue().getMessage()
+        );
+        verify(mlModelManager, never()).registerMLModel(any(), any());
+    }
+
     private void assertConnectorIdRejectedAsMcp(Connector storedConnector) {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);

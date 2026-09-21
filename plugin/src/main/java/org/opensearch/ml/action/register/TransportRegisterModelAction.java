@@ -383,6 +383,27 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest(registerModelInput.getTenantId());
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
+        } else if (registerModelInput.getConnector() != null || Strings.isNotBlank(registerModelInput.getConnectorId())) {
+            // uploadModel() routes any registration carrying a connector_id down the remote-model writer whatever
+            // the function name, so these fields are persisted rather than ignored - unvalidated, and without the
+            // connector-access check the REMOTE branch performs. A connector only means anything to a remote model,
+            // so refuse the combination instead of storing a document no API can repair. Model update already
+            // refuses connector edits for non-remote models, so the two paths now agree.
+            log
+                .error(
+                    "Rejected registration of a {} model carrying a connector, which only applies to remote models",
+                    registerModelInput.getFunctionName()
+                );
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "A connector or connector_id can only be used with function_name ["
+                            + FunctionName.REMOTE
+                            + "], but this request uses ["
+                            + registerModelInput.getFunctionName()
+                            + "]."
+                    )
+                );
         } else {
             createModelGroup(registerModelInput, listener);
         }

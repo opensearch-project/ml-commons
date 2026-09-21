@@ -82,6 +82,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteRequest;
@@ -120,6 +121,8 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -1188,6 +1191,50 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 eq(ActionName.DEPLOY),
                 eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
             );
+    }
+
+    /**
+     * Registration and update now refuse to attach an MCP connector to a model, but documents written before those
+     * checks existed are still out there. Deploying one used to succeed and then fail as an unclassified 500 on the
+     * first predict; the deploy itself should report it.
+     */
+    public void testDeployModel_McpBackedRemoteModelRejected() {
+        MLModel mcpBackedModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mcpBackedModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception.getValue()));
     }
 
     public void testDeployModel_ModelAlreadyDeployed() {

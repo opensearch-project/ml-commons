@@ -183,6 +183,36 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         verify(actionListener, times(0)).onFailure(any());
     }
 
+    /**
+     * An MCP connector has no executable action, so the executor chosen for its protocol cannot build a payload
+     * and the unimplemented accessors escape as a 500. MCP connectors are used through the agent and MCP tool
+     * APIs, not through connector execute.
+     */
+    public void testExecute_McpConnectorRejected() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.MCP_SSE);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(
+            "Cannot execute an MCP connector: protocol [mcp_sse] defines no executable action.",
+            captor.getValue().getMessage()
+        );
+        assertEquals(org.opensearch.core.rest.RestStatus.BAD_REQUEST, org.opensearch.ExceptionsHelper.status(captor.getValue()));
+        verify(connectorAccessControlHelper, times(0)).validateConnectorAccess(eq(client), any());
+    }
+
     public void testExecute_WithCustomConnectorAction() {
         when(metaData.hasIndex(anyString())).thenReturn(true);
         // Set custom connector action in parameters
