@@ -1838,8 +1838,8 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void testEscapeRemoteInferenceInputData_PromptInputsQuestionThatAreJson_AreEscaped() {
-        for (String key : new String[] { "prompt", "inputs", "question" }) {
+    public void testEscapeRemoteInferenceInputData_PromptQuestionSystemInstructionThatAreJson_AreEscaped() {
+        for (String key : new String[] { "prompt", "question", "system_instruction" }) {
             Map<String, String> params = new HashMap<>();
             params.put(key, "{\"a\":1}");
             RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
@@ -1848,6 +1848,22 @@ public class ConnectorUtilsTest {
 
             assertEquals("escaping " + key, "{\\\"a\\\":1}", inputData.getParameters().get(key));
         }
+    }
+
+    /**
+     * sagemaker_connector_copali_blueprint.md makes inputs the entire request body, and its documented predict
+     * example sends a JSON object, so inputs must keep reaching the template raw. This is why the allowlist cannot
+     * simply grow to cover every prompt-shaped key.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_InputsStaysRawForWholeBodyTemplates() {
+        Map<String, String> params = new HashMap<>();
+        params.put("inputs", "{\"queries\": [\"hello world\"]}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\"queries\": [\"hello world\"]}", inputData.getParameters().get("inputs"));
     }
 
     /** Raw-position parameters must keep being spliced in raw, or every blueprint using them breaks. */

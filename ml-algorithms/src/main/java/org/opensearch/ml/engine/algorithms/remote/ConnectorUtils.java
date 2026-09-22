@@ -185,15 +185,18 @@ public class ConnectorUtils {
     // deliberately interpolates one of these in a raw JSON position can still opt out via no_escape_params,
     // which is read from the connector's parameters as well as the request's.
     //
-    // The list is keys, not positions, because the escaping runs before the template is known. Each entry was
-    // checked against every blueprint and tutorial in docs/: all of them interpolate these inside a JSON string
-    // and none in a raw JSON position. The isJson shortcut below is deliberately kept for everything else -
-    // messages, texts, dimensions, temperature, max_tokens, input and normalize are interpolated raw in 25+
-    // places, and escaping those would break every one of them.
+    // The list is keys, not positions, because the escaping runs before the template is known, so it is a
+    // mitigation and not a complete fix: any parameter interpolated inside a JSON string that is not listed here
+    // still reaches the isJson shortcut. Each entry was checked against every request_body template under docs/ -
+    // all of them interpolate these inside a JSON string, none in a raw JSON position. inputs deliberately is NOT
+    // listed: sagemaker_connector_copali_blueprint.md makes it the entire request body, and another template uses
+    // it as a bare JSON value, so escaping it would break those connectors outright. The isJson shortcut is kept
+    // for the same reason - messages, texts, dimensions, temperature, max_tokens, input and normalize are
+    // interpolated raw in 25+ places and escaping them would break every one.
     // Built over a HashSet rather than with Set.of: Set.of#contains throws on a null key, where the previous
     // branch ordering reached HashSet#contains and returned false.
     private static final Set<String> ALWAYS_ESCAPE_PARAMS = Collections
-        .unmodifiableSet(new HashSet<>(List.of("system_prompt", "user_prompt", "prompt", "inputs", "question")));
+        .unmodifiableSet(new HashSet<>(List.of("system_prompt", "user_prompt", "prompt", "question", "system_instruction")));
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
         escapeRemoteInferenceInputData(inputData, null);
