@@ -213,6 +213,43 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(request.getMlCreateConnectorInput()).thenReturn(input);
     }
 
+    /** Create has no stored connector, so asking for mutual TLS is always newly relying on it. */
+    public void test_execute_rejectsMutualTlsWhileSettingOff() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
+    public void test_execute_acceptsMutualTlsWhileSettingOn() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
     public void test_execute_connectorAccessControl_notEnabled_success() throws InterruptedException {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
         input.setAddAllBackendRoles(null);

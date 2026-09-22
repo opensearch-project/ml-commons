@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
@@ -293,6 +294,25 @@ public class MLRegisterModelInputTest {
             assertNotNull(additionalConfig);
             assertEquals("l2", additionalConfig.get("space_type"));
         });
+    }
+
+    @Test
+    public void parse_RejectsUnknownFieldInBatchInferenceConfig() throws Exception {
+        // Register model is caller-supplied input, so a typo here must be reported rather than silently ignored.
+        String json = "{\"function_name\":\"REMOTE\",\"name\":\"m\",\"model_group_id\":\"g\","
+            + "\"batch_inference_config\":{\"max_items\":2}}";
+
+        Exception e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(true, json, parsed -> {}));
+        assertTrue(e.getMessage().contains("Unsupported field [max_items]"));
+    }
+
+    @Test
+    public void parse_RejectsUnknownFieldInBatchInferenceQueueConfig() throws Exception {
+        String json = "{\"function_name\":\"REMOTE\",\"name\":\"m\",\"model_group_id\":\"g\","
+            + "\"batch_inference_config\":{\"max_items_per_request\":2,\"queue\":{\"enabled\":true,\"flush_timeout\":100}}}";
+
+        Exception e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(true, json, parsed -> {}));
+        assertTrue(e.getMessage().contains("Unsupported field [flush_timeout]"));
     }
 
     private void testParseFromJsonString(

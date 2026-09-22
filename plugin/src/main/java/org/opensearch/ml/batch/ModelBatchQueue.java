@@ -5,26 +5,34 @@
 
 package org.opensearch.ml.batch;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorThrottlingException;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -86,12 +94,20 @@ public class ModelBatchQueue {
         }
     }
 
-    public void enqueue(QueueEntry entry) {
-        completeEnqueue(entry, offer(entry));
+    /** Returns false when the request was not queued and the caller must run it itself; see TOO_LARGE. */
+    public boolean enqueue(QueueEntry entry) {
+        EnqueueDecision decision = offer(entry);
+        completeEnqueue(entry, decision);
+        return decision != EnqueueDecision.TOO_LARGE;
     }
 
     EnqueueDecision offer(QueueEntry entry) {
         synchronized (stateLock) {
+            // Checked before reserving: a request bigger than the whole node budget can never be admitted, so
+            // it is handed back to run unqueued instead of being rejected with a retry that could never succeed.
+            if (budget.exceedsCapacity(entry.getRetainedByteSize())) {
+                return EnqueueDecision.TOO_LARGE;
+            }
             if (!budget.tryReserve(entry.getRetainedByteSize())) {
                 return EnqueueDecision.REJECTED;
             }
@@ -107,6 +123,22 @@ public class ModelBatchQueue {
 
     void completeEnqueue(QueueEntry entry, EnqueueDecision decision) {
         switch (decision) {
+            case TOO_LARGE:
+                // Left to the caller to run unqueued; nothing was reserved and nothing is pending for it here.
+                // Warned rather than debugged: the request still succeeds, but coalescing is silently not happening
+                // for it, and if the budget is misconfigured that is true of every request to this model forever.
+                log
+                    .warn(
+                        "Predict request for model {} retains an estimated {} bytes, more than the whole node batch "
+                            + "queue budget of {} bytes, so it runs unqueued. Raise {} or {} to let requests this "
+                            + "size be coalesced.",
+                        modelId,
+                        entry.getRetainedByteSize(),
+                        budget.getMaxBytes(),
+                        ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(),
+                        ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey()
+                    );
+                break;
             case REJECTED:
                 notifyRejected(entry);
                 break;
@@ -336,26 +368,67 @@ public class ModelBatchQueue {
     }
 
     private void place(BatchableInput handler, List<BatchItem> subBatch, MLOutput output, List<MLOutput[]> results) {
-        List<MLOutput> perItem = handler.distribute(output);
-        if (perItem.size() != subBatch.size()) {
-            throw new IllegalStateException(
-                "Model returned "
-                    + perItem.size()
-                    + " results for a sub-batch of "
-                    + subBatch.size()
-                    + " items, so results cannot be routed back to their callers"
-            );
-        }
+        List<MLOutput> perItem = handler.distributeExactly(output, subBatch.size());
         for (int i = 0; i < subBatch.size(); i++) {
             BatchItem item = subBatch.get(i);
             results.get(item.getSourceIndex())[item.getPositionInSource()] = perItem.get(i);
         }
     }
 
+    /**
+     * Records a sub-batch failure against every request whose items were in it.
+     *
+     * Only an error carrying the provider's raw response body is replaced, and only when the sub-batch merged
+     * more than one request - that body describes the merged call rather than any one request in it. Everything
+     * else is passed through: an error ml-commons raised itself describes our own handling, not anyone's data,
+     * and is what makes a throttle, a guardrail rejection or a sub-batch result-count mismatch diagnosable. A
+     * sub-batch holding a single request's items is passed through too, since the message is then entirely about
+     * that request - and that is the only shape that exists when coalescing is off.
+     */
     private void markFailed(List<BatchItem> subBatch, AtomicReferenceArray<Exception> entryFailures, Exception error) {
+        Set<Integer> affectedEntries = new HashSet<>();
         for (BatchItem item : subBatch) {
-            entryFailures.compareAndSet(item.getSourceIndex(), null, error);
+            affectedEntries.add(item.getSourceIndex());
         }
+        Exception reported = error;
+        if (affectedEntries.size() > 1 && carriesProviderResponseBody(error)) {
+            log
+                .warn(
+                    "Provider call failed for a sub-batch of model {} that merged {} requests; reporting a generic "
+                        + "error to each because the provider message describes the merged call, not one request",
+                    modelId,
+                    affectedEntries.size(),
+                    error
+                );
+            String message = "Batch inference failed. This request was merged with other requests for the same model, so the "
+                + "provider error is not reported per request; see the cluster logs for details.";
+            // Keep the status. The provider's own throttling comes back as 429, and a client or ingest pipeline
+            // that retries on 429 but gives up on 500 would otherwise turn a temporary throttle into a
+            // permanent failure.
+            reported = error instanceof OpenSearchStatusException statusError
+                ? new OpenSearchStatusException(message, statusError.status())
+                : new MLException(message);
+        }
+        for (Integer sourceIndex : affectedEntries) {
+            entryFailures.compareAndSet(sourceIndex, null, reported);
+        }
+    }
+
+    /**
+     * Whether the exception embeds the provider's raw response body, which is the only part of a failure that
+     * can describe another request in the merged call.
+     * <p>
+     * Decided by the error itself rather than by which listener reported it: the failure listener also receives
+     * errors raised before the provider was ever called - model-level and user-level throttling, a guardrail
+     * rejection, a model that is not deployed, a payload that would not build. Those must reach the caller
+     * unchanged. MLSdkAsyncHttpResponseHandler builds the one error that carries the body, prefixed with
+     * {@link org.opensearch.ml.common.CommonValue#REMOTE_SERVICE_ERROR}. RemoteConnectorThrottlingException
+     * shares that prefix but its message is a fixed sentence of ours, so it is left alone.
+     */
+    private static boolean carriesProviderResponseBody(Exception error) {
+        return !(error instanceof RemoteConnectorThrottlingException)
+            && error.getMessage() != null
+            && error.getMessage().startsWith(REMOTE_SERVICE_ERROR);
     }
 
     private void finish(
@@ -442,6 +515,8 @@ public class ModelBatchQueue {
     }
 
     enum EnqueueDecision {
+        /** Bigger than the whole node budget; not queued and not reserved, the caller runs it unqueued. */
+        TOO_LARGE,
         REJECTED,
         FLUSH,
         SCHEDULE_TIMER

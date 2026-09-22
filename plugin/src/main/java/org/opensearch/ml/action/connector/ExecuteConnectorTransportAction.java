@@ -8,6 +8,7 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.CONNECTOR_ACTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -16,9 +17,11 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -95,6 +98,22 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             String finalConnectorAction = connectorAction;
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
+                    // An MCP connector defines no actions, so the executor selected for its protocol cannot build a
+                    // payload for one - the accessors are unimplemented and escape as a 500. MCP connectors are
+                    // reached through the agent and MCP tool APIs, not through connector execute.
+                    if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                        log.error("Rejected execute on MCP connector {}", connectorId);
+                        actionListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Cannot execute an MCP connector: protocol ["
+                                        + connector.getProtocol()
+                                        + "] defines no executable action.",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
+                        return;
+                    }
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
                     ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
                         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
@@ -121,6 +140,17 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                         actionListener.onFailure(e);
                     });
                     connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
+                } else {
+                    // Without this the listener is never completed on denial, so the request hangs until the client
+                    // gives up instead of reporting that access was refused.
+                    log.error("You don't have permission to execute this connector, connector id: {}", connectorId);
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "You don't have permission to execute this connector, connector id: " + connectorId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
                 }
             }, e -> {
                 log.error("Failed to get connector " + connectorId, e);

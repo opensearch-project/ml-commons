@@ -12,8 +12,10 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -82,6 +84,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteRequest;
@@ -101,6 +104,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.shard.ShardId;
@@ -114,12 +118,16 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -1188,6 +1196,198 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 eq(ActionName.DEPLOY),
                 eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
             );
+    }
+
+    /**
+     * Registration and update now refuse to attach an MCP connector to a model, but documents written before those
+     * checks existed are still out there. Deploying one used to succeed and then fail as an unclassified 500 on the
+     * first predict; the deploy itself should report it.
+     */
+    public void testDeployModel_McpBackedRemoteModelRejected() {
+        MLModel mcpBackedModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mcpBackedModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception.getValue()));
+        // Without this the model stays DEPLOYING in the node cache and the next deploy is refused as a duplicate.
+        verify(modelCacheHelper).removeModel(modelId);
+    }
+
+    /** Same rejection when the connector is fetched by id rather than carried inline on the model. */
+    public void testDeployModel_McpBackedRemoteModelRejected_connectorFetchedById() {
+        MLModel mcpBackedModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connectorId("mcpConnectorId")
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mcpBackedModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Connector> connectorListener = invocation.getArgument(2);
+            connectorListener
+                .onResponse(
+                    McpConnector
+                        .builder()
+                        .name("mcp")
+                        .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+                        .url("https://api.openai.com/mcp")
+                        .credential(Map.of("key", "value"))
+                        .build()
+                );
+            return null;
+        }).when(modelManager).getConnector(eq("mcpConnectorId"), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
+        verify(modelCacheHelper).removeModel(modelId);
+    }
+
+    /**
+     * The rejection belongs to deploy only. A cache refresh answers 200 unconditionally before the async connector
+     * lookup returns, so rejecting here would evict a model the caller was just told is fine - leaving the document
+     * reading DEPLOYED with no cache entry and the node's deployed-model count permanently off.
+     */
+    public void testUpdateModelCache_McpBackedRemoteModelNotRejected() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        doReturn(new String[] { "node1" }).when(modelManager).getWorkerNodes(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mcpBackedModel(ConnectorProtocols.MCP_SSE));
+            return null;
+        }).when(modelManager).getModel(any(), any(ActionListener.class));
+
+        modelManager.updateModelCache(modelId, listener);
+
+        assertNoMcpRejection(listener);
+    }
+
+    /**
+     * Controller deletion goes through undeployController, and DeleteControllerTransportAction treats any node
+     * failure as an overall failure - so rejecting here would make a teardown that works today permanently fail.
+     */
+    public void testUndeployController_McpBackedRemoteModelNotRejected() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mcpBackedModel(ConnectorProtocols.MCP_STREAMABLE_HTTP));
+            return null;
+        }).when(modelManager).getModel(any(), any(ActionListener.class));
+
+        modelManager.undeployController(modelId, listener);
+
+        assertNoMcpRejection(listener);
+    }
+
+    private MLModel mcpBackedModel(String protocol) {
+        return MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYED)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(protocol)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+    }
+
+    /**
+     * The non-deploy paths may still fail for unrelated reasons (there is no predictor for an MCP protocol), but
+     * they must not raise the deploy-time rejection and must not evict the cache entry.
+     */
+    private void assertNoMcpRejection(ActionListener<String> listener) {
+        verify(modelCacheHelper, never()).removeModel(modelId);
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, atMost(1)).onFailure(exception.capture());
+        for (Exception e : exception.getAllValues()) {
+            assertFalse(String.valueOf(e.getMessage()).contains("is backed by an MCP connector"));
+        }
+    }
+
+    /**
+     * createConnector rethrows IllegalArgumentException deliberately - an unsupported or missing protocol is a bad
+     * request. Wrapping every exception from the read would turn that 400 into a 500.
+     */
+    public void testGetConnector_illegalArgumentStaysBadRequest() throws IOException {
+        GetResponse getResponse = prepareConnectorWithoutProtocol();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        ActionListener<Connector> listener = mock(ActionListener.class);
+
+        modelManager.getConnector("connectorId", null, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+    }
+
+    /** A stored connector document with no protocol, which makes createConnector raise IllegalArgumentException. */
+    private GetResponse prepareConnectorWithoutProtocol() {
+        BytesReference bytesReference = new BytesArray("{\"name\":\"no-protocol\"}");
+        GetResult getResult = new GetResult(CommonValue.ML_CONNECTOR_INDEX, "connectorId", 1L, 1L, 1L, true, bytesReference, null, null);
+        return new GetResponse(getResult);
     }
 
     public void testDeployModel_ModelAlreadyDeployed() {

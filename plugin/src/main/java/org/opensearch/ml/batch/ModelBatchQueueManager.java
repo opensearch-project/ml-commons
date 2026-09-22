@@ -68,7 +68,11 @@ public class ModelBatchQueueManager {
         return config != null && config.isQueueEnabled();
     }
 
-    public void enqueue(
+    /**
+     * Returns false when the request was not queued and no listener callback was made, so the caller must run it
+     * itself. That happens for a request too large for the whole node budget, which could never be admitted.
+     */
+    public boolean enqueue(
         String modelId,
         BatchInferenceConfig config,
         MLInput input,
@@ -78,10 +82,10 @@ public class ModelBatchQueueManager {
     ) {
         QueueEntry entry;
         try {
-            entry = toEntry(input, listener, predictor, channel);
+            entry = toEntry(modelId, input, listener, predictor, channel);
         } catch (Exception e) {
             notifyFailure(listener, e);
-            return;
+            return true;
         }
 
         ModelBatchQueue[] replaced = new ModelBatchQueue[1];
@@ -103,9 +107,16 @@ public class ModelBatchQueueManager {
             replaced[0].flush();
         }
         target[0].completeEnqueue(entry, decision[0]);
+        return decision[0] != ModelBatchQueue.EnqueueDecision.TOO_LARGE;
     }
 
-    private QueueEntry toEntry(MLInput input, ActionListener<MLTaskResponse> listener, Predictable predictor, TransportChannel channel) {
+    private QueueEntry toEntry(
+        String modelId,
+        MLInput input,
+        ActionListener<MLTaskResponse> listener,
+        Predictable predictor,
+        TransportChannel channel
+    ) {
         BatchableInput handler = registry.get(input);
         if (handler == null) {
             throw unsupportedInputType(input);
@@ -115,6 +126,9 @@ public class ModelBatchQueueManager {
         try {
             groupKey = handler.groupKey(input);
         } catch (Exception e) {
+            // A null key makes the request fail at flush rather than risk coalescing it with requests it may not
+            // match, so the request is not lost — but the reason it happened only exists in this exception.
+            log.warn("Failed to compute a batch group key for a predict request to model {}", modelId, e);
             groupKey = null;
         }
         return new QueueEntry(input, listener, predictor, channel, items, groupKey);

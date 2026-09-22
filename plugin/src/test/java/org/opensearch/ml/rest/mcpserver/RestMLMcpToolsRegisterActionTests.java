@@ -54,6 +54,7 @@ public class RestMLMcpToolsRegisterActionTests extends OpenSearchTestCase {
                 "tools": [
                     {
                         "type": "ListIndexTool",
+                        "name": "MyListIndexTool",
                         "description": "This is my first list index tool",
                         "parameters": {},
                         "attributes": {
@@ -122,6 +123,50 @@ public class RestMLMcpToolsRegisterActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_prepareRequest_successful() throws IOException {
+        BytesReference bytesReference = BytesReference
+            .fromByteBuffer(ByteBuffer.wrap(registerToolRequest.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_prepareRequest_nullToolName() throws IOException {
+        exceptionRule.expect(ActionRequestValidationException.class);
+        exceptionRule.expectMessage("tool name can not be null or blank");
+        String registerToolRequest = """
+            {
+                "tools": [
+                    {
+                        "type": "ListIndexTool",
+                        "name": null
+                    }
+                ]
+            }
+            """;
+        BytesReference bytesReference = BytesReference
+            .fromByteBuffer(ByteBuffer.wrap(registerToolRequest.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_prepareRequest_blankToolName() throws IOException {
+        exceptionRule.expect(ActionRequestValidationException.class);
+        exceptionRule.expectMessage("tool name can not be null or blank");
+        String registerToolRequest = """
+            {
+                "tools": [
+                    {
+                        "type": "ListIndexTool",
+                        "name": "   "
+                    }
+                ]
+            }
+            """;
         BytesReference bytesReference = BytesReference
             .fromByteBuffer(ByteBuffer.wrap(registerToolRequest.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

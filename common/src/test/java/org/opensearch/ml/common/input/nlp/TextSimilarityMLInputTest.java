@@ -149,4 +149,42 @@ public class TextSimilarityMLInputTest {
         assert (newPairs.equals(oldPairs));
     }
 
+    @Test
+    public void testParseJson_NullQueryText_ThenFail() throws IOException {
+        String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":null,\"text_docs\":[\"today is sunny\"]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
+        parser.nextToken();
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLInput.parse(parser, input.getFunctionName().name())
+        );
+        assert (e.getMessage().equals("No query text was provided"));
+    }
+
+    @Test
+    public void testParseJson_MissingQueryText_ThenFail() throws IOException {
+        String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"text_docs\":[\"today is sunny\"]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
+        parser.nextToken();
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLInput.parse(parser, input.getFunctionName().name())
+        );
+        assert (e.getMessage().equals("No query text was provided"));
+    }
+
 }

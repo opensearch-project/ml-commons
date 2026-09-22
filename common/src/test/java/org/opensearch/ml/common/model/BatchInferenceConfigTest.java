@@ -216,4 +216,41 @@ public class BatchInferenceConfigTest {
         assertTrue(parsed.isQueueEnabled());
         assertEquals(25L, parsed.getQueue().getFlushTimeoutMs());
     }
+
+    @Test
+    public void rejectsUnknownFieldOnTheApiInputPath() throws IOException {
+        // A typo like max_items instead of max_items_per_request would otherwise leave the limit disabled.
+        XContentParser parser = jsonParser("{\"max_items\":2}");
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported field [max_items]");
+        BatchInferenceConfig.parse(parser, true);
+    }
+
+    @Test
+    public void rejectsUnknownFieldInsideQueueBlockOnTheApiInputPath() throws IOException {
+        XContentParser parser = jsonParser("{\"max_items_per_request\":2,\"queue\":{\"enabled\":true,\"flushTimeoutMs\":100}}");
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported field [flushTimeoutMs]");
+        BatchInferenceConfig.parse(parser, true);
+    }
+
+    @Test
+    public void skipsUnknownFieldWhenReadingAStoredModel() throws IOException {
+        // Lenient by default so a field added by a newer version cannot make a stored model unreadable here.
+        BatchInferenceConfig parsed = BatchInferenceConfig
+            .parse(jsonParser("{\"max_items_per_request\":2,\"some_future_field\":{\"a\":1},\"queue\":{\"enabled\":true,\"future\":7}}"));
+
+        assertEquals(2, parsed.getMaxItemsPerRequest());
+        assertTrue(parsed.isQueueEnabled());
+    }
+
+    private static XContentParser jsonParser(String json) throws IOException {
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        return parser;
+    }
 }
