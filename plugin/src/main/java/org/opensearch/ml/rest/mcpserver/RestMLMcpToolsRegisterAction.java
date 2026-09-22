@@ -86,6 +86,12 @@ public class RestMLMcpToolsRegisterAction extends BaseRestHandler {
             exception.addValidationError("tools list can not be null");
             throw exception;
         }
+        for (McpToolRegisterInput mcpTool : registerNodesRequest.getMcpTools()) {
+            if (mcpTool.getName() == null || mcpTool.getName().isBlank()) {
+                exception.addValidationError("tool name can not be null or blank");
+                throw exception;
+            }
+        }
         String duplicateName = null;
         Set<String> uniqueName = new HashSet<>();
         for (McpToolRegisterInput mcpTool : registerNodesRequest.getMcpTools()) {
