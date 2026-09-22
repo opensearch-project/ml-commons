@@ -21,6 +21,73 @@ public class MLResourceIdUtilsTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    // ---- reserved ids -------------------------------------------------------
+
+    /**
+     * METRICS_CORRELATION is written at a fixed id with no opType(CREATE), as both a model and a model group,
+     * so a resource holding that id would be replaced by one of those writes.
+     */
+    @Test
+    public void validateCustomDocumentId_rejectsReservedMetricsCorrelationId() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model group id must not be a reserved id");
+        MLResourceIdUtils.validateCustomDocumentId("METRICS_CORRELATION", "model group id");
+    }
+
+    @Test
+    public void validateCustomModelId_rejectsReservedMetricsCorrelationId() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model id must not be a reserved id");
+        MLResourceIdUtils.validateCustomModelId("METRICS_CORRELATION");
+    }
+
+    /** Only the exact upper-case form can collide, but the case variants are rejected too. */
+    @Test
+    public void validateCustomModelId_rejectsReservedIdCaseInsensitively() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        MLResourceIdUtils.validateCustomModelId("metrics_correlation");
+    }
+
+    @Test
+    public void validateCustomDocumentId_acceptsIdThatMerelyContainsAReservedName() {
+        MLResourceIdUtils.validateCustomDocumentId("my_METRICS_CORRELATION_copy", "agent id");
+    }
+
+    // ---- model chunk id namespace -------------------------------------------
+
+    /**
+     * Chunk documents live in the model index under "<modelId>_<chunkNumber>" with no opType, so a custom model
+     * id of that shape and a chunk of an unrelated model resolve to the same document.
+     */
+    @Test
+    public void validateCustomModelId_rejectsChunkIdShape() {
+        for (String id : new String[] { "foo_0", "foo_1", "foo_12", "a_0", "foo_bar_7" }) {
+            try {
+                MLResourceIdUtils.validateCustomModelId(id);
+                throw new AssertionError("expected rejection for model id: " + id);
+            } catch (IllegalArgumentException e) {
+                assertEquals("model id must not end with '_<number>'; that form is reserved for model chunk documents", e.getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void validateCustomModelId_acceptsIdsThatOnlyLookLikeChunkIds() {
+        // A trailing digit is fine; only "_<digits>" at the very end is reserved.
+        for (String id : new String[] { "text_embedding_v1", "model0", "foo_0bar", "foo-0", "foo_", "0_a" }) {
+            MLResourceIdUtils.validateCustomModelId(id);
+        }
+    }
+
+    /** The chunk-id restriction is specific to the model index; other resource types keep the shape. */
+    @Test
+    public void validateCustomDocumentId_allowsChunkIdShapeForNonModelResources() {
+        MLResourceIdUtils.validateCustomDocumentId("foo_0", "connector id");
+        MLResourceIdUtils.validateCustomDocumentId("foo_0", "agent id");
+        MLResourceIdUtils.validateCustomDocumentId("foo_0", "model group id");
+        MLResourceIdUtils.validateCustomDocumentId("foo_0", "memory container id");
+    }
+
     @Test
     public void validateCustomDocumentId_acceptsNull() {
         MLResourceIdUtils.validateCustomDocumentId(null, "connector id");
