@@ -1050,6 +1050,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getConnector()).thenReturn(mcpSseConnector());
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
 
         transportRegisterModelAction.doExecute(task, request, actionListener);
 
@@ -1061,6 +1062,25 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
         assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
         verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
+    }
+
+    /** The status must not depend on whether a connector_id accompanies the inline connector. */
+    @Test
+    public void test_execute_registerRemoteModel_withBothConnectorIdAndInlineMcpConnector_gatedOff() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getConnector()).thenReturn(mcpSseConnector());
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.FORBIDDEN, ExceptionsHelper.status(argumentCaptor.getValue()));
     }
 
     private void assertConnectorIdRejectedAsMcp(Connector storedConnector) {

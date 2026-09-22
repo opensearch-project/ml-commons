@@ -285,6 +285,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 // connector_id was also supplied - validateInternalConnector below never runs on this branch. This
                 // is request content, so no access check is owed before rejecting it.
                 Connector inlineConnector = registerModelInput.getConnector();
+                if (inlineConnector != null) {
+                    // Same order as validateInternalConnector uses on the other branch, so the same request content
+                    // does not report a different status depending on whether a connector_id happens to accompany it.
+                    ConnectorProtocolValidator.validateProtocolEnabled(inlineConnector.getProtocol(), mlFeatureEnabledSetting);
+                }
                 if (inlineConnector != null && ConnectorProtocols.isMcpProtocol(inlineConnector.getProtocol())) {
                     log.error("Rejected model registration with an inline MCP connector, protocol {}", inlineConnector.getProtocol());
                     listener
