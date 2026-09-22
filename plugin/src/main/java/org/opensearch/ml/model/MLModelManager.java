@@ -1582,6 +1582,9 @@ public class MLModelManager {
 
     private void deployRemoteOrBuiltInModel(MLModel mlModel, Integer eligibleNodeCount, ActionListener<String> wrappedListener) {
         String modelId = mlModel.getModelId();
+        if (rejectMcpBackedRemoteModel(mlModel, wrappedListener)) {
+            return;
+        }
         setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
         setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
         setupModelInterface(modelId, mlModel.getModelInterface());
@@ -1601,6 +1604,9 @@ public class MLModelManager {
         log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
         getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
             mlModel.setConnector(connector);
+            if (rejectMcpBackedRemoteModel(mlModel, wrappedListener)) {
+                return;
+            }
             setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
         }, wrappedListener::onFailure));
@@ -1612,6 +1618,13 @@ public class MLModelManager {
      * now refuse to attach one, but documents written before those checks existed are still out there, and
      * deploying them used to succeed and then fail as an unclassified 500 on the first predict. Failing the deploy
      * instead reports the problem once, at the point the operator can act on it.
+     * <p>
+     * Called only from {@link #deployRemoteOrBuiltInModel}, and deliberately not from
+     * {@link #setupParamsAndPredictable}: that method is shared with the cache-refresh and controller
+     * deploy/undeploy paths ({@link #updateModelCache}, {@link #deployControllerWithDeployedModel},
+     * {@link #undeployController}), where neither the cache eviction nor a 400 is correct. Guarding there evicted
+     * a running model out from under a cache update that had already answered 200, and turned controller deletion
+     * into a permanent failure.
      *
      * @return true if the model was rejected and the listener has been failed
      */
@@ -1628,16 +1641,11 @@ public class MLModelManager {
                 mlModel.getModelId(),
                 mlModel.getConnector().getProtocol()
             );
-        // Only a fresh deploy needs the cache cleaning up, and only there does the DEPLOYING premise hold:
-        // deployModel has already put this model into DEPLOYING, and leaving it there makes isModelRunningOnNode
-        // true, so the next deploy attempt is refused as a duplicate task and the operator never sees this message
-        // again - the same cleanup the model-content-hash rejection does. The other callers of
-        // setupParamsAndPredictable (cache refresh, controller deploy and undeploy) all run against a model that is
-        // already DEPLOYED and serving on this node: wiping its cache entry there would undeploy a running model as
-        // a side effect of an unrelated request, while the persisted model state still said DEPLOYED.
-        if (!modelCacheHelper.isModelDeployed(mlModel.getModelId())) {
-            removeModel(mlModel.getModelId());
-        }
+        // Unconditional because this runs on a fresh deploy only, where the premise always holds: deployModel has
+        // already put this model into DEPLOYING, and leaving it there makes isModelRunningOnNode true, so the next
+        // deploy attempt is refused as a duplicate task and the operator never sees this message again - the same
+        // cleanup the model-content-hash rejection does.
+        removeModel(mlModel.getModelId());
         listener
             .onFailure(
                 new OpenSearchStatusException(
@@ -1653,11 +1661,6 @@ public class MLModelManager {
     }
 
     private void setupParamsAndPredictable(String modelId, MLModel mlModel, ActionListener<String> listener) {
-        // Guarded here rather than at the deploy entry points: every path that builds a predictor for a model -
-        // deploy, cache refresh, controller deploy/undeploy - comes through this method.
-        if (rejectMcpBackedRemoteModel(mlModel, listener)) {
-            return;
-        }
         Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
         ActionListener<Predictable> wrappedListener = ActionListener.wrap(r -> {
             modelCacheHelper.setPredictor(modelId, r);

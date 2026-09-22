@@ -12,8 +12,10 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -1289,6 +1291,78 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     /**
+     * The rejection belongs to deploy only. A cache refresh answers 200 unconditionally before the async connector
+     * lookup returns, so rejecting here would evict a model the caller was just told is fine - leaving the document
+     * reading DEPLOYED with no cache entry and the node's deployed-model count permanently off.
+     */
+    public void testUpdateModelCache_McpBackedRemoteModelNotRejected() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        doReturn(new String[] { "node1" }).when(modelManager).getWorkerNodes(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mcpBackedModel(ConnectorProtocols.MCP_SSE));
+            return null;
+        }).when(modelManager).getModel(any(), any(ActionListener.class));
+
+        modelManager.updateModelCache(modelId, listener);
+
+        assertNoMcpRejection(listener);
+    }
+
+    /**
+     * Controller deletion goes through undeployController, and DeleteControllerTransportAction treats any node
+     * failure as an overall failure - so rejecting here would make a teardown that works today permanently fail.
+     */
+    public void testUndeployController_McpBackedRemoteModelNotRejected() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mcpBackedModel(ConnectorProtocols.MCP_STREAMABLE_HTTP));
+            return null;
+        }).when(modelManager).getModel(any(), any(ActionListener.class));
+
+        modelManager.undeployController(modelId, listener);
+
+        assertNoMcpRejection(listener);
+    }
+
+    private MLModel mcpBackedModel(String protocol) {
+        return MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYED)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(protocol)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+    }
+
+    /**
+     * The non-deploy paths may still fail for unrelated reasons (there is no predictor for an MCP protocol), but
+     * they must not raise the deploy-time rejection and must not evict the cache entry.
+     */
+    private void assertNoMcpRejection(ActionListener<String> listener) {
+        verify(modelCacheHelper, never()).removeModel(modelId);
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, atMost(1)).onFailure(exception.capture());
+        for (Exception e : exception.getAllValues()) {
+            assertFalse(String.valueOf(e.getMessage()).contains("is backed by an MCP connector"));
+        }
+    }
+
+    /**
      * createConnector rethrows IllegalArgumentException deliberately - an unsupported or missing protocol is a bad
      * request. Wrapping every exception from the read would turn that 400 into a 500.
      */
@@ -1314,47 +1388,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         BytesReference bytesReference = new BytesArray("{\"name\":\"no-protocol\"}");
         GetResult getResult = new GetResult(CommonValue.ML_CONNECTOR_INDEX, "connectorId", 1L, 1L, 1L, true, bytesReference, null, null);
         return new GetResponse(getResult);
-    }
-
-    /**
-     * A cache refresh runs against a model that is already serving. Rejecting it is right - the model cannot
-     * predict - but the rejection must not undeploy it as a side effect of an unrelated request, which would also
-     * leave the persisted model state saying DEPLOYED.
-     */
-    public void testUpdateModelCache_McpBackedRemoteModelRejectedWithoutUndeploying() {
-        MLModel mcpBackedModel = MLModel
-            .builder()
-            .modelId(modelId)
-            .modelState(MLModelState.DEPLOYED)
-            .algorithm(FunctionName.REMOTE)
-            .name(modelName)
-            .version(version)
-            .connector(
-                McpConnector
-                    .builder()
-                    .name("mcp")
-                    .protocol(ConnectorProtocols.MCP_SSE)
-                    .url("https://api.openai.com/mcp")
-                    .credential(Map.of("key", "value"))
-                    .build()
-            )
-            .build();
-        ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
-        when(modelManager.getWorkerNodes(modelId, FunctionName.REMOTE)).thenReturn(new String[] { "node1" });
-        mock_client_ThreadContext(client, threadPool, threadContext);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(mcpBackedModel);
-            return null;
-        }).when(modelManager).getModel(any(), any());
-
-        modelManager.updateModelCache(modelId, listener);
-
-        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exception.capture());
-        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
-        verify(modelCacheHelper, never()).removeModel(modelId);
     }
 
     public void testDeployModel_ModelAlreadyDeployed() {
