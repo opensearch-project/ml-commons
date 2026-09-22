@@ -39,33 +39,38 @@ public interface BatchableInput {
      */
     List<MLOutput> distribute(MLOutput batchedOutput);
 
+    /** The number of results in a sub-batch output, without materializing one output per item. */
+    int resultCount(MLOutput batchedOutput);
+
     /**
-     * distribute, but only when the model returned exactly one result per item in the sub-batch.
+     * Fails unless the model returned exactly one result per item in the sub-batch.
      *
      * A count mismatch means the results can no longer be lined up with the items that produced them, so
      * the request must fail rather than return another item's result. For a split request, reassembling
      * the outputs would concatenate a misaligned sub-batch into the middle of the response and silently
      * shift every result after it. For an unsplit request, a short response can cause the same positional
      * ambiguity within that call.
-     *
-     * Note for the split path, which needs only the count and discards the returned list: that traverses the output
-     * once here and again in combine(), and allocates per-item wrappers that are immediately thrown away. It is
-     * deliberate — one implementation means the two paths cannot disagree about what counts as aligned — and cheap
-     * today, because distribute() reuses each ModelTensor by reference rather than copying any vector. If it ever
-     * becomes expensive, add a counting implementation that does not materialize the list, rather than letting the
-     * two paths check the count differently.
      */
+    default void ensureResultCount(MLOutput batchedOutput, int itemCount) {
+        validateResultCount(resultCount(batchedOutput), itemCount);
+    }
+
+    /** distribute, but only when the model returned exactly one result per item in the sub-batch. */
     default List<MLOutput> distributeExactly(MLOutput batchedOutput, int itemCount) {
         List<MLOutput> perItem = distribute(batchedOutput);
-        if (perItem.size() != itemCount) {
+        validateResultCount(perItem.size(), itemCount);
+        return perItem;
+    }
+
+    private static void validateResultCount(int resultCount, int itemCount) {
+        if (resultCount != itemCount) {
             throw new IllegalStateException(
                 "Model returned "
-                    + perItem.size()
+                    + resultCount
                     + " results for a sub-batch of "
                     + itemCount
                     + " items, so results cannot be routed back to their callers"
             );
         }
-        return perItem;
     }
 }

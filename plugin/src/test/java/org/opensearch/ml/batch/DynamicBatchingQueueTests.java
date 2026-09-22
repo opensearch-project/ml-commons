@@ -137,6 +137,7 @@ public class DynamicBatchingQueueTests {
     // Build a QueueEntry the way the manager does: decompose and key the input once, up front (null for
     // an input type with no batch handler).
     private QueueEntry queueEntry(MLInput input, ActionListener<MLTaskResponse> listener, Predictable predictor) {
+        input.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
         BatchableInput handler = registry.get(input);
         if (handler == null) {
             return new QueueEntry(input, listener, predictor, null, null, null);

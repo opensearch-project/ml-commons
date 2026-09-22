@@ -104,7 +104,9 @@ public class DynamicBatchingQueueManagerTests {
 
     private MLInput textInput(String... docs) {
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(ImmutableList.copyOf(docs)).build();
-        return MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(dataSet).build();
+        MLInput input = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
+        input.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
+        return input;
     }
 
     private BatchInferenceConfig queued(int maxItems, long flushMs) {
@@ -151,6 +153,42 @@ public class DynamicBatchingQueueManagerTests {
         scheduledFlush.get().run();
 
         assertEquals("requests differing only by caller algorithm must not share a model call", 2, calls.get());
+    }
+
+    @Test
+    public void requestsWithUnknownCallerAlgorithmDoNotCoalesce() {
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls);
+        BatchInferenceConfig config = queued(100, 10_000L);
+
+        MLInput a = textInput("a");
+        a.setCallerAlgorithm(null);
+        MLInput b = textInput("b");
+        b.setCallerAlgorithm(null);
+
+        manager.enqueue("model-1", config, a, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        manager.enqueue("model-1", config, b, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        scheduledFlush.get().run();
+
+        assertEquals("requests with an unknown caller algorithm must not coalesce", 2, calls.get());
+    }
+
+    @Test
+    public void requestsWithNormalizedRemoteCallerAlgorithmDoNotCoalesce() {
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls);
+        BatchInferenceConfig config = queued(100, 10_000L);
+
+        MLInput a = textInput("a");
+        a.setCallerAlgorithm(FunctionName.REMOTE);
+        MLInput b = textInput("b");
+        b.setCallerAlgorithm(FunctionName.REMOTE);
+
+        manager.enqueue("model-1", config, a, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        manager.enqueue("model-1", config, b, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        scheduledFlush.get().run();
+
+        assertEquals("requests whose original caller algorithm is unavailable must not coalesce", 2, calls.get());
     }
 
     @Test

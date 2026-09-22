@@ -306,15 +306,15 @@ public class MLCommonsSettingsTests {
 
     @Test
     public void testDynamicBatchingMemoryFractionAcceptsMaximum() {
-        double value = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.getKey(), 0.1).build());
+        double value = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.1).build());
         assertEquals(0.1, value, 0.0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testDynamicBatchingMemoryFractionRejectsAboveMaximum() {
-        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.getKey(), 0.11).build());
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.11).build());
     }
 
     @Test
@@ -375,36 +375,36 @@ public class MLCommonsSettingsTests {
     // predict request for the life of the node with a 429 that no backoff could clear.
     @Test(expected = IllegalArgumentException.class)
     public void testDynamicBatchingMemoryCeilingRejectsNegativeValue() {
-        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "-1b").build());
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "-1b").build());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testDynamicBatchingMemoryCeilingRejectsZero() {
-        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "0b").build());
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "0b").build());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testDynamicBatchingMemoryFloorRejectsNegativeValue() {
-        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "-1b").build());
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "-1b").build());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testDynamicBatchingMemoryFloorRejectsZero() {
-        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "0b").build());
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "0b").build());
     }
 
     @Test
     public void testDynamicBatchingMemoryBoundsAcceptPositiveValues() {
-        ByteSizeValue ceiling = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "1gb").build());
+        ByteSizeValue ceiling = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "1gb").build());
         assertEquals(new ByteSizeValue(1L, ByteSizeUnit.GB), ceiling);
 
-        ByteSizeValue floor = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "32mb").build());
+        ByteSizeValue floor = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "32mb").build());
         assertEquals(new ByteSizeValue(32L, ByteSizeUnit.MB), floor);
     }
 }

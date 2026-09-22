@@ -9,9 +9,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.spy;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 
 import java.io.IOException;
@@ -185,9 +185,9 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 Arrays
                     .asList(
                         ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE,
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN,
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
                     )
             )
         );

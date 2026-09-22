@@ -14,9 +14,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -179,8 +179,8 @@ public class BatchInferenceRouterTests {
             IllegalArgumentException.class,
             () -> BatchInferenceRouter.validateMemoryBounds(new ByteSizeValue(64L, ByteSizeUnit.MB), new ByteSizeValue(1L, ByteSizeUnit.MB))
         );
-        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey()));
-        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey()));
+        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey()));
+        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey()));
     }
 
     @Test
@@ -222,9 +222,9 @@ public class BatchInferenceRouterTests {
             new HashSet<>(
                 Arrays
                     .asList(
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE,
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN,
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
                     )
             )
         );
@@ -238,9 +238,9 @@ public class BatchInferenceRouterTests {
             .applySettings(
                 Settings
                     .builder()
-                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.getKey(), 0.02)
-                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "128mb")
-                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "256mb")
+                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.02)
+                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "128mb")
+                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "256mb")
                     .build()
             );
     }
@@ -256,20 +256,20 @@ public class BatchInferenceRouterTests {
                 .applySettings(
                     Settings
                         .builder()
-                        .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "128mb")
-                        .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "1mb")
+                        .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "128mb")
+                        .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "1mb")
                         .build()
                 )
         );
-        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey()));
+        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey()));
     }
 
     @Test
     public void nodeStartsUpRejectingCeilingBelowFloorInSettings() {
         Settings bad = Settings
             .builder()
-            .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "128mb")
-            .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "1mb")
+            .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "128mb")
+            .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "1mb")
             .build();
         ThreadPool threadPool = mock(ThreadPool.class);
         ClusterService clusterService = mock(ClusterService.class);
@@ -284,9 +284,9 @@ public class BatchInferenceRouterTests {
             new HashSet<>(
                 Arrays
                     .asList(
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE,
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN,
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
                     )
             )
         );

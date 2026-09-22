@@ -193,6 +193,28 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
     }
 
     @Test
+    public void testDoExecuteDoesNotInferCallerAlgorithmFromNormalizedRemoteInput() {
+        MLInput callerInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("k", "v")).build())
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_id")
+            .mlInput(callerInput)
+            .user(User.parse("admin|role-1|all_access"))
+            .build();
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getIsHidden()).thenReturn(false);
+
+        transportPredictionStreamTaskAction.doExecute(null, request, actionListener, transportChannel);
+
+        assertNull(callerInput.getCallerAlgorithm());
+    }
+
+    @Test
     public void testDoExecuteWithAccessDenied() {
         when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);

@@ -6,8 +6,8 @@
 package org.opensearch.ml.batch;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 
 import java.util.ArrayDeque;
@@ -138,8 +138,8 @@ public class DynamicBatchingQueue {
                         modelId,
                         entry.getRetainedByteSize(),
                         budget.getMaxBytes(),
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.getKey(),
-                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey()
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(),
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey()
                     );
                 notifyIdle(); // nothing entered the queue; drop it if this request created an empty one
                 break;
@@ -257,11 +257,12 @@ public class DynamicBatchingQueue {
                 notifyFailure(entry, new IllegalStateException("Could not compute a batch group key for the predict request"));
                 continue;
             }
-            GroupKey groupId = new GroupKey(
-                entry.getInput().getInputDataset().getInputDataType(),
-                entry.getInput().getCallerAlgorithm(),
-                entry.getGroupKey()
-            );
+            FunctionName callerAlgorithm = entry.getInput().getCallerAlgorithm();
+            // A pre-3.9 coordinator cannot send callerAlgorithm. The receiving node may therefore see null, or
+            // REMOTE if the request was already normalized before transport. In either case, isolate the request:
+            // its original caller type is unknown, so coalescing it could mix text embedding with sparse encoding.
+            Object callerAlgorithmKey = callerAlgorithm != null && callerAlgorithm != FunctionName.REMOTE ? callerAlgorithm : entry;
+            GroupKey groupId = new GroupKey(entry.getInput().getInputDataset().getInputDataType(), callerAlgorithmKey, entry.getGroupKey());
             groups.computeIfAbsent(groupId, k -> new ArrayList<>()).add(entry);
         }
         for (List<QueueEntry> group : groups.values()) {
@@ -544,7 +545,7 @@ public class DynamicBatchingQueue {
         SCHEDULE_TIMER
     }
 
-    private record GroupKey(Object inputType, FunctionName callerAlgorithm, String parametersKey) {
+    private record GroupKey(Object inputType, Object callerAlgorithm, String parametersKey) {
     }
 
     private record Totals(int entries, long items, long payloadBytes) {

@@ -156,9 +156,9 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final Setting<Double> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE = Setting
+    public static final Setting<Double> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION = Setting
         .doubleSetting(
-            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.size",
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.fraction",
             0.01,
             0.0,
             0.1,
@@ -172,9 +172,9 @@ public final class MLCommonsSettings {
     private static final ByteSizeValue MIN_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(1L, ByteSizeUnit.BYTES);
     private static final ByteSizeValue MAX_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(Long.MAX_VALUE, ByteSizeUnit.BYTES);
 
-    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN = Setting
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN = Setting
         .byteSizeSetting(
-            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.size.min",
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.min",
             new ByteSizeValue(64L, ByteSizeUnit.MB),
             MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
             MAX_DYNAMIC_BATCHING_MEMORY_BOUND,
@@ -182,9 +182,9 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX = Setting
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX = Setting
         .byteSizeSetting(
-            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.size.max",
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.max",
             new ByteSizeValue(512L, ByteSizeUnit.MB),
             MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
             MAX_DYNAMIC_BATCHING_MEMORY_BOUND,

@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.batch;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -41,18 +41,18 @@ public class BatchInferenceRouter {
         BatchSplitter splitter = new BatchSplitter();
         this.executor = new BatchInferenceExecutor(registry, splitter);
 
-        ByteSizeValue floor = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.get(settings);
-        ByteSizeValue ceiling = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.get(settings);
+        ByteSizeValue floor = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.get(settings);
+        ByteSizeValue ceiling = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.get(settings);
         validateMemoryBounds(floor, ceiling);
 
-        this.memoryFraction = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.get(settings);
+        this.memoryFraction = ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.get(settings);
         this.memoryFloorBytes = floor.getBytes();
         this.memoryCeilingBytes = ceiling.getBytes();
 
         QueueMemoryBudget budget = new QueueMemoryBudget(clampBudget(memoryFraction, memoryFloorBytes, memoryCeilingBytes));
 
         ClusterSettings clusterSettings = clusterService.getClusterSettings();
-        clusterSettings.addSettingsUpdateConsumer(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE, value -> {
+        clusterSettings.addSettingsUpdateConsumer(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION, value -> {
             memoryFraction = value;
             budget.setMaxBytes(clampBudget(memoryFraction, memoryFloorBytes, memoryCeilingBytes));
         });
@@ -60,8 +60,8 @@ public class BatchInferenceRouter {
         // validation time instead of silently clamping the budget to an unusable value.
         clusterSettings
             .addSettingsUpdateConsumer(
-                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN,
-                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX,
+                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN,
+                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX,
                 (newFloor, newCeiling) -> {
                     memoryFloorBytes = newFloor.getBytes();
                     memoryCeilingBytes = newCeiling.getBytes();
@@ -107,11 +107,11 @@ public class BatchInferenceRouter {
     static void validateMemoryBounds(ByteSizeValue floorBytes, ByteSizeValue ceilingBytes) {
         if (ceilingBytes.getBytes() < floorBytes.getBytes()) {
             throw new IllegalArgumentException(
-                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey()
+                ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey()
                     + " ["
                     + ceilingBytes
                     + "] must be at least "
-                    + ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey()
+                    + ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey()
                     + " ["
                     + floorBytes
                     + "]"

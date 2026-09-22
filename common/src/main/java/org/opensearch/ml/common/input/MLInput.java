@@ -87,12 +87,17 @@ public class MLInput implements Input {
 
     private int version = 1;
 
-    @Builder(toBuilder = true)
     public MLInput(FunctionName algorithm, MLAlgoParams parameters, MLInputDataset inputDataset) {
+        this(algorithm, parameters, inputDataset, null);
+    }
+
+    @Builder(toBuilder = true)
+    public MLInput(FunctionName algorithm, MLAlgoParams parameters, MLInputDataset inputDataset, FunctionName callerAlgorithm) {
         validate(algorithm);
         this.algorithm = algorithm;
         this.parameters = parameters;
         this.inputDataset = inputDataset;
+        this.callerAlgorithm = callerAlgorithm;
     }
 
     public MLInput(

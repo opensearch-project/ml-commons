@@ -109,7 +109,7 @@ public class BatchInferenceExecutor {
             @Override
             public void onResponse(MLTaskResponse response) {
                 try {
-                    handler.distributeExactly(response.getOutput(), itemCount);
+                    handler.ensureResultCount(response.getOutput(), itemCount);
                 } catch (Exception invalidOutput) {
                     log
                         .error(

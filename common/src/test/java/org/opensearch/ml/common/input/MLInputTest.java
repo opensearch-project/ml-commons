@@ -327,6 +327,20 @@ public class MLInputTest {
     }
 
     @Test
+    public void toBuilder_PreservesCallerAlgorithm() {
+        MLInput input = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .callerAlgorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(TextDocsInputDataSet.builder().docs(List.of("text")).build())
+            .build();
+
+        MLInput rebuilt = input.toBuilder().inputDataset(TextDocsInputDataSet.builder().docs(List.of("other")).build()).build();
+
+        assertEquals(FunctionName.TEXT_EMBEDDING, rebuilt.getCallerAlgorithm());
+    }
+
+    @Test
     public void testParse_TextSimilarity() throws IOException {
         List<String> docs = List.of("That is a happy dog", "it's summer");
         String queryText = "today is sunny";

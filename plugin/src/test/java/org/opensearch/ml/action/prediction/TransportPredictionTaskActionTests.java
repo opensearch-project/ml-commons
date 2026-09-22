@@ -299,6 +299,28 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testDoExecute_doesNotInferCallerAlgorithmFromNormalizedRemoteInput() {
+        MLInput callerInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("k", "v")).build())
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_id")
+            .mlInput(callerInput)
+            .user(User.parse("admin|role-1|all_access"))
+            .build();
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getIsHidden()).thenReturn(false);
+
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+
+        assertNull(callerInput.getCallerAlgorithm());
+    }
+
+    @Test
     public void testValidateInputSchemaSuccess() {
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
             .builder()
