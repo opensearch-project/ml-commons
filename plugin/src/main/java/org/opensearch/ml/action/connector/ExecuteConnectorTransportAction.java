@@ -140,6 +140,17 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                         actionListener.onFailure(e);
                     });
                     connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
+                } else {
+                    // Without this the listener is never completed on denial, so the request hangs until the client
+                    // gives up instead of reporting that access was refused.
+                    log.error("You don't have permission to execute this connector, connector id: {}", connectorId);
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "You don't have permission to execute this connector, connector id: " + connectorId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
                 }
             }, e -> {
                 log.error("Failed to get connector " + connectorId, e);

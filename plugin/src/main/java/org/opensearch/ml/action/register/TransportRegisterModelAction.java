@@ -464,6 +464,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
         ConnectorProtocolValidator.validateMutualTlsSupported(connector.getProtocol(), connector.getConnectorClientConfig());
+        ConnectorProtocolValidator.validateMutualTlsEnabled(connector.getConnectorClientConfig(), mlFeatureEnabledSetting);
         // check if the connector url is trusted
         // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
         // model, so no need to verify the connector endpoint as trusted or not
