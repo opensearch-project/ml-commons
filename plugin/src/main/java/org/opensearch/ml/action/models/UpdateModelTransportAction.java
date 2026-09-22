@@ -372,8 +372,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         ConnectorProtocolValidator
                             .validateMutualTlsSchemeAfterUpdate(
                                 connector.getActions(),
+                                connector.getParameters(),
                                 connector.getConnectorClientConfig(),
                                 updateModelInput.getConnector().getActions(),
+                                updateModelInput.getConnector().getParameters(),
                                 updateModelInput.getConnector().getConnectorClientConfig()
                             );
                     } catch (Exception e) {

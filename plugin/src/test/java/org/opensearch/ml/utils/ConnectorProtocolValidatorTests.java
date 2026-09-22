@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUT
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.Mock;
@@ -247,22 +248,22 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
     }
 
     public void testMutualTlsScheme_nullAndDisabledInputsAreIgnored() {
-        ConnectorProtocolValidator.validateMutualTlsScheme(null, mtls(true));
-        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), null);
+        ConnectorProtocolValidator.validateMutualTlsScheme(null, null, mtls(true));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), null, null);
         // Without mutual TLS the scheme is not this check's business - a cleartext connector is a separate
         // concern, governed by the trusted-endpoint allowlist.
-        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), mtls(false));
-        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), mtls(null));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), null, mtls(false));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), null, mtls(null));
     }
 
     public void testMutualTlsScheme_allowedOnHttps() {
-        ConnectorProtocolValidator.validateMutualTlsScheme(actions("https://host/predict"), mtls(true));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("https://host/predict"), null, mtls(true));
     }
 
     public void testMutualTlsScheme_rejectedOnCleartextUrl() {
         IllegalArgumentException e = expectThrows(
             IllegalArgumentException.class,
-            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), mtls(true))
+            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), null, mtls(true))
         );
         // The offending URL is named, so an operator can tell which action to fix.
         assertTrue(e.getMessage().contains("http://host/predict"));
@@ -272,20 +273,62 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
     public void testMutualTlsScheme_schemeMatchIgnoresCaseAndLeadingWhitespace() {
         expectThrows(
             IllegalArgumentException.class,
-            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("  HTTP://host/predict"), mtls(true))
+            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("  HTTP://host/predict"), null, mtls(true))
         );
     }
 
     /** The scheme of a substituted URL is not knowable until predict time, so it is left alone. */
+    /** Genuinely unresolvable at create time: nothing supplies "endpoint", so the scheme is unknown. */
     public void testMutualTlsScheme_unresolvedSubstitutionIsLeftAlone() {
-        ConnectorProtocolValidator.validateMutualTlsScheme(actions("${parameters.endpoint}/predict"), mtls(true));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("${parameters.endpoint}/predict"), null, mtls(true));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("${parameters.endpoint}/predict"), Map.of("other", "x"), mtls(true));
+    }
+
+    /**
+     * A placeholder the connector resolves itself is not unknowable - Connector#validateConnectorURL substitutes
+     * the same map on the same request. Writing the endpoint as a parameter must not buy a pass that the literal
+     * form does not get.
+     */
+    public void testMutualTlsScheme_rejectsCleartextThroughAConnectorSuppliedParameter() {
+        IllegalArgumentException e = expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMutualTlsScheme(
+                    actions("${parameters.endpoint}/v1/chat/completions"),
+                    Map.of("endpoint", "http://internal-llm.corp:8080"),
+                    mtls(true)
+                )
+        );
+        // The message names the resolved URL, not the placeholder.
+        assertTrue(e.getMessage().contains("http://internal-llm.corp:8080/v1/chat/completions"));
+    }
+
+    public void testMutualTlsScheme_acceptsHttpsThroughAConnectorSuppliedParameter() {
+        ConnectorProtocolValidator
+            .validateMutualTlsScheme(actions("${parameters.endpoint}/predict"), Map.of("endpoint", "https://host"), mtls(true));
+    }
+
+    /** Parameters merge with putAll on update, so an update that only changes the endpoint is still judged. */
+    public void testMutualTlsScheme_updateThatOnlyChangesTheEndpointParameterIsJudged() {
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMutualTlsSchemeAfterUpdate(
+                    actions("${parameters.endpoint}/predict"),
+                    Map.of("endpoint", "https://host"),
+                    mtls(true),
+                    null,
+                    Map.of("endpoint", "http://host:8080"),
+                    null
+                )
+        );
     }
 
     /** https on predict does not excuse a cleartext hop on another action. */
     public void testMutualTlsScheme_rejectsCleartextInAnyAction() {
         expectThrows(
             IllegalArgumentException.class,
-            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("https://host/predict", "http://host/batch"), mtls(true))
+            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("https://host/predict", "http://host/batch"), null, mtls(true))
         );
     }
 
@@ -293,7 +336,14 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
         expectThrows(
             IllegalArgumentException.class,
             () -> ConnectorProtocolValidator
-                .validateMutualTlsSchemeAfterUpdate(actions("https://host/predict"), mtls(true), actions("http://host/predict"), null)
+                .validateMutualTlsSchemeAfterUpdate(
+                    actions("https://host/predict"),
+                    null,
+                    mtls(true),
+                    actions("http://host/predict"),
+                    null,
+                    null
+                )
         );
     }
 
@@ -302,7 +352,7 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
         expectThrows(
             IllegalArgumentException.class,
             () -> ConnectorProtocolValidator
-                .validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), mtls(false), null, mtls(true))
+                .validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), null, mtls(false), null, null, mtls(true))
         );
     }
 
@@ -311,15 +361,23 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
      * client_config to keep mutual_tls_enabled, and rejecting that would make the connector uneditable.
      */
     public void testMutualTlsSchemeAfterUpdate_allowsEditOfPreExistingCleartextCombination() {
-        ConnectorProtocolValidator.validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), mtls(true), null, mtls(true));
+        ConnectorProtocolValidator
+            .validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), null, mtls(true), null, null, mtls(true));
     }
 
     public void testMutualTlsSchemeAfterUpdate_allowsSwitchToHttps() {
         ConnectorProtocolValidator
-            .validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), mtls(true), actions("https://host/predict"), null);
+            .validateMutualTlsSchemeAfterUpdate(
+                actions("http://host/predict"),
+                null,
+                mtls(true),
+                actions("https://host/predict"),
+                null,
+                null
+            );
     }
 
     public void testMutualTlsSchemeAfterUpdate_noChangeIsAllowed() {
-        ConnectorProtocolValidator.validateMutualTlsSchemeAfterUpdate(actions("https://host/predict"), mtls(true), null, null);
+        ConnectorProtocolValidator.validateMutualTlsSchemeAfterUpdate(actions("https://host/predict"), null, mtls(true), null, null, null);
     }
 }

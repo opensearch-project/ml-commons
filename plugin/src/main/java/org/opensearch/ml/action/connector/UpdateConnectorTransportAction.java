@@ -155,8 +155,10 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 ConnectorProtocolValidator
                                     .validateMutualTlsSchemeAfterUpdate(
                                         connector.getActions(),
+                                        connector.getParameters(),
                                         connector.getConnectorClientConfig(),
                                         mlUpdateConnectorAction.getUpdateContent().getActions(),
+                                        mlUpdateConnectorAction.getUpdateContent().getParameters(),
                                         mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
                                     );
                             } catch (Exception e) {

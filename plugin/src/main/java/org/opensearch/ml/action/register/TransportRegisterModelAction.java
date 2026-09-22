@@ -397,6 +397,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         ConnectorProtocolValidator
             .validateMutualTlsScheme(
                 registerModelInput.getConnector().getActions(),
+                registerModelInput.getConnector().getParameters(),
                 registerModelInput.getConnector().getConnectorClientConfig()
             );
         // check if the connector url is trusted
