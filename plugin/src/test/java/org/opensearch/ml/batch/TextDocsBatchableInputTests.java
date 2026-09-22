@@ -206,6 +206,11 @@ public class TextDocsBatchableInputTests {
             .build();
 
         assertEquals(3, handler.resultCount(output));
+        assertEquals(
+            "resultCount must match distribute() so the split and single-call paths cannot drift",
+            handler.distribute(output).size(),
+            handler.resultCount(output)
+        );
     }
 
     /** One model call's output: a single ModelTensors group with one tensor per doc. */

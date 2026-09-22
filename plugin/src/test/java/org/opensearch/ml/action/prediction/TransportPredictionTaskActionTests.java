@@ -299,7 +299,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testDoExecute_doesNotInferCallerAlgorithmFromNormalizedRemoteInput() {
+    public void testDoExecute_doesNotInferCallerAlgorithmFromRedispatchedRemoteInput() {
         MLInput callerInput = MLInput
             .builder()
             .algorithm(FunctionName.REMOTE)
@@ -309,6 +309,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             .builder()
             .modelId("test_id")
             .mlInput(callerInput)
+            .dispatchTask(false)
             .user(User.parse("admin|role-1|all_access"))
             .build();
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
@@ -318,6 +319,29 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         transportPredictionTaskAction.doExecute(null, request, actionListener);
 
         assertNull(callerInput.getCallerAlgorithm());
+    }
+
+    @Test
+    public void testDoExecute_capturesRemoteCallerAlgorithmOnCoordinator() {
+        MLInput callerInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("k", "v")).build())
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_id")
+            .mlInput(callerInput)
+            .dispatchTask(true)
+            .user(User.parse("admin|role-1|all_access"))
+            .build();
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getIsHidden()).thenReturn(false);
+
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+
+        assertEquals(FunctionName.REMOTE, callerInput.getCallerAlgorithm());
     }
 
     @Test

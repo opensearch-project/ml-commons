@@ -258,10 +258,7 @@ public class DynamicBatchingQueue {
                 continue;
             }
             FunctionName callerAlgorithm = entry.getInput().getCallerAlgorithm();
-            // A pre-3.9 coordinator cannot send callerAlgorithm. The receiving node may therefore see null, or
-            // REMOTE if the request was already normalized before transport. In either case, isolate the request:
-            // its original caller type is unknown, so coalescing it could mix text embedding with sparse encoding.
-            Object callerAlgorithmKey = callerAlgorithm != null && callerAlgorithm != FunctionName.REMOTE ? callerAlgorithm : entry;
+            Object callerAlgorithmKey = callerAlgorithm != null ? callerAlgorithm : entry;
             GroupKey groupId = new GroupKey(entry.getInput().getInputDataset().getInputDataType(), callerAlgorithmKey, entry.getGroupKey());
             groups.computeIfAbsent(groupId, k -> new ArrayList<>()).add(entry);
         }

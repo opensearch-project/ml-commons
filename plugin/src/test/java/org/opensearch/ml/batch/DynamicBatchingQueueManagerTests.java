@@ -174,10 +174,10 @@ public class DynamicBatchingQueueManagerTests {
     }
 
     @Test
-    public void requestsWithNormalizedRemoteCallerAlgorithmDoNotCoalesce() {
+    public void requestsWithRemoteCallerAlgorithmCoalesce() {
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls);
-        BatchInferenceConfig config = queued(100, 10_000L);
+        BatchInferenceConfig config = queued(2, 10_000L);
 
         MLInput a = textInput("a");
         a.setCallerAlgorithm(FunctionName.REMOTE);
@@ -186,9 +186,8 @@ public class DynamicBatchingQueueManagerTests {
 
         manager.enqueue("model-1", config, a, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
         manager.enqueue("model-1", config, b, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
-        scheduledFlush.get().run();
 
-        assertEquals("requests whose original caller algorithm is unavailable must not coalesce", 2, calls.get());
+        assertEquals("direct remote predict requests should share a model call", 1, calls.get());
     }
 
     @Test

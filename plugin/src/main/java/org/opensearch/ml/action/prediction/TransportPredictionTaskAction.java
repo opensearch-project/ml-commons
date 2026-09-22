@@ -132,7 +132,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                         throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
                     }
                     if (mlPredictionTaskRequest.getMlInput().getCallerAlgorithm() == null
-                        && mlPredictionTaskRequest.getMlInput().getAlgorithm() != FunctionName.REMOTE) {
+                        && (mlPredictionTaskRequest.getMlInput().getAlgorithm() != FunctionName.REMOTE
+                            || mlPredictionTaskRequest.isDispatchTask())) {
                         mlPredictionTaskRequest.getMlInput().setCallerAlgorithm(mlPredictionTaskRequest.getMlInput().getAlgorithm());
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
