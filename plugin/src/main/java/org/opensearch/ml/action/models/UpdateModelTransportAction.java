@@ -135,6 +135,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
+        // updatedConnector is written straight into the model's connector field, and it is wire-serialized, so a
+        // transport caller can set it even though the REST layer clears it. Checked here, before the inline-connector
+        // path sets it itself further down, so only a caller-supplied value is inspected.
+        if (updateModelInput.getUpdatedConnector() != null
+            && ConnectorProtocols.isMcpProtocol(updateModelInput.getUpdatedConnector().getProtocol())) {
+            log.error("Rejected update of model {} with an MCP connector", modelId);
+            actionListener
+                .onFailure(new OpenSearchStatusException("Cannot update this model to use an MCP connector.", RestStatus.BAD_REQUEST));
+            return;
+        }
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
@@ -345,6 +355,26 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             );
                         return;
                     }
+                    // The stored connector is already MCP, which means this model predates the checks that now
+                    // refuse to attach one. Patching it cannot produce a usable model - the document carries MCP
+                    // fields, so relabelling its protocol just moves the breakage - and supplying actions reads
+                    // getActions() on it below, which is unimplemented and escapes as a 500. Same invariant as the
+                    // connector API applies to a protocol crossing, stated from the other side.
+                    if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                        log.error("Rejected inline connector update for model {} backed by an MCP connector", modelId);
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Cannot update the inline connector of model "
+                                        + modelId
+                                        + ": it is an MCP connector [protocol "
+                                        + connector.getProtocol()
+                                        + "], which cannot back a model. Register the model against an inference connector instead.",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
+                        return;
+                    }
                     // A model's inline connector can have its protocol changed here, so apply the same
                     // supported-protocol and feature-flag checks the connector API applies, using the value
                     // the connector will have once the update is applied.
@@ -355,6 +385,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         if (updatedProtocol != null) {
                             ConnectorProtocols.validateProtocol(updatedProtocol);
                             ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                            // Connector.update() overwrites the protocol in place, so this would persist a model
+                            // whose connector document says MCP while holding inference fields. Reading it back
+                            // resolves the concrete class from that protocol, producing an MCP connector whose
+                            // action accessors are unimplemented - the model becomes permanently unusable.
+                            if (ConnectorProtocols.isMcpProtocol(updatedProtocol)) {
+                                throw new OpenSearchStatusException(
+                                    "Cannot change this model's connector to MCP protocol [" + updatedProtocol + "].",
+                                    RestStatus.BAD_REQUEST
+                                );
+                            }
                         }
                         ConnectorProtocolValidator
                             .validateMutualTlsSupportedAfterUpdate(
@@ -473,15 +513,35 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     mlFeatureEnabledSetting,
                     ActionListener.wrap(hasNewConnectorPermission -> {
                         if (hasNewConnectorPermission) {
-                            updateModelWithRegisteringToAnotherModelGroup(
-                                modelId,
-                                newModelGroupId,
-                                tenantId,
-                                user,
-                                updateModelInput,
-                                wrappedListener,
-                                isUpdateModelCache
-                            );
+                            // The new connector has to be one a model can predict with. Model register rejects MCP
+                            // connectors for that reason; without the same check here a model could be registered
+                            // against an http connector and then re-pointed at an MCP one, which only surfaces as
+                            // an UnsupportedOperationException at deploy or predict time.
+                            mlModelManager.getConnector(newConnectorId, tenantId, ActionListener.wrap(newConnector -> {
+                                if (ConnectorProtocols.isMcpProtocol(newConnector.getProtocol())) {
+                                    log.error("Rejected update of model {} onto MCP connector {}", modelId, newConnectorId);
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Cannot update this model to use MCP connector: " + newConnectorId,
+                                                RestStatus.BAD_REQUEST
+                                            )
+                                        );
+                                    return;
+                                }
+                                updateModelWithRegisteringToAnotherModelGroup(
+                                    modelId,
+                                    newModelGroupId,
+                                    tenantId,
+                                    user,
+                                    updateModelInput,
+                                    wrappedListener,
+                                    isUpdateModelCache
+                                );
+                            }, e -> {
+                                log.error("Failed to load new connector {} while updating model {}", newConnectorId, modelId, e);
+                                wrappedListener.onFailure(e);
+                            }));
                         } else {
                             wrappedListener
                                 .onFailure(
