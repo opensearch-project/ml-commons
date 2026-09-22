@@ -629,6 +629,23 @@ public final class MLCommonsSettings {
         "The Vertex AI (google_cloud) connector is not enabled. To enable it, please update the cluster setting "
             + ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.getKey();
 
+    // Feature flag for connector mutual TLS. Disabled by default (opt-in).
+    //
+    // Support for mutual_tls_enabled is not complete: it is not applied on the streaming path, and some
+    // adjacent certificate and CA handling does not yet match what the field implies. Until that is finished,
+    // an operator needs a way to keep the field from being accepted rather than having it stored and reported
+    // back as configured. Gating it matches how the other new connector surfaces ship
+    // (connector.vertexai_enabled, stream_enabled) and is reversible in one setting.
+    public static final Setting<Boolean> ML_COMMONS_MUTUAL_TLS_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.mutual_tls_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE =
+        "Connector mutual TLS is not enabled. To enable it, please update the cluster setting " + ML_COMMONS_MUTUAL_TLS_ENABLED.getKey();
+
     // Feature flag for global tenant id in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);

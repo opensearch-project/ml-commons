@@ -147,6 +147,16 @@ public class ConnectorAccessControlHelper {
                 ) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     Connector connector = Connector.createConnector(parser);
+                    if (connector == null) {
+                        // createConnector swallows a parse failure and returns null. Consumers dereference the
+                        // result, so report it here rather than handing them a null to trip over.
+                        log.error("Failed to read connector {}: the stored document could not be parsed", connectorId);
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException("Failed to read connector: " + connectorId, RestStatus.INTERNAL_SERVER_ERROR)
+                            );
+                        return;
+                    }
                     listener.onResponse(connector);
                 } catch (Exception e) {
                     log.error("Failed to parse connector:{}", connectorId);
@@ -201,6 +211,19 @@ public class ConnectorAccessControlHelper {
                         ) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             Connector mlConnector = Connector.createConnector(parser);
+                            if (mlConnector == null) {
+                                // Without this, removeCredential() below throws an NPE that the enclosing catch
+                                // reports as a parse or permission failure.
+                                log.error("Failed to read connector {}: the stored document could not be parsed", connectorId);
+                                listener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Failed to read connector: " + connectorId,
+                                            RestStatus.INTERNAL_SERVER_ERROR
+                                        )
+                                    );
+                                return;
+                            }
                             mlConnector.removeCredential();
                             listener.onResponse(mlConnector);
                         } catch (Exception e) {

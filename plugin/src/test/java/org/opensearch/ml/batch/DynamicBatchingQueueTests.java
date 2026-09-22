@@ -16,6 +16,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,10 +27,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -287,6 +290,123 @@ public class DynamicBatchingQueueTests {
         assertEquals("unaffected caller still succeeds", ImmutableList.of(docA), resultNames(a.get()));
         assertNull(aErr.get());
         assertTrue("only the caller in the failed sub-batch fails", bErr.get().getMessage().contains(docB));
+    }
+
+    /** A model whose call fails with the given exception, whatever the docs are. */
+    private Predictable failingModel(Exception failure) {
+        return new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                listener.onFailure(failure);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+    }
+
+    /**
+     * A provider error carries the provider's raw response body, which describes the merged call rather than any
+     * one request in it, so a merged sub-batch reports a generic failure instead of passing it to each request.
+     */
+    @Test
+    public void mergedSubBatchFailureReportsAGenericErrorToEachRequest() {
+        // Count limit 2 with no byte limit: both callers' docs go out in one call.
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        Predictable predictor = failingModel(
+            new OpenSearchStatusException(REMOTE_SERVICE_ERROR + "{\"error\":\"bad input doc-of-b\"}", RestStatus.BAD_REQUEST)
+        );
+
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, aErr::set), "doc-of-a"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), "doc-of-b"));
+
+        assertNotNull("both callers in the merged call fail", aErr.get());
+        assertNotNull(bErr.get());
+        for (Exception e : new Exception[] { aErr.get(), bErr.get() }) {
+            assertFalse("the provider message was passed through to an individual request", e.getMessage().contains("doc-of-b"));
+            assertTrue(e.getMessage().contains("merged with other requests"));
+            // The status has to survive, or a client retrying on 429 and giving up on 500 would stop retrying a
+            // temporary provider throttle.
+            assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) e).status());
+        }
+    }
+
+    /**
+     * The failure listener also receives errors raised before the provider was called - throttling, a guardrail
+     * rejection, a model that is not deployed. Masking those would hide the caller's own reason from them.
+     */
+    @Test
+    public void mergedSubBatchPassesThroughErrorsWeRaisedOurselves() {
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        Predictable predictor = failingModel(
+            new OpenSearchStatusException("Request is throttled at user level.", RestStatus.TOO_MANY_REQUESTS)
+        );
+
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, aErr::set), "doc-of-a"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), "doc-of-b"));
+
+        for (Exception e : new Exception[] { aErr.get(), bErr.get() }) {
+            assertEquals("Request is throttled at user level.", e.getMessage());
+            assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) e).status());
+        }
+    }
+
+    /**
+     * The other half: a sub-batch holding one caller's items keeps the provider's message, which is what makes
+     * the failure diagnosable. This is also the only shape that exists when coalescing is off.
+     */
+    @Test
+    public void singleCallerSubBatchFailureKeepsTheProviderError() {
+        // Byte limit only, so each 30-byte doc lands in its own call.
+        String docA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        String docB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(null, 40L, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        String providerBody = REMOTE_SERVICE_ERROR + "{\"error\":\"bad input\"}";
+        Predictable predictor = failingModel(new OpenSearchStatusException(providerBody, RestStatus.BAD_REQUEST));
+
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), docA));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), docB));
+
+        assertEquals(providerBody, bErr.get().getMessage());
     }
 
     @Test

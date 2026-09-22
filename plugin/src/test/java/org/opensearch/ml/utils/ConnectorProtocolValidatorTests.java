@@ -5,12 +5,16 @@
 
 package org.opensearch.ml.utils;
 
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED;
 
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -73,6 +77,78 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
         ConnectorProtocolValidator.validateProtocolEnabled(ConnectorProtocols.MCP_SSE, mlFeatureEnabledSetting);
         ConnectorProtocolValidator.validateProtocolEnabled(ConnectorProtocols.MCP_STREAMABLE_HTTP, mlFeatureEnabledSetting);
+    }
+
+    /** The gate matches MCP case-insensitively, so an odd spelling cannot slip past a disabled flag. */
+    public void testProtocolEnabled_mcpProtocolRejectedRegardlessOfCase() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator.validateProtocolEnabled("MCP_SSE", mlFeatureEnabledSetting)
+        );
+        assertEquals(RestStatus.FORBIDDEN, e.status());
+    }
+
+    // ---- validateMutualTlsEnabled ------------------------------------------
+
+    public void testMutualTlsEnabled_nullAndDisabledInputsAreIgnored() {
+        // Nothing to gate: these requests do not ask for mTLS, so the flag must not be consulted at all.
+        // An update that leaves client_config alone has to keep working while the flag is off.
+        ConnectorProtocolValidator.validateMutualTlsEnabled(null, mlFeatureEnabledSetting);
+        ConnectorProtocolValidator.validateMutualTlsEnabled(mtls(null), mlFeatureEnabledSetting);
+        ConnectorProtocolValidator.validateMutualTlsEnabled(mtls(false), mlFeatureEnabledSetting);
+        verify(mlFeatureEnabledSetting, never()).isMutualTlsEnabled();
+    }
+
+    public void testMutualTlsEnabled_rejectedWhenFlagOff() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator.validateMutualTlsEnabled(mtls(true), mlFeatureEnabledSetting)
+        );
+        assertEquals(RestStatus.FORBIDDEN, e.status());
+        assertTrue(e.getMessage().contains(ML_COMMONS_MUTUAL_TLS_ENABLED.getKey()));
+    }
+
+    public void testMutualTlsEnabled_allowedWhenFlagOn() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        ConnectorProtocolValidator.validateMutualTlsEnabled(mtls(true), mlFeatureEnabledSetting);
+    }
+
+    /** The flag is off by default, so a cluster that never set it rejects mTLS. */
+    public void testMutualTlsEnabled_defaultIsDisabled() {
+        assertFalse(ML_COMMONS_MUTUAL_TLS_ENABLED.get(Settings.EMPTY));
+    }
+
+    /**
+     * An update replaces client_config wholesale, so an operator editing an unrelated field has to re-send
+     * mutual_tls_enabled to keep it. Rejecting that would make an existing mutual-TLS connector uneditable as
+     * soon as the setting is turned off, instead of just preventing new reliance on the control.
+     */
+    public void testMutualTlsEnabled_storedValueIsCarriedForwardWhileFlagOff() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        ConnectorProtocolValidator.validateMutualTlsEnabledAfterUpdate(mtls(true), mtls(true), mlFeatureEnabledSetting);
+    }
+
+    /** Turning it on for a connector that did not have it is what the setting is there to stop. */
+    public void testMutualTlsEnabled_newlyEnablingOnAnExistingConnectorIsRejected() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        for (ConnectorClientConfig stored : new ConnectorClientConfig[] { null, mtls(null), mtls(false) }) {
+            OpenSearchStatusException e = expectThrows(
+                OpenSearchStatusException.class,
+                () -> ConnectorProtocolValidator.validateMutualTlsEnabledAfterUpdate(stored, mtls(true), mlFeatureEnabledSetting)
+            );
+            assertEquals(RestStatus.FORBIDDEN, e.status());
+        }
+    }
+
+    /** Create has no stored connector, so it delegates with a null stored config and cannot be grandfathered. */
+    public void testMutualTlsEnabled_createIsNeverGrandfathered() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator.validateMutualTlsEnabled(mtls(true), mlFeatureEnabledSetting)
+        );
     }
 
     // ---- validateMutualTlsSupported ----------------------------------------

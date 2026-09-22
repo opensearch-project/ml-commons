@@ -6,6 +6,7 @@
 package org.opensearch.ml.utils;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 
 import java.util.Set;
@@ -40,12 +41,58 @@ public class ConnectorProtocolValidator {
         if (protocol == null) {
             return;
         }
-        boolean isMcpProtocol = ConnectorProtocols.MCP_SSE.equals(protocol) || ConnectorProtocols.MCP_STREAMABLE_HTTP.equals(protocol);
-        if (isMcpProtocol && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
+        if (ConnectorProtocols.isMcpProtocol(protocol) && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             throw new OpenSearchStatusException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
         }
         if (ConnectorProtocols.GOOGLE_CLOUD.equals(protocol) && !mlFeatureEnabledSetting.isVertexAIConnectorEnabled()) {
             throw new OpenSearchStatusException(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        }
+    }
+
+    /**
+     * Rejects a request that turns {@code mutual_tls_enabled} on while the mutual-TLS setting is off.
+     * <p>
+     * Create variant: there is no stored connector, so any request asking for mutual TLS is turning it on.
+     * <p>
+     * Call this <em>after</em> {@link #validateMutualTlsSupported(String, ConnectorClientConfig)}: when a
+     * request asks for mutual TLS on a protocol that can never apply it <em>and</em> the setting is off, the
+     * protocol message is the useful one, because enabling the setting would not make that request work.
+     *
+     * @param clientConfig the resulting connector client config; {@code null} or mTLS-off is ignored
+     * @param mlFeatureEnabledSetting feature flag accessor
+     * @throws OpenSearchStatusException with {@link RestStatus#FORBIDDEN} if mutual TLS is being turned on
+     *         while the setting is off
+     */
+    public static void validateMutualTlsEnabled(ConnectorClientConfig clientConfig, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        validateMutualTlsEnabledAfterUpdate(null, clientConfig, mlFeatureEnabledSetting);
+    }
+
+    /**
+     * Update variant of {@link #validateMutualTlsEnabled(ConnectorClientConfig, MLFeatureEnabledSetting)}.
+     * <p>
+     * A connector whose stored config already has mutual TLS on is left alone. That is not laxness: an update
+     * replaces {@code client_config} wholesale ({@code HttpConnector#update}), so an operator editing an
+     * unrelated field such as {@code max_connection} has to re-send {@code mutual_tls_enabled} to avoid
+     * dropping it. Rejecting that would make an existing mutual-TLS connector uneditable the moment the
+     * setting is turned off, rather than merely preventing new reliance on the control.
+     *
+     * @param storedConfig the client config the connector has now; {@code null} for a create
+     * @param updatedConfig the client config the request carries
+     * @param mlFeatureEnabledSetting feature flag accessor
+     */
+    public static void validateMutualTlsEnabledAfterUpdate(
+        ConnectorClientConfig storedConfig,
+        ConnectorClientConfig updatedConfig,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
+    ) {
+        if (updatedConfig == null || !Boolean.TRUE.equals(updatedConfig.getMutualTlsEnabled())) {
+            return;
+        }
+        if (storedConfig != null && Boolean.TRUE.equals(storedConfig.getMutualTlsEnabled())) {
+            return;
+        }
+        if (!mlFeatureEnabledSetting.isMutualTlsEnabled()) {
+            throw new OpenSearchStatusException(ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
         }
     }
 

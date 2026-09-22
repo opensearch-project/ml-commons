@@ -8,6 +8,7 @@ package org.opensearch.ml.jobs.processors;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -19,6 +20,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +38,8 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
@@ -46,6 +52,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.FunctionName;
@@ -56,6 +63,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.transport.memorycontainer.MemoryRetentionDryRunResult;
+import org.opensearch.ml.jobs.MLJobType;
 import org.opensearch.search.DocValueFormat;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -222,9 +230,13 @@ public class MemoryRetentionDryRunTests {
     }
 
     private MemoryRetentionDryRunResult run(MemoryConfiguration config, Long baseline) {
+        return run(config, baseline, null);
+    }
+
+    private MemoryRetentionDryRunResult run(MemoryConfiguration config, Long baseline, String retentionJobWarning) {
         AtomicReference<MemoryRetentionDryRunResult> ref = new AtomicReference<>();
         AtomicReference<Exception> err = new AtomicReference<>();
-        processor.dryRunContainer(config, "container-1", baseline, ActionListener.wrap(ref::set, err::set));
+        processor.dryRunContainer(config, "container-1", baseline, retentionJobWarning, ActionListener.wrap(ref::set, err::set));
         if (err.get() != null) {
             fail("dryRunContainer failed: " + err.get());
         }
@@ -526,6 +538,108 @@ public class MemoryRetentionDryRunTests {
         assertEquals(0, result.getTotalWouldDelete());
         assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("no retention policy and no cluster defaults")));
         assertNoDeletes();
+    }
+
+    @Test
+    public void testSurfacesRetentionJobWarningAndStillReportsCounts() {
+        mockSessionsWouldEvict();
+
+        MemoryRetentionDryRunResult result = run(sessionConfig(7, 2), null, MemoryRetentionJobProcessor.JOB_NOT_REGISTERED_WARNING);
+
+        assertTrue(result.getWarnings().contains(MemoryRetentionJobProcessor.JOB_NOT_REGISTERED_WARNING));
+        // Counts are still reported, not zeroed: the operator needs both halves of the picture.
+        assertEquals(14, result.getTotalWouldDelete());
+        assertNoDeletes();
+    }
+
+    @Test
+    public void testNoRetentionJobWarningWhenNoneResolved() {
+        mockSessionsWouldEvict();
+
+        MemoryRetentionDryRunResult result = run(sessionConfig(7, 2), null, null);
+
+        assertFalse(result.getWarnings().stream().anyMatch(w -> w.contains("retention job")));
+        assertEquals(14, result.getTotalWouldDelete());
+        assertNoDeletes();
+    }
+
+    /** Stubs the jobs-index job-document lookup. {@code sourceJson} null means "document does not exist". */
+    private void mockJobDocument(String sourceJson) {
+        boolean exists = sourceJson != null;
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> l = invocation.getArgument(1);
+            l
+                .onResponse(
+                    new GetResponse(
+                        new GetResult(
+                            ML_JOBS_INDEX,
+                            MLJobType.MEMORY_RETENTION.name(),
+                            exists ? 0L : UNASSIGNED_SEQ_NO,
+                            exists ? 1L : UNASSIGNED_PRIMARY_TERM,
+                            exists ? 1L : -1L,
+                            exists,
+                            exists ? new BytesArray(sourceJson) : null,
+                            null,
+                            null
+                        )
+                    )
+                );
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+    }
+
+    private String resolveWarning() {
+        AtomicReference<String> ref = new AtomicReference<>();
+        AtomicReference<Boolean> called = new AtomicReference<>(Boolean.FALSE);
+        AtomicReference<Exception> err = new AtomicReference<>();
+        processor.resolveRetentionJobWarning(ActionListener.wrap(w -> {
+            called.set(Boolean.TRUE);
+            ref.set(w);
+        }, err::set));
+        if (err.get() != null) {
+            fail("resolveRetentionJobWarning must never fail the listener, but got: " + err.get());
+        }
+        assertTrue("resolveRetentionJobWarning should have completed", called.get());
+        return ref.get();
+    }
+
+    @Test
+    public void testResolveWarnsWhenJobsIndexMissing() {
+        lenient().when(clusterService.state().metadata().hasIndex(ML_JOBS_INDEX)).thenReturn(false);
+        assertEquals(MemoryRetentionJobProcessor.JOB_NOT_REGISTERED_WARNING, resolveWarning());
+        // Resolved from cluster state alone - no I/O on this path.
+        verify(client, never()).get(any(GetRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testResolveWarnsWhenJobDocumentMissing() {
+        // Index exists (another job type may have created it) but retention's registration never wrote its document.
+        mockJobDocument(null);
+        assertEquals(MemoryRetentionJobProcessor.JOB_NOT_REGISTERED_WARNING, resolveWarning());
+    }
+
+    @Test
+    public void testResolveWarnsWhenJobDocumentDisabled() {
+        mockJobDocument("{\"name\":\"MEMORY_RETENTION\",\"enabled\":false}");
+        // Distinct wording: the job is registered and scheduled, it just will not run until re-enabled.
+        assertEquals(MemoryRetentionJobProcessor.JOB_DISABLED_WARNING, resolveWarning());
+    }
+
+    @Test
+    public void testResolveNoWarningWhenJobActive() {
+        mockJobDocument("{\"name\":\"MEMORY_RETENTION\",\"enabled\":true}");
+        assertNull(resolveWarning());
+    }
+
+    @Test
+    public void testResolveNoWarningWhenStateIndeterminate() {
+        // An unreadable jobs index must not emit a misleading warning, nor fail the dry-run.
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> l = invocation.getArgument(1);
+            l.onFailure(new RuntimeException("jobs index unreadable"));
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        assertNull(resolveWarning());
     }
 
     private Settings.Builder gateSettings(boolean remoteMetadataStore, boolean retentionEnabled) {

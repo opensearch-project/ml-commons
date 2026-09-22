@@ -43,8 +43,9 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
-import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -279,6 +280,28 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         FunctionName functionName = registerModelInput.getFunctionName();
         if (FunctionName.REMOTE == functionName) {
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
+                // An inline connector is persisted alongside connector_id (MLModelManager.performIndexRemoteModel
+                // writes both), and it is the one deploy reads first, so it cannot be left unchecked just because a
+                // connector_id was also supplied - validateInternalConnector below never runs on this branch. This
+                // is request content, so no access check is owed before rejecting it.
+                Connector inlineConnector = registerModelInput.getConnector();
+                if (inlineConnector != null) {
+                    // Same order as validateInternalConnector uses on the other branch, so the same request content
+                    // does not report a different status depending on whether a connector_id happens to accompany it.
+                    ConnectorProtocolValidator.validateProtocolEnabled(inlineConnector.getProtocol(), mlFeatureEnabledSetting);
+                }
+                if (inlineConnector != null && ConnectorProtocols.isMcpProtocol(inlineConnector.getProtocol())) {
+                    log.error("Rejected model registration with an inline MCP connector, protocol {}", inlineConnector.getProtocol());
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Cannot create a model from an inline MCP connector: protocol ["
+                                    + inlineConnector.getProtocol()
+                                    + "] does not define a predict action."
+                            )
+                        );
+                    return;
+                }
                 connectorAccessControlHelper
                     .validateConnectorAccess(
                         sdkClient,
@@ -288,29 +311,49 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         mlFeatureEnabledSetting,
                         ActionListener.wrap(r -> {
                             if (Boolean.TRUE.equals(r)) {
-                                if (registerModelInput.getModelInterface() == null) {
-                                    mlModelManager
-                                        .getConnector(
-                                            registerModelInput.getConnectorId(),
-                                            registerModelInput.getTenantId(),
-                                            ActionListener.wrap(connector -> {
-                                                if (connector instanceof McpConnector) {
-                                                    listener
-                                                        .onFailure(
-                                                            new IllegalArgumentException(
-                                                                "Cannot Create a Model from MCP Connector: "
-                                                                    + registerModelInput.getConnectorId()
-                                                            )
-                                                        );
-                                                    return;
-                                                }
+                                // The connector is fetched even when the request carries its own interface, because
+                                // it is also what tells us whether the model can be backed by this connector at all.
+                                mlModelManager
+                                    .getConnector(
+                                        registerModelInput.getConnectorId(),
+                                        registerModelInput.getTenantId(),
+                                        ActionListener.wrap(connector -> {
+                                            // Checked by protocol rather than by type: mcp_streamable_http is a
+                                            // sibling of McpConnector, not a subclass, and an instanceof check
+                                            // lets it through to a preset model interface lookup that reads its
+                                            // actions and throws UnsupportedOperationException.
+                                            if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                                // Wording kept exactly as it was before this check moved off
+                                                // instanceof, so callers matching on the message still work.
+                                                log
+                                                    .error(
+                                                        "Rejected model registration against MCP connector {}",
+                                                        registerModelInput.getConnectorId()
+                                                    );
+                                                listener
+                                                    .onFailure(
+                                                        new IllegalArgumentException(
+                                                            "Cannot Create a Model from MCP Connector: "
+                                                                + registerModelInput.getConnectorId()
+                                                        )
+                                                    );
+                                                return;
+                                            }
+                                            // An interface supplied on the request wins over the connector's preset.
+                                            if (registerModelInput.getModelInterface() == null) {
                                                 updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
-                                                createModelGroup(registerModelInput, listener);
-                                            }, listener::onFailure)
-                                        );
-                                } else {
-                                    createModelGroup(registerModelInput, listener);
-                                }
+                                            }
+                                            createModelGroup(registerModelInput, listener);
+                                        }, e -> {
+                                            log
+                                                .error(
+                                                    "Failed to load connector {} while registering a model",
+                                                    registerModelInput.getConnectorId(),
+                                                    e
+                                                );
+                                            listener.onFailure(e);
+                                        })
+                                    );
                             } else {
                                 listener
                                     .onFailure(
@@ -345,6 +388,27 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest(registerModelInput.getTenantId());
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
+        } else if (registerModelInput.getConnector() != null || Strings.isNotBlank(registerModelInput.getConnectorId())) {
+            // uploadModel() routes any registration carrying a connector_id down the remote-model writer whatever
+            // the function name, so these fields are persisted rather than ignored - unvalidated, and without the
+            // connector-access check the REMOTE branch performs. A connector only means anything to a remote model,
+            // so refuse the combination instead of storing a document no API can repair. Model update already
+            // refuses connector edits for non-remote models, so the two paths now agree.
+            log
+                .error(
+                    "Rejected registration of a {} model carrying a connector, which only applies to remote models",
+                    registerModelInput.getFunctionName()
+                );
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "A connector or connector_id can only be used with function_name ["
+                            + FunctionName.REMOTE
+                            + "], but this request uses ["
+                            + registerModelInput.getFunctionName()
+                            + "]."
+                    )
+                );
         } else {
             createModelGroup(registerModelInput, listener);
         }
@@ -378,30 +442,39 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             log.error("You must provide connector content when creating a remote model without providing connector id!");
             throw new IllegalArgumentException("You must provide connector content when creating a remote model without connector id!");
         }
-        if (registerModelInput
-            .getConnector()
-            .getActionEndpoint(PREDICT.name(), registerModelInput.getConnector().getParameters()) == null) {
+        Connector connector = registerModelInput.getConnector();
+        // An inline connector establishes a protocol just as the connector API does, so it has to honour the
+        // same opt-in feature flags. Otherwise a gated protocol is reachable by attaching it to a model.
+        // Checked ahead of the validations below so a protocol left disabled reports as disabled rather
+        // than as whatever the next validation happens to find.
+        ConnectorProtocolValidator.validateProtocolEnabled(connector.getProtocol(), mlFeatureEnabledSetting);
+        // An MCP connector carries no actions, so every action accessor used below - and later by the preset
+        // model interface lookup - throws UnsupportedOperationException on one. Reject it before reading any
+        // of them, otherwise an unusable request escapes as a 500 "Not implemented." instead of a 4xx.
+        if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+            log.error("Rejected model registration with an inline MCP connector, protocol {}", connector.getProtocol());
+            throw new IllegalArgumentException(
+                "Cannot create a model from an inline MCP connector: protocol ["
+                    + connector.getProtocol()
+                    + "] does not define a predict action."
+            );
+        }
+        if (connector.getActionEndpoint(PREDICT.name(), connector.getParameters()) == null) {
             log.error("Connector endpoint is required when creating a remote model without connector id!");
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
-        // An inline connector establishes a protocol just as the connector API does, so it has to honour the
-        // same opt-in feature flags. Otherwise a gated protocol is reachable by attaching it to a model.
-        ConnectorProtocolValidator.validateProtocolEnabled(registerModelInput.getConnector().getProtocol(), mlFeatureEnabledSetting);
-        ConnectorProtocolValidator
-            .validateMutualTlsSupported(
-                registerModelInput.getConnector().getProtocol(),
-                registerModelInput.getConnector().getConnectorClientConfig()
-            );
+        ConnectorProtocolValidator.validateMutualTlsSupported(connector.getProtocol(), connector.getConnectorClientConfig());
+        ConnectorProtocolValidator.validateMutualTlsEnabled(connector.getConnectorClientConfig(), mlFeatureEnabledSetting);
         // check if the connector url is trusted
         // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
         // model, so no need to verify the connector endpoint as trusted or not
         if (!registerModelInput.getIsHidden()) {
-            registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
         }
 
-        for (ConnectorAction action : registerModelInput.getConnector().getActions()) {
+        for (ConnectorAction action : connector.getActions()) {
             Map<String, String> headers = action.getHeaders();
-            AbstractConnector.validateConnectorHeaders(headers, registerModelInput.getConnector().getProtocol());
+            AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
         }
     }
 
