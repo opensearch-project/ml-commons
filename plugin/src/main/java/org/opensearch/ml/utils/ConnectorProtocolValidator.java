@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +18,16 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 /**
  * Checks a connector protocol against the opt-in feature flag that guards it.
@@ -54,6 +59,68 @@ public class ConnectorProtocolValidator {
         if (ConnectorProtocols.GOOGLE_CLOUD.equals(protocol) && !mlFeatureEnabledSetting.isVertexAIConnectorEnabled()) {
             throw new OpenSearchStatusException(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
         }
+    }
+
+    /**
+     * Rejects a connector whose protocol does not accept the fields the connector actually carries.
+     * <p>
+     * A protocol is not only a label: it selects the class a stored connector document is parsed back into, and
+     * each class enforces the fields it cannot work without - {@code aws_sigv4} a signing credential,
+     * {@code google_cloud} service-account material. Nothing checks that pairing once a connector exists, so a
+     * connector can be relabelled onto a protocol whose class rejects the document it has become. The document is
+     * then written, and every later read of it throws: the resource is unreadable, unrepairable, and - because
+     * delete parses the document too - not removable through the public API either.
+     * <p>
+     * The check is the read-back path itself rather than a restatement of each class's rules. The connector is
+     * serialised and handed to {@link Connector#createConnector(XContentBuilder, String)} the way the index hands
+     * it back, so anything that would leave the stored document unparseable fails here first, and a protocol added
+     * later is covered without this class being told about it.
+     *
+     * @param connector the resulting connector
+     * @throws OpenSearchStatusException with {@link RestStatus#BAD_REQUEST} if the resulting protocol's connector
+     *         class rejects the resulting connector
+     */
+    public static void validateProtocolRequirements(Connector connector) {
+        String reason;
+        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+            connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+            if (Connector.createConnector(builder, connector.getProtocol()) != null) {
+                return;
+            }
+            // createConnector reports anything that is not an IllegalArgumentException by returning null.
+            reason = "it cannot be parsed as that protocol's connector";
+        } catch (IllegalArgumentException | IOException e) {
+            reason = e.getMessage() == null ? e.toString() : e.getMessage();
+        }
+        throw new OpenSearchStatusException(
+            "Connector protocol ["
+                + connector.getProtocol()
+                + "] does not accept the connector this request would produce: "
+                + reason
+                + ". Supply the fields that protocol requires in the same request.",
+            RestStatus.BAD_REQUEST
+        );
+    }
+
+    /**
+     * Update variant of {@link #validateProtocolRequirements(Connector)}.
+     * <p>
+     * The merged state is produced by applying the request to a copy of the stored connector through
+     * {@code Connector#update} itself, rather than by merging the fields again here. That merge is uneven - the
+     * protocol, credential and actions are replaced while the parameters are merged - and a second copy of those
+     * rules is the thing that would drift away from the one that decides what gets written.
+     * <p>
+     * There is no grandfathering clause, unlike the other update variants here, because there is nothing to
+     * grandfather: a connector already in this state does not parse, so neither update path can load one to begin
+     * with. Every rejection this adds is a document the request itself would have broken.
+     *
+     * @param storedConnector the connector as it is now
+     * @param updateContent the update the request carries
+     */
+    public static void validateProtocolRequirementsAfterUpdate(Connector storedConnector, MLCreateConnectorInput updateContent) {
+        Connector mergedConnector = storedConnector.cloneConnector();
+        mergedConnector.update(updateContent);
+        validateProtocolRequirements(mergedConnector);
     }
 
     /**

@@ -418,6 +418,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 updateModelInput.getConnector().getParameters(),
                                 updateModelInput.getConnector().getConnectorClientConfig()
                             );
+                        // Checked last: the validations above name a specific reason, so they get first refusal.
+                        // This one covers the general case - a protocol whose connector class rejects the document
+                        // the update would leave behind, which would make the model document itself unreadable.
+                        ConnectorProtocolValidator.validateProtocolRequirementsAfterUpdate(connector, updateModelInput.getConnector());
                     } catch (Exception e) {
                         log.error("Rejected inline connector update for model {}", modelId, e);
                         wrappedListener.onFailure(e);
