@@ -45,9 +45,9 @@ import org.opensearch.transport.TransportChannel;
 
 import com.google.common.collect.ImmutableList;
 
-public class ModelBatchQueueManagerTests {
+public class DynamicBatchingQueueManagerTests {
 
-    private ModelBatchQueueManager manager;
+    private DynamicBatchingQueueManager manager;
     private ThreadPool threadPool;
     private AtomicReference<Runnable> scheduledFlush;
 
@@ -59,7 +59,7 @@ public class ModelBatchQueueManagerTests {
             scheduledFlush.set(invocation.getArgument(0));
             return mock(Scheduler.ScheduledCancellable.class);
         });
-        manager = new ModelBatchQueueManager(
+        manager = new DynamicBatchingQueueManager(
             new BatchableInputRegistry(),
             new BatchSplitter(),
             threadPool,
@@ -136,6 +136,24 @@ public class ModelBatchQueueManagerTests {
     }
 
     @Test
+    public void sameModelDifferentCallerAlgorithmsDoNotCoalesce() {
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls);
+        BatchInferenceConfig config = queued(100, 10_000L);
+
+        MLInput embedding = textInput("a");
+        embedding.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
+        MLInput sparse = textInput("b");
+        sparse.setCallerAlgorithm(FunctionName.SPARSE_ENCODING);
+
+        manager.enqueue("model-1", config, embedding, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        manager.enqueue("model-1", config, sparse, predictor, null, ActionListener.wrap(r -> {}, e -> {}));
+        scheduledFlush.get().run();
+
+        assertEquals("requests differing only by caller algorithm must not share a model call", 2, calls.get());
+    }
+
+    @Test
     public void differentModelsDoNotCoalesceTogether() {
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls);
@@ -209,7 +227,7 @@ public class ModelBatchQueueManagerTests {
 
     @Test
     public void requestTooLargeForTheBudgetIsHandedBackWithoutSettlingTheListener() {
-        ModelBatchQueueManager tightManager = new ModelBatchQueueManager(
+        DynamicBatchingQueueManager tightManager = new DynamicBatchingQueueManager(
             new BatchableInputRegistry(),
             new BatchSplitter(),
             threadPool,
@@ -245,7 +263,7 @@ public class ModelBatchQueueManagerTests {
                 return false;
             }
         };
-        ModelBatchQueueManager m = new ModelBatchQueueManager(
+        DynamicBatchingQueueManager m = new DynamicBatchingQueueManager(
             new BatchableInputRegistry(),
             new BatchSplitter(),
             threadPool,
@@ -291,7 +309,7 @@ public class ModelBatchQueueManagerTests {
                 return super.tryReserve(bytes);
             }
         };
-        ModelBatchQueueManager m = new ModelBatchQueueManager(
+        DynamicBatchingQueueManager m = new DynamicBatchingQueueManager(
             new BatchableInputRegistry(),
             new BatchSplitter(),
             threadPool,

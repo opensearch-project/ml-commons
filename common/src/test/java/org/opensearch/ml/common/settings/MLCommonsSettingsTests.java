@@ -305,14 +305,14 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
-    public void testBatchQueueMemoryFractionAcceptsMaximum() {
+    public void testDynamicBatchingMemoryFractionAcceptsMaximum() {
         double value = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.getKey(), 0.1).build());
         assertEquals(0.1, value, 0.0);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testBatchQueueMemoryFractionRejectsAboveMaximum() {
+    public void testDynamicBatchingMemoryFractionRejectsAboveMaximum() {
         MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE.getKey(), 0.11).build());
     }
@@ -371,34 +371,34 @@ public class MLCommonsSettingsTests {
         assertEquals(defaults, result);
     }
 
-    // A zero or negative bound would clamp the batch queue's memory budget to nothing, rejecting every queued
+    // A zero or negative bound would clamp the dynamic batching queue's memory budget to nothing, rejecting every queued
     // predict request for the life of the node with a 429 that no backoff could clear.
     @Test(expected = IllegalArgumentException.class)
-    public void testBatchQueueMemoryCeilingRejectsNegativeValue() {
+    public void testDynamicBatchingMemoryCeilingRejectsNegativeValue() {
         MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "-1b").build());
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testBatchQueueMemoryCeilingRejectsZero() {
+    public void testDynamicBatchingMemoryCeilingRejectsZero() {
         MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "0b").build());
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testBatchQueueMemoryFloorRejectsNegativeValue() {
+    public void testDynamicBatchingMemoryFloorRejectsNegativeValue() {
         MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "-1b").build());
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testBatchQueueMemoryFloorRejectsZero() {
+    public void testDynamicBatchingMemoryFloorRejectsZero() {
         MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MIN.getKey(), "0b").build());
     }
 
     @Test
-    public void testBatchQueueMemoryBoundsAcceptPositiveValues() {
+    public void testDynamicBatchingMemoryBoundsAcceptPositiveValues() {
         ByteSizeValue ceiling = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_SIZE_MAX.getKey(), "1gb").build());
         assertEquals(new ByteSizeValue(1L, ByteSizeUnit.GB), ceiling);

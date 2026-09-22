@@ -24,6 +24,7 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
@@ -40,7 +41,7 @@ import lombok.extern.log4j.Log4j2;
  * retries are left to the connector.
  */
 @Log4j2
-public class ModelBatchQueue {
+public class DynamicBatchingQueue {
 
     private final String modelId;
     private final BatchInferenceConfig config;
@@ -49,7 +50,7 @@ public class ModelBatchQueue {
     private final BatchSplitter splitter;
     private final ThreadPool threadPool;
     private final QueueMemoryBudget budget;
-    private final Consumer<ModelBatchQueue> onIdle;
+    private final Consumer<DynamicBatchingQueue> onIdle;
 
     private final Object stateLock = new Object();
     private final ArrayDeque<QueueEntry> queue = new ArrayDeque<>();
@@ -58,14 +59,14 @@ public class ModelBatchQueue {
     private boolean timerScheduled;
     private Scheduler.Cancellable scheduledTimer;
 
-    public ModelBatchQueue(
+    public DynamicBatchingQueue(
         String modelId,
         BatchInferenceConfig config,
         BatchableInputRegistry registry,
         BatchSplitter splitter,
         ThreadPool threadPool,
         QueueMemoryBudget budget,
-        Consumer<ModelBatchQueue> onIdle
+        Consumer<DynamicBatchingQueue> onIdle
     ) {
         this.modelId = modelId;
         this.config = config;
@@ -250,7 +251,11 @@ public class ModelBatchQueue {
                 notifyFailure(entry, new IllegalStateException("Could not compute a batch group key for the predict request"));
                 continue;
             }
-            GroupKey groupId = new GroupKey(entry.getInput().getInputDataset().getInputDataType(), entry.getGroupKey());
+            GroupKey groupId = new GroupKey(
+                entry.getInput().getInputDataset().getInputDataType(),
+                entry.getInput().getCallerAlgorithm(),
+                entry.getGroupKey()
+            );
             groups.computeIfAbsent(groupId, k -> new ArrayList<>()).add(entry);
         }
         for (List<QueueEntry> group : groups.values()) {
@@ -483,7 +488,7 @@ public class ModelBatchQueue {
         SCHEDULE_TIMER
     }
 
-    private record GroupKey(Object inputType, String parametersKey) {
+    private record GroupKey(Object inputType, FunctionName callerAlgorithm, String parametersKey) {
     }
 
     private record Totals(int entries, long items, long payloadBytes) {

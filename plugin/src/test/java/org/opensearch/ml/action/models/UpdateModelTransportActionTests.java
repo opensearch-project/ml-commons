@@ -79,11 +79,13 @@ import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -1058,6 +1060,34 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
         assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
+    }
+
+    @Test
+    public void testUpdateModelCacheModelWithBatchInferenceConfigTriggersCacheUpdate() throws InterruptedException {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest request = prepareRemoteRequest("REMOTE_INTERNAL");
+        request.getUpdateModelInput().setModelGroupId(null);
+        request.getUpdateModelInput().setConnector(null);
+        request.getUpdateModelInput().setBatchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(96).build());
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(client).execute(eq(MLUpdateModelCacheAction.INSTANCE), any(), isA(ActionListener.class));
     }
 
     @Test

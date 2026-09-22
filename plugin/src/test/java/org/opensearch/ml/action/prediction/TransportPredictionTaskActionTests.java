@@ -272,6 +272,33 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testDoExecute_capturesCallerAlgorithmOnlyOnce() {
+        MLInput callerInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("k", "v")).build())
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_id")
+            .mlInput(callerInput)
+            .user(User.parse("admin|role-1|all_access"))
+            .build();
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getIsHidden()).thenReturn(false);
+
+        // Coordinator pass: caller algorithm captured, algorithm normalized to REMOTE.
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+        assertEquals(FunctionName.TEXT_EMBEDDING, callerInput.getCallerAlgorithm());
+        assertEquals(FunctionName.REMOTE, callerInput.getAlgorithm());
+
+        // Worker pass after re-dispatch (algorithm already REMOTE): caller algorithm must be preserved, not overwritten.
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+        assertEquals(FunctionName.TEXT_EMBEDDING, callerInput.getCallerAlgorithm());
+    }
+
+    @Test
     public void testValidateInputSchemaSuccess() {
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
             .builder()

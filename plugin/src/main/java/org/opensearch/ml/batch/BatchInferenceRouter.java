@@ -30,7 +30,7 @@ import org.opensearch.transport.TransportChannel;
 public class BatchInferenceRouter {
 
     private final BatchInferenceExecutor executor;
-    private final ModelBatchQueueManager queueManager;
+    private final DynamicBatchingQueueManager queueManager;
 
     private volatile double memoryFraction;
     private volatile long memoryFloorBytes;
@@ -70,10 +70,10 @@ public class BatchInferenceRouter {
                 BatchInferenceRouter::validateMemoryBounds
             );
 
-        this.queueManager = new ModelBatchQueueManager(registry, splitter, threadPool, budget);
+        this.queueManager = new DynamicBatchingQueueManager(registry, splitter, threadPool, budget);
     }
 
-    BatchInferenceRouter(BatchInferenceExecutor executor, ModelBatchQueueManager queueManager) {
+    BatchInferenceRouter(BatchInferenceExecutor executor, DynamicBatchingQueueManager queueManager) {
         this.executor = executor;
         this.queueManager = queueManager;
     }

@@ -43,10 +43,10 @@ public interface BatchableInput {
      * distribute, but only when the model returned exactly one result per item in the sub-batch.
      *
      * A count mismatch means the results can no longer be lined up with the items that produced them, so
-     * every caller of a split or coalesced request must fail rather than receive another item's result:
-     * reassembling them would concatenate a misaligned sub-batch into the middle of the response and
-     * silently shift every result after it, which for an embedding model ends up as a wrong vector stored
-     * in a knn_vector field with nothing to indicate it.
+     * the request must fail rather than return another item's result. For a split request, reassembling
+     * the outputs would concatenate a misaligned sub-batch into the middle of the response and silently
+     * shift every result after it. For an unsplit request, a short response can cause the same positional
+     * ambiguity within that call.
      *
      * Note for the split path, which needs only the count and discards the returned list: that traverses the output
      * once here and again in combine(), and allocates per-item wrappers that are immediately thrown away. It is

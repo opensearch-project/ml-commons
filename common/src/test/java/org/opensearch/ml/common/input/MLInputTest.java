@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.input;
 
 import static org.junit.Assert.*;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -292,6 +294,36 @@ public class MLInputTest {
         MLInput parsedInput = new MLInput(streamInput);
         assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
         verify.accept(parsedInput);
+    }
+
+    @Test
+    public void readInputStream_PreservesCallerAlgorithm() throws IOException {
+        MLInput input = MLInput.builder().algorithm(FunctionName.REMOTE).build();
+        input.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_3_9_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_3_9_0);
+        MLInput parsedInput = new MLInput(in);
+
+        assertEquals(FunctionName.TEXT_EMBEDDING, parsedInput.getCallerAlgorithm());
+    }
+
+    @Test
+    public void readInputStream_BeforeCallerAlgorithmVersionDropsIt() throws IOException {
+        MLInput input = MLInput.builder().algorithm(FunctionName.REMOTE).build();
+        input.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_3_8_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_3_8_0);
+        MLInput parsedInput = new MLInput(in);
+
+        assertNull("an older node never receives callerAlgorithm on the wire", parsedInput.getCallerAlgorithm());
     }
 
     @Test

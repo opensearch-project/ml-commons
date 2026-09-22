@@ -8,6 +8,7 @@ package org.opensearch.ml.batch;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,6 +74,13 @@ public class BatchInferenceExecutorTests {
     private MLInput textInput(String... docs) {
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(ImmutableList.copyOf(docs)).build();
         return MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(dataSet).build();
+    }
+
+    private MLInput remoteTextInput(FunctionName callerAlgorithm, String... docs) {
+        MLInput input = textInput(docs);
+        input.setCallerAlgorithm(callerAlgorithm);
+        input.setAlgorithm(FunctionName.REMOTE);
+        return input;
     }
 
     // One model call returns a single ModelTensors group with one tensor per doc (remote-embedding shape).
@@ -289,6 +297,75 @@ public class BatchInferenceExecutorTests {
         return new MLTaskResponse(
             ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(ModelTensors.builder().mlModelTensors(tensors).build())).build()
         );
+    }
+
+    @Test
+    public void unsplitRemoteTextReturningFewerResultsThanItemsFailsTheRequest() {
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(1)));
+
+        executor.execute("m", remoteTextInput(FunctionName.TEXT_EMBEDDING, "a", "b", "c"), null, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("a short result list must not be returned as a success");
+        }, failure::set));
+
+        assertTrue(failure.get().getMessage().contains("Model returned 1 results for a sub-batch of 3 items"));
+    }
+
+    @Test
+    public void unsplitRemoteTextReturningMoreResultsThanItemsFailsTheRequest() {
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(3)));
+
+        executor.execute("m", remoteTextInput(FunctionName.SPARSE_ENCODING, "a", "b"), null, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("an extra result must not be returned as a success");
+        }, failure::set));
+
+        assertTrue(failure.get().getMessage().contains("Model returned 3 results for a sub-batch of 2 items"));
+    }
+
+    @Test
+    public void configuredSingleCallReturningFewerResultsThanItemsFailsTheRequest() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(10).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(1)));
+
+        executor.execute("m", textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("a single call under the configured limit must still validate its result count");
+        }, failure::set));
+
+        assertTrue(failure.get().getMessage().contains("Model returned 1 results for a sub-batch of 2 items"));
+    }
+
+    @Test
+    public void genericRemoteRequestKeepsExistingUnsplitResponseSemantics() {
+        AtomicReference<MLTaskResponse> result = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(1)));
+
+        executor.execute("m", remoteTextInput(FunctionName.REMOTE, "a", "b"), null, predictor, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError(e);
+        }));
+
+        assertEquals(ImmutableList.of("t0"), resultNames(result.get()));
+    }
+
+    @Test
+    public void streamingRemoteTextRequestKeepsExistingResponseSemantics() {
+        AtomicReference<MLTaskResponse> result = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(1)));
+
+        executor
+            .execute(
+                "m",
+                remoteTextInput(FunctionName.TEXT_EMBEDDING, "a", "b"),
+                null,
+                predictor,
+                mock(TransportChannel.class),
+                ActionListener.wrap(result::set, e -> {
+                    throw new AssertionError(e);
+                })
+            );
+
+        assertEquals(ImmutableList.of("t0"), resultNames(result.get()));
     }
 
     @Test

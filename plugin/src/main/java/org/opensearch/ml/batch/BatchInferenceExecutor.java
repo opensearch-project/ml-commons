@@ -14,6 +14,7 @@ import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
@@ -25,8 +26,9 @@ import lombok.extern.log4j.Log4j2;
 
 /**
  * Splits one predict request into size-bounded sub-batches, runs them concurrently, and reassembles
- * the outputs in input order. Every sub-batch is waited for; if any failed, the request fails and
- * reports all of their errors. The request completes once.
+ * the outputs in input order. Single-call remote embedding and sparse requests are also checked for
+ * exactly one result per input text. Every sub-batch is waited for; if any failed, the request fails
+ * and reports all of their errors. The request completes once.
  */
 @Log4j2
 public class BatchInferenceExecutor {
@@ -42,8 +44,9 @@ public class BatchInferenceExecutor {
     /**
      * Splits into sub-batches only when there is a config, a handler for the input type, and the request
      * needs more than one sub-batch. A request runs as a single call when the model has no config or
-     * already fits within the limits, and fails when the model has a config but the input type has no
-     * handler, rather than being sent unsplit.
+     * already fits within the limits. Non-streaming remote embedding and sparse calls validate that the
+     * single response still contains one result per input text. A request fails when the model has a
+     * config but the input type has no handler, rather than being sent unsplit.
      */
     public void execute(
         String modelId,
@@ -54,7 +57,19 @@ public class BatchInferenceExecutor {
         ActionListener<MLTaskResponse> listener
     ) {
         if (config == null) {
-            predictor.asyncPredict(input, listener, channel);
+            BatchableInput handler = registry.get(input);
+            if (requiresExactResultCount(input, channel) && handler != null) {
+                List<BatchItem> items;
+                try {
+                    items = handler.toItems(input);
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                    return;
+                }
+                executeSingleCall(modelId, input, handler, items.size(), predictor, channel, listener);
+            } else {
+                predictor.asyncPredict(input, listener, channel);
+            }
             return;
         }
 
@@ -72,20 +87,71 @@ public class BatchInferenceExecutor {
             return;
         }
 
+        List<BatchItem> items;
         List<List<BatchItem>> batches;
         try {
-            batches = splitter.split(handler.toItems(input), config);
+            items = handler.toItems(input);
+            batches = splitter.split(items, config);
         } catch (Exception e) {
             listener.onFailure(e);
             return;
         }
 
         if (batches.size() == 1) {
-            predictor.asyncPredict(input, listener, channel);
+            if (channel == null) {
+                executeSingleCall(modelId, input, handler, items.size(), predictor, channel, listener);
+            } else {
+                predictor.asyncPredict(input, listener, channel);
+            }
             return;
         }
 
         dispatchBatches(modelId, input, handler, batches, predictor, channel, listener);
+    }
+
+    private boolean requiresExactResultCount(MLInput input, TransportChannel channel) {
+        if (channel != null || input == null || input.getAlgorithm() != FunctionName.REMOTE) {
+            return false;
+        }
+        FunctionName callerAlgorithm = input.getCallerAlgorithm();
+        return callerAlgorithm == FunctionName.TEXT_EMBEDDING
+            || callerAlgorithm == FunctionName.SPARSE_ENCODING
+            || callerAlgorithm == FunctionName.SPARSE_TOKENIZE;
+    }
+
+    private void executeSingleCall(
+        String modelId,
+        MLInput input,
+        BatchableInput handler,
+        int itemCount,
+        Predictable predictor,
+        TransportChannel channel,
+        ActionListener<MLTaskResponse> listener
+    ) {
+        ActionListener<MLTaskResponse> validatingListener = new ActionListener<>() {
+            @Override
+            public void onResponse(MLTaskResponse response) {
+                try {
+                    handler.distributeExactly(response.getOutput(), itemCount);
+                } catch (Exception invalidOutput) {
+                    log
+                        .error(
+                            "Single model call for model {} returned results that could not be matched to its input items",
+                            modelId,
+                            invalidOutput
+                        );
+                    listener.onFailure(invalidOutput);
+                    return;
+                }
+                listener.onResponse(response);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
+        predictor.asyncPredict(input, validatingListener, channel);
     }
 
     private void dispatchBatches(

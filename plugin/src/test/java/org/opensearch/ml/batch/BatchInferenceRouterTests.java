@@ -50,7 +50,7 @@ import org.opensearch.transport.TransportChannel;
 public class BatchInferenceRouterTests {
 
     private BatchInferenceExecutor executor;
-    private ModelBatchQueueManager queueManager;
+    private DynamicBatchingQueueManager queueManager;
     private BatchInferenceRouter router;
 
     private final MLInput input = mock(MLInput.class);
@@ -61,7 +61,7 @@ public class BatchInferenceRouterTests {
     @Before
     public void setUp() {
         executor = mock(BatchInferenceExecutor.class);
-        queueManager = mock(ModelBatchQueueManager.class);
+        queueManager = mock(DynamicBatchingQueueManager.class);
         router = new BatchInferenceRouter(executor, queueManager);
     }
 
@@ -108,7 +108,7 @@ public class BatchInferenceRouterTests {
         ThreadPool threadPool = mock(ThreadPool.class);
         BatchInferenceRouter realRouter = new BatchInferenceRouter(
             new BatchInferenceExecutor(registry, splitter),
-            new ModelBatchQueueManager(registry, splitter, threadPool, new QueueMemoryBudget(1L))
+            new DynamicBatchingQueueManager(registry, splitter, threadPool, new QueueMemoryBudget(1L))
         );
         BatchInferenceConfig config = BatchInferenceConfig
             .builder()
