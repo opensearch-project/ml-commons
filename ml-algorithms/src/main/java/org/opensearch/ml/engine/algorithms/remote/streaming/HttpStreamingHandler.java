@@ -78,6 +78,23 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         Duration connectionTimeout = Duration.ofSeconds(connectorClientConfig.getConnectionTimeout());
         Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeout());
 
+        // The client built below carries no mutual-TLS material, so a connector that asked for
+        // mutual_tls_enabled would stream without presenting its client certificate.
+        // ConnectorProtocolValidator rejects that combination on the protocols whose executors never apply
+        // mutual TLS, but http is not one of them: the non-streaming http executor does apply it, so the field
+        // is legitimately accepted for the protocol and only this path cannot honour it. Fail the stream
+        // instead of proceeding without it.
+        if (Boolean.TRUE.equals(connectorClientConfig.getMutualTlsEnabled())) {
+            throw new IllegalArgumentException(
+                "Mutual TLS is not supported on the streaming path. "
+                    + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                    + " is applied only by the non-streaming http executor, so streaming this connector would "
+                    + "connect without a client certificate. Either do not stream this connector, or remove "
+                    + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                    + "."
+            );
+        }
+
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 this.okHttpClient = new OkHttpClient.Builder()

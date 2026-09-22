@@ -363,6 +363,12 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 updatedProtocol,
                                 updateModelInput.getConnector().getConnectorClientConfig()
                             );
+                        ConnectorProtocolValidator
+                            .validateMutualTlsEnabledAfterUpdate(
+                                connector.getConnectorClientConfig(),
+                                updateModelInput.getConnector().getConnectorClientConfig(),
+                                mlFeatureEnabledSetting
+                            );
                     } catch (Exception e) {
                         log.error("Rejected inline connector update for model {}", modelId, e);
                         wrappedListener.onFailure(e);

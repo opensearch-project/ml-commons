@@ -392,6 +392,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 registerModelInput.getConnector().getProtocol(),
                 registerModelInput.getConnector().getConnectorClientConfig()
             );
+        ConnectorProtocolValidator
+            .validateMutualTlsEnabled(registerModelInput.getConnector().getConnectorClientConfig(), mlFeatureEnabledSetting);
         // check if the connector url is trusted
         // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
         // model, so no need to verify the connector endpoint as trusted or not
