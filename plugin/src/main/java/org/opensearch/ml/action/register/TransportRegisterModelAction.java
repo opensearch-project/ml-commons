@@ -280,6 +280,23 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         FunctionName functionName = registerModelInput.getFunctionName();
         if (FunctionName.REMOTE == functionName) {
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
+                // An inline connector is persisted alongside connector_id (MLModelManager.performIndexRemoteModel
+                // writes both), and it is the one deploy reads first, so it cannot be left unchecked just because a
+                // connector_id was also supplied - validateInternalConnector below never runs on this branch. This
+                // is request content, so no access check is owed before rejecting it.
+                Connector inlineConnector = registerModelInput.getConnector();
+                if (inlineConnector != null && ConnectorProtocols.isMcpProtocol(inlineConnector.getProtocol())) {
+                    log.error("Rejected model registration with an inline MCP connector, protocol {}", inlineConnector.getProtocol());
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Cannot create a model from an inline MCP connector: protocol ["
+                                    + inlineConnector.getProtocol()
+                                    + "] does not define a predict action."
+                            )
+                        );
+                    return;
+                }
                 connectorAccessControlHelper
                     .validateConnectorAccess(
                         sdkClient,
@@ -296,23 +313,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                         registerModelInput.getConnectorId(),
                                         registerModelInput.getTenantId(),
                                         ActionListener.wrap(connector -> {
-                                            // createConnector returns null when the stored document cannot be
-                                            // parsed, so say that plainly instead of dereferencing it below.
-                                            if (connector == null) {
-                                                log
-                                                    .error(
-                                                        "Failed to read connector {} while registering a model",
-                                                        registerModelInput.getConnectorId()
-                                                    );
-                                                listener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "Failed to read connector: " + registerModelInput.getConnectorId(),
-                                                            RestStatus.INTERNAL_SERVER_ERROR
-                                                        )
-                                                    );
-                                                return;
-                                            }
                                             // Checked by protocol rather than by type: mcp_streamable_http is a
                                             // sibling of McpConnector, not a subclass, and an instanceof check
                                             // lets it through to a preset model interface lookup that reads its

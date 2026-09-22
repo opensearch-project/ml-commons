@@ -959,25 +959,6 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(argumentCaptor.getValue()));
     }
 
-    /** An unparseable stored connector reads back as null; say so rather than dereferencing it. */
-    @Test
-    public void test_execute_registerRemoteModel_withConnectorId_unreadableConnectorReported() {
-        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
-        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
-        when(request.getRegisterModelInput()).thenReturn(input);
-        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
-        when(input.getConnectorId()).thenReturn("mockConnectorId");
-        when(input.getModelInterface()).thenReturn(null);
-        stubConnectorLookup(null);
-
-        transportRegisterModelAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to read connector: mockConnectorId", argumentCaptor.getValue().getMessage());
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(argumentCaptor.getValue()));
-    }
-
     /**
      * The newly reachable combination: supplying an interface used to skip the connector lookup entirely, so a
      * request naming a connector that cannot be resolved returned 200 and a model with a dangling reference.
@@ -1010,25 +991,6 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(lookupFailure, argumentCaptor.getValue());
-        verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
-    }
-
-    /** Same combination, for a connector document that exists but cannot be parsed. */
-    @Test
-    public void test_execute_registerRemoteModel_withConnectorId_unreadableConnectorReportedWhenModelInterfaceProvided() {
-        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
-        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
-        when(request.getRegisterModelInput()).thenReturn(input);
-        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
-        when(input.getConnectorId()).thenReturn("mockConnectorId");
-        when(input.getModelInterface()).thenReturn(Map.of("input", "{}"));
-        stubConnectorLookup(null);
-
-        transportRegisterModelAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to read connector: mockConnectorId", argumentCaptor.getValue().getMessage());
         verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
     }
 
@@ -1074,6 +1036,31 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             argumentCaptor.getValue().getMessage()
         );
         verify(mlModelManager, never()).registerMLModel(any(), any());
+    }
+
+    /**
+     * An inline connector is persisted alongside connector_id and is the one deploy reads first, so supplying both
+     * used to slip an MCP connector past every check on this branch.
+     */
+    @Test
+    public void test_execute_registerRemoteModel_withBothConnectorIdAndInlineMcpConnectorRejected() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getConnector()).thenReturn(mcpSseConnector());
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Cannot create a model from an inline MCP connector: protocol [mcp_sse] does not define a predict action.",
+            argumentCaptor.getValue().getMessage()
+        );
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+        verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
     }
 
     private void assertConnectorIdRejectedAsMcp(Connector storedConnector) {

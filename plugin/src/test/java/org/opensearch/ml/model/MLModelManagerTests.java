@@ -1316,6 +1316,47 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         return new GetResponse(getResult);
     }
 
+    /**
+     * A cache refresh runs against a model that is already serving. Rejecting it is right - the model cannot
+     * predict - but the rejection must not undeploy it as a side effect of an unrelated request, which would also
+     * leave the persisted model state saying DEPLOYED.
+     */
+    public void testUpdateModelCache_McpBackedRemoteModelRejectedWithoutUndeploying() {
+        MLModel mcpBackedModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYED)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
+        when(modelManager.getWorkerNodes(modelId, FunctionName.REMOTE)).thenReturn(new String[] { "node1" });
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mcpBackedModel);
+            return null;
+        }).when(modelManager).getModel(any(), any());
+
+        modelManager.updateModelCache(modelId, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
+        verify(modelCacheHelper, never()).removeModel(modelId);
+    }
+
     public void testDeployModel_ModelAlreadyDeployed() {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);

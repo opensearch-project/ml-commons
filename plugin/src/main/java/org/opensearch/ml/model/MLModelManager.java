@@ -1628,10 +1628,16 @@ public class MLModelManager {
                 mlModel.getModelId(),
                 mlModel.getConnector().getProtocol()
             );
-        // deployModel has already put this model into DEPLOYING in the node-local cache. Leaving it there makes
-        // isModelRunningOnNode true, so the next deploy attempt is refused as a duplicate task and the operator
-        // never sees this message again. Same cleanup the model-content-hash rejection does.
-        removeModel(mlModel.getModelId());
+        // Only a fresh deploy needs the cache cleaning up, and only there does the DEPLOYING premise hold:
+        // deployModel has already put this model into DEPLOYING, and leaving it there makes isModelRunningOnNode
+        // true, so the next deploy attempt is refused as a duplicate task and the operator never sees this message
+        // again - the same cleanup the model-content-hash rejection does. The other callers of
+        // setupParamsAndPredictable (cache refresh, controller deploy and undeploy) all run against a model that is
+        // already DEPLOYED and serving on this node: wiping its cache entry there would undeploy a running model as
+        // a side effect of an unrelated request, while the persisted model state still said DEPLOYED.
+        if (!modelCacheHelper.isModelDeployed(mlModel.getModelId())) {
+            removeModel(mlModel.getModelId());
+        }
         listener
             .onFailure(
                 new OpenSearchStatusException(
