@@ -27,7 +27,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Use exact-match queries for id-based lookups so removing one MCP tool no longer deletes tools with similar names and connectors with hyphenated ids remain deletable and updatable ([#5034](https://github.com/opensearch-project/ml-commons/pull/5034))
 * Require a non-blank name when registering an MCP tool ([#5034](https://github.com/opensearch-project/ml-commons/pull/5034))
 * Fix HTTP 500 on model register/deploy against security 3.9+ clusters by avoiding a Jackson 3 self-reference cycle in `isSuperAdminUser` ([#4994](https://github.com/opensearch-project/ml-commons/pull/4994))
-* Fail batch inference when a sub-batch result count does not match its item count, and tighten `batch_queue` setting and `batch_inference_config` validation ([#5040](https://github.com/opensearch-project/ml-commons/pull/5040))
+* Fail batch inference when a sub-batch result count does not match its item count, and tighten `dynamic_batching` setting and `batch_inference_config` validation ([#5040](https://github.com/opensearch-project/ml-commons/pull/5040))
 * Pin `google_cloud` connector `token_uri` to the default HTTPS port so a signed JWT cannot be sent to a non-default port ([#5041](https://github.com/opensearch-project/ml-commons/pull/5041))
 * Reject counted repetition of a quantified group in trusted-endpoint regex validation ([#5042](https://github.com/opensearch-project/ml-commons/pull/5042))
 * Delete the auto-created model when unified agent registration fails, instead of leaving an orphaned model holding the request credentials ([#5043](https://github.com/opensearch-project/ml-commons/pull/5043))

@@ -25,7 +25,8 @@ import lombok.extern.log4j.Log4j2;
 
 /**
  * Splits one predict request into size-bounded sub-batches, runs them concurrently, and reassembles
- * the outputs in input order. Every sub-batch is waited for; if any failed, the request fails and
+ * the outputs in input order. A configured request that fits in one call is also checked for exactly
+ * one result per input item. Every sub-batch is waited for; if any failed, the request fails and
  * reports all of their errors. The request completes once.
  */
 @Log4j2
@@ -42,8 +43,9 @@ public class BatchInferenceExecutor {
     /**
      * Splits into sub-batches only when there is a config, a handler for the input type, and the request
      * needs more than one sub-batch. A request runs as a single call when the model has no config or
-     * already fits within the limits, and fails when the model has a config but the input type has no
-     * handler, rather than being sent unsplit.
+     * already fits within the limits. When a configured, non-streaming request fits in one call, the
+     * response is still validated against the input item count. A request fails when the model has a
+     * config but the input type has no handler, rather than being sent unsplit.
      */
     public void execute(
         String modelId,
@@ -72,20 +74,61 @@ public class BatchInferenceExecutor {
             return;
         }
 
+        List<BatchItem> items;
         List<List<BatchItem>> batches;
         try {
-            batches = splitter.split(handler.toItems(input), config);
+            items = handler.toItems(input);
+            batches = splitter.split(items, config);
         } catch (Exception e) {
             listener.onFailure(e);
             return;
         }
 
         if (batches.size() == 1) {
-            predictor.asyncPredict(input, listener, channel);
+            if (channel == null) {
+                executeSingleCall(modelId, input, handler, items.size(), predictor, channel, listener);
+            } else {
+                predictor.asyncPredict(input, listener, channel);
+            }
             return;
         }
 
         dispatchBatches(modelId, input, handler, batches, predictor, channel, listener);
+    }
+
+    private void executeSingleCall(
+        String modelId,
+        MLInput input,
+        BatchableInput handler,
+        int itemCount,
+        Predictable predictor,
+        TransportChannel channel,
+        ActionListener<MLTaskResponse> listener
+    ) {
+        ActionListener<MLTaskResponse> validatingListener = new ActionListener<>() {
+            @Override
+            public void onResponse(MLTaskResponse response) {
+                try {
+                    handler.ensureResultCount(response.getOutput(), itemCount);
+                } catch (Exception invalidOutput) {
+                    log
+                        .error(
+                            "Single model call for model {} returned results that could not be matched to its input items",
+                            modelId,
+                            invalidOutput
+                        );
+                    listener.onFailure(invalidOutput);
+                    return;
+                }
+                listener.onResponse(response);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
+        predictor.asyncPredict(input, validatingListener, channel);
     }
 
     private void dispatchBatches(
