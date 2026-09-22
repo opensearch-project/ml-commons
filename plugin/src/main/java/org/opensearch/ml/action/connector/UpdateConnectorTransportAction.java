@@ -138,6 +138,24 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 if (updatedProtocol != null) {
                                     ConnectorProtocols.validateProtocol(updatedProtocol);
                                     ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                                    // Crossing the MCP boundary changes which class the stored document parses back
+                                    // into - an MCP connector carries no actions, an inference one does - while the
+                                    // document keeps the fields of the old family. The connector, and any model
+                                    // referencing it, is then read back as a shape whose accessors are missing or
+                                    // unimplemented. The "models are still using this connector" check below does not
+                                    // cover this: it only looks at deployed models, so a connector referenced solely
+                                    // by a registered-but-undeployed model passes it.
+                                    if (ConnectorProtocols.isMcpProtocol(updatedProtocol) != ConnectorProtocols
+                                        .isMcpProtocol(connector.getProtocol())) {
+                                        throw new OpenSearchStatusException(
+                                            "Cannot change connector protocol from ["
+                                                + connector.getProtocol()
+                                                + "] to ["
+                                                + updatedProtocol
+                                                + "]: an MCP connector and an inference connector are not interchangeable.",
+                                            RestStatus.BAD_REQUEST
+                                        );
+                                    }
                                 }
                                 ConnectorProtocolValidator
                                     .validateMutualTlsSupportedAfterUpdate(
@@ -152,15 +170,22 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                         mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig(),
                                         mlFeatureEnabledSetting
                                     );
-                                ConnectorProtocolValidator
-                                    .validateMutualTlsSchemeAfterUpdate(
-                                        connector.getActions(),
-                                        connector.getParameters(),
-                                        connector.getConnectorClientConfig(),
-                                        mlUpdateConnectorAction.getUpdateContent().getActions(),
-                                        mlUpdateConnectorAction.getUpdateContent().getParameters(),
-                                        mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
-                                    );
+                                // Skipped for an MCP connector: it carries no actions, so reading them below
+                                // throws and would escape as a 500. Nothing is lost by skipping - an MCP protocol
+                                // can never apply mutual TLS, which the supported check above already owns, so an
+                                // action URL's scheme says nothing here. The protocol-crossing check above means
+                                // the stored protocol settles this for the updated connector as well.
+                                if (!ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                    ConnectorProtocolValidator
+                                        .validateMutualTlsSchemeAfterUpdate(
+                                            connector.getActions(),
+                                            connector.getParameters(),
+                                            connector.getConnectorClientConfig(),
+                                            mlUpdateConnectorAction.getUpdateContent().getActions(),
+                                            mlUpdateConnectorAction.getUpdateContent().getParameters(),
+                                            mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                        );
+                                }
                             } catch (Exception e) {
                                 log.error("Rejected connector update for connector id {}", connectorId, e);
                                 listener.onFailure(e);
@@ -171,6 +196,20 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
 
                             // Only validate headers if actions were modified in this update
                             MLCreateConnectorInput updateContent = mlUpdateConnectorAction.getUpdateContent();
+                            // An MCP connector has no actions, so reading them below throws. update() also silently
+                            // drops any actions supplied for one, so the request is meaningless either way - say so
+                            // rather than failing as an unclassified error.
+                            if (updateContent.getActions() != null && ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                log.error("Rejected actions on MCP connector update for connector id {}", connectorId);
+                                listener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Connector actions are not supported for protocol [" + connector.getProtocol() + "].",
+                                            RestStatus.BAD_REQUEST
+                                        )
+                                    );
+                                return;
+                            }
                             if (updateContent.getActions() != null && connector.getActions() != null) {
                                 for (ConnectorAction action : connector.getActions()) {
                                     Map<String, String> headers = action.getHeaders();

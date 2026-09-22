@@ -48,8 +48,7 @@ public class ConnectorProtocolValidator {
         if (protocol == null) {
             return;
         }
-        boolean isMcpProtocol = ConnectorProtocols.MCP_SSE.equals(protocol) || ConnectorProtocols.MCP_STREAMABLE_HTTP.equals(protocol);
-        if (isMcpProtocol && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
+        if (ConnectorProtocols.isMcpProtocol(protocol) && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             throw new OpenSearchStatusException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
         }
         if (ConnectorProtocols.GOOGLE_CLOUD.equals(protocol) && !mlFeatureEnabledSetting.isVertexAIConnectorEnabled()) {
