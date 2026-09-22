@@ -27,6 +27,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
@@ -90,6 +91,7 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
                             ML_COMMONS_MEMORY_RETENTION_ENABLED,
                             ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED,
+                            ML_COMMONS_MUTUAL_TLS_ENABLED,
                             ML_COMMONS_MCP_CONNECTOR_ENABLED,
                             ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                             ML_COMMONS_STREAM_ENABLED,

@@ -689,6 +689,76 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         assertTrue(captor.getValue().getMessage().contains("Mutual TLS is not supported"));
     }
 
+    /** The setting is there to stop a connector newly relying on mutual TLS while support is incomplete. */
+    @Test
+    public void testUpdateConnectorRejectsNewlyEnablingMutualTlsWhileSettingOff() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build())
+                    .build()
+            );
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
+    /**
+     * An update replaces client_config wholesale, so editing an unrelated field means re-sending
+     * mutual_tls_enabled to keep it. That must not be rejected, or turning the setting off would make an
+     * existing mutual-TLS connector uneditable rather than just preventing new reliance on it.
+     */
+    @Test
+    public void testUpdateConnectorAllowsCarryingForwardStoredMutualTlsWhileSettingOff() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener
+                .onResponse(
+                    HttpConnector
+                        .builder()
+                        .name("test")
+                        .protocol("http")
+                        .version("1")
+                        .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build())
+                        .build()
+                );
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .description("an unrelated edit")
+                    .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).maxConnections(50).build())
+                    .build()
+            );
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubSearchReturnsNoModels();
+        stubUpdateSucceeds();
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, atMost(1)).onFailure(captor.capture());
+        for (Exception e : captor.getAllValues()) {
+            assertFalse(
+                "carrying the stored mutual_tls_enabled forward was rejected: " + e.getMessage(),
+                e instanceof OpenSearchStatusException && ((OpenSearchStatusException) e).status() == RestStatus.FORBIDDEN
+            );
+        }
+    }
+
     private void stubSearchReturnsNoModels() {
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
