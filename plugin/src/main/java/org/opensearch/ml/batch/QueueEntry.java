@@ -18,7 +18,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 
 /**
- * One predict request waiting in a ModelBatchQueue: its input, listener, predictor and channel, plus what
+ * One predict request waiting in a DynamicBatchingQueue: its input, listener, predictor and channel, plus what
  * is derived from the input once at enqueue so flush need not re-parse it — the decomposed items, the group
  * key deciding which requests may coalesce, the item count and payload byte size for the queue's batching
  * thresholds, and an estimated retained byte size for node-level memory backpressure. items and groupKey are
