@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -1816,6 +1817,91 @@ public class ConnectorUtilsTest {
 
         // Assert
         assertEquals("[{\"text\":\"raw\"}]", inputData.getParameters().get("system_prompt"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_UserPromptThatIsItselfJson_IsStillEscaped() {
+        // Arrange — the blueprints interpolate user_prompt inside a JSON string in exactly the same shape as
+        // system_prompt, so a user whose whole question is a JSON document must not break the payload
+        Map<String, String> params = new HashMap<>();
+        params.put("user_prompt", "{\"a\":1}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\\\"a\\\":1}", inputData.getParameters().get("user_prompt"));
+    }
+
+    /** The structure-injection shape: a value that is valid JSON and would splice a sibling object into messages. */
+    @Test
+    public void testEscapeRemoteInferenceInputData_UserPromptStructureInjection_IsEscaped() {
+        Map<String, String> params = new HashMap<>();
+        params.put("user_prompt", "[\"},{\",\":\"]");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertFalse(inputData.getParameters().get("user_prompt").contains("\"},{\""));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_PromptInputsQuestionThatAreJson_AreEscaped() {
+        for (String key : new String[] { "prompt", "inputs", "question" }) {
+            Map<String, String> params = new HashMap<>();
+            params.put(key, "{\"a\":1}");
+            RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+            ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+            assertEquals("escaping " + key, "{\\\"a\\\":1}", inputData.getParameters().get(key));
+        }
+    }
+
+    /** Raw-position parameters must keep being spliced in raw, or every blueprint using them breaks. */
+    @Test
+    public void testEscapeRemoteInferenceInputData_RawPositionParamsAreNotEscaped() {
+        Map<String, String> params = new HashMap<>();
+        params.put("messages", "[{\"role\":\"user\"}]");
+        params.put("dimensions", "1024");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("[{\"role\":\"user\"}]", inputData.getParameters().get("messages"));
+        assertEquals("1024", inputData.getParameters().get("dimensions"));
+    }
+
+    /**
+     * The opt-out has to work where an operator declares it: on the connector. Its parameters are merged into the
+     * request only after escaping runs, so reading it from the request alone made the documented escape hatch
+     * unreachable for a connector that interpolates one of these in a raw JSON position.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_NoEscapeParamsFromConnectorParameters_StaysRaw() {
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "[{\"text\":\"raw\"}]");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        Map<String, String> connectorParameters = Map.of(NO_ESCAPE_PARAMS, "system_prompt");
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData, connectorParameters);
+
+        assertEquals("[{\"text\":\"raw\"}]", inputData.getParameters().get("system_prompt"));
+    }
+
+    /** Request-level and connector-level declarations are unioned, so neither silently disables the other. */
+    @Test
+    public void testEscapeRemoteInferenceInputData_NoEscapeParamsUnionedAcrossRequestAndConnector() {
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "[{\"text\":\"raw\"}]");
+        params.put("user_prompt", "{\"a\":1}");
+        params.put(NO_ESCAPE_PARAMS, "user_prompt");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        Map<String, String> connectorParameters = Map.of(NO_ESCAPE_PARAMS, "system_prompt");
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData, connectorParameters);
+
+        assertEquals("[{\"text\":\"raw\"}]", inputData.getParameters().get("system_prompt"));
+        assertEquals("{\"a\":1}", inputData.getParameters().get("user_prompt"));
     }
 
     @Test

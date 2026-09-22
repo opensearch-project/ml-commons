@@ -103,7 +103,7 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("no " + action + " action found");
         }
         RemoteInferenceInputDataSet inputData = processMLInput(action, mlInput, connector, parameters, scriptService);
-        escapeRemoteInferenceInputData(inputData);
+        escapeRemoteInferenceInputData(inputData, connector.getParameters());
         return inputData;
     }
 
@@ -182,21 +182,37 @@ public class ConnectorUtils {
     // Parameters that every built-in request template interpolates inside a JSON string, so a value that
     // happens to be a JSON object or array must still be escaped rather than spliced in raw - otherwise it
     // ends the string early and either breaks the payload or injects structure into it. A caller that
-    // deliberately interpolates one of these in a raw JSON position can still opt out via no_escape_params.
-    private static final Set<String> ALWAYS_ESCAPE_PARAMS = Set.of("system_prompt");
+    // deliberately interpolates one of these in a raw JSON position can still opt out via no_escape_params,
+    // which is read from the connector's parameters as well as the request's.
+    //
+    // The list is keys, not positions, because the escaping runs before the template is known. Each entry was
+    // checked against every blueprint and tutorial in docs/: all of them interpolate these inside a JSON string
+    // and none in a raw JSON position. The isJson shortcut below is deliberately kept for everything else -
+    // messages, texts, dimensions, temperature, max_tokens, input and normalize are interpolated raw in 25+
+    // places, and escaping those would break every one of them.
+    private static final Set<String> ALWAYS_ESCAPE_PARAMS = Set.of("system_prompt", "user_prompt", "prompt", "inputs", "question");
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
+        escapeRemoteInferenceInputData(inputData, null);
+    }
+
+    /**
+     * @param connectorParameters the connector's own parameters, consulted for no_escape_params. The connector is
+     *                            where an operator declares which of its template positions are raw JSON, and those
+     *                            parameters are merged into the request only after escaping has run - so without
+     *                            this the opt-out would exist only for callers who repeat it on every request.
+     */
+    public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData, Map<String, String> connectorParameters) {
         if (inputData.getParameters() == null) {
             return;
         }
         Map<String, String> newParameters = new HashMap<>();
-        String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
         Set<String> noEscapParamSet = new HashSet<>();
-        if (noEscapeParams != null && !noEscapeParams.isEmpty()) {
-            String[] keys = noEscapeParams.split(",");
-            for (String key : keys) {
-                noEscapParamSet.add(key.trim());
-            }
+        // Union rather than override: the connector declares its own raw positions, and a request adding one of its
+        // own must not silently switch those off.
+        addNoEscapeParams(inputData.getParameters().get(NO_ESCAPE_PARAMS), noEscapParamSet);
+        if (connectorParameters != null) {
+            addNoEscapeParams(connectorParameters.get(NO_ESCAPE_PARAMS), noEscapParamSet);
         }
         if (inputData.getParameters() != null) {
             inputData.getParameters().forEach((key, value) -> {
@@ -215,6 +231,15 @@ public class ConnectorUtils {
                 }
             });
             inputData.setParameters(newParameters);
+        }
+    }
+
+    private static void addNoEscapeParams(String noEscapeParams, Set<String> target) {
+        if (noEscapeParams == null || noEscapeParams.isEmpty()) {
+            return;
+        }
+        for (String key : noEscapeParams.split(",")) {
+            target.add(key.trim());
         }
     }
 
