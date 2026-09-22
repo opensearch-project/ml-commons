@@ -369,6 +369,22 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         return;
                     }
 
+                    // mlModel came from MLModelManager.parseAndReturnModel, which neither decrypts nor strips
+                    // the credential, so connector.credential currently holds the stored ciphertext.
+                    // Connector.update() keeps that value when the request supplies no credential of its own,
+                    // and encrypt() only skips an empty map - so encrypting unconditionally would persist
+                    // ciphertext-of-ciphertext and leave the credential unusable.
+                    //
+                    // So encrypt only what the request actually supplied. When it supplied nothing, the stored
+                    // value is written back exactly as it was read. Note the field must be written back rather
+                    // than omitted: whether an omitted field preserves the stored one depends on the metadata
+                    // backend - the local index client issues a partial-document update that OpenSearch merges
+                    // recursively, but the DynamoDB-backed client merges the stored source with a shallow
+                    // top-level Map.putAll, which replaces the whole connector object. Omitting the credential
+                    // there would drop it, and a REMOTE connector without one no longer parses, which makes the
+                    // model document unreadable and undeletable.
+                    Map<String, String> suppliedCredential = updateModelInput.getConnector().getCredential();
+                    boolean hasSuppliedCredential = suppliedCredential != null && !suppliedCredential.isEmpty();
                     connector.update(updateModelInput.getConnector());
 
                     // Only validate headers if connector actions were modified in this update
@@ -398,7 +414,11 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         log.error("Failed to encrypt connector settings for model {}", modelId, e);
                         wrappedListener.onFailure(e);
                     });
-                    connector.encrypt(mlEngine::encrypt, tenantId, encryptSuccessfulListener);
+                    if (hasSuppliedCredential) {
+                        connector.encrypt(mlEngine::encrypt, tenantId, encryptSuccessfulListener);
+                    } else {
+                        encryptSuccessfulListener.onResponse(true);
+                    }
                 } else {
                     updateModelWithRegisteringToAnotherModelGroup(
                         modelId,
