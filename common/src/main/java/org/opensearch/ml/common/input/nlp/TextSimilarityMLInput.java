@@ -97,7 +97,7 @@ public class TextSimilarityMLInput extends MLInput {
                     }
                     break;
                 case QUERY_TEXT_FIELD:
-                    queryText = parser.text();
+                    queryText = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();

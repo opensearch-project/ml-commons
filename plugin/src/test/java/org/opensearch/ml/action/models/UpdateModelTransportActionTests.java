@@ -7,17 +7,21 @@ package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -38,6 +42,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
@@ -62,6 +67,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -70,9 +76,13 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
@@ -296,6 +306,14 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             )
             .build();
 
+        // A connector_id swap now loads the incoming connector to check it can back a model. Default to a
+        // usable one; tests that care about the rejection re-stub this with an MCP connector.
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(testConnector);
+            return null;
+        }).when(mlModelManager).getConnector(any(), any(), isA(ActionListener.class));
+
         // TODO eventually remove if migrated to sdkClient
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(4);
@@ -478,6 +496,83 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
+    /**
+     * The stored model is parsed without decrypting or stripping its credential, so connector.credential holds
+     * ciphertext. An update that edits anything other than the credential must not hand that ciphertext back to
+     * encrypt() - doing so stores ciphertext-of-ciphertext and destroys the credential.
+     */
+    @Test
+    public void testUpdateInternalRemoteModel_omittedCredentialIsNotReEncrypted() throws InterruptedException {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        // prepareRemoteRequest("REMOTE_INTERNAL") carries only version and description - no credential.
+        MLUpdateModelRequest request = prepareRemoteRequest("REMOTE_INTERNAL");
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        verify(mlEngine, never()).encrypt(argThat(values -> values != null && values.contains("credential_value")), any(), any());
+
+        // The stored value must be written back, not omitted. Whether an omitted field survives depends on the
+        // metadata backend: the local index client merges a partial document recursively, but the DynamoDB
+        // client merges the stored source with a shallow top-level Map.putAll that replaces the whole connector
+        // object, so an absent credential would be dropped there - and a REMOTE connector without one no longer
+        // parses, which makes the model document unreadable and undeletable.
+        Connector writtenConnector = request.getUpdateModelInput().getUpdatedConnector();
+        assertNotNull("the connector must still be written", writtenConnector);
+        assertEquals(
+            "the stored credential must be carried through unchanged",
+            Map.of("api_key", "credential_value"),
+            ((AbstractConnector) writtenConnector).getCredential()
+        );
+    }
+
+    /** The other half: a credential the request does supply must still be encrypted, exactly once. */
+    @Test
+    public void testUpdateInternalRemoteModel_suppliedCredentialIsStillEncrypted() throws InterruptedException {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .connector(
+                        MLCreateConnectorInput
+                            .builder()
+                            .updateConnector(true)
+                            .version("1")
+                            .credential(Map.of("api_key", "brand_new_secret"))
+                            .build()
+                    )
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        ArgumentCaptor<List<String>> encryptCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mlEngine).encrypt(encryptCaptor.capture(), any(), any());
+        assertTrue(encryptCaptor.getValue().contains("brand_new_secret"));
+    }
+
     @Test
     public void testUpdateInternalRemoteModelWithInternalRemoteInformationSuccess() throws InterruptedException {
         MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
@@ -574,6 +669,190 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             "You don't have permission to update the connector, connector id: updated_test_connector_id",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    /**
+     * Re-pointing a model at an MCP connector is the same defect as creating one from an MCP connector: the
+     * connector has no predict action, so the model would only fail once something tried to use it. Reject
+     * the swap instead.
+     */
+    @Test
+    public void testUpdateRemoteModelWithNewMcpConnectorIdRejected() {
+        assertNewStandAloneConnectorRejectedAsMcp(
+            McpConnector
+                .builder()
+                .name("mcp")
+                .protocol(ConnectorProtocols.MCP_SSE)
+                .url("https://api.openai.com/mcp")
+                .credential(Map.of("key", "value"))
+                .build()
+        );
+    }
+
+    /** mcp_streamable_http is a sibling of McpConnector, so the check has to be by protocol. */
+    @Test
+    public void testUpdateRemoteModelWithNewMcpStreamableHttpConnectorIdRejected() {
+        assertNewStandAloneConnectorRejectedAsMcp(
+            McpStreamableHttpConnector
+                .builder()
+                .name("mcp")
+                .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+                .url("https://api.openai.com/mcp")
+                .credential(Map.of("key", "value"))
+                .build()
+        );
+    }
+
+    /** The rejection is a property of the connector's shape, not of the MCP feature flag. */
+    @Test
+    public void testUpdateRemoteModelWithNewMcpConnectorIdRejectedWhenMcpFeatureEnabled() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        assertNewStandAloneConnectorRejectedAsMcp(
+            McpConnector
+                .builder()
+                .name("mcp")
+                .protocol(ConnectorProtocols.MCP_SSE)
+                .url("https://api.openai.com/mcp")
+                .credential(Map.of("key", "value"))
+                .build()
+        );
+    }
+
+    /** A failed lookup of the incoming connector has to reach the caller unchanged. */
+    @Test
+    public void testUpdateRemoteModelWithNewConnectorIdLookupFailurePropagates() {
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        OpenSearchStatusException lookupFailure = new OpenSearchStatusException(
+            "Failed to find connector:updated_test_connector_id",
+            RestStatus.NOT_FOUND
+        );
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onFailure(lookupFailure);
+            return null;
+        }).when(mlModelManager).getConnector(eq("updated_test_connector_id"), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(lookupFailure, argumentCaptor.getValue());
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    /**
+     * An inline connector's protocol can be patched in place, and Connector.update() overwrites it
+     * unconditionally. Flipping it to MCP would persist a model whose connector document resolves back to
+     * an MCP connector on read, leaving the model permanently unusable.
+     */
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorProtocolChangedToMcpRejected() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        MLUpdateModelInput updateInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .connector(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_SSE).build())
+            .build();
+
+        transportUpdateModelAction
+            .doExecute(task, MLUpdateModelRequest.builder().updateModelInput(updateInput).build(), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Cannot change this model's connector to MCP protocol [mcp_sse].", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    /**
+     * updated_connector is unreachable from REST but is wire-serialized, so a transport caller can set it and
+     * have it written straight into the model's connector field.
+     */
+    @Test
+    public void testUpdateRemoteModelWithUpdatedConnectorSetToMcpRejected() {
+        MLUpdateModelInput updateInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .updatedConnector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+
+        transportUpdateModelAction.doExecute(task, MLUpdateModelRequest.builder().updateModelInput(updateInput).build(), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Cannot update this model to use an MCP connector.", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+        verify(mlModelManager, never()).getModel(any(), any(), any(), any(), isA(ActionListener.class));
+    }
+
+    /**
+     * A model whose inline connector is already MCP predates the checks that refuse to attach one. Patching it
+     * cannot help, and supplying actions reads getActions() on the MCP instance, which is unimplemented.
+     */
+    @Test
+    public void testUpdateRemoteModelWithExistingMcpInlineConnectorRejected() {
+        MLModel mcpBackedModel = prepareMLModel("REMOTE_INTERNAL");
+        mcpBackedModel
+            .setConnector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            );
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mcpBackedModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("it is an MCP connector"));
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    private void assertNewStandAloneConnectorRejectedAsMcp(Connector newConnector) {
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(newConnector);
+            return null;
+        }).when(mlModelManager).getConnector(eq("updated_test_connector_id"), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Cannot update this model to use MCP connector: updated_test_connector_id", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
     }
 
     @Test
@@ -720,6 +999,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model to update with the provided model id: test_model_id", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateModelWithGetModelFailurePropagated() {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener
+                .onFailure(
+                    new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model")
+                );
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Space type must be provided in additional_config for remote text embedding model",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -1639,6 +1938,76 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     // TODO: Add UT to make sure that version incremented successfully.
+    /**
+     * A model's inline connector can have its protocol changed here, so the feature-flag gate has to apply on
+     * this path too - otherwise a disabled protocol is reachable by updating a model instead of a connector.
+     */
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorGatedProtocolRejected() throws InterruptedException {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.REGISTERED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
+
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .connector(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build())
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+    }
+
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorGatedMcpStreamableProtocolRejected() throws InterruptedException {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.REGISTERED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
+
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .connector(
+                        MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP).build()
+                    )
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+    }
+
     private MLModel prepareMLModel(String functionName, MLModelState modelState, boolean isHidden) throws IllegalArgumentException {
         MLModel mlModel;
         switch (functionName) {

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.utils;
 import static java.util.Locale.ROOT;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.opensearch.OpenSearchException;
@@ -20,13 +21,61 @@ import org.opensearch.index.engine.VersionConflictEngineException;
  */
 public final class MLResourceIdUtils {
 
-    public static final int MAX_DOCUMENT_ID_LENGTH = 512;
+    /**
+     * Maximum length of a user-specified resource id, in UTF-8 bytes.
+     *
+     * Kept at 256 to match the `ignore_above: 256` default that OpenSearch applies to dynamically mapped `keyword`
+     * subfields (and that the ML index mappings use for id-like fields). Ids longer than that would not be indexed into
+     * the `.keyword` subfield at all, so exact-match reference guards such as the "is this connector still used by a
+     * model?" check in DeleteConnectorTransportAction would silently return zero hits and fail open.
+     *
+     * Note the units differ: this limit is checked in UTF-8 bytes, while `ignore_above` is compared against the
+     * character count. The two coincide only because {@link #CUSTOM_DOCUMENT_ID_PATTERN} restricts ids to ASCII. If that
+     * pattern is ever widened to non-ASCII characters, this bound must be re-derived in characters.
+     *
+     * Raising this value requires revisiting those guards. OpenSearch independently rejects any document id over 512
+     * bytes, which is where the original limit came from.
+     */
+    public static final int MAX_DOCUMENT_ID_LENGTH = 256;
 
     /**
      * Allowed characters for user-specified document IDs used in REST path segments.
      * Must start with a letter or digit; subsequent characters may also include '_' and '-'.
      */
     public static final Pattern CUSTOM_DOCUMENT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9_-]*$");
+
+    /**
+     * Document ids the plugin writes at a fixed, non-random id of its own.
+     *
+     * Those writes are plain index requests: they do not set opType(CREATE), so they replace whatever document
+     * already occupies the id. METRICS_CORRELATION is written that way both as a model document
+     * ({@code MLModelManager.configureModelMetaIndexRequest}) and as a model group document
+     * ({@code MetricsCorrelation#initModel}), so a resource that had taken the id is lost.
+     *
+     * Reserving the id is what keeps those writes from colliding, and it wants to land with custom ids rather
+     * than after them: no stored resource can be using one yet, while adding the reservation later would
+     * reject ids a previous version accepted.
+     *
+     * Reserved for every resource type rather than only the two that can actually collide. One list is far
+     * harder to get wrong than a per-type list, and it keeps the rule explainable - a reserved id is reserved,
+     * rather than being valid for an agent and invalid for a model.
+     *
+     * Matched case-insensitively. Only the exact upper-case form can collide, since document ids are
+     * case-sensitive, but rejecting the case variants too avoids the confusing near-miss where
+     * "Metrics_Correlation" is accepted and "METRICS_CORRELATION" is not.
+     */
+    private static final Set<String> RESERVED_DOCUMENT_IDS = Set.of("METRICS_CORRELATION");
+
+    /**
+     * Model chunk documents share {@code .plugins-ml-model} and its id namespace with model metadata
+     * documents, under the id {@code <modelId>_<chunkNumber>} ({@code MLModelManager#getModelChunkId}).
+     * Those writes set no opType either, so a custom model id of this shape and a chunk of an unrelated model
+     * resolve to the same document.
+     *
+     * Applied to model ids only: chunk documents exist in the model index alone, so restricting connector,
+     * agent, model group or memory container ids would be a gratuitous limitation.
+     */
+    private static final Pattern MODEL_CHUNK_ID_PATTERN = Pattern.compile("^.*_\\d+$");
 
     private MLResourceIdUtils() {}
 
@@ -38,6 +87,9 @@ public final class MLResourceIdUtils {
      */
     public static void validateCustomModelId(String modelId) {
         validateCustomDocumentId(modelId, "model id");
+        if (modelId != null && MODEL_CHUNK_ID_PATTERN.matcher(modelId).matches()) {
+            throw new IllegalArgumentException("model id must not end with '_<number>'; that form is reserved for model chunk documents");
+        }
     }
 
     /**
@@ -67,6 +119,9 @@ public final class MLResourceIdUtils {
             throw new IllegalArgumentException(
                 resourceLabel + " must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
             );
+        }
+        if (RESERVED_DOCUMENT_IDS.contains(documentId.toUpperCase(ROOT))) {
+            throw new IllegalArgumentException(resourceLabel + " must not be a reserved id: " + documentId);
         }
     }
 

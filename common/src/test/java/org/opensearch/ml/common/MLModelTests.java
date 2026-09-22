@@ -8,6 +8,7 @@ package org.opensearch.ml.common;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -22,9 +23,11 @@ import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
@@ -117,6 +120,25 @@ public class MLModelTests {
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
         TestHelper.testParseFromString(config, mlModelContent, function);
+    }
+
+    @Test
+    public void parse_KeepsStoredModelReadableWhenBatchInferenceConfigHasUnknownFields() throws IOException {
+        // Reading a stored model must stay lenient: an unknown field means it was written by a version that knows
+        // about something this node does not, and rejecting it here would make the model document unreadable and
+        // break get/delete/deploy/predict for it. Unknown fields are only rejected on the register-model API path.
+        String json = "{\"name\":\"m\",\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\","
+            + "\"batch_inference_config\":{\"max_items_per_request\":8,\"some_future_field\":{\"a\":1},"
+            + "\"queue\":{\"enabled\":true,\"some_future_queue_field\":7}}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+
+        MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
+
+        assertEquals(8, parsed.getBatchInferenceConfig().getMaxItemsPerRequest());
+        assertEquals(true, parsed.getBatchInferenceConfig().isQueueEnabled());
     }
 
     @Test
@@ -602,5 +624,33 @@ public class MLModelTests {
         streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLModel deserialized = new MLModel(streamInput);
         assertNull(deserialized.getProvisionedBy());
+    }
+
+    // Issue #4999: documents stored before the space_type requirement (#3786) must still parse back.
+    @Test
+    public void parseRemoteModel_legacyStoredDocWithoutSpaceType() throws IOException {
+        String legacySource = "{"
+            + "\"name\":\"legacy_remote_text_embedding_model\","
+            + "\"algorithm\":\"REMOTE\","
+            + "\"model_version\":\"19\","
+            + "\"model_state\":\"DEPLOY_FAILED\","
+            + "\"connector_id\":\"test_connector_id\","
+            + "\"model_group_id\":\"test_model_group_id\","
+            + "\"model_config\":{"
+            + "\"model_type\":\"TEXT_EMBEDDING\","
+            + "\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\""
+            + "}"
+            + "}";
+        try (
+            XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, legacySource)
+        ) {
+            parser.nextToken();
+            MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
+            assertEquals("legacy_remote_text_embedding_model", parsed.getName());
+            assertNotNull(parsed.getModelConfig());
+            assertEquals("TEXT_EMBEDDING", parsed.getModelConfig().getModelType());
+            assertNull(((BaseModelConfig) parsed.getModelConfig()).getAdditionalConfig());
+        }
     }
 }

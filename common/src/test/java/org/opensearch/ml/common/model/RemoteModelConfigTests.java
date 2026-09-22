@@ -20,13 +20,19 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
 public class RemoteModelConfigTests {
+
+    private static final String LEGACY_TEXT_EMBEDDING_CONTENT = "{\"model_type\":\"text_embedding\","
+        + "\"embedding_dimension\":768,"
+        + "\"framework_type\":\"SENTENCE_TRANSFORMERS\"}";
 
     RemoteModelConfig config;
     Function<XContentParser, RemoteModelConfig> function;
@@ -136,6 +142,28 @@ public class RemoteModelConfigTests {
             + "\"additional_config\":{\"space_type\":\"l2\"},"
             + "\"wrong_filed\":\"test_value\"}";
         TestHelper.testParseFromString(config, content, function);
+    }
+
+    @Test
+    public void parse_textEmbeddingMissingSpaceType() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Space type must be provided in additional_config for remote text embedding model");
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, LEGACY_TEXT_EMBEDDING_CONTENT);
+        parser.nextToken();
+        RemoteModelConfig.parse(parser);
+    }
+
+    @Test
+    public void parseLenient_textEmbeddingMissingSpaceType() throws IOException {
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, LEGACY_TEXT_EMBEDDING_CONTENT);
+        parser.nextToken();
+        RemoteModelConfig config = RemoteModelConfig.parse(parser, false);
+        assertEquals("text_embedding", config.getModelType());
+        assertNull(config.getAdditionalConfig());
     }
 
     @Test

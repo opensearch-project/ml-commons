@@ -18,6 +18,7 @@
 package org.opensearch.ml.rest.mcpserver;
 
 import java.io.IOException;
+import java.util.Locale;
 
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
@@ -103,6 +104,8 @@ public class RestMcpToolsRemoveActionIT extends MLCommonsRestTestCase {
         String registerResString = TestHelper.httpEntityToString(registerResponseEntity);
         assertTrue(registerResString.contains("created"));
 
+        // A single element containing comma-separated names is intentional: MLMcpToolsRemoveNodesRequest.parse splits
+        // each array element on commas, so this exercises that path.
         String removeRequestBody = """
             [
                 "ListIndexTool1, ListIndexTool2"
@@ -123,5 +126,53 @@ public class RestMcpToolsRemoveActionIT extends MLCommonsRestTestCase {
         String listEntityString = TestHelper.httpEntityToString(listHttpEntity);
         assertFalse(listEntityString.contains("ListIndexTool1"));
         assertFalse(listEntityString.contains("ListIndexTool2"));
+    }
+
+    /**
+     * Regression test for https://github.com/opensearch-project/ml-commons/issues/5032: the tool lookup behind
+     * `_remove` used an analysed match query on the `name` text field. The standard analyser splits on '-', so removing
+     * `vfy-list-tool` also deleted `vfy-mapping-tool` because they share the `vfy` and `tool` tokens, while the caller
+     * was told only that the requested tool had been removed. ('_' does not split — Word_Break=ExtendNumLet in
+     * UAX #29 — so snake_case tool names are unaffected and this test uses hyphenated names.)
+     */
+    public void testRemoveMcpTool_doesNotRemoveToolsSharingNameToken() throws IOException {
+        // The two names must share at least one analysed token ("vfy" and "tool" here, split on '-') to reproduce the
+        // bug. The random
+        // suffix keeps the test rerunnable against a persistent cluster (-Dtests.rest.cluster=...), where a previous
+        // aborted run could otherwise leave these documents behind.
+        String suffix = randomAlphaOfLength(8);
+        String removedTool = "vfy-list-tool-" + suffix;
+        String survivingTool = "vfy-mapping-tool-" + suffix;
+
+        String registerRequestBody = String.format(Locale.ROOT, """
+            {
+               "tools": [
+                   {
+                       "name": "%s",
+                       "type": "ListIndexTool",
+                       "description": "first tool"
+                   },
+                   {
+                       "name": "%s",
+                       "type": "IndexMappingTool",
+                       "description": "second tool"
+                   }
+               ]
+            }
+            """, removedTool, survivingTool);
+        Response registerResponse = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/mcp/tools/_register", null, registerRequestBody, null);
+        assertEquals(RestStatus.OK, TestHelper.restStatus(registerResponse));
+
+        Response removeResponse = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/mcp/tools/_remove", null, "[\"" + removedTool + "\"]", null);
+        assertEquals(RestStatus.OK, TestHelper.restStatus(removeResponse));
+        assertTrue(TestHelper.httpEntityToString(removeResponse.getEntity()).contains("removed"));
+
+        Response listResponse = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/mcp/tools/_list", null, "", null);
+        assertEquals(RestStatus.OK, TestHelper.restStatus(listResponse));
+        String listEntityString = TestHelper.httpEntityToString(listResponse.getEntity());
+        assertFalse("Requested tool should have been removed", listEntityString.contains(removedTool));
+        assertTrue("Tool sharing a name token must survive", listEntityString.contains(survivingTool));
     }
 }

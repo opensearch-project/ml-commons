@@ -36,6 +36,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -43,6 +44,7 @@ import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -123,10 +125,91 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                     if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
+                            // An update may change the protocol, so the protocol is validated against the
+                            // supported list and against its opt-in feature flag here, using the value the
+                            // connector will actually have once the update is applied. The update parse path
+                            // skips MLCreateConnectorInput's validation block, so neither check has run yet.
+                            String updatedProtocol = mlUpdateConnectorAction.getUpdateContent().getProtocol();
+                            // Reported through the listener directly rather than by throwing. A throw here would
+                            // be routed to the enclosing listener's failure consumer, which logs it as a
+                            // permission denial, so an operator debugging a rejected protocol would be told the
+                            // wrong thing.
+                            try {
+                                if (updatedProtocol != null) {
+                                    ConnectorProtocols.validateProtocol(updatedProtocol);
+                                    ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                                    // Crossing the MCP boundary changes which class the stored document parses back
+                                    // into - an MCP connector carries no actions, an inference one does - while the
+                                    // document keeps the fields of the old family. The connector, and any model
+                                    // referencing it, is then read back as a shape whose accessors are missing or
+                                    // unimplemented. The "models are still using this connector" check below does not
+                                    // cover this: it only looks at deployed models, so a connector referenced solely
+                                    // by a registered-but-undeployed model passes it.
+                                    if (ConnectorProtocols.isMcpProtocol(updatedProtocol) != ConnectorProtocols
+                                        .isMcpProtocol(connector.getProtocol())) {
+                                        throw new OpenSearchStatusException(
+                                            "Cannot change connector protocol from ["
+                                                + connector.getProtocol()
+                                                + "] to ["
+                                                + updatedProtocol
+                                                + "]: an MCP connector and an inference connector are not interchangeable.",
+                                            RestStatus.BAD_REQUEST
+                                        );
+                                    }
+                                }
+                                ConnectorProtocolValidator
+                                    .validateMutualTlsSupportedAfterUpdate(
+                                        connector.getProtocol(),
+                                        connector.getConnectorClientConfig(),
+                                        updatedProtocol,
+                                        mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                    );
+                                ConnectorProtocolValidator
+                                    .validateMutualTlsEnabledAfterUpdate(
+                                        connector.getConnectorClientConfig(),
+                                        mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig(),
+                                        mlFeatureEnabledSetting
+                                    );
+                                // Skipped for an MCP connector: it carries no actions, so reading them below
+                                // throws and would escape as a 500. Nothing is lost by skipping - an MCP protocol
+                                // can never apply mutual TLS, which the supported check above already owns, so an
+                                // action URL's scheme says nothing here. The protocol-crossing check above means
+                                // the stored protocol settles this for the updated connector as well.
+                                if (!ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                    ConnectorProtocolValidator
+                                        .validateMutualTlsSchemeAfterUpdate(
+                                            connector.getActions(),
+                                            connector.getParameters(),
+                                            connector.getConnectorClientConfig(),
+                                            mlUpdateConnectorAction.getUpdateContent().getActions(),
+                                            mlUpdateConnectorAction.getUpdateContent().getParameters(),
+                                            mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                        );
+                                }
+                            } catch (Exception e) {
+                                log.error("Rejected connector update for connector id {}", connectorId, e);
+                                listener.onFailure(e);
+                                return;
+                            }
+
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 
                             // Only validate headers if actions were modified in this update
                             MLCreateConnectorInput updateContent = mlUpdateConnectorAction.getUpdateContent();
+                            // An MCP connector has no actions, so reading them below throws. update() also silently
+                            // drops any actions supplied for one, so the request is meaningless either way - say so
+                            // rather than failing as an unclassified error.
+                            if (updateContent.getActions() != null && ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                log.error("Rejected actions on MCP connector update for connector id {}", connectorId);
+                                listener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Connector actions are not supported for protocol [" + connector.getProtocol() + "].",
+                                            RestStatus.BAD_REQUEST
+                                        )
+                                    );
+                                return;
+                            }
                             if (updateContent.getActions() != null && connector.getActions() != null) {
                                 for (ConnectorAction action : connector.getActions()) {
                                     Map<String, String> headers = action.getHeaders();
@@ -181,7 +264,9 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     ) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        boolQueryBuilder.must(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+        // Exact match on the keyword subfield. An analysed match query on the `connector_id` text field splits on '-'
+        // and lowercases, so any model referencing a connector id that shares a single token would block this update.
+        boolQueryBuilder.must(QueryBuilders.termQuery(MLModel.CONNECTOR_ID_KEYWORD_FIELD, connectorId));
         boolQueryBuilder.must(QueryBuilders.idsQuery().addIds(mlModelManager.getAllModelIds()));
         sourceBuilder.query(boolQueryBuilder);
 

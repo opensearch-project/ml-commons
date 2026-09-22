@@ -7,6 +7,7 @@ package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -154,5 +155,102 @@ public class BatchInferenceConfigTest {
         BatchInferenceConfig parsed = BatchInferenceConfig.parse(parser);
         assertEquals(BatchInferenceConfig.NO_LIMIT, parsed.getMaxItemsPerRequest());
         assertEquals(4096L, parsed.getMaxBytesPerRequest());
+    }
+
+    @Test
+    public void queueAbsentByDefault() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(96).build();
+        assertNull(config.getQueue());
+        assertFalse("a size-only config never enables the queue", config.isQueueEnabled());
+    }
+
+    @Test
+    public void isQueueEnabledFalseWhenBlockPresentButDisabled() {
+        BatchInferenceConfig config = BatchInferenceConfig
+            .builder()
+            .maxItemsPerRequest(96)
+            .queue(BatchQueueConfig.builder().enabled(false).flushTimeoutMs(10L).build())
+            .build();
+        assertFalse(config.isQueueEnabled());
+    }
+
+    @Test
+    public void streamRoundTripCarriesQueueBlock() throws IOException {
+        BatchInferenceConfig original = BatchInferenceConfig
+            .builder()
+            .maxItemsPerRequest(96)
+            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
+            .build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        original.writeTo(out);
+        BatchInferenceConfig restored = new BatchInferenceConfig(out.bytes().streamInput());
+        assertTrue(restored.isQueueEnabled());
+        assertEquals(10L, restored.getQueue().getFlushTimeoutMs());
+    }
+
+    @Test
+    public void streamRoundTripWithoutQueueRestoresNull() throws IOException {
+        BatchInferenceConfig original = BatchInferenceConfig.builder().maxItemsPerRequest(96).build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        original.writeTo(out);
+        BatchInferenceConfig restored = new BatchInferenceConfig(out.bytes().streamInput());
+        assertNull(restored.getQueue());
+    }
+
+    @Test
+    public void xContentRoundTripCarriesQueueBlock() throws IOException {
+        BatchInferenceConfig original = BatchInferenceConfig
+            .builder()
+            .maxItemsPerRequest(96)
+            .maxBytesPerRequest(4096L)
+            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(25L).build())
+            .build();
+        XContentBuilder builder = XContentType.JSON.contentBuilder();
+        original.toXContent(builder, ToXContent.EMPTY_PARAMS);
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString());
+        parser.nextToken();
+        BatchInferenceConfig parsed = BatchInferenceConfig.parse(parser);
+        assertTrue(parsed.isQueueEnabled());
+        assertEquals(25L, parsed.getQueue().getFlushTimeoutMs());
+    }
+
+    @Test
+    public void rejectsUnknownFieldOnTheApiInputPath() throws IOException {
+        // A typo like max_items instead of max_items_per_request would otherwise leave the limit disabled.
+        XContentParser parser = jsonParser("{\"max_items\":2}");
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported field [max_items]");
+        BatchInferenceConfig.parse(parser, true);
+    }
+
+    @Test
+    public void rejectsUnknownFieldInsideQueueBlockOnTheApiInputPath() throws IOException {
+        XContentParser parser = jsonParser("{\"max_items_per_request\":2,\"queue\":{\"enabled\":true,\"flushTimeoutMs\":100}}");
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported field [flushTimeoutMs]");
+        BatchInferenceConfig.parse(parser, true);
+    }
+
+    @Test
+    public void skipsUnknownFieldWhenReadingAStoredModel() throws IOException {
+        // Lenient by default so a field added by a newer version cannot make a stored model unreadable here.
+        BatchInferenceConfig parsed = BatchInferenceConfig
+            .parse(jsonParser("{\"max_items_per_request\":2,\"some_future_field\":{\"a\":1},\"queue\":{\"enabled\":true,\"future\":7}}"));
+
+        assertEquals(2, parsed.getMaxItemsPerRequest());
+        assertTrue(parsed.isQueueEnabled());
+    }
+
+    private static XContentParser jsonParser(String json) throws IOException {
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        return parser;
     }
 }

@@ -46,6 +46,7 @@ public class BatchInferenceExecutor {
      * handler, rather than being sent unsplit.
      */
     public void execute(
+        String modelId,
         MLInput input,
         BatchInferenceConfig config,
         Predictable predictor,
@@ -84,10 +85,11 @@ public class BatchInferenceExecutor {
             return;
         }
 
-        dispatchBatches(input, handler, batches, predictor, channel, listener);
+        dispatchBatches(modelId, input, handler, batches, predictor, channel, listener);
     }
 
     private void dispatchBatches(
+        String modelId,
         MLInput input,
         BatchableInput handler,
         List<List<BatchItem>> batches,
@@ -101,7 +103,7 @@ public class BatchInferenceExecutor {
             for (List<BatchItem> b : batches) {
                 items += b.size();
             }
-            log.debug("Size-based batching: split {} items into {} sub-batches", items, total);
+            log.debug("Size-based batching for model {}: split {} items into {} sub-batches", modelId, items, total);
         }
 
         AtomicReferenceArray<MLOutput> results = new AtomicReferenceArray<>(total);
@@ -115,7 +117,26 @@ public class BatchInferenceExecutor {
             List<BatchItem> batch = batches.get(i);
             ActionListener<MLTaskResponse> subListener = ActionListener.wrap(response -> {
                 try {
-                    results.set(index, response.getOutput());
+                    MLOutput output = response.getOutput();
+                    // A sub-batch whose result count does not match its item count is a failure, not a result:
+                    // combine() concatenates per sub-batch, so keeping it would splice misaligned results into the
+                    // middle of the response and silently displace every result after it. The distributed results
+                    // themselves are only needed by the queue path, which routes them back per caller.
+                    handler.distributeExactly(output, batch.size());
+                    results.set(index, output);
+                } catch (Exception misaligned) {
+                    // Deliberately not asserting a cause here: this also catches anything else distribute() rejects
+                    // the output for. The attached exception carries the real reason, with the counts when it is a
+                    // misalignment.
+                    log
+                        .error(
+                            "Sub-batch {} of {} for model {} could not be used, so the whole predict request fails",
+                            index + 1,
+                            total,
+                            modelId,
+                            misaligned
+                        );
+                    failures.set(index, misaligned);
                 } finally {
                     if (remaining.decrementAndGet() == 0) {
                         complete(failures, results, handler, listener);

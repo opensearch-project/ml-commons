@@ -1,0 +1,60 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.batch;
+
+import java.util.concurrent.atomic.AtomicLong;
+
+class QueueMemoryBudget {
+
+    private volatile long maxBytes;
+    private final AtomicLong reservedBytes = new AtomicLong();
+
+    QueueMemoryBudget(long maxBytes) {
+        this.maxBytes = maxBytes;
+    }
+
+    void setMaxBytes(long maxBytes) {
+        this.maxBytes = maxBytes;
+    }
+
+    long getMaxBytes() {
+        return maxBytes;
+    }
+
+    long getReservedBytes() {
+        return reservedBytes.get();
+    }
+
+    /**
+     * True when a single request could never be admitted, however empty the queue is. Such a request must not
+     * be told to retry after backoff, since no amount of waiting frees enough budget for it.
+     */
+    boolean exceedsCapacity(long bytes) {
+        return bytes > maxBytes;
+    }
+
+    boolean tryReserve(long bytes) {
+        if (bytes <= 0) {
+            return true;
+        }
+        while (true) {
+            long current = reservedBytes.get();
+            long limit = maxBytes;
+            if (current > limit || bytes > limit - current) {
+                return false;
+            }
+            if (reservedBytes.compareAndSet(current, current + bytes)) {
+                return true;
+            }
+        }
+    }
+
+    void release(long bytes) {
+        if (bytes > 0) {
+            reservedBytes.addAndGet(-bytes);
+        }
+    }
+}
