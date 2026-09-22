@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.batch;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
@@ -12,21 +13,26 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THRE
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorThrottlingException;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -369,10 +375,60 @@ public class ModelBatchQueue {
         }
     }
 
+    /**
+     * Records a sub-batch failure against every request whose items were in it.
+     *
+     * Only an error carrying the provider's raw response body is replaced, and only when the sub-batch merged
+     * more than one request - that body describes the merged call rather than any one request in it. Everything
+     * else is passed through: an error ml-commons raised itself describes our own handling, not anyone's data,
+     * and is what makes a throttle, a guardrail rejection or a sub-batch result-count mismatch diagnosable. A
+     * sub-batch holding a single request's items is passed through too, since the message is then entirely about
+     * that request - and that is the only shape that exists when coalescing is off.
+     */
     private void markFailed(List<BatchItem> subBatch, AtomicReferenceArray<Exception> entryFailures, Exception error) {
+        Set<Integer> affectedEntries = new HashSet<>();
         for (BatchItem item : subBatch) {
-            entryFailures.compareAndSet(item.getSourceIndex(), null, error);
+            affectedEntries.add(item.getSourceIndex());
         }
+        Exception reported = error;
+        if (affectedEntries.size() > 1 && carriesProviderResponseBody(error)) {
+            log
+                .warn(
+                    "Provider call failed for a sub-batch of model {} that merged {} requests; reporting a generic "
+                        + "error to each because the provider message describes the merged call, not one request",
+                    modelId,
+                    affectedEntries.size(),
+                    error
+                );
+            String message = "Batch inference failed. This request was merged with other requests for the same model, so the "
+                + "provider error is not reported per request; see the cluster logs for details.";
+            // Keep the status. The provider's own throttling comes back as 429, and a client or ingest pipeline
+            // that retries on 429 but gives up on 500 would otherwise turn a temporary throttle into a
+            // permanent failure.
+            reported = error instanceof OpenSearchStatusException statusError
+                ? new OpenSearchStatusException(message, statusError.status())
+                : new MLException(message);
+        }
+        for (Integer sourceIndex : affectedEntries) {
+            entryFailures.compareAndSet(sourceIndex, null, reported);
+        }
+    }
+
+    /**
+     * Whether the exception embeds the provider's raw response body, which is the only part of a failure that
+     * can describe another request in the merged call.
+     * <p>
+     * Decided by the error itself rather than by which listener reported it: the failure listener also receives
+     * errors raised before the provider was ever called - model-level and user-level throttling, a guardrail
+     * rejection, a model that is not deployed, a payload that would not build. Those must reach the caller
+     * unchanged. MLSdkAsyncHttpResponseHandler builds the one error that carries the body, prefixed with
+     * {@link org.opensearch.ml.common.CommonValue#REMOTE_SERVICE_ERROR}. RemoteConnectorThrottlingException
+     * shares that prefix but its message is a fixed sentence of ours, so it is left alone.
+     */
+    private static boolean carriesProviderResponseBody(Exception error) {
+        return !(error instanceof RemoteConnectorThrottlingException)
+            && error.getMessage() != null
+            && error.getMessage().startsWith(REMOTE_SERVICE_ERROR);
     }
 
     private void finish(
