@@ -170,6 +170,22 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                         mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig(),
                                         mlFeatureEnabledSetting
                                     );
+                                // Skipped for an MCP connector: it carries no actions, so reading them below
+                                // throws and would escape as a 500. Nothing is lost by skipping - an MCP protocol
+                                // can never apply mutual TLS, which the supported check above already owns, so an
+                                // action URL's scheme says nothing here. The protocol-crossing check above means
+                                // the stored protocol settles this for the updated connector as well.
+                                if (!ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                    ConnectorProtocolValidator
+                                        .validateMutualTlsSchemeAfterUpdate(
+                                            connector.getActions(),
+                                            connector.getParameters(),
+                                            connector.getConnectorClientConfig(),
+                                            mlUpdateConnectorAction.getUpdateContent().getActions(),
+                                            mlUpdateConnectorAction.getUpdateContent().getParameters(),
+                                            mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                        );
+                                }
                             } catch (Exception e) {
                                 log.error("Rejected connector update for connector id {}", connectorId, e);
                                 listener.onFailure(e);
