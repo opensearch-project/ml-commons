@@ -179,24 +179,52 @@ public class ConnectorUtils {
         return mlInput;
     }
 
-    // Parameters that every built-in request template interpolates inside a JSON string, so a value that
-    // happens to be a JSON object or array must still be escaped rather than spliced in raw - otherwise it
-    // ends the string early and either breaks the payload or injects structure into it. A caller that
-    // deliberately interpolates one of these in a raw JSON position can still opt out via no_escape_params,
-    // which is read from the connector's parameters as well as the request's.
+    // Parameters that request templates interpolate inside a JSON string, so a value that happens to be a JSON
+    // object or array must still be escaped rather than spliced in raw - otherwise it ends the string early and
+    // either breaks the payload or injects structure into it. A connector that deliberately interpolates one of
+    // these in a raw JSON position can still opt out via no_escape_params, which is read from the connector's
+    // parameters as well as the request's.
     //
-    // The list is keys, not positions, because the escaping runs before the template is known, so it is a
-    // mitigation and not a complete fix: any parameter interpolated inside a JSON string that is not listed here
-    // still reaches the isJson shortcut. Each entry was checked against every request_body template under docs/ -
-    // all of them interpolate these inside a JSON string, none in a raw JSON position. inputs deliberately is NOT
-    // listed: sagemaker_connector_copali_blueprint.md makes it the entire request body, and another template uses
-    // it as a bare JSON value, so escaping it would break those connectors outright. The isJson shortcut is kept
-    // for the same reason - messages, texts, dimensions, temperature, max_tokens, input and normalize are
-    // interpolated raw in 25+ places and escaping them would break every one.
+    // An entry has to meet two conditions: the key carries caller-supplied free text, which is what can plausibly
+    // arrive as a whole JSON document, and every request_body template under docs/ plus every built-in model
+    // provider template places it inside a JSON string. Only request_body templates count, because that is the
+    // only substitution this escaping feeds - a tool's "input" template is substituted by the agent framework
+    // instead, which is why question and query appear in raw positions there without being affected by this.
+    //
+    // Deliberately excluded because they do reach raw positions in request_body templates: inputs
+    // (sagemaker_connector_copali_blueprint.md:86 makes it the entire body), input, texts, messages, documents and
+    // the scalar knobs (dimensions, temperature, max_tokens, normalize, top_p, ...). That is also why the isJson
+    // shortcut below stays: those keys reach a raw position precisely because it waves them through, in 25+ places
+    // across docs/, and the V2 model providers rely on it for body. query is excluded for a different reason - its
+    // in-repo request_body uses are all string positions, but it is the natural name for a raw query DSL object
+    // and PPLTool templates already interpolate it raw, so the blast radius outside this repo is too wide.
+    //
+    // This is a mitigation, not a complete fix, for two reasons. The escaping runs before the template is known,
+    // so keys are all it can match on. And a key that is string-positioned in one template and raw in another
+    // cannot be served by either choice: inputs is exactly that - string-positioned in
+    // ml_inference_with_language_identification_ingest.md:155, raw in the copali blueprint - so it stays exposed.
+    // Closing that needs the decision to move to substitution time, where the position is known.
+    //
     // Built over a HashSet rather than with Set.of: Set.of#contains throws on a null key, where the previous
     // branch ordering reached HashSet#contains and returned false.
     private static final Set<String> ALWAYS_ESCAPE_PARAMS = Collections
-        .unmodifiableSet(new HashSet<>(List.of("system_prompt", "user_prompt", "prompt", "question", "system_instruction")));
+        .unmodifiableSet(
+            new HashSet<>(
+                List
+                    .of(
+                        "system_prompt",
+                        "user_prompt",
+                        "prompt",
+                        "question",
+                        "system_instruction",
+                        "inputText",
+                        "text",
+                        "Text",
+                        "message",
+                        "context"
+                    )
+            )
+        );
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
         escapeRemoteInferenceInputData(inputData, null);

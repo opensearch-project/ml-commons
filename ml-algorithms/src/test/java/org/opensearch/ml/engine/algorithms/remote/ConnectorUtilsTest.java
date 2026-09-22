@@ -2005,6 +2005,77 @@ public class ConnectorUtilsTest {
     }
 
     /**
+     * The prompt keys are not the only ones a template puts inside a JSON string. These five carry
+     * caller-supplied free text and are string-positioned in every request_body template in the repo, so a value
+     * that is itself a JSON document has to be escaped for the same reason system_prompt does.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_ContentKeysThatAreJson_AreEscaped() {
+        for (String key : new String[] { "inputText", "text", "Text", "message", "context" }) {
+            Map<String, String> params = new HashMap<>();
+            params.put(key, "{\"a\":1}");
+            RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+            ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+            assertEquals("escaping " + key, "{\\\"a\\\":1}", inputData.getParameters().get(key));
+        }
+    }
+
+    /**
+     * query is deliberately left off the allowlist: its in-repo request_body uses are all string positions, but it
+     * is the natural name for a raw query DSL object and PPLTool templates already interpolate it raw.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_QueryStaysRaw() {
+        Map<String, String> params = new HashMap<>();
+        params.put("query", "{\"match_all\":{}}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\"match_all\":{}}", inputData.getParameters().get("query"));
+    }
+
+    /**
+     * The Titan embedding shape from bedrock_connector_titan_embedding_blueprint.md, whose documented predict body
+     * sends inputText directly: embedding a document that happens to be a JSON object used to fail at
+     * createPayload, while the raw-positioned dimensions next to it still has to be spliced in unescaped.
+     */
+    @Test
+    public void testEmbeddingConnector_JsonDocumentAsInputTextStillBuildsAValidPayload() {
+        String document = "{\"title\":\"a doc\",\"body\":\"that is itself json\"}";
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions}}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("inputText", document);
+        params.put("dimensions", "1024");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+        String payload = connector.createPayload(PREDICT.name(), new HashMap<>(inputData.getParameters()));
+
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        Map<String, Object> parsed = gson.fromJson(payload, Map.class);
+        assertEquals(document, parsed.get("inputText"));
+        assertEquals(1024.0, (double) (Double) parsed.get("dimensions"), 0.0);
+    }
+
+    /**
      * Reproduces the net effect of RemoteConnectorExecutor#preparePayloadAndInvoke: connector parameters
      * are merged as-is and the caller-supplied input parameters are escaped once. Production actually
      * escapes the dataset twice - once directly and once inside ConnectorUtils#processInput, which receives

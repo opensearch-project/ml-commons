@@ -631,6 +631,22 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testSetupPromptParametersKeepsCallerNoEscapeParams() {
+        Map<String, String> testParams = new HashMap<>();
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.NO_ESCAPE_PARAMS_FIELD, "system_prompt");
+
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+
+        // the caller's opt-out is the only way to keep a raw JSON position working, so it must survive alongside
+        // the agent's own defaults rather than being replaced by them
+        String noEscapeParams = testParams.get(MLPlanExecuteAndReflectAgentRunner.NO_ESCAPE_PARAMS_FIELD);
+        assertTrue(noEscapeParams.contains("system_prompt"));
+        assertTrue(noEscapeParams.contains("tool_configs"));
+        assertTrue(noEscapeParams.contains("_tools"));
+    }
+
+    @Test
     public void testSetupPromptParametersWithDateInjection() {
         Map<String, String> testParams = new HashMap<>();
         testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
