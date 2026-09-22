@@ -50,6 +50,7 @@ import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.action.support.WriteRequest;
@@ -66,6 +67,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
@@ -83,6 +85,7 @@ import org.opensearch.ml.common.memorycontainer.RetentionRule;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.transport.memorycontainer.MLExecuteMemoryRetentionResponse.TriggerStatus;
 import org.opensearch.ml.common.transport.memorycontainer.MemoryRetentionDryRunResult;
+import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobType;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
@@ -2486,6 +2489,7 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
         MemoryConfiguration config,
         String containerId,
         Long orphanBaselineMillis,
+        String retentionJobWarning,
         ActionListener<MemoryRetentionDryRunResult> listener
     ) {
         try {
@@ -2515,52 +2519,103 @@ public class MemoryRetentionJobProcessor extends MLJobProcessor {
                 listener.onResponse(buildDryRunResult(ctx));
                 return;
             }
-            // Retention being enabled only means the job is allowed to run; the job document the scheduler drives
-            // must also exist. Registration happens on a cluster state change and can be deferred or fail (for
-            // example when the jobs index cannot be created), leaving retention enabled but inert - and the dry-run
-            // then reports deletions for a job that will never execute. The counts are still reported rather than
-            // short-circuited to zero, so an operator sees both that the policy matches documents and that the job
-            // is missing.
-            if (!clusterService.state().metadata().hasIndex(ML_JOBS_INDEX)) {
-                ctx.warnings
-                    .add(
-                        "retention is enabled but no scheduled retention job was found ("
-                            + ML_JOBS_INDEX
-                            + " does not exist); the job will not run until it is scheduled, so nothing would be deleted"
-                    );
+            // Retention being enabled only means the job is allowed to run; job-scheduler drives it from a document
+            // in the jobs index, and that registration can be deferred or fail, leaving retention enabled but inert.
+            // Warn when no active job exists, but still report the counts rather than short-circuiting to zero, so an
+            // operator sees both that the policy matches documents and that the job is missing.
+            if (retentionJobWarning != null) {
+                ctx.warnings.add(retentionJobWarning);
             }
-            if (MemoryRetentionDryRunResult.POLICY_SOURCE_NONE.equals(policySource)) {
-                ctx.warnings.add("container has no retention policy and no cluster defaults apply; nothing would be deleted");
-            }
-
-            // sessions -> long-term -> history -> working -> finalize
-            dryRunSessions(
-                config,
-                ctx,
-                ActionListener
-                    .wrap(
-                        v1 -> dryRunLongTerm(
-                            config,
-                            ctx,
-                            ActionListener
-                                .wrap(
-                                    v2 -> dryRunHistory(
-                                        config,
-                                        ctx,
-                                        ActionListener
-                                            .wrap(v3 -> dryRunWorking(config, ctx, orphanBaselineMillis, ActionListener.wrap(v4 -> {
-                                                listener.onResponse(buildDryRunResult(ctx));
-                                            }, listener::onFailure)), listener::onFailure)
-                                    ),
-                                    listener::onFailure
-                                )
-                        ),
-                        listener::onFailure
-                    )
-            );
+            runDryRunPasses(config, ctx, orphanBaselineMillis, policySource, listener);
         } catch (Exception e) {
             listener.onFailure(e);
         }
+    }
+
+    private static final String RETENTION_JOB_REF = ML_JOBS_INDEX + "/" + MLJobType.MEMORY_RETENTION.name();
+    static final String JOB_NOT_REGISTERED_WARNING = "retention is enabled but no retention job is registered ("
+        + RETENTION_JOB_REF
+        + "); the job will not run until it is scheduled, so nothing would be deleted";
+    static final String JOB_DISABLED_WARNING = "retention is enabled but the retention job ("
+        + RETENTION_JOB_REF
+        + ") is disabled; it will not run until it is enabled, so nothing would be deleted";
+
+    /**
+     * Resolves the advisory warning for the retention job's state, or {@code null} when an active job exists. The two
+     * states need different remediation, so they are reported differently. Any failure to determine the state resolves
+     * to {@code null}, so an unreadable jobs index neither emits a misleading warning nor fails a dry-run that would
+     * otherwise succeed.
+     */
+    public void resolveRetentionJobWarning(ActionListener<String> listener) {
+        // Fast path: the index is only created by writing a job document, so an absent index means no job.
+        if (!clusterService.state().metadata().hasIndex(ML_JOBS_INDEX)) {
+            listener.onResponse(JOB_NOT_REGISTERED_WARNING);
+            return;
+        }
+        GetRequest getRequest = new GetRequest(ML_JOBS_INDEX, MLJobType.MEMORY_RETENTION.name());
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrapped = ActionListener.runBefore(listener, context::restore);
+            client.get(getRequest, ActionListener.wrap(response -> {
+                if (response == null || !response.isExists()) {
+                    // The index exists (another job type may have created it) but retention has no job document.
+                    wrapped.onResponse(JOB_NOT_REGISTERED_WARNING);
+                    return;
+                }
+                Object enabled = response.getSourceAsMap() == null ? null : response.getSourceAsMap().get(MLJobParameter.ENABLED_FILED);
+                // A job document that exists but is disabled will not run either. An absent flag counts as enabled so
+                // an unexpected document shape cannot produce a spurious warning.
+                boolean active = enabled == null || Boolean.parseBoolean(String.valueOf(enabled));
+                wrapped.onResponse(active ? null : JOB_DISABLED_WARNING);
+            }, e -> {
+                if (ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
+                    wrapped.onResponse(JOB_NOT_REGISTERED_WARNING);
+                } else {
+                    log.debug("Could not determine whether the memory retention job is active", e);
+                    wrapped.onResponse(null);
+                }
+            }));
+        } catch (Exception e) {
+            log.debug("Could not determine whether the memory retention job is active", e);
+            listener.onResponse(null);
+        }
+    }
+
+    /** Runs the four read-only counting passes in order and assembles the result. */
+    private void runDryRunPasses(
+        MemoryConfiguration config,
+        DryRunContext ctx,
+        Long orphanBaselineMillis,
+        String policySource,
+        ActionListener<MemoryRetentionDryRunResult> listener
+    ) {
+        if (MemoryRetentionDryRunResult.POLICY_SOURCE_NONE.equals(policySource)) {
+            ctx.warnings.add("container has no retention policy and no cluster defaults apply; nothing would be deleted");
+        }
+
+        // sessions -> long-term -> history -> working -> finalize
+        dryRunSessions(
+            config,
+            ctx,
+            ActionListener
+                .wrap(
+                    v1 -> dryRunLongTerm(
+                        config,
+                        ctx,
+                        ActionListener
+                            .wrap(
+                                v2 -> dryRunHistory(
+                                    config,
+                                    ctx,
+                                    ActionListener.wrap(v3 -> dryRunWorking(config, ctx, orphanBaselineMillis, ActionListener.wrap(v4 -> {
+                                        listener.onResponse(buildDryRunResult(ctx));
+                                    }, listener::onFailure)), listener::onFailure)
+                                ),
+                                listener::onFailure
+                            )
+                    ),
+                    listener::onFailure
+                )
+        );
     }
 
     private MemoryRetentionDryRunResult buildDryRunResult(DryRunContext ctx) {
