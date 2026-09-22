@@ -190,7 +190,10 @@ public class ConnectorUtils {
     // and none in a raw JSON position. The isJson shortcut below is deliberately kept for everything else -
     // messages, texts, dimensions, temperature, max_tokens, input and normalize are interpolated raw in 25+
     // places, and escaping those would break every one of them.
-    private static final Set<String> ALWAYS_ESCAPE_PARAMS = Set.of("system_prompt", "user_prompt", "prompt", "inputs", "question");
+    // Built over a HashSet rather than with Set.of: Set.of#contains throws on a null key, where the previous
+    // branch ordering reached HashSet#contains and returned false.
+    private static final Set<String> ALWAYS_ESCAPE_PARAMS = Collections
+        .unmodifiableSet(new HashSet<>(List.of("system_prompt", "user_prompt", "prompt", "inputs", "question")));
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
         escapeRemoteInferenceInputData(inputData, null);

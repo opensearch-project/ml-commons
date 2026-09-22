@@ -1781,13 +1781,6 @@ public class ConnectorUtilsTest {
         assertEquals(plannerPrompt, messages.get(1).get("content"));
     }
 
-    /**
-     * Reproduces the net effect of RemoteConnectorExecutor#preparePayloadAndInvoke: connector parameters
-     * are merged as-is and the caller-supplied input parameters are escaped once. Production actually
-     * escapes the dataset twice - once directly and once inside ConnectorUtils#processInput, which receives
-     * the same instance - but it then overrides with a snapshot taken after the first escape, so the payload
-     * sees single-escaped values just as it does here.
-     */
     @Test
     public void testEscapeRemoteInferenceInputData_SystemPromptThatIsItselfJson_IsStillEscaped() {
         // Arrange — every provider template puts system_prompt inside a JSON string, so a value that
@@ -1980,6 +1973,28 @@ public class ConnectorUtilsTest {
         assertEquals(systemPrompt, system.get(0).get("text"));
     }
 
+    @Test
+    public void testEscapeRemoteInferenceInputData_NullKeyIsTolerated() {
+        // Arrange — a null key is not reachable through XContent parsing, but the map permits one and the
+        // pre-existing branch ordering tolerated it. Set.of#contains would throw here instead.
+        Map<String, String> params = new HashMap<>();
+        params.put(null, "plain value");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        // Assert
+        assertEquals("plain value", inputData.getParameters().get(null));
+    }
+
+    /**
+     * Reproduces the net effect of RemoteConnectorExecutor#preparePayloadAndInvoke: connector parameters
+     * are merged as-is and the caller-supplied input parameters are escaped once. Production actually
+     * escapes the dataset twice - once directly and once inside ConnectorUtils#processInput, which receives
+     * the same instance - but it then overrides with a snapshot taken after the first escape, so the payload
+     * sees single-escaped values just as it does here.
+     */
     private String buildAgentConnectorPayload(Connector connector, RemoteInferenceInputDataSet inputData) {
         Map<String, String> parameters = new HashMap<>(connector.getParameters());
         ConnectorUtils.escapeRemoteInferenceInputData(inputData);
