@@ -42,6 +42,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
@@ -80,6 +81,8 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
@@ -302,6 +305,14 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                     )
             )
             .build();
+
+        // A connector_id swap now loads the incoming connector to check it can back a model. Default to a
+        // usable one; tests that care about the rejection re-stub this with an MCP connector.
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(testConnector);
+            return null;
+        }).when(mlModelManager).getConnector(any(), any(), isA(ActionListener.class));
 
         // TODO eventually remove if migrated to sdkClient
         doAnswer(invocation -> {
@@ -658,6 +669,190 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             "You don't have permission to update the connector, connector id: updated_test_connector_id",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    /**
+     * Re-pointing a model at an MCP connector is the same defect as creating one from an MCP connector: the
+     * connector has no predict action, so the model would only fail once something tried to use it. Reject
+     * the swap instead.
+     */
+    @Test
+    public void testUpdateRemoteModelWithNewMcpConnectorIdRejected() {
+        assertNewStandAloneConnectorRejectedAsMcp(
+            McpConnector
+                .builder()
+                .name("mcp")
+                .protocol(ConnectorProtocols.MCP_SSE)
+                .url("https://api.openai.com/mcp")
+                .credential(Map.of("key", "value"))
+                .build()
+        );
+    }
+
+    /** mcp_streamable_http is a sibling of McpConnector, so the check has to be by protocol. */
+    @Test
+    public void testUpdateRemoteModelWithNewMcpStreamableHttpConnectorIdRejected() {
+        assertNewStandAloneConnectorRejectedAsMcp(
+            McpStreamableHttpConnector
+                .builder()
+                .name("mcp")
+                .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+                .url("https://api.openai.com/mcp")
+                .credential(Map.of("key", "value"))
+                .build()
+        );
+    }
+
+    /** The rejection is a property of the connector's shape, not of the MCP feature flag. */
+    @Test
+    public void testUpdateRemoteModelWithNewMcpConnectorIdRejectedWhenMcpFeatureEnabled() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        assertNewStandAloneConnectorRejectedAsMcp(
+            McpConnector
+                .builder()
+                .name("mcp")
+                .protocol(ConnectorProtocols.MCP_SSE)
+                .url("https://api.openai.com/mcp")
+                .credential(Map.of("key", "value"))
+                .build()
+        );
+    }
+
+    /** A failed lookup of the incoming connector has to reach the caller unchanged. */
+    @Test
+    public void testUpdateRemoteModelWithNewConnectorIdLookupFailurePropagates() {
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        OpenSearchStatusException lookupFailure = new OpenSearchStatusException(
+            "Failed to find connector:updated_test_connector_id",
+            RestStatus.NOT_FOUND
+        );
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onFailure(lookupFailure);
+            return null;
+        }).when(mlModelManager).getConnector(eq("updated_test_connector_id"), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(lookupFailure, argumentCaptor.getValue());
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    /**
+     * An inline connector's protocol can be patched in place, and Connector.update() overwrites it
+     * unconditionally. Flipping it to MCP would persist a model whose connector document resolves back to
+     * an MCP connector on read, leaving the model permanently unusable.
+     */
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorProtocolChangedToMcpRejected() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        MLUpdateModelInput updateInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .connector(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_SSE).build())
+            .build();
+
+        transportUpdateModelAction
+            .doExecute(task, MLUpdateModelRequest.builder().updateModelInput(updateInput).build(), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Cannot change this model's connector to MCP protocol [mcp_sse].", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    /**
+     * updated_connector is unreachable from REST but is wire-serialized, so a transport caller can set it and
+     * have it written straight into the model's connector field.
+     */
+    @Test
+    public void testUpdateRemoteModelWithUpdatedConnectorSetToMcpRejected() {
+        MLUpdateModelInput updateInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .updatedConnector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+
+        transportUpdateModelAction.doExecute(task, MLUpdateModelRequest.builder().updateModelInput(updateInput).build(), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Cannot update this model to use an MCP connector.", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+        verify(mlModelManager, never()).getModel(any(), any(), any(), any(), isA(ActionListener.class));
+    }
+
+    /**
+     * A model whose inline connector is already MCP predates the checks that refuse to attach one. Patching it
+     * cannot help, and supplying actions reads getActions() on the MCP instance, which is unimplemented.
+     */
+    @Test
+    public void testUpdateRemoteModelWithExistingMcpInlineConnectorRejected() {
+        MLModel mcpBackedModel = prepareMLModel("REMOTE_INTERNAL");
+        mcpBackedModel
+            .setConnector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            );
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mcpBackedModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("it is an MCP connector"));
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    private void assertNewStandAloneConnectorRejectedAsMcp(Connector newConnector) {
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(newConnector);
+            return null;
+        }).when(mlModelManager).getConnector(eq("updated_test_connector_id"), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Cannot update this model to use MCP connector: updated_test_connector_id", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
     }
 
     @Test
