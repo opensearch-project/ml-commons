@@ -823,6 +823,39 @@ public class MLAgentTest {
     }
 
     @Test
+    public void parse_WithNullAgentId() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\",\"agent_id\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parseFromUserInput(parser);
+
+        assertNull(agent.getAgentId());
+    }
+
+    @Test
+    public void parse_WithNullDescription() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\",\"description\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parseFromUserInput(parser);
+
+        assertEquals("test", agent.getName());
+        assertNull(agent.getDescription());
+    }
+
+    @Test
     public void writeToAndReadFrom_withCustomAgentId() throws IOException {
         MLAgent agent = MLAgent.builder().name("test").type("FLOW").agentId("chat-agent").build();
         BytesStreamOutput out = new BytesStreamOutput();

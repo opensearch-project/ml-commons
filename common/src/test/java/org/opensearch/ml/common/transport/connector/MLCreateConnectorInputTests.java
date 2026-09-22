@@ -812,6 +812,21 @@ public class MLCreateConnectorInputTests {
     }
 
     @Test
+    public void parse_withNullConnectorId() throws Exception {
+        String json = "{\"name\":\"conn\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"k\":\"v\"},\"connector_id\":null}";
+        testParseFromJsonString(json, parsed -> assertNull(parsed.getConnectorId()));
+    }
+
+    @Test
+    public void parse_withNullDescription() throws Exception {
+        String json = "{\"name\":\"conn\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"k\":\"v\"},\"description\":null}";
+        testParseFromJsonString(json, parsed -> {
+            assertEquals("conn", parsed.getName());
+            assertNull(parsed.getDescription());
+        });
+    }
+
+    @Test
     public void toXContent_WithCustomConnectorId() throws Exception {
         MLCreateConnectorInput input = mlCreateConnectorInput.toBuilder().connectorId("bedrock-connector").build();
         XContentBuilder builder = XContentFactory.jsonBuilder();

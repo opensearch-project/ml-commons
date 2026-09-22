@@ -187,4 +187,34 @@ public class TextSimilarityMLInputTest {
         assert (e.getMessage().equals("No query text was provided"));
     }
 
+    @Test
+    public void testParseJson_MalformedFields_ThenFail() throws IOException {
+        String[] malformedBodies = new String[] {
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":null,\"text_docs\":null}",
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":null}",
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[null]}",
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"it's summer\",null]}",
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":\"notanarray\"}",
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":{\"a\":1},\"text_docs\":[\"it's summer\"]}",
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":[\"today is sunny\"],\"text_docs\":[\"it's summer\"]}" };
+
+        for (String json : malformedBodies) {
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    json
+                );
+            parser.nextToken();
+
+            IllegalArgumentException e = assertThrows(
+                json,
+                IllegalArgumentException.class,
+                () -> MLInput.parse(parser, input.getFunctionName().name())
+            );
+            assert (e.getMessage().contains("Failed to parse TEXT_SIMILARITY input"));
+        }
+    }
+
 }
