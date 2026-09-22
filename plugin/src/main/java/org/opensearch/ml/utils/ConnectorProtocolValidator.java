@@ -9,10 +9,13 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 
+import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -171,5 +174,92 @@ public class ConnectorProtocolValidator {
             return false;
         }
         return PROTOCOLS_WITHOUT_MUTUAL_TLS.contains(protocol);
+    }
+
+    /** A literal cleartext scheme at the start of an action URL. */
+    private static final Pattern CLEARTEXT_URL = Pattern.compile("^\\s*http://", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Rejects {@code mutual_tls_enabled} on a connector whose action URL is plain {@code http://}.
+     * <p>
+     * Certificate validation never sees a URL, and the request path permits both schemes explicitly, so against
+     * an {@code http://} endpoint no TLS handshake happens at all: the key managers built from the client
+     * certificate are inert, nothing is presented to the server, and the traffic is cleartext. The connector
+     * still reports {@code mutual_tls_enabled: true}, so an operator believes a control is in force that is not.
+     * <p>
+     * Only a <em>literal</em> scheme is judged. A URL beginning with a substitution such as
+     * <code>${parameters.endpoint}</code> is left alone, because its scheme is not knowable until predict time.
+     * <p>
+     * On a stock cluster this combination is already refused elsewhere - every default
+     * {@code trusted_connector_endpoints_regex} pattern is anchored {@code ^https://}. This check is what covers
+     * a deployment that has widened that allowlist, where the endpoint check no longer says anything about the
+     * scheme.
+     *
+     * @param actions the resulting connector actions; {@code null} is ignored
+     * @param clientConfig the resulting connector client config; {@code null} or mTLS-off is ignored
+     * @throws IllegalArgumentException if mutual TLS is requested alongside a cleartext action URL
+     */
+    public static void validateMutualTlsScheme(List<ConnectorAction> actions, ConnectorClientConfig clientConfig) {
+        String cleartextUrl = cleartextActionUrl(actions, clientConfig);
+        if (cleartextUrl == null) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "Mutual TLS cannot be used with the cleartext endpoint ["
+                + cleartextUrl
+                + "]. "
+                + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                + " requires an https:// action URL: over http:// there is no TLS handshake, so the client "
+                + "certificate is never presented and the request is not encrypted."
+        );
+    }
+
+    /**
+     * Update variant of {@link #validateMutualTlsScheme(List, ConnectorClientConfig)}.
+     * <p>
+     * An update replaces the action list wholesale when it carries one ({@code HttpConnector#update}), so the
+     * resulting URLs are the request's when it supplies actions and the stored ones otherwise.
+     * <p>
+     * A connector that is <em>already</em> in this state and whose URLs the request leaves alone is not blocked,
+     * for the same reason as the other update variants here: an unrelated edit has to re-send
+     * {@code client_config} to avoid dropping {@code mutual_tls_enabled}, and rejecting that would make such a
+     * connector uneditable rather than merely preventing new reliance on the control. A request that introduces
+     * the cleartext URL itself is still rejected.
+     *
+     * @param storedActions the actions the connector has now; {@code null} for a create
+     * @param storedConfig the client config the connector has now; {@code null} for a create
+     * @param updatedActions the actions the request carries
+     * @param updatedConfig the client config the request carries
+     */
+    public static void validateMutualTlsSchemeAfterUpdate(
+        List<ConnectorAction> storedActions,
+        ConnectorClientConfig storedConfig,
+        List<ConnectorAction> updatedActions,
+        ConnectorClientConfig updatedConfig
+    ) {
+        if (updatedActions == null && cleartextActionUrl(storedActions, storedConfig) != null) {
+            return;
+        }
+        validateMutualTlsScheme(
+            updatedActions != null ? updatedActions : storedActions,
+            updatedConfig != null ? updatedConfig : storedConfig
+        );
+    }
+
+    /**
+     * @return the first action URL that is literally cleartext while mutual TLS is on, or {@code null} if there
+     *         is none - including when mutual TLS is off, in which case the scheme is not this check's business
+     */
+    private static String cleartextActionUrl(List<ConnectorAction> actions, ConnectorClientConfig clientConfig) {
+        if (actions == null || clientConfig == null || !Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())) {
+            return null;
+        }
+        for (ConnectorAction action : actions) {
+            String url = action == null ? null : action.getUrl();
+            if (url != null && CLEARTEXT_URL.matcher(url).find()) {
+                return url.trim();
+            }
+        }
+        return null;
     }
 }

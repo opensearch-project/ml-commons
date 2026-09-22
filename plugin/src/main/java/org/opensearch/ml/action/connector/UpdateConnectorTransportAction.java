@@ -152,6 +152,13 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                         mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig(),
                                         mlFeatureEnabledSetting
                                     );
+                                ConnectorProtocolValidator
+                                    .validateMutualTlsSchemeAfterUpdate(
+                                        connector.getActions(),
+                                        connector.getConnectorClientConfig(),
+                                        mlUpdateConnectorAction.getUpdateContent().getActions(),
+                                        mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                    );
                             } catch (Exception e) {
                                 log.error("Rejected connector update for connector id {}", connectorId, e);
                                 listener.onFailure(e);

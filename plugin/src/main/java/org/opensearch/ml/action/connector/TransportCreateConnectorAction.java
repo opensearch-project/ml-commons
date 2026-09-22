@@ -110,6 +110,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             ConnectorProtocolValidator
                 .validateMutualTlsSupported(mlCreateConnectorInput.getProtocol(), mlCreateConnectorInput.getConnectorClientConfig());
             ConnectorProtocolValidator.validateMutualTlsEnabled(mlCreateConnectorInput.getConnectorClientConfig(), mlFeatureEnabledSetting);
+            ConnectorProtocolValidator
+                .validateMutualTlsScheme(mlCreateConnectorInput.getActions(), mlCreateConnectorInput.getConnectorClientConfig());
         } catch (Exception e) {
             listener.onFailure(e);
             return;

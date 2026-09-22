@@ -10,12 +10,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -230,5 +234,92 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
     public void testMutualTlsAfterUpdate_allowsMoveFromUnsupportedProtocolToHttp() {
         ConnectorProtocolValidator
             .validateMutualTlsSupportedAfterUpdate(ConnectorProtocols.AWS_SIGV4, mtls(true), ConnectorProtocols.HTTP, null);
+    }
+
+    // ---- validateMutualTlsScheme -------------------------------------------
+
+    private static List<ConnectorAction> actions(String... urls) {
+        List<ConnectorAction> actions = new ArrayList<>();
+        for (String url : urls) {
+            actions.add(new ConnectorAction(ConnectorAction.ActionType.PREDICT, null, "POST", url, null, "{}", null, null));
+        }
+        return actions;
+    }
+
+    public void testMutualTlsScheme_nullAndDisabledInputsAreIgnored() {
+        ConnectorProtocolValidator.validateMutualTlsScheme(null, mtls(true));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), null);
+        // Without mutual TLS the scheme is not this check's business - a cleartext connector is a separate
+        // concern, governed by the trusted-endpoint allowlist.
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), mtls(false));
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), mtls(null));
+    }
+
+    public void testMutualTlsScheme_allowedOnHttps() {
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("https://host/predict"), mtls(true));
+    }
+
+    public void testMutualTlsScheme_rejectedOnCleartextUrl() {
+        IllegalArgumentException e = expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("http://host/predict"), mtls(true))
+        );
+        // The offending URL is named, so an operator can tell which action to fix.
+        assertTrue(e.getMessage().contains("http://host/predict"));
+        assertTrue(e.getMessage().contains(ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD));
+    }
+
+    public void testMutualTlsScheme_schemeMatchIgnoresCaseAndLeadingWhitespace() {
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("  HTTP://host/predict"), mtls(true))
+        );
+    }
+
+    /** The scheme of a substituted URL is not knowable until predict time, so it is left alone. */
+    public void testMutualTlsScheme_unresolvedSubstitutionIsLeftAlone() {
+        ConnectorProtocolValidator.validateMutualTlsScheme(actions("${parameters.endpoint}/predict"), mtls(true));
+    }
+
+    /** https on predict does not excuse a cleartext hop on another action. */
+    public void testMutualTlsScheme_rejectsCleartextInAnyAction() {
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("https://host/predict", "http://host/batch"), mtls(true))
+        );
+    }
+
+    public void testMutualTlsSchemeAfterUpdate_rejectsNewlyIntroducedCleartextUrl() {
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMutualTlsSchemeAfterUpdate(actions("https://host/predict"), mtls(true), actions("http://host/predict"), null)
+        );
+    }
+
+    /** Turning mutual TLS on over an already-stored cleartext URL is the request creating the state. */
+    public void testMutualTlsSchemeAfterUpdate_rejectsTurningMutualTlsOnOverStoredCleartextUrl() {
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), mtls(false), null, mtls(true))
+        );
+    }
+
+    /**
+     * An unrelated edit to a connector created before this check existed is not blocked: it has to re-send
+     * client_config to keep mutual_tls_enabled, and rejecting that would make the connector uneditable.
+     */
+    public void testMutualTlsSchemeAfterUpdate_allowsEditOfPreExistingCleartextCombination() {
+        ConnectorProtocolValidator.validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), mtls(true), null, mtls(true));
+    }
+
+    public void testMutualTlsSchemeAfterUpdate_allowsSwitchToHttps() {
+        ConnectorProtocolValidator
+            .validateMutualTlsSchemeAfterUpdate(actions("http://host/predict"), mtls(true), actions("https://host/predict"), null);
+    }
+
+    public void testMutualTlsSchemeAfterUpdate_noChangeIsAllowed() {
+        ConnectorProtocolValidator.validateMutualTlsSchemeAfterUpdate(actions("https://host/predict"), mtls(true), null, null);
     }
 }
