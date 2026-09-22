@@ -7,11 +7,13 @@ package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -73,6 +75,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -480,6 +483,83 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
         assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
+    }
+
+    /**
+     * The stored model is parsed without decrypting or stripping its credential, so connector.credential holds
+     * ciphertext. An update that edits anything other than the credential must not hand that ciphertext back to
+     * encrypt() - doing so stores ciphertext-of-ciphertext and destroys the credential.
+     */
+    @Test
+    public void testUpdateInternalRemoteModel_omittedCredentialIsNotReEncrypted() throws InterruptedException {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        // prepareRemoteRequest("REMOTE_INTERNAL") carries only version and description - no credential.
+        MLUpdateModelRequest request = prepareRemoteRequest("REMOTE_INTERNAL");
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        verify(mlEngine, never()).encrypt(argThat(values -> values != null && values.contains("credential_value")), any(), any());
+
+        // The stored value must be written back, not omitted. Whether an omitted field survives depends on the
+        // metadata backend: the local index client merges a partial document recursively, but the DynamoDB
+        // client merges the stored source with a shallow top-level Map.putAll that replaces the whole connector
+        // object, so an absent credential would be dropped there - and a REMOTE connector without one no longer
+        // parses, which makes the model document unreadable and undeletable.
+        Connector writtenConnector = request.getUpdateModelInput().getUpdatedConnector();
+        assertNotNull("the connector must still be written", writtenConnector);
+        assertEquals(
+            "the stored credential must be carried through unchanged",
+            Map.of("api_key", "credential_value"),
+            ((AbstractConnector) writtenConnector).getCredential()
+        );
+    }
+
+    /** The other half: a credential the request does supply must still be encrypted, exactly once. */
+    @Test
+    public void testUpdateInternalRemoteModel_suppliedCredentialIsStillEncrypted() throws InterruptedException {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .connector(
+                        MLCreateConnectorInput
+                            .builder()
+                            .updateConnector(true)
+                            .version("1")
+                            .credential(Map.of("api_key", "brand_new_secret"))
+                            .build()
+                    )
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        ArgumentCaptor<List<String>> encryptCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mlEngine).encrypt(encryptCaptor.capture(), any(), any());
+        assertTrue(encryptCaptor.getValue().contains("brand_new_secret"));
     }
 
     @Test
