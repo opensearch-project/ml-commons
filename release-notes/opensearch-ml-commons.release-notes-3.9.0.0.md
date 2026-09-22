@@ -33,6 +33,15 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Delete the auto-created model when unified agent registration fails, instead of leaving an orphaned model holding the request credentials ([#5043](https://github.com/opensearch-project/ml-commons/pull/5043))
 * Read the stored script and target index mapping as the calling user when registering an agentic search template ([#5044](https://github.com/opensearch-project/ml-commons/pull/5044))
 * Validate connector protocol, opt-in protocol settings, and `mutual_tls_enabled` on connector update, model register with inline connector, and model update — not only on connector create ([#5045](https://github.com/opensearch-project/ml-commons/pull/5045))
+* Send `system_prompt` to the OpenAI chat-completions model provider ([#5062](https://github.com/opensearch-project/ml-commons/pull/5062))
+* Return HTTP 403 instead of hanging when connector execution is denied ([#5068](https://github.com/opensearch-project/ml-commons/pull/5068))
+* Make connector mutual TLS opt-in and reject it on the streaming path ([#5071](https://github.com/opensearch-project/ml-commons/pull/5071))
+* Warn in retention dry-run responses when the retention job is not registered or is disabled ([#5069](https://github.com/opensearch-project/ml-commons/pull/5069))
+* Reserve plugin-owned document IDs, preserve stored credentials on inline connector update, and return generic errors for merged batch failures ([#5073](https://github.com/opensearch-project/ml-commons/pull/5073))
+* Require a non-blank MCP tool name and return HTTP 400 for explicit null names ([#5088](https://github.com/opensearch-project/ml-commons/pull/5088))
+* Return HTTP 400 for explicit null `query_text` in TEXT_SIMILARITY prediction requests ([#5087](https://github.com/opensearch-project/ml-commons/pull/5087))
+* Reject MCP connectors during model registration and update instead of returning HTTP 500 or persisting unusable configurations ([#5063](https://github.com/opensearch-project/ml-commons/pull/5063))
+* Reject connector mutual TLS when an action URL resolves to a cleartext `http://` endpoint ([#5083](https://github.com/opensearch-project/ml-commons/pull/5083))
 
 ### Infrastructure
 
@@ -53,3 +62,4 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.9.0
 * Add Eclipse P2 mirror to avoid `download.eclipse.org` outages ([#4980](https://github.com/opensearch-project/ml-commons/pull/4980))
 * Guard `eclipse()` to spotless tasks and keep the P2 mirror on the pinned version ([#5001](https://github.com/opensearch-project/ml-commons/pull/5001))
 * Add `ci.opensearch.org/m2/` mirror for plugin resolution ([#4949](https://github.com/opensearch-project/ml-commons/pull/4949))
+* Align `bctls-fips` to 2.1.24 to address CVE-2026-59646 and CVE-2026-59638 ([#5039](https://github.com/opensearch-project/ml-commons/pull/5039))
