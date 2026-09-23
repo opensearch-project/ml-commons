@@ -158,52 +158,52 @@ public class BatchInferenceConfigTest {
     }
 
     @Test
-    public void queueAbsentByDefault() {
+    public void dynamicBatchingAbsentByDefault() {
         BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(96).build();
-        assertNull(config.getQueue());
-        assertFalse("a size-only config never enables the queue", config.isQueueEnabled());
+        assertNull(config.getDynamicBatching());
+        assertFalse("a size-only config never enables dynamic batching", config.isDynamicBatchingEnabled());
     }
 
     @Test
-    public void isQueueEnabledFalseWhenBlockPresentButDisabled() {
+    public void isDynamicBatchingEnabledFalseWhenBlockPresentButDisabled() {
         BatchInferenceConfig config = BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(96)
-            .queue(BatchQueueConfig.builder().enabled(false).flushTimeoutMs(10L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(false).flushTimeoutMs(10L).build())
             .build();
-        assertFalse(config.isQueueEnabled());
+        assertFalse(config.isDynamicBatchingEnabled());
     }
 
     @Test
-    public void streamRoundTripCarriesQueueBlock() throws IOException {
+    public void streamRoundTripCarriesDynamicBatchingBlock() throws IOException {
         BatchInferenceConfig original = BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(96)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(10L).build())
             .build();
         BytesStreamOutput out = new BytesStreamOutput();
         original.writeTo(out);
         BatchInferenceConfig restored = new BatchInferenceConfig(out.bytes().streamInput());
-        assertTrue(restored.isQueueEnabled());
-        assertEquals(10L, restored.getQueue().getFlushTimeoutMs());
+        assertTrue(restored.isDynamicBatchingEnabled());
+        assertEquals(10L, restored.getDynamicBatching().getFlushTimeoutMs());
     }
 
     @Test
-    public void streamRoundTripWithoutQueueRestoresNull() throws IOException {
+    public void streamRoundTripWithoutDynamicBatchingRestoresNull() throws IOException {
         BatchInferenceConfig original = BatchInferenceConfig.builder().maxItemsPerRequest(96).build();
         BytesStreamOutput out = new BytesStreamOutput();
         original.writeTo(out);
         BatchInferenceConfig restored = new BatchInferenceConfig(out.bytes().streamInput());
-        assertNull(restored.getQueue());
+        assertNull(restored.getDynamicBatching());
     }
 
     @Test
-    public void xContentRoundTripCarriesQueueBlock() throws IOException {
+    public void xContentRoundTripCarriesDynamicBatchingBlock() throws IOException {
         BatchInferenceConfig original = BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(96)
             .maxBytesPerRequest(4096L)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(25L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(25L).build())
             .build();
         XContentBuilder builder = XContentType.JSON.contentBuilder();
         original.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -213,8 +213,8 @@ public class BatchInferenceConfigTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString());
         parser.nextToken();
         BatchInferenceConfig parsed = BatchInferenceConfig.parse(parser);
-        assertTrue(parsed.isQueueEnabled());
-        assertEquals(25L, parsed.getQueue().getFlushTimeoutMs());
+        assertTrue(parsed.isDynamicBatchingEnabled());
+        assertEquals(25L, parsed.getDynamicBatching().getFlushTimeoutMs());
     }
 
     @Test
@@ -228,11 +228,13 @@ public class BatchInferenceConfigTest {
     }
 
     @Test
-    public void rejectsUnknownFieldInsideQueueBlockOnTheApiInputPath() throws IOException {
-        XContentParser parser = jsonParser("{\"max_items_per_request\":2,\"queue\":{\"enabled\":true,\"flushTimeoutMs\":100}}");
+    public void rejectsUnknownFieldInsideDynamicBatchingBlockOnTheApiInputPath() throws IOException {
+        XContentParser parser = jsonParser("{\"max_items_per_request\":2,\"dynamic_batching\":{\"enabled\":true,\"flushTimeoutMs\":100}}");
 
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Unsupported field [flushTimeoutMs]");
+        // The error must name the dynamic_batching block, not the pre-rename "queue" block.
+        exceptionRule.expectMessage("batch_inference_config dynamic_batching block");
         BatchInferenceConfig.parse(parser, true);
     }
 
@@ -240,10 +242,14 @@ public class BatchInferenceConfigTest {
     public void skipsUnknownFieldWhenReadingAStoredModel() throws IOException {
         // Lenient by default so a field added by a newer version cannot make a stored model unreadable here.
         BatchInferenceConfig parsed = BatchInferenceConfig
-            .parse(jsonParser("{\"max_items_per_request\":2,\"some_future_field\":{\"a\":1},\"queue\":{\"enabled\":true,\"future\":7}}"));
+            .parse(
+                jsonParser(
+                    "{\"max_items_per_request\":2,\"some_future_field\":{\"a\":1},\"dynamic_batching\":{\"enabled\":true,\"future\":7}}"
+                )
+            );
 
         assertEquals(2, parsed.getMaxItemsPerRequest());
-        assertTrue(parsed.isQueueEnabled());
+        assertTrue(parsed.isDynamicBatchingEnabled());
     }
 
     private static XContentParser jsonParser(String json) throws IOException {

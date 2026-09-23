@@ -1728,6 +1728,7 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
             getModel(modelId, ActionListener.wrap(mlModel -> {
                 int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
+                modelCacheHelper.setModelInfo(modelId, mlModel);
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
                 setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());

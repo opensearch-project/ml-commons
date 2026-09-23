@@ -21,15 +21,15 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
- * Cross-request queue settings within batch_inference_config: whether to coalesce concurrent predict
- * requests to a model into shared calls, and how long to wait before flushing (flush_timeout_ms).
+ * Settings for the dynamic_batching block within batch_inference_config: whether to coalesce concurrent
+ * predict requests to a model into shared calls, and how long to wait before flushing (flush_timeout_ms).
  * Disabled by default. Enable only for a model whose callers send homogeneous requests (same input type
  * and parameters) and whose output is one tensor per input, since coalesced requests share one model
  * call and a failed call fails every caller whose items were in it.
  */
 @Getter
 @EqualsAndHashCode
-public class BatchQueueConfig implements ToXContentObject, Writeable {
+public class DynamicBatchingConfig implements ToXContentObject, Writeable {
 
     public static final String ENABLED_FIELD = "enabled";
     public static final String FLUSH_TIMEOUT_MS_FIELD = "flush_timeout_ms";
@@ -41,13 +41,13 @@ public class BatchQueueConfig implements ToXContentObject, Writeable {
     private final long flushTimeoutMs;
 
     @Builder(toBuilder = true)
-    public BatchQueueConfig(Boolean enabled, Long flushTimeoutMs) {
+    public DynamicBatchingConfig(Boolean enabled, Long flushTimeoutMs) {
         this.enabled = enabled != null && enabled;
         this.flushTimeoutMs = flushTimeoutMs == null ? DEFAULT_FLUSH_TIMEOUT_MS : flushTimeoutMs;
         validate();
     }
 
-    public BatchQueueConfig(StreamInput in) throws IOException {
+    public DynamicBatchingConfig(StreamInput in) throws IOException {
         this.enabled = in.readBoolean();
         this.flushTimeoutMs = in.readLong();
     }
@@ -76,12 +76,12 @@ public class BatchQueueConfig implements ToXContentObject, Writeable {
     }
 
     /** Lenient: skips unknown fields, so a stored model written by a newer version stays readable. */
-    public static BatchQueueConfig parse(XContentParser parser) throws IOException {
+    public static DynamicBatchingConfig parse(XContentParser parser) throws IOException {
         return parse(parser, false);
     }
 
     /** See {@link BatchInferenceConfig#parse(XContentParser, boolean)} for when rejectUnknownFields applies. */
-    public static BatchQueueConfig parse(XContentParser parser, boolean rejectUnknownFields) throws IOException {
+    public static DynamicBatchingConfig parse(XContentParser parser, boolean rejectUnknownFields) throws IOException {
         Boolean enabled = null;
         Long flushTimeoutMs = null;
 
@@ -104,7 +104,9 @@ public class BatchQueueConfig implements ToXContentObject, Writeable {
                         throw new IllegalArgumentException(
                             "Unsupported field ["
                                 + fieldName
-                                + "] in the batch_inference_config queue block. Supported fields are ["
+                                + "] in the batch_inference_config "
+                                + BatchInferenceConfig.DYNAMIC_BATCHING_FIELD
+                                + " block. Supported fields are ["
                                 + ENABLED_FIELD
                                 + ", "
                                 + FLUSH_TIMEOUT_MS_FIELD
@@ -115,6 +117,6 @@ public class BatchQueueConfig implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new BatchQueueConfig(enabled, flushTimeoutMs);
+        return new DynamicBatchingConfig(enabled, flushTimeoutMs);
     }
 }
