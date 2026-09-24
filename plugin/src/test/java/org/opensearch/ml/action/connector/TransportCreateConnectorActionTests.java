@@ -35,6 +35,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
@@ -1033,4 +1034,95 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             .credential(credential)
             .build();
     }
+
+    public void test_execute_mutualTls_missingCertificates_failsAtCreateTime() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception failure = argumentCaptor.getValue();
+        // IllegalArgumentException, so a malformed request is a 400 rather than a 500.
+        assertTrue("Expected IllegalArgumentException, got: " + failure.getClass(), failure instanceof IllegalArgumentException);
+        assertTrue("Should name the missing credential fields, got: " + failure.getMessage(), failure.getMessage().contains("client_cert_pem"));
+    }
+
+    public void test_execute_mutualTls_withSkipSslVerification_failsAtCreateTime() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        Map<String, String> mtlsCredential = new HashMap<>();
+        mtlsCredential.put("client_cert_pem", "cert");
+        mtlsCredential.put("client_key_pem", "key");
+        input.setCredential(mtlsCredential);
+        input
+            .setConnectorClientConfig(
+                ConnectorClientConfig.builder().mutualTlsEnabled(true).skipSslVerification(true).keystoreType("PEM").build()
+            );
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception failure = argumentCaptor.getValue();
+        // IllegalArgumentException, so a malformed request is a 400 rather than a 500.
+        assertTrue("Expected IllegalArgumentException, got: " + failure.getClass(), failure instanceof IllegalArgumentException);
+        assertTrue(
+            "Should reject the unsafe combination, got: " + failure.getMessage(),
+            failure.getMessage().contains("skip_ssl_verification")
+        );
+    }
+
+    public void test_execute_mutualTls_validConfig_passesValidation() throws InterruptedException {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        Map<String, String> mtlsCredential = new HashMap<>();
+        mtlsCredential.put("client_cert_pem", "cert");
+        mtlsCredential.put("client_key_pem", "key");
+        input.setCredential(mtlsCredential);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        assertNoCertificateValidationFailure();
+    }
+
+    public void test_execute_noClientConfig_validationSkipped() throws InterruptedException {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorClientConfig(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        assertNoCertificateValidationFailure();
+    }
+
+    /**
+     * Certificate validation is the only failure these tests care about; anything else is noise from
+     * the mocked indexing path. Asserting on the message rather than the exception type keeps this
+     * from silently passing if the type ever changes.
+     */
+    private void assertNoCertificateValidationFailure() {
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        // Mockito.atLeast, qualified: LuceneTestCase inherits an atLeast(int) that would win here.
+        verify(actionListener, Mockito.atLeast(0)).onFailure(argumentCaptor.capture());
+        for (Exception failure : argumentCaptor.getAllValues()) {
+            String message = String.valueOf(failure.getMessage());
+            assertFalse(
+                "Certificate validation should have passed, but failed with: " + message,
+                message.contains("client_cert_pem") || message.contains("skip_ssl_verification") || message.contains("mutual TLS")
+            );
+        }
+    }
+
 }
