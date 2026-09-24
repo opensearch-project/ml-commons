@@ -486,11 +486,12 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }
 
             // Forward any content events (pass false — isLast is controlled by the outer chunk)
-            HttpChunk contentChunk = convertToAGUIEvent(content, false);
-            combinedSse.append(new String(BytesReference.toBytes(contentChunk.content())));
+            AGUIEventResult contentResult = convertToAGUIEvent(content, false);
+            combinedSse.append(new String(BytesReference.toBytes(contentResult.chunk().content())));
 
-            // RunFinished is the last AG-UI event, emitted only on the final chunk
-            if (isLast) {
+            // RunFinished is the last AG-UI event, emitted only on the final chunk.
+            // Skip if a RUN_ERROR was already emitted — RUN_ERROR is a terminal event.
+            if (isLast && !contentResult.hasRunError()) {
                 BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
                 combinedSse.append("data: ").append(runFinishedEvent.toJsonString()).append("\n\n");
             }
@@ -571,7 +572,10 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return null;
     }
 
-    private HttpChunk convertToAGUIEvent(String content, boolean isLast) {
+    private record AGUIEventResult(HttpChunk chunk, boolean hasRunError) {
+    }
+
+    private AGUIEventResult convertToAGUIEvent(String content, boolean isLast) {
         log
             .debug(
                 "RestMLExecuteStreamAction: convertToAGUIEvent() called - contentLength={}, isLast={}",
@@ -580,6 +584,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             );
 
         StringBuilder sseResponse = new StringBuilder();
+        boolean hasRunError = false;
 
         if (content != null && !content.isEmpty()) {
             log.debug("RestMLExecuteStreamAction: Processing content: '{}'", content);
@@ -590,17 +595,18 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     sseResponse.append("data: ").append(element).append("\n\n");
                     log.debug("RestMLExecuteStreamAction: Processing json element: '{}'", element);
                 } else {
-                    // catch unexpected content chunks such as Bedrock error
                     log.warn("Unexpected content received - not valid JSON: {}", content);
                     BaseEvent runErrorEvent = new RunErrorEvent("Unexpected chunk: " + content, null);
                     sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
                     isLast = true;
+                    hasRunError = true;
                 }
             } catch (Exception e) {
                 log.error("Failed to process AG-UI events chunk content {}", content, e);
                 BaseEvent runErrorEvent = new RunErrorEvent("Unexpected error: " + e.getMessage(), null);
                 sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
                 isLast = true;
+                hasRunError = true;
             }
         } else {
             log.warn("Received null or empty AG-UI content chunk");
@@ -608,7 +614,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         String finalSse = sseResponse.toString();
         log.debug("RestMLExecuteStreamAction: Returning chunk - length={}", finalSse.length());
-        return createHttpChunk(finalSse, isLast);
+        return new AGUIEventResult(createHttpChunk(finalSse, isLast), hasRunError);
     }
 
     @VisibleForTesting
