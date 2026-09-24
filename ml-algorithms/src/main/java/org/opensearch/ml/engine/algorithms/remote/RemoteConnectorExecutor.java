@@ -231,7 +231,7 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
         MLInputDataset inputDataset = mlInput.getInputDataset();
         Map<String, String> inputParameters = new HashMap<>();
         if (inputDataset instanceof RemoteInferenceInputDataSet && ((RemoteInferenceInputDataSet) inputDataset).getParameters() != null) {
-            escapeRemoteInferenceInputData((RemoteInferenceInputDataSet) inputDataset);
+            escapeRemoteInferenceInputData((RemoteInferenceInputDataSet) inputDataset, connector.getParameters());
             inputParameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
         parameters.putAll(inputParameters);
