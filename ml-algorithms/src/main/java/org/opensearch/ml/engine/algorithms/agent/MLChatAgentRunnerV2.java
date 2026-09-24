@@ -80,7 +80,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         ActionListener<AgentLogicResult> listener
     ) {
         String agentId = params.get(AGENT_ID_LOG_FIELD);
-        int maxIterations = getMaxIterations(params);
+        int maxIterations = getMaxIterations(params, mlAgent);
         // Create mutable list for ReAct iterations (will append tool results)
         List<Message> messages = new ArrayList<>(conversationHistory);
         AtomicInteger iteration = new AtomicInteger(0);
