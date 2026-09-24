@@ -77,6 +77,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -774,6 +775,120 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Cannot change this model's connector to MCP protocol [mcp_sse].", argumentCaptor.getValue().getMessage());
         assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+    }
+
+    /**
+     * A protocol selects the class the stored document is parsed back into. Relabelling the inline connector as
+     * aws_sigv4 leaves an http connector's fields under a protocol that requires a signing credential, so the
+     * whole model document stops parsing - get, update and delete all fail on it afterwards, and the only
+     * recovery is deleting the raw document with a superadmin certificate.
+     */
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorRelabelledOntoIncompatibleProtocolRejected() {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        MLUpdateModelInput updateInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .connector(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.AWS_SIGV4).build())
+            .build();
+
+        transportUpdateModelAction.doExecute(task, MLUpdateModelRequest.builder().updateModelInput(updateInput).build(), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(argumentCaptor.getValue()));
+        assertTrue(argumentCaptor.getValue().getMessage().contains(ConnectorProtocols.AWS_SIGV4));
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Missing credential"));
+    }
+
+    /** The same relabelling goes through once the request also carries the fields aws_sigv4 needs. */
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorProtocolChangeSupplyingRequiredFields() throws InterruptedException {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        MLUpdateModelInput updateInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .connector(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .protocol(ConnectorProtocols.AWS_SIGV4)
+                    .credential(
+                        Map
+                            .of(
+                                AbstractConnector.ACCESS_KEY_FIELD,
+                                "access",
+                                AbstractConnector.SECRET_KEY_FIELD,
+                                "secret",
+                                HttpConnector.REGION_FIELD,
+                                "us-east-1",
+                                HttpConnector.SERVICE_NAME_FIELD,
+                                "bedrock"
+                            )
+                    )
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction
+            .doExecute(task, MLUpdateModelRequest.builder().updateModelInput(updateInput).build(), latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+    }
+
+    /**
+     * A connector whose protocol does have required fields must stay editable: an unrelated edit leaves those
+     * fields where they are, so nothing about the resulting document is broken.
+     */
+    @Test
+    public void testUpdateRemoteModelWithUnrelatedEditOnAwsInlineConnector() throws InterruptedException {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        remoteModel
+            .setConnector(
+                AwsConnector
+                    .awsConnectorBuilder()
+                    .name("test")
+                    .protocol(ConnectorProtocols.AWS_SIGV4)
+                    .credential(Map.of(AbstractConnector.ACCESS_KEY_FIELD, "access", AbstractConnector.SECRET_KEY_FIELD, "secret"))
+                    .parameters(Map.of(HttpConnector.REGION_FIELD, "us-east-1", HttpConnector.SERVICE_NAME_FIELD, "bedrock"))
+                    .actions(
+                        List
+                            .of(
+                                ConnectorAction
+                                    .builder()
+                                    .actionType(ConnectorAction.ActionType.PREDICT)
+                                    .method("POST")
+                                    .url("https://api.test.com/v1/test")
+                                    .build()
+                            )
+                    )
+                    .build()
+            );
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
     }
 
     /**

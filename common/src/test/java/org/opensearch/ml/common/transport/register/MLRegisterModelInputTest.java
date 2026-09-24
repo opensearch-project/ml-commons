@@ -316,6 +316,24 @@ public class MLRegisterModelInputTest {
         assertTrue(e.getMessage().contains("batch_inference_config dynamic_batching block"));
     }
 
+    /**
+     * An inline connector is resolved to a concrete class by its protocol while the request is still being
+     * parsed, so a protocol whose class rejects the connector never reaches the register action at all. That is
+     * what keeps a model document from being written with a connector its own protocol cannot read back - the
+     * state that leaves the model unreadable and undeletable afterwards.
+     */
+    @Test
+    public void parse_RejectsInlineConnectorMissingTheFieldsItsProtocolRequires() throws Exception {
+        String json = "{\"function_name\":\"REMOTE\",\"name\":\"m\",\"model_group_id\":\"g\","
+            + "\"connector\":{\"name\":\"c\",\"version\":\"1\",\"protocol\":\"aws_sigv4\","
+            + "\"credential\":{\"api_key\":\"credential_value\"},"
+            + "\"parameters\":{\"region\":\"us-west-2\",\"service_name\":\"sagemaker\"},"
+            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://api.test.com/v1/test\"}]}}";
+
+        Exception e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(true, json, parsed -> {}));
+        assertEquals("Missing credential", e.getMessage());
+    }
+
     private void testParseFromJsonString(
         String modelName,
         String version,

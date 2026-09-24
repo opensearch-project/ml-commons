@@ -20,10 +20,16 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
+import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
@@ -92,6 +98,181 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
             () -> ConnectorProtocolValidator.validateProtocolEnabled("MCP_SSE", mlFeatureEnabledSetting)
         );
         assertEquals(RestStatus.FORBIDDEN, e.status());
+    }
+
+    // ---- validateProtocolRequirements --------------------------------------
+
+    /**
+     * A connector holding an http connector's fields under an arbitrary protocol label - the shape
+     * {@code HttpConnector#update} leaves behind when a request only relabels the protocol.
+     */
+    private static HttpConnector httpShapedConnector(String protocol) {
+        return HttpConnector
+            .builder()
+            .name("test")
+            .protocol(protocol)
+            .credential(Map.of("api_key", "credential_value"))
+            .parameters(Map.of("param1", "value1"))
+            .actions(actions("https://api.openai.com/v1/chat/completions"))
+            .build();
+    }
+
+    private static AwsConnector awsConnector() {
+        return AwsConnector
+            .awsConnectorBuilder()
+            .name("test")
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .credential(Map.of(AbstractConnector.ACCESS_KEY_FIELD, "access", AbstractConnector.SECRET_KEY_FIELD, "secret"))
+            .parameters(Map.of(HttpConnector.REGION_FIELD, "us-east-1", HttpConnector.SERVICE_NAME_FIELD, "bedrock"))
+            .actions(actions("https://bedrock-runtime.us-east-1.amazonaws.com/model/x/invoke"))
+            .build();
+    }
+
+    public void testProtocolRequirements_httpConnectorIsAccepted() {
+        ConnectorProtocolValidator.validateProtocolRequirements(httpShapedConnector(ConnectorProtocols.HTTP));
+    }
+
+    public void testProtocolRequirements_awsConnectorWithItsRequiredFieldsIsAccepted() {
+        ConnectorProtocolValidator.validateProtocolRequirements(awsConnector());
+    }
+
+    /** Read back, this document resolves to an AwsConnector, which has no signing credential to work with. */
+    public void testProtocolRequirements_rejectsProtocolWhoseRequiredFieldsAreMissing() {
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator.validateProtocolRequirements(httpShapedConnector(ConnectorProtocols.AWS_SIGV4))
+        );
+        assertEquals(RestStatus.BAD_REQUEST, e.status());
+        // Both the protocol and the field its connector class complained about are named, so an operator can
+        // tell what the request is missing.
+        assertTrue(e.getMessage().contains(ConnectorProtocols.AWS_SIGV4));
+        assertTrue(e.getMessage().contains("Missing credential"));
+    }
+
+    /** google_cloud fails on a different field, so the message is the target class's own, not a fixed string. */
+    public void testProtocolRequirements_reportsTheTargetProtocolsOwnReason() {
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator
+                .validateProtocolRequirements(
+                    HttpConnector
+                        .builder()
+                        .name("test")
+                        .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                        .parameters(Map.of(GoogleCloudConnector.AUTH_MODE_FIELD, GoogleCloudConnector.AUTH_MODE_ADC))
+                        .credential(Map.of(GoogleCloudConnector.PRIVATE_KEY_FIELD, "key"))
+                        .actions(actions("https://aiplatform.googleapis.com/v1/predict"))
+                        .build()
+                )
+        );
+        assertEquals(RestStatus.BAD_REQUEST, e.status());
+        assertTrue(e.getMessage().contains("auth_mode=adc must not include service-account credentials"));
+    }
+
+    // ---- validateProtocolRequirementsAfterUpdate ---------------------------
+
+    /**
+     * The defect this closes. Relabelling a connector onto a protocol whose class requires fields the stored
+     * document does not have used to be accepted, and every later read of that document - including the one
+     * delete performs - then failed, leaving the resource unreadable, unrepairable and undeletable.
+     */
+    public void testProtocolRequirementsAfterUpdate_rejectsRelabellingOntoAnIncompatibleProtocol() {
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator
+                .validateProtocolRequirementsAfterUpdate(
+                    httpShapedConnector(ConnectorProtocols.HTTP),
+                    MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.AWS_SIGV4).build()
+                )
+        );
+        assertEquals(RestStatus.BAD_REQUEST, e.status());
+        assertTrue(e.getMessage().contains("Missing credential"));
+    }
+
+    /** Supplying what the target protocol needs in the same request makes the change a legitimate one. */
+    public void testProtocolRequirementsAfterUpdate_allowsProtocolChangeThatSuppliesTheRequiredFields() {
+        ConnectorProtocolValidator
+            .validateProtocolRequirementsAfterUpdate(
+                httpShapedConnector(ConnectorProtocols.HTTP),
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .protocol(ConnectorProtocols.AWS_SIGV4)
+                    .credential(Map.of(AbstractConnector.ACCESS_KEY_FIELD, "access", AbstractConnector.SECRET_KEY_FIELD, "secret"))
+                    .parameters(Map.of(HttpConnector.REGION_FIELD, "us-east-1", HttpConnector.SERVICE_NAME_FIELD, "bedrock"))
+                    .build()
+            );
+    }
+
+    /** An unrelated edit to a connector whose protocol does have required fields must not be blocked. */
+    public void testProtocolRequirementsAfterUpdate_allowsUnrelatedEditOnAwsConnector() {
+        ConnectorProtocolValidator
+            .validateProtocolRequirementsAfterUpdate(
+                awsConnector(),
+                MLCreateConnectorInput.builder().updateConnector(true).description("new description").build()
+            );
+    }
+
+    /**
+     * A google_cloud connector in auth_mode=adc stores no credential at all, so a perfectly valid connector can
+     * look like the broken state from the outside. An unrelated edit to one must still go through.
+     */
+    public void testProtocolRequirementsAfterUpdate_allowsUnrelatedEditOnCredentiallessAdcConnector() {
+        ConnectorProtocolValidator
+            .validateProtocolRequirementsAfterUpdate(
+                GoogleCloudConnector
+                    .googleCloudConnectorBuilder()
+                    .name("test")
+                    .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                    .parameters(Map.of(GoogleCloudConnector.AUTH_MODE_FIELD, GoogleCloudConnector.AUTH_MODE_ADC))
+                    .actions(actions("https://aiplatform.googleapis.com/v1/predict"))
+                    .build(),
+                MLCreateConnectorInput.builder().updateConnector(true).description("new description").build()
+            );
+    }
+
+    /**
+     * The credential is replaced wholesale rather than merged, so a request can strip a field the stored
+     * protocol needs without touching the protocol at all - the same broken document by another route.
+     */
+    public void testProtocolRequirementsAfterUpdate_rejectsCredentialReplacementThatDropsARequiredField() {
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> ConnectorProtocolValidator
+                .validateProtocolRequirementsAfterUpdate(
+                    awsConnector(),
+                    MLCreateConnectorInput
+                        .builder()
+                        .updateConnector(true)
+                        .credential(Map.of(AbstractConnector.ACCESS_KEY_FIELD, "access"))
+                        .build()
+                )
+        );
+        assertEquals(RestStatus.BAD_REQUEST, e.status());
+        assertTrue(e.getMessage().contains("Missing credential"));
+    }
+
+    /** Both MCP protocols carry the same document shape and require none of the inference fields. */
+    public void testProtocolRequirementsAfterUpdate_allowsSwitchBetweenMcpProtocols() {
+        ConnectorProtocolValidator
+            .validateProtocolRequirementsAfterUpdate(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("api_key", "credential_value"))
+                    .build(),
+                MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP).build()
+            );
+    }
+
+    public void testProtocolRequirementsAfterUpdate_noChangeIsAllowed() {
+        ConnectorProtocolValidator
+            .validateProtocolRequirementsAfterUpdate(
+                httpShapedConnector(ConnectorProtocols.HTTP),
+                MLCreateConnectorInput.builder().updateConnector(true).build()
+            );
     }
 
     // ---- validateMutualTlsEnabled ------------------------------------------
