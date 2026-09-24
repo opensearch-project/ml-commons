@@ -478,10 +478,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MLModel.MODEL_ID_FIELD:
-                    modelId = parser.text();
+                    modelId = parser.textOrNull();
                     break;
                 case MODEL_GROUP_ID_FIELD:
-                    modelGroupId = parser.text();
+                    modelGroupId = parser.textOrNull();
                     break;
                 case IS_ENABLED_FIELD:
                     isEnabled = parser.booleanValue();
@@ -496,7 +496,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     hashValue = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
@@ -635,19 +635,19 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MLModel.MODEL_ID_FIELD:
-                    modelId = parser.text();
+                    modelId = parser.textOrNull();
                     break;
                 case NAME_FIELD:
                     name = parser.text();
                     break;
                 case MODEL_GROUP_ID_FIELD:
-                    modelGroupId = parser.text();
+                    modelGroupId = parser.textOrNull();
                     break;
                 case VERSION_FIELD:
                     version = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case IS_ENABLED_FIELD:
                     isEnabled = parser.booleanValue();
