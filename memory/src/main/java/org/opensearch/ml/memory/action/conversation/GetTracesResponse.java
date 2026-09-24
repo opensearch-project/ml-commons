@@ -16,6 +16,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.conversation.PaginationTokenUtil;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -69,6 +70,7 @@ public class GetTracesResponse extends ActionResponse implements ToXContentObjec
         builder.endArray();
         if (hasMoreTokens) {
             builder.field(ActionConstants.NEXT_TOKEN_FIELD, nextToken);
+            builder.field(ActionConstants.NEXT_PAGE_TOKEN_FIELD, PaginationTokenUtil.encodeOffset(nextToken));
         }
         builder.endObject();
         return builder;
