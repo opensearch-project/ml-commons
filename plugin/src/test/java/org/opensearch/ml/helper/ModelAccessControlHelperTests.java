@@ -56,6 +56,16 @@ import org.opensearch.transport.client.Client;
 
 public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
+    /**
+     * These tests configure model_access_control_enabled, which is deprecated, and the code under test reads it.
+     * Acknowledging the warning per test is not reliable here: the deprecation logger dedups by key, so only whichever
+     * test runs first in the JVM emits it, and the randomized runner varies the order.
+     */
+    @Override
+    protected boolean enableWarningsCheck() {
+        return false;
+    }
+
     @Mock
     ClusterService clusterService;
 
