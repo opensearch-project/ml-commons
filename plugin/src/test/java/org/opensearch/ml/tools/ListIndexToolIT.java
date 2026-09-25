@@ -14,9 +14,13 @@ import java.util.List;
 import java.util.Objects;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hc.core5.http.HttpHost;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
+import org.opensearch.client.RestClient;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.RestBaseAgentToolsIT;
 import org.opensearch.ml.utils.TestHelper;
@@ -35,6 +39,44 @@ public class ListIndexToolIT extends RestBaseAgentToolsIT {
     @Before
     public void setUpCluster() throws Exception {
         registerListIndexFlowAgent();
+    }
+
+    public void testListIndexWithNoPermissions() throws Exception {
+        if (!isHttps()) {
+            log.info("Skipping permission test as security is not enabled");
+            return;
+        }
+
+        String noPermissionUser = "no_permission_user";
+        String password = "TestPassword123!";
+
+        try {
+            createUser(noPermissionUser, password, new ArrayList<>());
+
+            final RestClient noPermissionClient = new SecureRestClientBuilder(
+                getClusterHosts().toArray(new HttpHost[0]),
+                isHttps(),
+                noPermissionUser,
+                password
+            ).setSocketTimeout(60000).build();
+
+            try {
+                ResponseException exception = expectThrows(ResponseException.class, () -> {
+                    TestHelper
+                        .makeRequest(noPermissionClient, "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, question, null);
+                });
+
+                String errorMessage = exception.getMessage().toLowerCase();
+                assertTrue(
+                    "Expected permission error, got: " + errorMessage,
+                    errorMessage.contains("no permissions") || errorMessage.contains("forbidden") || errorMessage.contains("unauthorized")
+                );
+            } finally {
+                noPermissionClient.close();
+            }
+        } finally {
+            deleteUser(noPermissionUser);
+        }
     }
 
     private List<String> createIndices(int count) throws IOException {
