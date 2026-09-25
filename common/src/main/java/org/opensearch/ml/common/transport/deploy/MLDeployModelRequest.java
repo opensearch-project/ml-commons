@@ -7,6 +7,8 @@ package org.opensearch.ml.common.transport.deploy;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RESOURCE_TYPE;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
@@ -19,6 +21,7 @@ import java.util.List;
 import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.DocRequest;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -35,7 +38,7 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLDeployModelRequest extends MLTaskRequest {
+public class MLDeployModelRequest extends MLTaskRequest implements DocRequest {
 
     private static final String NODE_IDS_FIELD = "node_ids";
     private String modelId;
@@ -142,4 +145,18 @@ public class MLDeployModelRequest extends MLTaskRequest {
 
     }
 
+    @Override
+    public String type() {
+        return ML_MODEL_RESOURCE_TYPE;
+    }
+
+    @Override
+    public String index() {
+        return ML_MODEL_INDEX;
+    }
+
+    @Override
+    public String id() {
+        return modelId;
+    }
 }

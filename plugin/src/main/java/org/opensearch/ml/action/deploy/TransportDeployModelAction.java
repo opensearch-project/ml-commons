@@ -177,8 +177,9 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(
+                        .validateModelAccess(
                             user,
+                            modelId,
                             mlModel.getModelGroupId(),
                             MLDeployModelAction.NAME,
                             client,
