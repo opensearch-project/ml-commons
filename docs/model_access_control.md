@@ -11,7 +11,7 @@ We have implemented backend role-based access in which members of the same back-
 
 Note: 
 - Model access control is an experimental feature. If you see any bug or have any suggestion, feel free to cut Github issue.
-- **Superseded.** Everything on this page — `plugins.ml_commons.model_access_control_enabled`, model-group access modes, and backend-role based access — is superseded by the security plugin's resource sharing and access control, and is slated for removal in 4.0. Models are now shareable in their own right; see [Resource sharing for models](#resource-sharing-for-models) below. The setting itself is not marked deprecated yet, because existing models cannot be migrated to per-model sharing until the migrate endpoint gains the two capabilities listed in that section.
+- **Superseded.** Everything on this page — `plugins.ml_commons.model_access_control_enabled`, model-group access modes, and backend-role based access — is superseded by the security plugin's resource sharing and access control, and is slated for removal in 4.0. Models are now shareable in their own right; see [Resource sharing for models](#resource-sharing-for-models) below. The setting is marked deprecated, so it logs a deprecation warning when set. That is a signal of direction, not an instruction to turn it off: existing models cannot move to per-model sharing until the migrate endpoint gains the two capabilities listed in that section, and until then this setting remains their working control.
 
 
 
