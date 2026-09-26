@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -24,6 +26,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.collect.Tuple;
@@ -39,6 +42,9 @@ import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.google.auth.oauth2.AccessToken;
+import com.google.auth.oauth2.GoogleCredentials;
 
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -207,5 +213,24 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
 
         executor.invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(), "{}", null, streamListener);
         Mockito.verify(streamListener, times(1)).onFailure(Mockito.any(Exception.class));
+    }
+
+    @Test
+    public void credentialProvider_LazilyBuildsOnceAndCaches() {
+        // Every other test pre-injects a provider, so the lazy branch that calls
+        // GoogleCredentialProvider.fromConnector is otherwise never exercised.
+        GoogleCredentials adc = GoogleCredentials.create(new AccessToken("ya29.adc-token", new Date(Long.MAX_VALUE)));
+        GoogleCloudConnector connector = adcConnector("POST", "https://us-central1-aiplatform.googleapis.com/v1/x:generateContent");
+        connector
+            .decrypt(PREDICT.name(), (keys, tenantId, listener) -> listener.onResponse(keys), null, ActionListener.wrap(r -> {}, e -> {}));
+        GoogleConnectorExecutor executor = new GoogleConnectorExecutor(connector);
+
+        try (MockedStatic<GoogleCredentials> mocked = mockStatic(GoogleCredentials.class)) {
+            mocked.when(GoogleCredentials::getApplicationDefault).thenReturn(adc);
+
+            GoogleCredentialProvider first = executor.credentialProvider();
+            assertSame(first, executor.credentialProvider());
+            mocked.verify(GoogleCredentials::getApplicationDefault, times(1));
+        }
     }
 }
