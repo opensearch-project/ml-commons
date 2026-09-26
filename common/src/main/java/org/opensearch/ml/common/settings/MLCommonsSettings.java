@@ -295,6 +295,9 @@ public final class MLCommonsSettings {
                     "^https://api\\.cohere\\.ai/.*$",
                     "^https://api\\.deepseek\\.com/.*$",
                     "^https://generativelanguage\\.googleapis\\.com/.*$",
+                    // Vertex AI joins the region to the host with a hyphen (us-central1-aiplatform.googleapis.com)
+                    // and also serves a global aiplatform.googleapis.com, so the region prefix is optional.
+                    "^https://([a-z0-9-]+-)?aiplatform\\.googleapis\\.com/.*$",
                     "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
