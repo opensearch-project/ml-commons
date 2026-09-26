@@ -339,6 +339,14 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsRejectMalformedVertexAiRegionPrefix() {
+        // A DNS label cannot start with a hyphen, so the region prefix must not either. These cannot
+        // resolve, but the allowlist should describe only hostnames that are actually well formed.
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://--aiplatform.googleapis.com/v1/predict"));
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://-us-aiplatform.googleapis.com/v1/predict"));
+    }
+
+    @Test
     public void testDynamicBatchingMemoryFractionAcceptsMaximum() {
         double value = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.1).build());
