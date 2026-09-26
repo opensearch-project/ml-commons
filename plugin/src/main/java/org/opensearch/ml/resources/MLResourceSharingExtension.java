@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.resources;
 
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_RESOURCE_TYPE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
@@ -100,9 +102,44 @@ public class MLResourceSharingExtension implements ResourceSharingExtension {
         }
     };
 
+    /**
+     * Standalone connectors are a simpler case than models: one document per resource in its own index, with {@code
+     * owner} and {@code backend_roles} already on the document, so there is nothing to discriminate and no parent to
+     * inherit from. The owner paths let the security plugin's migrate endpoint attribute existing connectors without
+     * any of the extra capabilities model migration needs.
+     */
+    private static final ResourceProvider CONNECTOR_PROVIDER = new ResourceProvider() {
+
+        @Override
+        public String resourceType() {
+            return ML_CONNECTOR_RESOURCE_TYPE;
+        }
+
+        @Override
+        public String resourceIndexName() {
+            return ML_CONNECTOR_INDEX;
+        }
+
+        @Override
+        public String ownerNamePath() {
+            return "/owner/name";
+        }
+
+        @Override
+        public String ownerBackendRolesPath() {
+            return "/owner/backend_roles";
+        }
+
+        /** The connector index maps no workspaces field, so opt out rather than have the write path look for one. */
+        @Override
+        public String workspacesField() {
+            return null;
+        }
+    };
+
     @Override
     public Set<ResourceProvider> getResourceProviders() {
-        return Set.of(MODEL_GROUP_PROVIDER, MODEL_PROVIDER);
+        return Set.of(MODEL_GROUP_PROVIDER, MODEL_PROVIDER, CONNECTOR_PROVIDER);
     }
 
     @Override

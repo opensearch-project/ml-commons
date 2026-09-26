@@ -101,6 +101,8 @@ public class CommonValue {
      */
     public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
     public static final String ML_MODEL_RESOURCE_TYPE = "ml-model";
+    /** Standalone connectors are shareable in their own right; see docs/model_access_control.md. */
+    public static final String ML_CONNECTOR_RESOURCE_TYPE = "ml-connector";
     /**
      * Field stamped on model metadata documents to mark them as resources. Model chunks share
      * {@link #ML_MODEL_INDEX} but are not resources, and the resource-sharing framework has no way to skip a

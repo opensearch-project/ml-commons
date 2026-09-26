@@ -37,3 +37,19 @@ resource_types:
       allowed_actions:
         - "cluster:admin/opensearch/ml/*"
         - "cluster:admin/security/resource/share"
+
+  ml-connector:
+    ml_read_only:
+      allowed_actions:
+        - "cluster:admin/opensearch/ml/connectors/get"
+
+    ml_read_write:
+      allowed_actions:
+        - "cluster:admin/opensearch/ml/connectors/get"
+        - "cluster:admin/opensearch/ml/connectors/update"
+        - "cluster:admin/opensearch/ml/connectors/execute"
+
+    ml_full_access:
+      allowed_actions:
+        - "cluster:admin/opensearch/ml/connectors/*"
+        - "cluster:admin/security/resource/share"

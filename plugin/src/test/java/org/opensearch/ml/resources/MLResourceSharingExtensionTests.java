@@ -53,16 +53,31 @@ public class MLResourceSharingExtensionTests {
     }
 
     @Test
-    public void testGetResourceProviders_returnsModelGroupAndModelProviders() {
+    public void testGetResourceProviders_returnsModelGroupModelAndConnectorProviders() {
         MLResourceSharingExtension ext = new MLResourceSharingExtension();
 
         Set<ResourceProvider> providers = ext.getResourceProviders();
         assertThat(providers, is(not(nullValue())));
-        assertThat(providers.size(), equalTo(2));
+        assertThat(providers.size(), equalTo(3));
 
         Map<String, String> indicesByType = indicesByType(providers);
         assertThat(indicesByType.get(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), equalTo(CommonValue.ML_MODEL_GROUP_INDEX));
         assertThat(indicesByType.get(CommonValue.ML_MODEL_RESOURCE_TYPE), equalTo(CommonValue.ML_MODEL_INDEX));
+        assertThat(indicesByType.get(CommonValue.ML_CONNECTOR_RESOURCE_TYPE), equalTo(CommonValue.ML_CONNECTOR_INDEX));
+    }
+
+    @Test
+    public void testConnectorProviderDeclarations() {
+        Set<ResourceProvider> providers = new MLResourceSharingExtension().getResourceProviders();
+        ResourceProvider connector = providerFor(providers, CommonValue.ML_CONNECTOR_RESOURCE_TYPE);
+
+        // The connector index holds only connectors, so there is nothing to discriminate and no parent to inherit from.
+        assertThat(connector.typeField(), is(nullValue()));
+        assertThat(connector.parentType(), is(nullValue()));
+        // owner is populated on connector documents, so migration can attribute them without inheriting from a parent
+        assertThat(connector.ownerNamePath(), equalTo("/owner/name"));
+        assertThat(connector.ownerBackendRolesPath(), equalTo("/owner/backend_roles"));
+        assertThat("connector index maps no workspaces field", connector.workspacesField(), is(nullValue()));
     }
 
     @Test
