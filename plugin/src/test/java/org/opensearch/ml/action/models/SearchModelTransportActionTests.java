@@ -363,7 +363,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     public void test_RSC_featureEnabled_typeEnabled_callsGetAccessibleIds() throws Exception {
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
-        // Feature enabled for this type => apply resource sharing
+        // Models are a protected type now, so the handler filters on accessible model ids rather than group ids
         when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
 
         var user = new User();
@@ -379,7 +379,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             // Simulate async success with some accessible IDs
             l.onResponse(Set.of("model_group_IT"));
             return null;
-        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
+        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_RESOURCE_TYPE), rscListenerCaptor.capture());
 
         // The final remote search goes through client.search(...); return a normal response
         doAnswer(inv -> {
@@ -394,7 +394,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
 
         // Verify RSC path was taken
-        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), any());
+        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_RESOURCE_TYPE), any());
 
         // Verify we executed the final search and returned
         verify(client, times(1)).search(any(), any());
@@ -403,6 +403,36 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+
+    public void test_RSC_modelTypeDisabled_fallsBackToModelGroupIds() throws Exception {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        // Only model groups are protected, which is the state before models are onboarded on a given cluster
+        when(rsc.isFeatureEnabledForType(CommonValue.ML_MODEL_RESOURCE_TYPE)).thenReturn(false);
+        when(rsc.isFeatureEnabledForType(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE)).thenReturn(true);
+
+        var user = new User();
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, user.toString());
+        when(modelAccessControlHelper.modelAccessControlEnabled()).thenReturn(true);
+
+        doAnswer(inv -> {
+            ActionListener<Set<String>> l = inv.getArgument(1);
+            l.onResponse(Set.of("model_group_IT"));
+            return null;
+        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), any());
+
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mlSearchHandler.search(sdkClient, searchRequest, null, actionListener);
+
+        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), any());
+        verify(rsc, times(0)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_RESOURCE_TYPE), any());
+    }
+
     public void test_RSC_featureEnabled_typeDisabled_skipsRSC() throws Exception {
         // Feature enabled globally but TYPE disabled → shouldUseResourceAuthz = false
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);

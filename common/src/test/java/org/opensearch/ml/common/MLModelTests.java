@@ -6,8 +6,10 @@
 package org.opensearch.ml.common;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
@@ -100,9 +102,30 @@ public class MLModelTests {
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"name\":\"model_name\",\"algorithm\":\"KMEANS\",\"model_version\":\"1.0.0\",\"model_content\":\"test_content\",\"is_hidden\":true}",
+            "{\"name\":\"model_name\",\"resource_type\":\"ml-model\",\"algorithm\":\"KMEANS\",\"model_version\":\"1.0.0\","
+                + "\"model_content\":\"test_content\",\"is_hidden\":true}",
             mlModelContent
         );
+    }
+
+    @Test
+    public void toXContent_ModelChunk_omitsResourceType() throws IOException {
+        // Chunks share the model index but are not resources: stamping them would give every chunk its own
+        // resource-sharing record.
+        MLModel chunk = MLModel
+            .builder()
+            .algorithm(FunctionName.KMEANS)
+            .name("model_name")
+            .version("1.0.0")
+            .content("test_content")
+            .chunkNumber(0)
+            .totalChunks(2)
+            .build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        chunk.toXContent(builder, EMPTY_PARAMS);
+        String chunkContent = TestHelper.xContentBuilderToString(builder);
+        assertFalse(chunkContent.contains("resource_type"));
+        assertTrue(chunkContent.contains("\"chunk_number\":0"));
     }
 
     @Test
@@ -111,7 +134,8 @@ public class MLModelTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{}", mlModelContent);
+        // resource_type marks the document as a model resource; only chunks omit it
+        assertEquals("{\"resource_type\":\"ml-model\"}", mlModelContent);
     }
 
     @Test
@@ -184,7 +208,8 @@ public class MLModelTests {
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"name\":\"model_name\",\"algorithm\":\"KMEANS\",\"model_version\":\"1.0.0\",\"model_content\":\"test_content\",\"is_hidden\":true,\"tenant_id\":\"test_tenant\"}",
+            "{\"name\":\"model_name\",\"resource_type\":\"ml-model\",\"algorithm\":\"KMEANS\",\"model_version\":\"1.0.0\","
+                + "\"model_content\":\"test_content\",\"is_hidden\":true,\"tenant_id\":\"test_tenant\"}",
             mlModelContent
         );
     }

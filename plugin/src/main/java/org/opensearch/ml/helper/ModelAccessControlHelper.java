@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RESOURCE_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 import java.util.Collections;
@@ -91,6 +92,104 @@ public class ModelAccessControlHelper {
             ExistsQueryBuilder.class,
             RangeQueryBuilder.class
         );
+
+    /**
+     * Authorizes an action on an existing model.
+     * <p>
+     * When {@code ml-model} is a protected resource type, the model's own sharing record is the authority. The
+     * provider declares the model group as the model's parent, so a group-level share still grants access through
+     * inheritance - a group share is not lost by moving to per-model authorization. Clusters that have not protected
+     * models fall back to the model-group check, which is the pre-resource-sharing behavior.
+     * <p>
+     * Creating a model is not covered here: there is no model to authorize against yet, so registration authorizes
+     * write access on the destination group instead.
+     * <p>
+     * <b>When model-group-derived access is removed in 4.0</b>, this method collapses. {@code modelGroupId} and
+     * {@code client} exist only to fetch and evaluate the group document, so both go, along with
+     * {@code mlFeatureEnabledSetting}, {@code tenantId} and {@code sdkClient} on the overload below - which exists
+     * solely because the group lookup needs them. The two overloads become one
+     * {@code validateModelAccess(user, modelId, action, listener)}. Three things have to be decided rather than
+     * inherited when that happens:
+     * <ul>
+     *   <li>the else-branch has to say directly that no security plugin or an unprotected type means no per-resource
+     *       authorization. Today that outcome comes from {@code validateModelGroupAccess} returning true when
+     *       {@code isSecurityEnabledAndModelAccessControlEnabled} is false, and that method will be gone.</li>
+     *   <li>the overload's multi-tenancy short-circuit returns true outright on the assumption that tenancy is the
+     *       access control. That is a group-path assumption; whether tenant isolation supersedes per-model sharing or
+     *       composes with it needs an explicit answer before the branch is kept or dropped.</li>
+     *   <li>dropping the {@code ml-model-group} registration removes {@code parentType} from the model provider, and
+     *       with it the inheritance that lets a group-level share grant model access. Group shares must be
+     *       materialized onto models first, or access silently narrows at upgrade - the same dependency as the
+     *       migration work in opensearch-project/security issues 6525 and 6526.</li>
+     * </ul>
+     * GA on its own changes nothing here: resource sharing stays opt-in per cluster, and the security plugin can be
+     * absent, so the branch itself is still needed.
+     */
+    public void validateModelAccess(
+        User user,
+        String modelId,
+        String modelGroupId,
+        String action,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
+        if (shouldUseResourceAuthz(ML_MODEL_RESOURCE_TYPE)) {
+            verifyResourceAccess(user, modelId, ML_MODEL_RESOURCE_TYPE, action, listener);
+            return;
+        }
+        validateModelGroupAccess(user, modelGroupId, action, client, listener);
+    }
+
+    /**
+     * SdkClient-aware variant of {@link #validateModelAccess(User, String, String, String, Client, ActionListener)}.
+     * Its extra parameters serve the model-group fallback only; see that method for what happens to this overload when
+     * model-group-derived access is removed in 4.0.
+     */
+    public void validateModelAccess(
+        User user,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        String tenantId,
+        String modelId,
+        String modelGroupId,
+        String action,
+        Client client,
+        SdkClient sdkClient,
+        ActionListener<Boolean> listener
+    ) {
+        if (shouldUseResourceAuthz(ML_MODEL_RESOURCE_TYPE)) {
+            verifyResourceAccess(user, modelId, ML_MODEL_RESOURCE_TYPE, action, listener);
+            return;
+        }
+        validateModelGroupAccess(user, mlFeatureEnabledSetting, tenantId, modelGroupId, action, client, sdkClient, listener);
+    }
+
+    /**
+     * Single place that turns a resource-sharing verdict into either {@code true} or a 403, so the message and the
+     * fail-closed behavior are identical for every resource type and call site.
+     */
+    private void verifyResourceAccess(User user, String resourceId, String resourceType, String action, ActionListener<Boolean> listener) {
+        var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        resourceSharingClient.verifyAccess(resourceId, resourceType, action, ActionListener.wrap(isAuthorized -> {
+            if (!isAuthorized) {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "User "
+                                + (user == null ? "" : user.getName())
+                                + " is not authorized to perform action "
+                                + action
+                                + " on "
+                                + resourceType
+                                + " id: "
+                                + resourceId,
+                            RestStatus.FORBIDDEN
+                        )
+                    );
+                return;
+            }
+            listener.onResponse(true);
+        }, listener::onFailure));
+    }
 
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
     public void validateModelGroupAccess(User user, String modelGroupId, String action, Client client, ActionListener<Boolean> listener) {

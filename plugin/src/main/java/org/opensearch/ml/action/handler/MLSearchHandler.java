@@ -8,6 +8,7 @@ package org.opensearch.ml.action.handler;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RESOURCE_TYPE;
 import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
@@ -149,6 +150,34 @@ public class MLSearchHandler {
                     CommonValue.ML_MODEL_GROUP_INDEX
                 );
 
+            // When models are protected in their own right, filter on the models the caller can actually access rather
+            // than on their groups, so search agrees with the per-model permission check. Because the provider declares
+            // the model group as the model's parent, a group-level share is already reflected in these ids.
+            //
+            // This deliberately does not lean on the security plugin's DLS filter. That filter only engages for a
+            // search the security plugin sees as an internal/plugin request, and this search does not reach it that
+            // way - verified end to end: with the filter removed, an unshared user's search returned models whose
+            // all_shared_principals did not include them. Filtering here keeps the search fail-closed regardless.
+            if (shouldUseResourceAuthz(ML_MODEL_RESOURCE_TYPE) && user != null) {
+                var rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+                rsc.getAccessibleResourceIds(ML_MODEL_RESOURCE_TYPE, ActionListener.wrap(accessibleModelIds -> {
+                    SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
+                    gated.query(restrictToIds(gated.query(), accessibleModelIds));
+                    request.source(gated);
+                    SearchDataObjectRequest modelSearch = SearchDataObjectRequest
+                        .builder()
+                        .indices(request.indices())
+                        .searchSourceBuilder(request.source())
+                        .tenantId(tenantId)
+                        .build();
+                    sdkClient.searchDataObjectAsync(modelSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                }, e -> {
+                    log.error("Failed to resolve accessible ml-model ids", e);
+                    wrappedListener.onFailure(e);
+                }));
+                return;
+            }
+
             if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)
                 && user != null
                 && modelAccessControlHelper.modelAccessControlEnabled()
@@ -243,6 +272,26 @@ public class MLSearchHandler {
      * Gate model search by model-groups; resource-sharing feature path
      */
     @VisibleForTesting
+    /**
+     * Restricts a model search to the given document ids. Unlike the model-group gate below there is no "missing"
+     * escape hatch: every model is a resource once {@code ml-model} is protected, so an id that is not in the
+     * accessible set is not visible. An empty set denies everything, which keeps the search fail-closed.
+     */
+    static QueryBuilder restrictToIds(QueryBuilder existing, @Nullable Collection<String> accessibleIds) {
+        final QueryBuilder gate = (accessibleIds == null || accessibleIds.isEmpty())
+            ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery())
+            : QueryBuilders.idsQuery().addIds(accessibleIds.toArray(new String[0]));
+
+        if (existing == null) {
+            return gate;
+        } else if (existing instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) existing).filter(gate);
+            return existing;
+        } else {
+            return QueryBuilders.boolQuery().must(existing).filter(gate);
+        }
+    }
+
     static QueryBuilder rewriteQueryBuilderRSC(QueryBuilder existing, @Nullable Collection<String> modelGroupIds) {
         // RSC: empty => DENY-ALL; non-empty => (ids OR missing)
         final QueryBuilder gate;

@@ -9,7 +9,9 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_RESOURCE_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.apache.lucene.search.join.ScoreMode;
@@ -35,9 +37,11 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -73,6 +77,10 @@ public class ConnectorAccessControlHelper {
 
     public void validateConnectorAccess(Client client, String connectorId, ActionListener<Boolean> listener) {
         User user = RestActionUtils.getUserContext(client);
+        if (shouldUseResourceAuthz(ML_CONNECTOR_RESOURCE_TYPE)) {
+            verifyConnectorAccess(user, connectorId, listener);
+            return;
+        }
         if (isAdmin(user) || accessControlNotEnabled(user)) {
             listener.onResponse(true);
             return;
@@ -99,6 +107,10 @@ public class ConnectorAccessControlHelper {
     ) {
 
         User user = RestActionUtils.getUserContext(client);
+        if (shouldUseResourceAuthz(ML_CONNECTOR_RESOURCE_TYPE)) {
+            verifyConnectorAccess(user, connectorId, listener);
+            return;
+        }
         if (!mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
             if (isAdmin(user) || accessControlNotEnabled(user)) {
                 listener.onResponse(true);
@@ -127,6 +139,38 @@ public class ConnectorAccessControlHelper {
         }
     }
 
+    /**
+     * Turns a resource-sharing verdict into {@code true} or a 403, so the message and the fail-closed behaviour are the
+     * same at every connector call site.
+     */
+    private void verifyConnectorAccess(User user, String connectorId, ActionListener<Boolean> listener) {
+        var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        resourceSharingClient
+            .verifyAccess(connectorId, ML_CONNECTOR_RESOURCE_TYPE, MLConnectorGetAction.NAME, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User "
+                                    + (user == null ? "" : user.getName())
+                                    + " is not authorized to access ml-connector id: "
+                                    + connectorId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+    }
+
+    /**
+     * Synchronous variant, kept on the pre-resource-sharing path. {@code verifyAccess} is asynchronous, so it cannot be
+     * called from a method that returns a boolean; the two callers that use this - ExecuteConnectorTransportAction and
+     * UpdateConnectorTransportAction - have to be restructured to an async check before connectors can be authorized
+     * through resource sharing end to end. Until then those two actions authorize on access modes and backend roles
+     * only, which is why {@code connector_access_control_enabled} is not deprecated in this change.
+     */
     public boolean validateConnectorAccess(Client client, Connector connector) {
         User user = RestActionUtils.getUserContext(client);
         if (isAdmin(user) || accessControlNotEnabled(user)) {
