@@ -50,7 +50,12 @@ dependencies {
     implementation ('com.google.auth:google-auth-library-oauth2-http:1.23.0') {
         exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
         exclude group: 'com.google.guava', module: 'guava'
-        // grpc-context's io.grpc.* classes collide (jar hell) with grpc-api on the classpath; not needed here.
+        // grpc-context's io.grpc.* classes collide (jar hell) with grpc-api on the classpath. io.grpc.Context
+        // IS required at runtime: the OAuth2 refresh path initializes google-http-client's OpenCensus
+        // instrumentation, which references it. It resolves from the transport-grpc module (grpc-api), which
+        // ml-commons declares optional in plugin/build.gradle but which OpenSearch bundles in every
+        // distribution, including the min distro, because modules are mandatory. Bundling grpc-context here
+        // instead would reintroduce the jar-hell clash on every normal install. See issue #5079.
         exclude group: 'io.grpc', module: 'grpc-context'
     }
     implementation platform("ai.djl:bom:0.31.1")
