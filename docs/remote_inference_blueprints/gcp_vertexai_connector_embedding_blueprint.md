@@ -9,18 +9,19 @@
 
 ### GCP VertexAI Embedding Connector Blueprint:
 
-## 1. Add VertexAI endpoint to trusted URLs:
+## 1. Confirm the VertexAI endpoint is trusted:
 
-```json
-PUT /_cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://.*-aiplatform\\.googleapis\\.com/.*$"
-        ]
-    }
-}
-```
+No cluster-settings change is needed. The Vertex AI host is already matched by the default
+`plugins.ml_commons.trusted_connector_endpoints_regex`.
+
+If your cluster has overridden that setting, add a Vertex AI pattern to whatever it is currently
+set to. It is a list setting, so a `PUT` replaces the defaults rather than adding to them, and
+dropping them would break every other remote connector in the cluster.
+
+This blueprint uses `"protocol": "http"` with a hand-managed `Authorization` header, so it is not
+gated by `plugins.ml_commons.connector.vertexai_enabled`. That flag applies only to the
+`google_cloud` protocol used by
+[`gcp_vertexai_embedding_blueprint.md`](./gcp_vertexai_embedding_blueprint.md).
 
 ## 2. Generate access-token to access Vertex AI
 

@@ -15,7 +15,7 @@ it, so `batch_predict_status` and `cancel_batch_predict` are not declared separa
 Batch input and output are configured in the request body via GCS or BigQuery locations. See
 the [Vertex AI batch prediction docs](https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/batch-prediction).
 
-## 1. Enable the connector and add the Vertex AI endpoint to trusted URLs
+## 1. Enable the connector
 
 The `google_cloud` connector is opt-in. With `plugins.ml_commons.connector.vertexai_enabled`
 left at its default of `false`, creating the connector in step 2 fails with `403`.
@@ -24,13 +24,16 @@ left at its default of `false`, creating the connector in step 2 fails with `403
 PUT /_cluster/settings
 {
     "persistent": {
-        "plugins.ml_commons.connector.vertexai_enabled": true,
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://.*-aiplatform\\.googleapis\\.com/.*$"
-        ]
+        "plugins.ml_commons.connector.vertexai_enabled": true
     }
 }
 ```
+
+The Vertex AI host is already matched by the default
+`plugins.ml_commons.trusted_connector_endpoints_regex`, so no endpoint change is needed. If your
+cluster has overridden that setting, add a Vertex AI pattern to whatever it is currently set to:
+it is a list setting, so a `PUT` replaces the defaults rather than adding to them, and dropping
+them would break every other remote connector in the cluster.
 
 ## 2. Create the connector
 
