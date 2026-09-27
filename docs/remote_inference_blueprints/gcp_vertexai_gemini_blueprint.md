@@ -6,19 +6,24 @@ and you do **not** add an `Authorization` header — the plugin injects it per r
 
 Two credential modes are supported:
 - **Service-account key** — supply the service account's `private_key` and `client_email`.
-  The `token_uri` is optional and, when set, is restricted to Google token endpoints
-  (`*.googleapis.com` over HTTPS).
+  The `token_uri` is optional and defaults to `https://oauth2.googleapis.com/token`. When set it
+  must be exactly that host, over HTTPS, on the default port. It is the only endpoint that ever
+  receives the signed JWT, so other `*.googleapis.com` hosts are rejected.
 - **ADC / Workload Identity** — set `auth_mode: adc` and supply no credentials; the node's
   Application Default Credentials (GKE Workload Identity, GCE metadata server, or an ADC file)
   are used. Use this mode only on GCP-hosted nodes: it resolves credentials from the
   environment, which includes contacting the GCE/GKE metadata server.
 
-## 1. Add Vertex AI endpoint to trusted URLs
+## 1. Enable the connector and add the Vertex AI endpoint to trusted URLs
+
+The `google_cloud` connector is opt-in. With `plugins.ml_commons.connector.vertexai_enabled`
+left at its default of `false`, creating the connector in step 2 fails with `403`.
 
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
+        "plugins.ml_commons.connector.vertexai_enabled": true,
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
             "^https://.*-aiplatform\\.googleapis\\.com/.*$"
         ]

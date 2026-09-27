@@ -11,12 +11,16 @@ Two credential modes are supported:
 > Replaces the legacy `gcp_vertexai_connector_embedding_blueprint.md`, which used the generic
 > `http` protocol with a manually refreshed static token.
 
-## 1. Add Vertex AI endpoint to trusted URLs
+## 1. Enable the connector and add the Vertex AI endpoint to trusted URLs
+
+The `google_cloud` connector is opt-in. With `plugins.ml_commons.connector.vertexai_enabled`
+left at its default of `false`, creating the connector in step 2 fails with `403`.
 
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
+        "plugins.ml_commons.connector.vertexai_enabled": true,
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
             "^https://.*-aiplatform\\.googleapis\\.com/.*$"
         ]

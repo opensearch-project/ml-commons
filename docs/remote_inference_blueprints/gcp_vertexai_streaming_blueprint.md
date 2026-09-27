@@ -7,12 +7,19 @@ automatically; no `Authorization` header is added by you.
 Streaming requires the `_llm_interface` parameter set to `gemini/v1beta/generatecontent`, and
 predictions are issued against the streaming predict endpoint.
 
-## 1. Add Vertex AI endpoint to trusted URLs
+## 1. Enable the connector and streaming, and add the Vertex AI endpoint to trusted URLs
+
+The `google_cloud` connector and the streaming API are both opt-in, and both default to `false`.
+Without `plugins.ml_commons.connector.vertexai_enabled`, creating the connector in step 2 fails
+with `403`. Without `plugins.ml_commons.stream_enabled`, the `_predict/stream` call in step 4
+fails with "Streaming is currently disabled".
 
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
+        "plugins.ml_commons.connector.vertexai_enabled": true,
+        "plugins.ml_commons.stream_enabled": true,
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
             "^https://.*-aiplatform\\.googleapis\\.com/.*$"
         ]
