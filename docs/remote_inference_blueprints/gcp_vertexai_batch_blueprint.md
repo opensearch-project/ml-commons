@@ -4,20 +4,27 @@ This blueprint runs offline batch inference against Vertex AI `batchPredictionJo
 `google_cloud` connector protocol. OAuth2 tokens are minted and refreshed automatically; no
 `Authorization` header is added by you.
 
-It defines three actions:
-- `batch_predict` — submit a batch prediction job.
-- `batch_predict_status` — poll a job's status.
-- `cancel_batch_predict` — cancel a running job.
+It covers three operations:
+- submit a batch prediction job
+- poll a job's status
+- cancel a running job
+
+Only the `batch_predict` action is declared. ml-commons derives the status and cancel calls from
+it, so `batch_predict_status` and `cancel_batch_predict` are not declared separately (see step 2).
 
 Batch input and output are configured in the request body via GCS or BigQuery locations. See
 the [Vertex AI batch prediction docs](https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/batch-prediction).
 
-## 1. Add Vertex AI endpoint to trusted URLs
+## 1. Enable the connector and add the Vertex AI endpoint to trusted URLs
+
+The `google_cloud` connector is opt-in. With `plugins.ml_commons.connector.vertexai_enabled`
+left at its default of `false`, creating the connector in step 2 fails with `403`.
 
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
+        "plugins.ml_commons.connector.vertexai_enabled": true,
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
             "^https://.*-aiplatform\\.googleapis\\.com/.*$"
         ]
@@ -114,10 +121,11 @@ The response includes the refreshed remote job state under `remote_job.state` (e
 `JOB_STATE_PENDING`, `JOB_STATE_RUNNING`, `JOB_STATE_SUCCEEDED`, `JOB_STATE_CANCELLED`).
 
 The ML task's own state transitions to a terminal value (`COMPLETED`, `FAILED`, `EXPIRED`,
-`CANCELLED`) once the remote job finishes. This is derived from `remote_job.state` via the
-shared cluster settings `plugins.ml_commons.remote_job.status_field` and
-`plugins.ml_commons.remote_job.status_regex.*`, which recognize the Vertex `JOB_STATE_*`
-values by default — no per-connector configuration is required.
+`CANCELLED`) once the remote job finishes. That value comes from the `batch_job_status` mapping
+declared on the connector, not from the cluster-wide `plugins.ml_commons.remote_job.*` settings:
+`remote_job.status_field` defaults to `["status", "Status", "TransformJobStatus"]`, none of which
+is the `state` field Vertex reports. The `batch_job_status` block in step 2 is therefore required
+rather than optional.
 
 ## 6. Cancel a job
 
