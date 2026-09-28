@@ -300,6 +300,7 @@ import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
+import org.opensearch.ml.engine.tools.SearchTemplateFillTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
@@ -886,6 +887,7 @@ public class MachineLearningPlugin extends Plugin
         VisualizationsTool.Factory.getInstance().init(client);
         ConnectorTool.Factory.getInstance().init(client);
         QueryPlanningTool.Factory.getInstance().init(client);
+        SearchTemplateFillTool.Factory.getInstance().init(client, agenticSearchTemplateService, mlFeatureEnabledSetting);
         WriteToScratchPadTool.Factory.getInstance().init();
         ReadFromScratchPadTool.Factory.getInstance().init();
 
@@ -900,6 +902,7 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(ConnectorTool.TYPE, ConnectorTool.Factory.getInstance());
         toolFactories.put(QueryPlanningTool.TYPE, QueryPlanningTool.Factory.getInstance());
+        toolFactories.put(SearchTemplateFillTool.TYPE, SearchTemplateFillTool.Factory.getInstance());
         toolFactories.put(WriteToScratchPadTool.TYPE, WriteToScratchPadTool.Factory.getInstance());
         toolFactories.put(ReadFromScratchPadTool.TYPE, ReadFromScratchPadTool.Factory.getInstance());
         if (externalToolFactories != null) {
