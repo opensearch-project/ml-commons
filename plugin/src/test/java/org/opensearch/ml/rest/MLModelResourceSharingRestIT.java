@@ -66,17 +66,6 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
     private RestClient otherClient;
 
     /**
-     * The shared {@code buildClient} builds the super-admin client with {@code SecureRestClientBuilder(settings, path)},
-     * which derives its endpoint from settings - {@code http.port: 9200} on localhost - instead of from the cluster's
-     * host list. The gradle test cluster binds a random port on IPv6 loopback, so that client reaches either whatever
-     * occupies 9200 (a plaintext dev cluster produces "Unrecognized SSL message, plaintext connection?") or nothing at
-     * all. Every test then dies before its first assertion.
-     * <p>
-     * Certificate authentication has to stay, because cleanup deletes system indices such as
-     * {@code .plugins-ml-model-group} and only the kirk super-admin certificate may do that - basic-auth admin gets a
-     * 403. The three-argument constructor keeps the certificate and takes the real hosts, which is the whole fix.
-     */
-    /**
      * On a security-enabled cluster the node starts accepting connections before the security plugin has initialized
      * its configuration index - the node log carries "OpenSearch Security not initialized" during that window, and a
      * request that lands in it fails with "Unrecognized SSL message, plaintext connection?", taking the test with it.
@@ -123,8 +112,17 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
         throw new AssertionError("the security plugin never reported UP; secure tests cannot run", last);
     }
 
-    public static long CUSTOM_MODEL_TIMEOUT = 20_000; // 20 seconds
-
+    /**
+     * The shared {@code buildClient} builds the super-admin client with {@code SecureRestClientBuilder(settings, path)},
+     * which derives its endpoint from settings - {@code http.port: 9200} on localhost - instead of from the cluster's
+     * host list. The gradle test cluster binds a random port on IPv6 loopback, so that client reaches either whatever
+     * occupies 9200 (a plaintext dev cluster produces "Unrecognized SSL message, plaintext connection?") or nothing at
+     * all. Every test then dies before its first assertion.
+     * <p>
+     * Certificate authentication has to stay, because cleanup deletes system indices such as
+     * {@code .plugins-ml-model-group} and only the kirk super-admin certificate may do that - basic-auth admin gets a
+     * 403. The three-argument constructor keeps the certificate and takes the real hosts, which is the whole fix.
+     */
     @Override
     protected RestClient buildClient(Settings settings, HttpHost[] hosts) throws IOException {
         if (isHttps() && settings.get(OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_FILEPATH) != null) {
@@ -255,6 +253,10 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
             .makeRequest(client, "POST", "_plugins/_ml/model_groups/_register", null, TestHelper.toHttpEntity(groupInput), null);
         String modelGroupId = (String) parseResponse(groupResponse).get("model_group_id");
         assertNotNull(modelGroupId);
+        // The group's sharing record is written by an index listener after the REST call returns. Registering a model
+        // into the group authorizes against that record, and a missing one surfaces as a 500 rather than a deny, so
+        // wait for the group to be readable by its owner before continuing.
+        awaitReadable(client, "_plugins/_ml/model_groups/" + modelGroupId, modelGroupId);
 
         TextEmbeddingModelConfig config = TextEmbeddingModelConfig
             .builder()
@@ -288,6 +290,28 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
      * record exists the resource check denies everyone, the owner included. A timeout here means the write path never
      * produced a record, which is a product failure rather than a slow test.
      */
+    /** Polls a resource until its owner can read it, which is only true once its sharing record exists. */
+    private void awaitReadable(RestClient client, String endpoint, String resourceId) throws IOException {
+        String last = "no response captured";
+        for (int attempt = 0; attempt < 20; attempt++) {
+            try {
+                Response response = TestHelper.makeRequest(client, "GET", endpoint, null, "", null);
+                if (RestStatus.OK == TestHelper.restStatus(response)) {
+                    return;
+                }
+            } catch (ResponseException e) {
+                last = e.getMessage();
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("interrupted waiting for " + resourceId, e);
+            }
+        }
+        fail("the owner could not read " + resourceId + " within 10s. last response: " + last);
+    }
+
     private void awaitOwnerAccess(RestClient client, String modelId) throws IOException {
         String last = "no response captured";
         for (int attempt = 0; attempt < 20; attempt++) {
