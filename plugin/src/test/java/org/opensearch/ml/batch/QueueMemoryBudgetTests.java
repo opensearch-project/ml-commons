@@ -28,6 +28,30 @@ public class QueueMemoryBudgetTests extends OpenSearchTestCase {
         assertEquals(250L, budget.getMaxBytes());
     }
 
+    public void testExceedsCapacityOnlyAboveTheWholeBudget() {
+        QueueMemoryBudget budget = new QueueMemoryBudget(100L);
+        // Exactly the whole budget is admissible on an empty queue, so it must not be declined as too large.
+        assertFalse(budget.exceedsCapacity(100L));
+        assertFalse(budget.exceedsCapacity(99L));
+        assertTrue(budget.exceedsCapacity(101L));
+    }
+
+    public void testExceedsCapacityIgnoresWhatIsAlreadyReserved() {
+        // Capacity is about the budget itself, not the free space: a request that fits the budget must be queued
+        // and told to wait, not handed back as impossible.
+        QueueMemoryBudget budget = new QueueMemoryBudget(100L);
+        assertTrue(budget.tryReserve(100L));
+        assertFalse(budget.exceedsCapacity(100L));
+    }
+
+    public void testExceedsCapacityFollowsBudgetUpdates() {
+        QueueMemoryBudget budget = new QueueMemoryBudget(100L);
+        budget.setMaxBytes(10L);
+        assertTrue(budget.exceedsCapacity(11L));
+        budget.setMaxBytes(1000L);
+        assertFalse(budget.exceedsCapacity(11L));
+    }
+
     public void testTryReserveWithNonPositiveBytesAlwaysSucceeds() {
         QueueMemoryBudget budget = new QueueMemoryBudget(100L);
         // bytes == 0 and bytes < 0 hit the early-return branch and must not reserve anything.

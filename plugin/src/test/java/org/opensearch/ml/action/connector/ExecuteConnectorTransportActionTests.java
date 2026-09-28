@@ -7,7 +7,9 @@ package org.opensearch.ml.action.connector;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +20,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
@@ -26,6 +29,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -178,9 +182,93 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
 
         action.doExecute(task, request, actionListener);
 
-        // When access is denied, no action should be taken on the listener
+        // Denial has to be reported. This previously asserted that neither callback fired, which is what left the
+        // request hanging until the client timed out.
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
         verify(actionListener, times(0)).onResponse(any());
-        verify(actionListener, times(0)).onFailure(any());
+        assertEquals(
+            "You don't have permission to execute this connector, connector id: test_connector_id",
+            captor.getValue().getMessage()
+        );
+        assertEquals(RestStatus.FORBIDDEN, ExceptionsHelper.status(captor.getValue()));
+    }
+
+    /**
+     * An MCP connector has no executable action, so the executor chosen for its protocol cannot build a payload
+     * and the unimplemented accessors escape as a 500. MCP connectors are used through the agent and MCP tool
+     * APIs, not through connector execute.
+     */
+    public void testExecute_McpConnectorRejected() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        // A real MCP connector, not a mock claiming an MCP protocol: the point is that its accessors are
+        // unimplemented, which a mock cannot reproduce.
+        Connector mcpConnector = org.opensearch.ml.common.connector.McpConnector
+            .builder()
+            .name("mcp")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .url("https://api.openai.com/mcp")
+            .credential(Map.of("key", "value"))
+            .build();
+        // Authorization runs first: the protocol is only reported to a caller allowed to see the connector.
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(mcpConnector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(
+            "Cannot execute an MCP connector: protocol [mcp_sse] defines no executable action.",
+            captor.getValue().getMessage()
+        );
+        assertEquals(org.opensearch.core.rest.RestStatus.BAD_REQUEST, org.opensearch.ExceptionsHelper.status(captor.getValue()));
+    }
+
+    /**
+     * Pins the order the MCP rejection runs in: a caller who cannot see the connector must not be told its
+     * protocol. Without authorization running first this would report the MCP rejection instead.
+     */
+    public void testExecute_McpConnectorAccessDeniedReportsDenialNotProtocol() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        Connector mcpConnector = org.opensearch.ml.common.connector.McpConnector
+            .builder()
+            .name("mcp")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .url("https://api.openai.com/mcp")
+            .credential(Map.of("key", "value"))
+            .build();
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(mcpConnector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        // On this branch a denied caller gets no response at all - that hang is a separate pre-existing bug, fixed
+        // in #5068 - so assert the guarantee that holds either way: the protocol is never reported to a caller who
+        // was refused access. This fails if the MCP rejection is ever moved back ahead of the access check.
+        verify(actionListener, never()).onResponse(any());
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, atMost(1)).onFailure(captor.capture());
+        for (Exception reported : captor.getAllValues()) {
+            assertFalse(reported.getMessage().contains("MCP"));
+            assertFalse(reported.getMessage().contains("mcp_sse"));
+        }
     }
 
     public void testExecute_WithCustomConnectorAction() {

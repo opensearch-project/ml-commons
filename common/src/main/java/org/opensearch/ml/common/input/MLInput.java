@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.input;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.input.remote.RemoteInferenceMLInput.ACTION_TYPE_FIELD;
 
 import java.io.IOException;
@@ -79,14 +80,24 @@ public class MLInput implements Input {
     // Input data to train model, run trained model to predict or run ML algorithms(no-model-based) directly.
     protected MLInputDataset inputDataset;
 
+    // The caller-supplied algorithm (e.g. TEXT_EMBEDDING vs SPARSE_ENCODING) captured before it is normalized to
+    // REMOTE for remote models. Transport-only, not part of the REST body; used by dynamic batching to avoid
+    // coalescing requests whose caller algorithm differs. Null unless the predict path set it.
+    protected FunctionName callerAlgorithm;
+
     private int version = 1;
 
-    @Builder(toBuilder = true)
     public MLInput(FunctionName algorithm, MLAlgoParams parameters, MLInputDataset inputDataset) {
+        this(algorithm, parameters, inputDataset, null);
+    }
+
+    @Builder(toBuilder = true)
+    public MLInput(FunctionName algorithm, MLAlgoParams parameters, MLInputDataset inputDataset, FunctionName callerAlgorithm) {
         validate(algorithm);
         this.algorithm = algorithm;
         this.parameters = parameters;
         this.inputDataset = inputDataset;
+        this.callerAlgorithm = callerAlgorithm;
     }
 
     public MLInput(
@@ -122,6 +133,9 @@ public class MLInput implements Input {
             this.inputDataset = MLInputDataset.fromStream(in);
         }
         this.version = in.readInt();
+        if (in.getVersion().onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
+            this.callerAlgorithm = in.readEnum(FunctionName.class);
+        }
     }
 
     @Override
@@ -140,6 +154,14 @@ public class MLInput implements Input {
             out.writeBoolean(false);
         }
         out.writeInt(version);
+        if (out.getVersion().onOrAfter(VERSION_3_9_0)) {
+            if (callerAlgorithm != null) {
+                out.writeBoolean(true);
+                out.writeEnum(callerAlgorithm);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override

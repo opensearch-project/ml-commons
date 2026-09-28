@@ -8,7 +8,6 @@ package org.opensearch.ml.action.agenticsearch;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.transport.agenticsearch.MLRegisterAgenticSearchTemplateAction;
@@ -46,12 +45,12 @@ public class RegisterAgenticSearchTemplateTransportAction extends
         MLRegisterAgenticSearchTemplateRequest request,
         ActionListener<MLRegisterAgenticSearchTemplateResponse> listener
     ) {
-        // Capture the caller's identity BEFORE stashing: stashContext() installs a
-        // fresh context that drops the security-user transient, so reading it after the
-        // stash (here or in the service) would always yield null. Pass it into the
-        // service so created_by records the real registering user.
+        // Registration reads a stored script and an index mapping on the caller's behalf, so it must run in
+        // the caller's context for the security plugin to authorize those reads against the caller's own
+        // permissions. The stash is therefore pushed down to the single step that needs the plugin's
+        // identity - the system-index write - rather than wrapping the whole call here.
         User user = RestActionUtils.getUserContext(client);
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try {
             service
                 .register(
                     request.getTemplateId(),

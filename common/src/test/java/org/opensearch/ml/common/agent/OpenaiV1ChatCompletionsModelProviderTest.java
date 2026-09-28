@@ -18,6 +18,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
@@ -28,6 +29,7 @@ import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
+import org.opensearch.ml.common.utils.StringUtils;
 
 public class OpenaiV1ChatCompletionsModelProviderTest {
 
@@ -1407,5 +1409,78 @@ public class OpenaiV1ChatCompletionsModelProviderTest {
             assertTrue(e.getMessage().contains("top_p"));
             assertTrue(e.getMessage().contains("must be a valid number"));
         }
+    }
+
+    @Test
+    public void testCreateConnector_SystemPromptIsSentAsFirstMessage() {
+        // Arrange
+        Connector connector = provider.createConnector("gpt-4o", Map.of("openai_api_key", "test_key"), new HashMap<>());
+
+        // Act
+        List<Map<String, String>> messages = buildMessages(connector, "Only answer questions about cooking.");
+
+        // Assert — the configured system prompt leads the messages array
+        assertEquals("system", messages.get(0).get("role"));
+        assertEquals("Only answer questions about cooking.", messages.get(0).get("content"));
+        assertEquals("user", messages.get(1).get("role"));
+        assertEquals(2, messages.size());
+    }
+
+    @Test
+    public void testCreateConnector_SystemPromptDefaultsWhenNotSet() {
+        // Arrange — a direct _predict against the auto-created model runs without an agent runner and so
+        // never sets system_prompt. An unfilled placeholder would be rejected by Connector#validatePayload,
+        // which createPayload's caller runs and which buildMessages asserts below.
+        Connector connector = provider.createConnector("gpt-4o", Map.of("openai_api_key", "test_key"), new HashMap<>());
+
+        // Act
+        List<Map<String, String>> messages = buildMessages(connector, null);
+
+        // Assert
+        assertEquals("system", messages.get(0).get("role"));
+        assertEquals("You are a helpful assistant", messages.get(0).get("content"));
+    }
+
+    @Test
+    public void testCreateConnector_ReasoningTemplateSendsSystemPrompt() {
+        // Arrange — reasoning_effort selects the alternate request body template
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("reasoning_effort", "high");
+        Connector connector = provider.createConnector("o3", Map.of("openai_api_key", "test_key"), modelParameters);
+
+        // Act
+        String payload = buildPayload(connector, "Only answer questions about cooking.");
+
+        // Assert
+        assertEquals("high", StringUtils.gson.fromJson(payload, Map.class).get("reasoning_effort"));
+        List<Map<String, String>> messages = extractMessages(payload);
+        assertEquals("system", messages.get(0).get("role"));
+        assertEquals("Only answer questions about cooking.", messages.get(0).get("content"));
+    }
+
+    /**
+     * Builds the request payload through the connector itself, so the assertions run against what would be
+     * sent to the provider. validatePayload is the same gate the remote inference path applies, and it
+     * fails on any placeholder the template left unfilled.
+     */
+    private String buildPayload(Connector connector, String systemPrompt) {
+        Map<String, String> params = new HashMap<>(connector.getParameters());
+        if (systemPrompt != null) {
+            params.put("system_prompt", systemPrompt);
+        }
+        params.put("body", "{\"role\":\"user\",\"content\":\"hi\"}");
+        String payload = connector.createPayload(ConnectorAction.ActionType.PREDICT.name(), params);
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        return payload;
+    }
+
+    private List<Map<String, String>> buildMessages(Connector connector, String systemPrompt) {
+        return extractMessages(buildPayload(connector, systemPrompt));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, String>> extractMessages(String payload) {
+        return (List<Map<String, String>>) StringUtils.gson.fromJson(payload, Map.class).get("messages");
     }
 }

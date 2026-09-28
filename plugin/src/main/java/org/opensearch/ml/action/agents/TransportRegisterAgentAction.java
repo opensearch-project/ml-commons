@@ -7,6 +7,7 @@ package org.opensearch.ml.action.agents;
 
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
@@ -137,7 +138,24 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 MLAgentModelSpec sanitizedModelSpec = mlAgent.getModel().toBuilder().modelParameters(null).credential(null).build();
                 // ToDo: store model details within agent to prevent creating a new model document
                 MLAgent agent = mlAgent.toBuilder().llm(llmSpec).model(sanitizedModelSpec).parameters(parameters).build();
-                registerAgent(agent, listener);
+                // The model is provisioned before the agent is validated and indexed, so any later failure
+                // would leave that model behind with no agent referencing it - and it holds the caller's
+                // credentials. Roll it back so a failed registration leaves nothing provisioned.
+                //
+                // Deliberately an explicit listener rather than ActionListener.wrap: wrap routes a throw from
+                // its onResponse consumer into onFailure, which would run the rollback after the agent was
+                // already indexed and delete the model that agent now references.
+                registerAgent(agent, new ActionListener<>() {
+                    @Override
+                    public void onResponse(MLRegisterAgentResponse response) {
+                        listener.onResponse(response);
+                    }
+
+                    @Override
+                    public void onFailure(Exception parentFailure) {
+                        deleteOrphanedModel(modelId, agent.getTenantId(), parentFailure, listener);
+                    }
+                });
             }, listener::onFailure));
         } catch (Exception e) {
             listener.onFailure(e);
@@ -236,6 +254,39 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             tenantId,
             ActionListener.wrap(response -> { listener.onResponse(response.getAgentId()); }, listener::onFailure)
         );
+    }
+
+    /**
+     * Removes a model that was auto-provisioned for a unified-interface agent whose registration then failed.
+     * The model document carries the caller's credentials and, for an inline connector, the connector
+     * definition too, so leaving it behind both strands a resource and keeps those credentials stored with
+     * nothing referencing them. The original failure is always what reaches the caller; a failed cleanup is
+     * logged rather than masking it.
+     */
+    private void deleteOrphanedModel(
+        String modelId,
+        String tenantId,
+        Exception parentFailure,
+        ActionListener<MLRegisterAgentResponse> listener
+    ) {
+        log.warn("Agent registration failed after auto-creating model {}; attempting cleanup", modelId, parentFailure);
+        ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
+        ActionListener<MLRegisterAgentResponse> failureListener = ActionListener.runBefore(listener, context::restore);
+        try {
+            sdkClient
+                .deleteDataObjectAsync(DeleteDataObjectRequest.builder().index(ML_MODEL_INDEX).id(modelId).tenantId(tenantId).build())
+                .whenComplete((response, deleteThrowable) -> {
+                    if (deleteThrowable != null) {
+                        log.error("Failed to delete orphaned model {}", modelId, deleteThrowable);
+                    } else {
+                        log.info("Deleted orphaned model {} after agent registration failure", modelId);
+                    }
+                    failureListener.onFailure(parentFailure);
+                });
+        } catch (Exception e) {
+            log.error("Failed to delete orphaned model {}", modelId, e);
+            failureListener.onFailure(parentFailure);
+        }
     }
 
     private void deleteOrphanedConversationAgent(

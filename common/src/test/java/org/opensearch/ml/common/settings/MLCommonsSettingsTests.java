@@ -305,16 +305,16 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
-    public void testBatchQueueMemoryFractionAcceptsMaximum() {
-        double value = MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(), 0.1).build());
+    public void testDynamicBatchingMemoryFractionAcceptsMaximum() {
+        double value = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.1).build());
         assertEquals(0.1, value, 0.0);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testBatchQueueMemoryFractionRejectsAboveMaximum() {
-        MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION
-            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(), 0.11).build());
+    public void testDynamicBatchingMemoryFractionRejectsAboveMaximum() {
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.11).build());
     }
 
     @Test
@@ -338,5 +338,73 @@ public class MLCommonsSettingsTests {
         List<String> invalidRegex = List.of("^https://host(:\\d+)*/.*$");
         MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex).build());
+    }
+
+    /**
+     * A counted repetition of a group that already contains a quantifier backtracks exponentially, so it must
+     * be rejected. This is the shape {@link #testValidateRegexSafety_boundedQuantifier_success()} does not
+     * cover: there the "{1,5}" sits *inside* the group, which is harmless, so that test passes either way.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testValidateRegexSafety_countedRepetitionOfQuantifiedGroup_throwsException() {
+        List<String> invalidRegex = List.of("^https://host(a+){1,1000}/.*$");
+        MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex).build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testValidateRegexSafety_openEndedRepetitionOfQuantifiedGroup_throwsException() {
+        List<String> invalidRegex = List.of("^https://host(a+){1,}/.*$");
+        MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex).build());
+    }
+
+    /**
+     * The default trusted-endpoint patterns are validated by the same validator, so a tightening of the guard
+     * must not reject any of them.
+     */
+    @Test
+    public void testValidateRegexSafety_defaultTrustedEndpointPatterns_success() {
+        List<String> defaults = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(Settings.EMPTY);
+        List<String> result = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+            .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), defaults).build());
+        assertEquals(defaults, result);
+    }
+
+    // A zero or negative bound would clamp the dynamic batching queue's memory budget to nothing, rejecting every queued
+    // predict request for the life of the node with a 429 that no backoff could clear.
+    @Test(expected = IllegalArgumentException.class)
+    public void testDynamicBatchingMemoryCeilingRejectsNegativeValue() {
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "-1b").build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testDynamicBatchingMemoryCeilingRejectsZero() {
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "0b").build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testDynamicBatchingMemoryFloorRejectsNegativeValue() {
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "-1b").build());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testDynamicBatchingMemoryFloorRejectsZero() {
+        MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "0b").build());
+    }
+
+    @Test
+    public void testDynamicBatchingMemoryBoundsAcceptPositiveValues() {
+        ByteSizeValue ceiling = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "1gb").build());
+        assertEquals(new ByteSizeValue(1L, ByteSizeUnit.GB), ceiling);
+
+        ByteSizeValue floor = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN
+            .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "32mb").build());
+        assertEquals(new ByteSizeValue(32L, ByteSizeUnit.MB), floor);
     }
 }

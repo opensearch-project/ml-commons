@@ -17,6 +17,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATC
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.BEDROCK_NOVA_MODEL;
 
 import java.io.IOException;
@@ -35,6 +36,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.BedrockConverseModelProvider;
+import org.opensearch.ml.common.agent.OpenaiV1ChatCompletionsModelProvider;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -44,6 +48,8 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.PromptTemplate;
 import org.opensearch.script.ScriptService;
 
 import com.google.common.collect.ImmutableMap;
@@ -1576,5 +1582,215 @@ public class ConnectorUtilsTest {
 
         // Should not throw exception
         ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testOpenaiAgentConnector_SystemPromptSurvivesEscapingAndPayloadBuild() {
+        // Arrange — a plan_execute_and_reflect style system prompt: multi-line, quoted, brace-heavy
+        String systemPrompt = "You are a planner.\nAlways respond with a valid JSON object:\n"
+            + "```json\n{\n  \"steps\": array[string],\n  \"result\": string\n}\n```\n"
+            + "Do not add any content before or after the JSON.";
+        Connector connector = new OpenaiV1ChatCompletionsModelProvider()
+            .createConnector("gpt-4o", ImmutableMap.of("openai_api_key", "test_key"), new HashMap<>());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", systemPrompt);
+        params.put("body", "{\"role\":\"user\",\"content\":\"hi\"}");
+        // Mirrors mapMessages. Note this single-object body would survive unescaped even without the list,
+        // because escapeRemoteInferenceInputData skips any value for which isJson is true.
+        params.put(NO_ESCAPE_PARAMS, "body");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act — build the payload in effect as RemoteConnectorExecutor does: connector parameters are merged
+        // unescaped and the input parameters are escaped once
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert — escaping keeps the payload valid JSON and the prompt reaches the provider intact
+        assertTrue(StringUtils.isJson(payload));
+        connector.validatePayload(payload);
+        Map<String, Object> parsed = gson.fromJson(payload, Map.class);
+        List<Map<String, String>> messages = (List<Map<String, String>>) parsed.get("messages");
+        assertEquals("system", messages.get(0).get("role"));
+        assertEquals(systemPrompt, messages.get(0).get("content"));
+        assertEquals("user", messages.get(1).get("role"));
+    }
+
+    @Test
+    public void testOpenaiAgentConnector_SystemMessagePrecedesChatHistoryAndInteractions() {
+        // Arrange — a multi-turn tool-calling request, the shape a conversational agent actually sends once
+        // memory is populated. The system message has to lead the array: a replayed turn ahead of it would
+        // put the configured persona after the conversation it is supposed to govern.
+        Connector connector = new OpenaiV1ChatCompletionsModelProvider()
+            .createConnector("gpt-4o", ImmutableMap.of("openai_api_key", "test_key"), new HashMap<>());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "Only answer questions about cooking.");
+        // The string-content history shape MLChatAgentRunner#runWithMemory produces from the function
+        // calling class's CHAT_HISTORY_*_TEMPLATE, stored with a trailing ", "; AgentUtils stores
+        // interactions with a leading ", ". Those separators are what make the concatenated array
+        // well-formed. (The V2 path formats history via mapMessages instead, where content is a block
+        // array rather than a string - a shape this test does not cover.)
+        params.put("_chat_history", "{\"role\":\"user\",\"content\":\"prior q\"},{\"role\":\"assistant\",\"content\":\"prior a\"}, ");
+        params.put("body", "{\"role\":\"user\",\"content\":\"current q\"}");
+        // A tool message is only valid after the assistant message that requested the call, and AgentUtils
+        // prepends exactly that before appending the result
+        params
+            .put(
+                "_interactions",
+                ", {\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"t1\",\"type\":\"function\","
+                    + "\"function\":{\"name\":\"search\",\"arguments\":\"{}\"}}]}"
+                    + ", {\"role\":\"tool\",\"tool_call_id\":\"t1\",\"content\":\"tool result\"}"
+            );
+        // Unlike the single-object body above, _chat_history is a bare comma-separated sequence rather than
+        // valid JSON, so here the no-escape list is what keeps it intact
+        params.put(NO_ESCAPE_PARAMS, "_chat_history,_interactions,body");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert — the system message leads, then history, then the current turn, then tool results
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        Map<String, Object> parsed = gson.fromJson(payload, Map.class);
+        List<Map<String, String>> messages = (List<Map<String, String>>) parsed.get("messages");
+        assertEquals(6, messages.size());
+        assertEquals("system", messages.get(0).get("role"));
+        assertEquals("Only answer questions about cooking.", messages.get(0).get("content"));
+        assertEquals("user", messages.get(1).get("role"));
+        assertEquals("prior q", messages.get(1).get("content"));
+        assertEquals("assistant", messages.get(2).get("role"));
+        assertEquals("user", messages.get(3).get("role"));
+        assertEquals("current q", messages.get(3).get("content"));
+        assertEquals("assistant", messages.get(4).get("role"));
+        assertEquals("tool", messages.get(5).get("role"));
+    }
+
+    @Test
+    public void testBedrockAgentConnector_PayloadBuildsWhenSystemPromptNotSet() {
+        // Arrange — a direct _predict against the auto-created model never sets system_prompt
+        Connector connector = new BedrockConverseModelProvider()
+            .createConnector(
+                "anthropic.claude-v2",
+                ImmutableMap.of("access_key", "test_key", "secret_key", "test_secret"),
+                new HashMap<>()
+            );
+
+        Map<String, String> params = new HashMap<>();
+        params.put("body", "{\"role\":\"user\",\"content\":[{\"text\":\"hi\"}]}");
+        params.put(NO_ESCAPE_PARAMS, "body");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert — without the template default this would fail validation on an unfilled placeholder
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        Map<String, Object> parsed = gson.fromJson(payload, Map.class);
+        List<Map<String, String>> system = (List<Map<String, String>>) parsed.get("system");
+        assertEquals("You are a helpful assistant", system.get(0).get("text"));
+    }
+
+    @Test
+    public void testBedrockAgentConnector_SystemPromptReachesTheSystemFieldAndMessagesStayOrdered() {
+        // Arrange — the template has to read system_prompt rather than merely resolve to its default, and
+        // Converse keeps the system prompt in its own top-level field, so the messages array must still
+        // read history, then the current turn, then tool results
+        Connector connector = new BedrockConverseModelProvider()
+            .createConnector(
+                "anthropic.claude-v2",
+                ImmutableMap.of("access_key", "test_key", "secret_key", "test_secret"),
+                new HashMap<>()
+            );
+
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "Only answer questions about cooking.");
+        params.put("_chat_history", "{\"role\":\"user\",\"content\":[{\"text\":\"prior q\"}]}, ");
+        params.put("body", "{\"role\":\"user\",\"content\":[{\"text\":\"current q\"}]}");
+        params
+            .put(
+                "_interactions",
+                ", {\"role\":\"assistant\",\"content\":[{\"toolUse\":{\"toolUseId\":\"t1\",\"name\":\"search\",\"input\":{}}}]}"
+                    + ", {\"role\":\"user\",\"content\":[{\"toolResult\":{\"toolUseId\":\"t1\",\"content\":[{\"text\":\"tool result\"}]}}]}"
+            );
+        params.put(NO_ESCAPE_PARAMS, "_chat_history,_interactions,body");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        Map<String, Object> parsed = gson.fromJson(payload, Map.class);
+        List<Map<String, Object>> system = (List<Map<String, Object>>) parsed.get("system");
+        assertEquals("Only answer questions about cooking.", system.get(0).get("text"));
+        List<Map<String, Object>> messages = (List<Map<String, Object>>) parsed.get("messages");
+        assertEquals(4, messages.size());
+        assertEquals("prior q", firstBedrockText(messages.get(0)));
+        assertEquals("current q", firstBedrockText(messages.get(1)));
+        assertEquals("assistant", messages.get(2).get("role"));
+        assertTrue(messages.get(3).toString().contains("toolResult"));
+    }
+
+    /** Reads the text of a Bedrock Converse message's first content block. */
+    @SuppressWarnings("unchecked")
+    private String firstBedrockText(Map<String, Object> message) {
+        List<Map<String, Object>> content = (List<Map<String, Object>>) message.get("content");
+        return (String) content.get(0).get("text");
+    }
+
+    @Test
+    public void testOpenaiAgentConnector_PlanExecuteAndReflectPlannerPromptReachesTheModel() {
+        // Arrange — the real planner system prompt, which carries the JSON response schema the planner is
+        // told to follow. It was dropped entirely before the system message was added to the template.
+        String plannerSystemPrompt = PromptTemplate.DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX + PromptTemplate.getCorePlanningInstructions()
+            + PromptTemplate.getPlanExecuteReflectResponseFormat() + PromptTemplate.FINAL_RESULT_RESPONSE_INSTRUCTIONS;
+        String plannerPrompt = "Objective: ```Find the \"root cause\" of the latency spike``` \n\n"
+            + "Remember: Respond only in JSON format following the required schema.";
+
+        OpenaiV1ChatCompletionsModelProvider provider = new OpenaiV1ChatCompletionsModelProvider();
+        Connector connector = provider.createConnector("gpt-4o", ImmutableMap.of("openai_api_key", "test_key"), new HashMap<>());
+
+        // PER maps the user message to a ${parameters.prompt} placeholder rather than the question text,
+        // so the body carries a nested placeholder that substitution has to resolve.
+        Map<String, String> params = new HashMap<>(provider.mapTextInput("ignored", MLAgentType.PLAN_EXECUTE_AND_REFLECT));
+        assertTrue(params.get("body").contains("${parameters.prompt}"));
+        params.put("prompt", plannerPrompt);
+        params.put("system_prompt", plannerSystemPrompt);
+        // PER overwrites no_escape_params with its own value, which notably does not include body
+        params.put(NO_ESCAPE_PARAMS, "tool_configs,_tools");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert — both halves of the planner prompt arrive intact
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        Map<String, Object> parsed = gson.fromJson(payload, Map.class);
+        List<Map<String, String>> messages = (List<Map<String, String>>) parsed.get("messages");
+        assertEquals(2, messages.size());
+        assertEquals("system", messages.get(0).get("role"));
+        assertEquals(plannerSystemPrompt, messages.get(0).get("content"));
+        // The response schema specifically, since being told to follow an unseen schema was the failure mode
+        assertTrue(messages.get(0).get("content").contains("\"steps\": array[string]"));
+        assertEquals("user", messages.get(1).get("role"));
+        assertEquals(plannerPrompt, messages.get(1).get("content"));
+    }
+
+    /**
+     * Reproduces the net effect of RemoteConnectorExecutor#preparePayloadAndInvoke: connector parameters
+     * are merged as-is and the caller-supplied input parameters are escaped once. Production actually
+     * escapes the dataset twice - once directly and once inside ConnectorUtils#processInput, which receives
+     * the same instance - but it then overrides with a snapshot taken after the first escape, so the payload
+     * sees single-escaped values just as it does here.
+     */
+    private String buildAgentConnectorPayload(Connector connector, RemoteInferenceInputDataSet inputData) {
+        Map<String, String> parameters = new HashMap<>(connector.getParameters());
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+        parameters.putAll(inputData.getParameters());
+        return connector.createPayload(PREDICT.name(), parameters);
     }
 }

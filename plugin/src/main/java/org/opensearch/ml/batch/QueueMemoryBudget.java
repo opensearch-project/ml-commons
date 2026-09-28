@@ -28,6 +28,14 @@ class QueueMemoryBudget {
         return reservedBytes.get();
     }
 
+    /**
+     * True when a single request could never be admitted, however empty the queue is. Such a request must not
+     * be told to retry after backoff, since no amount of waiting frees enough budget for it.
+     */
+    boolean exceedsCapacity(long bytes) {
+        return bytes > maxBytes;
+    }
+
     boolean tryReserve(long bytes) {
         if (bytes <= 0) {
             return true;

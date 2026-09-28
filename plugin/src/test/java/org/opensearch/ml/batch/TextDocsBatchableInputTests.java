@@ -187,6 +187,32 @@ public class TextDocsBatchableInputTests {
         assertTrue(handler.distribute(withNull).isEmpty());
     }
 
+    @Test
+    public void resultCountCountsTensorsAcrossOutputGroups() {
+        ModelTensorOutput output = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                ImmutableList
+                    .of(
+                        ModelTensors.builder().mlModelTensors(ImmutableList.of(ModelTensor.builder().name("a").build())).build(),
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                ImmutableList.of(ModelTensor.builder().name("b").build(), ModelTensor.builder().name("c").build())
+                            )
+                            .build()
+                    )
+            )
+            .build();
+
+        assertEquals(3, handler.resultCount(output));
+        assertEquals(
+            "resultCount must match distribute() so the split and single-call paths cannot drift",
+            handler.distribute(output).size(),
+            handler.resultCount(output)
+        );
+    }
+
     /** One model call's output: a single ModelTensors group with one tensor per doc. */
     private MLOutput tensorOutput(String... names) {
         return tensorOutput(null, names);

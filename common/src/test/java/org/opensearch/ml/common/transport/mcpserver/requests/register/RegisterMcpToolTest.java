@@ -103,6 +103,40 @@ public class RegisterMcpToolTest {
     }
 
     @Test
+    public void testParse_NullNameField_ParsesToNullName() throws Exception {
+        String json = "{\"type\":\"stock_tool\",\"name\":null,\"description\":\"Stock data tool\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+
+        McpToolRegisterInput parsed = McpToolRegisterInput.parse(parser);
+        assertNull(parsed.getName());
+        assertEquals("stock_tool", parsed.getType());
+    }
+
+    @Test
+    public void testParse_NullTypeField_ThenFail() throws Exception {
+        String json = "{\"type\":null,\"name\":\"stock_tool\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("type field required");
+        McpToolRegisterInput.parse(parser);
+    }
+
+    @Test
     public void testToXContent_AllFields() throws Exception {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         mcptool.toXContent(builder, ToXContent.EMPTY_PARAMS);

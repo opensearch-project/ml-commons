@@ -121,6 +121,21 @@ public class TextDocsBatchableInput implements BatchableInput {
         return perItem;
     }
 
+    @Override
+    public int resultCount(MLOutput batchedOutput) {
+        List<ModelTensors> groups = asTensorOutput(batchedOutput).getMlModelOutputs();
+        if (groups == null) {
+            return 0;
+        }
+        int count = 0;
+        for (ModelTensors group : groups) {
+            if (group.getMlModelTensors() != null) {
+                count += group.getMlModelTensors().size();
+            }
+        }
+        return count;
+    }
+
     private TextDocsInputDataSet asTextDocs(MLInput input) {
         MLInputDataset dataset = input == null ? null : input.getInputDataset();
         if (!(dataset instanceof TextDocsInputDataSet)) {
