@@ -381,6 +381,14 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_RESOURCE_TYPE), rscListenerCaptor.capture());
 
+        // The handler also resolves accessible groups, so that a model reachable only through a group share is not
+        // hidden from search. Both lookups have to be stubbed or the chain never reaches the search.
+        doAnswer(inv -> {
+            ActionListener<Set<String>> l = inv.getArgument(1);
+            l.onResponse(Set.of());
+            return null;
+        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), any());
+
         // The final remote search goes through client.search(...); return a normal response
         doAnswer(inv -> {
             ActionListener<SearchResponse> l = inv.getArgument(1);
@@ -403,6 +411,40 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+
+    public void test_RSC_modelTypeEnabled_looksUpBothModelAndGroupIds() throws Exception {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+
+        var user = new User();
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, user.toString());
+        when(modelAccessControlHelper.modelAccessControlEnabled()).thenReturn(true);
+
+        doAnswer(inv -> {
+            ActionListener<Set<String>> l = inv.getArgument(1);
+            l.onResponse(Set.of("model_1"));
+            return null;
+        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_RESOURCE_TYPE), any());
+        doAnswer(inv -> {
+            ActionListener<Set<String>> l = inv.getArgument(1);
+            l.onResponse(Set.of("group_1"));
+            return null;
+        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), any());
+
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mlSearchHandler.search(sdkClient, searchRequest, null, actionListener);
+
+        // Both lookups happen: a model is visible through its own record or through its group's, matching what a
+        // per-model permission check allows.
+        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_RESOURCE_TYPE), any());
+        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), any());
+    }
 
     public void test_RSC_modelTypeDisabled_fallsBackToModelGroupIds() throws Exception {
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
