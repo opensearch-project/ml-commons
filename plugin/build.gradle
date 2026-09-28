@@ -260,6 +260,7 @@ integTest {
         filter {
             excludeTestsMatching "org.opensearch.ml.rest.SecureMLRestIT"
             excludeTestsMatching "org.opensearch.ml.rest.MLModelGroupRestIT"
+            excludeTestsMatching "org.opensearch.ml.rest.MLModelResourceSharingRestIT"
         }
     }
 
