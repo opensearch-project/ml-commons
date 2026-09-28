@@ -164,8 +164,13 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
 
     @After
     public void cleanupUsers() throws IOException {
-        ownerClient.close();
-        otherClient.close();
+        // Null-safe so that a failure in setup surfaces its own cause rather than an NPE from cleanup on top of it
+        if (ownerClient != null) {
+            ownerClient.close();
+        }
+        if (otherClient != null) {
+            otherClient.close();
+        }
         deleteUser(owner);
         deleteUser(other);
     }
