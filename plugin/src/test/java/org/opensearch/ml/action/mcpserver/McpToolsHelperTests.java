@@ -27,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.cluster.service.ClusterService;
@@ -40,6 +41,8 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.IdsQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
@@ -163,6 +166,38 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(10L, argumentCaptor.getValue().getHits().getHits()[0].getPrimaryTerm());
+    }
+
+    /**
+     * Regression test for https://github.com/opensearch-project/ml-commons/issues/5032: the tool lookup used an
+     * analysed, default-OR match query on the `name` text field, so names sharing a single token (e.g. `vfy-list-tool`
+     * and `vfy-mapping-tool`) all matched and `_remove` deleted unrelated tools. Tool documents are keyed by name, so
+     * the lookup must be an exact document-id query.
+     */
+    @Test
+    public void test_searchToolsWithVersion_usesExactIdsQuery() {
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
+        mcpToolsHelper.searchToolsWithVersion(Arrays.asList("vfy-list-tool", "vfy-mapping-tool"), actionListener);
+
+        QueryBuilder query = captureSearchQuery();
+        assertTrue("Expected IdsQueryBuilder but got: " + query.getClass().getSimpleName(), query instanceof IdsQueryBuilder);
+        assertEquals(Set.of("vfy-list-tool", "vfy-mapping-tool"), ((IdsQueryBuilder) query).ids());
+    }
+
+    @Test
+    public void test_searchToolsWithPrimaryTermAndSeqNo_usesExactIdsQuery() {
+        ActionListener<SearchResponse> actionListener = mock(ActionListener.class);
+        mcpToolsHelper.searchToolsWithPrimaryTermAndSeqNo(Arrays.asList("vfy-list-tool"), actionListener);
+
+        QueryBuilder query = captureSearchQuery();
+        assertTrue("Expected IdsQueryBuilder but got: " + query.getClass().getSimpleName(), query instanceof IdsQueryBuilder);
+        assertEquals(Set.of("vfy-list-tool"), ((IdsQueryBuilder) query).ids());
+    }
+
+    private QueryBuilder captureSearchQuery() {
+        ArgumentCaptor<SearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(searchRequestCaptor.capture(), isA(ActionListener.class));
+        return searchRequestCaptor.getValue().source().query();
     }
 
     // ==================== ERROR HANDLING TESTS ====================

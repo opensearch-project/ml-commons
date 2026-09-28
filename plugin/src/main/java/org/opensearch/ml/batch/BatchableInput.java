@@ -38,4 +38,39 @@ public interface BatchableInput {
      * combine. Used to route each result back to the request it came from.
      */
     List<MLOutput> distribute(MLOutput batchedOutput);
+
+    /** The number of results in a sub-batch output, without materializing one output per item. */
+    int resultCount(MLOutput batchedOutput);
+
+    /**
+     * Fails unless the model returned exactly one result per item in the sub-batch.
+     *
+     * A count mismatch means the results can no longer be lined up with the items that produced them, so
+     * the request must fail rather than return another item's result. For a split request, reassembling
+     * the outputs would concatenate a misaligned sub-batch into the middle of the response and silently
+     * shift every result after it. For an unsplit request, a short response can cause the same positional
+     * ambiguity within that call.
+     */
+    default void ensureResultCount(MLOutput batchedOutput, int itemCount) {
+        validateResultCount(resultCount(batchedOutput), itemCount);
+    }
+
+    /** distribute, but only when the model returned exactly one result per item in the sub-batch. */
+    default List<MLOutput> distributeExactly(MLOutput batchedOutput, int itemCount) {
+        List<MLOutput> perItem = distribute(batchedOutput);
+        validateResultCount(perItem.size(), itemCount);
+        return perItem;
+    }
+
+    private static void validateResultCount(int resultCount, int itemCount) {
+        if (resultCount != itemCount) {
+            throw new IllegalStateException(
+                "Model returned "
+                    + resultCount
+                    + " results for a sub-batch of "
+                    + itemCount
+                    + " items, so results cannot be routed back to their callers"
+            );
+        }
+    }
 }

@@ -108,9 +108,7 @@ public class AgenticSearchTemplateService {
      * @param providedSchema a caller-supplied param-schema. When non-null it is validated
      *     and pre-flight rendered against the body, then stored without derivation. When
      *     null the schema is derived from the body and index mapping.
-     * @param user the caller, captured by the transport action before it stashed the
-     *     thread context (reading it here would be too late — the stash below drops the
-     *     security-user transient); may be null when security is disabled
+     * @param user the caller, resolved by the transport action; may be null when security is disabled
      * @param listener yields the stored {@link AgenticSearchTemplate}
      */
     public void register(
@@ -121,9 +119,13 @@ public class AgenticSearchTemplateService {
         User user,
         ActionListener<AgenticSearchTemplate> listener
     ) {
-        try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<AgenticSearchTemplate> wrapped = ActionListener.runBefore(listener, ctx::restore);
-
+        // Steps 1 and 2 read a stored script and an index mapping, which are the caller's resources rather
+        // than the plugin's. They deliberately run in the caller's context so the security plugin authorizes
+        // them against the caller's own permissions; stashing here would run them as the plugin and let a
+        // caller read a script or mapping they cannot otherwise see. Only the system-index write in
+        // storeTemplate needs the plugin's identity, so the stash is scoped to that.
+        try {
+            ActionListener<AgenticSearchTemplate> wrapped = listener;
             // 1. Fetch the stored Mustache body from core _scripts.
             fetchTemplateBody(templateId, ActionListener.wrap(body -> {
                 // 2. Fetch the index mapping for field-name enums.
@@ -175,7 +177,19 @@ public class AgenticSearchTemplateService {
         }
     }
 
-    private void storeTemplate(AgenticSearchTemplate template, ActionListener<Boolean> listener) {
+    /** Writes to the system index, so this is the one step that runs with the plugin's identity. */
+    private void storeTemplate(AgenticSearchTemplate template, ActionListener<Boolean> outerListener) {
+        ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext();
+        ActionListener<Boolean> listener = ActionListener.runBefore(outerListener, ctx::restore);
+        try {
+            storeTemplateInIndex(template, listener);
+        } catch (Exception e) {
+            // Restore the stashed context even if the write could not be dispatched at all.
+            listener.onFailure(e);
+        }
+    }
+
+    private void storeTemplateInIndex(AgenticSearchTemplate template, ActionListener<Boolean> listener) {
         mlIndicesHandler.initMLIndexIfAbsent(MLIndex.AGENTIC_SEARCH_TEMPLATES, ActionListener.wrap(created -> {
             try {
                 // CREATE opType so a duplicate template id conflicts instead of overwriting.

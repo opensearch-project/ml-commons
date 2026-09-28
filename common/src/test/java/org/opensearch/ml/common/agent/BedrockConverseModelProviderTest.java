@@ -19,6 +19,7 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
@@ -28,6 +29,7 @@ import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
+import org.opensearch.ml.common.utils.StringUtils;
 
 public class BedrockConverseModelProviderTest {
 
@@ -1345,5 +1347,27 @@ public class BedrockConverseModelProviderTest {
         assertNotNull(result);
         assertTrue(result.contains("\"role\":\"assistant\""));
         assertTrue(result.contains("toolUse"));
+    }
+
+    @Test
+    public void testCreateConnector_SystemPromptDefaultsWhenNotSet() {
+        // Arrange — a direct _predict against the auto-created model runs without an agent runner and so
+        // never sets system_prompt
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+        Connector connector = provider.createConnector("anthropic.claude-v2", credential, new HashMap<>());
+
+        // Act — validatePayload is the gate that rejects a placeholder the template left unfilled
+        Map<String, String> params = new HashMap<>(connector.getParameters());
+        params.put("body", "{\"role\":\"user\",\"content\":[{\"text\":\"hi\"}]}");
+        String payload = connector.createPayload(ConnectorAction.ActionType.PREDICT.name(), params);
+        connector.validatePayload(payload);
+
+        // Assert
+        assertTrue(StringUtils.isJson(payload));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> system = (List<Map<String, Object>>) StringUtils.gson.fromJson(payload, Map.class).get("system");
+        assertEquals("You are a helpful assistant", system.get(0).get("text"));
     }
 }

@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -88,6 +89,9 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     private AgenticSearchTemplateService service;
+
+    /** Transient used to observe which identity a step runs under. */
+    private static final String CALLER_MARKER = "_test_caller_marker";
 
     // A minimal but real Mustache _search body: one required root value (lex_query) and
     // one optional section (size with an inverted-section default). Renders to legal JSON
@@ -822,5 +826,134 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
             l.onResponse(response);
             return null;
         }).when(indicesAdminClient).getIndex(any(GetIndexRequest.class), any());
+    }
+
+    /**
+     * The stored script and the target index mapping are the caller's resources, so those two reads must run
+     * in the caller's thread context for the security plugin to authorize them against the caller's own
+     * permissions. Only the system-index write may run with the plugin's identity.
+     *
+     * Pinned by observing a caller transient at each step, because the difference is invisible in the
+     * response: stashing the whole call still returns the same template, it just reads as the plugin.
+     */
+    @Test
+    public void register_readsCallerResourcesAsCaller_andWritesSystemIndexAsPlugin() throws Exception {
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+        threadContext.putTransient(CALLER_MARKER, "present");
+
+        AtomicReference<String> duringScriptRead = new AtomicReference<>();
+        AtomicReference<String> duringMappingRead = new AtomicReference<>();
+        AtomicReference<String> duringSystemIndexWrite = new AtomicReference<>();
+
+        GetStoredScriptResponse scriptResponse = mock(GetStoredScriptResponse.class);
+        when(scriptResponse.getSource()).thenReturn(new StoredScriptSource("mustache", TEMPLATE_BODY, java.util.Collections.emptyMap()));
+        doAnswer((Answer<Void>) inv -> {
+            duringScriptRead.set(threadContext.getTransient(CALLER_MARKER));
+            ActionListener<GetStoredScriptResponse> l = inv.getArgument(1);
+            l.onResponse(scriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(GetStoredScriptRequest.class), any());
+
+        GetIndexResponse indexMappingResponse = mock(GetIndexResponse.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+        when(mappingMetadata.getSourceAsMap())
+            .thenReturn(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        when(indexMappingResponse.mappings()).thenReturn(ImmutableMap.of("my-index", mappingMetadata));
+        doAnswer((Answer<Void>) inv -> {
+            duringMappingRead.set(threadContext.getTransient(CALLER_MARKER));
+            ActionListener<GetIndexResponse> l = inv.getArgument(1);
+            l.onResponse(indexMappingResponse);
+            return null;
+        }).when(indicesAdminClient).getIndex(any(GetIndexRequest.class), any());
+
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        doAnswer((Answer<Void>) inv -> {
+            duringSystemIndexWrite.set(threadContext.getTransient(CALLER_MARKER));
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        verify(listener).onResponse(any(AgenticSearchTemplate.class));
+        assertEquals("stored-script read must run as the caller", "present", duringScriptRead.get());
+        assertEquals("index mapping read must run as the caller", "present", duringMappingRead.get());
+        assertNull("system-index write must run with the plugin's identity", duringSystemIndexWrite.get());
+        assertEquals("the caller's context must be restored afterwards", "present", threadContext.getTransient(CALLER_MARKER));
+    }
+
+    /**
+     * A caller-supplied schema skips derivation, but the stored script is still read to reject unknown params
+     * and to pre-flight render, so that read must be in the caller's context too.
+     */
+    @Test
+    public void register_withProvidedSchema_stillReadsStoredScriptAsCaller() throws Exception {
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+        threadContext.putTransient(CALLER_MARKER, "present");
+        AtomicReference<String> duringScriptRead = new AtomicReference<>();
+
+        GetStoredScriptResponse scriptResponse = mock(GetStoredScriptResponse.class);
+        when(scriptResponse.getSource()).thenReturn(new StoredScriptSource("mustache", TEMPLATE_BODY, java.util.Collections.emptyMap()));
+        doAnswer((Answer<Void>) inv -> {
+            duringScriptRead.set(threadContext.getTransient(CALLER_MARKER));
+            ActionListener<GetStoredScriptResponse> l = inv.getArgument(1);
+            l.onResponse(scriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(GetStoredScriptRequest.class), any());
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        Map<String, Object> provided = new LinkedHashMap<>();
+        provided.put("lex_query", ImmutableMap.of("type", "string", "required", true));
+        provided.put("size", ImmutableMap.of("type", "number"));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        verify(listener).onResponse(any(AgenticSearchTemplate.class));
+        assertEquals("stored-script read must run as the caller", "present", duringScriptRead.get());
+    }
+
+    /** A failure on the privileged write must still restore the caller's context. */
+    @Test
+    public void register_systemIndexWriteFailure_restoresCallerContext() throws Exception {
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+        threadContext.putTransient(CALLER_MARKER, "present");
+
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onFailure(new RuntimeException("index unavailable"));
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        verify(listener).onFailure(any(Exception.class));
+        assertEquals("present", threadContext.getTransient(CALLER_MARKER));
     }
 }

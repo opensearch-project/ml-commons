@@ -9,10 +9,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.spy;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 
 import java.io.IOException;
@@ -186,10 +185,9 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 Arrays
                     .asList(
                         ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION,
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR,
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING,
-                        ML_COMMONS_BATCH_QUEUE_IDLE_TTL
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
                     )
             )
         );

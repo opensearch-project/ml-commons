@@ -85,4 +85,19 @@ public class GoogleCredentialProviderTest {
         // Ensure endsWith(".googleapis.com") cannot be bypassed by a lookalike domain.
         GoogleCredentialProvider.validateTokenUri("https://googleapis.com.evil.example/token");
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validateTokenUri_rejectsNonDefaultPortOnValidHost() {
+        // Pinning the host alone still allows an arbitrary port on it, which would send the signed JWT
+        // somewhere other than the real token endpoint.
+        GoogleCredentialProvider.validateTokenUri("https://oauth2.googleapis.com:8443/token");
+    }
+
+    @Test
+    public void validateTokenUri_acceptsExplicitDefaultPort() {
+        assertEquals(
+            URI.create("https://oauth2.googleapis.com:443/token"),
+            GoogleCredentialProvider.validateTokenUri("https://oauth2.googleapis.com:443/token")
+        );
+    }
 }

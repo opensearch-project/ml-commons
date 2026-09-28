@@ -58,12 +58,16 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     private static final String DEFAULT_REGION = "us-east-1";
 
-    private static final String REQUEST_BODY_TEMPLATE = "{\"system\": [{\"text\": \"${parameters.system_prompt}\"}], "
-        + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
-        + "${parameters.tool_configs:-}, "
-        + "\"inferenceConfig\": {\"maxTokens\": ${parameters.max_tokens:-4096}"
-        + "${parameters.temperature_field:-}${parameters.top_p_field:-}}"
-        + " }";
+    // The default matters: a direct _predict against the auto-created model runs without an agent runner
+    // and so does not set system_prompt, and would otherwise be rejected by Connector#validatePayload for
+    // an unfilled placeholder. Every agent runner path does set it.
+    private static final String REQUEST_BODY_TEMPLATE =
+        "{\"system\": [{\"text\": \"${parameters.system_prompt:-You are a helpful assistant}\"}], "
+            + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
+            + "${parameters.tool_configs:-}, "
+            + "\"inferenceConfig\": {\"maxTokens\": ${parameters.max_tokens:-4096}"
+            + "${parameters.temperature_field:-}${parameters.top_p_field:-}}"
+            + " }";
 
     // Body templates for different input types
     private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_text}\"}]}";

@@ -16,6 +16,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,10 +27,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -38,7 +41,7 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
-import org.opensearch.ml.common.model.BatchQueueConfig;
+import org.opensearch.ml.common.model.DynamicBatchingConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -52,7 +55,7 @@ import org.opensearch.transport.TransportChannel;
 
 import com.google.common.collect.ImmutableList;
 
-public class ModelBatchQueueTests {
+public class DynamicBatchingQueueTests {
 
     private BatchableInputRegistry registry;
     private BatchSplitter splitter;
@@ -134,6 +137,7 @@ public class ModelBatchQueueTests {
     // Build a QueueEntry the way the manager does: decompose and key the input once, up front (null for
     // an input type with no batch handler).
     private QueueEntry queueEntry(MLInput input, ActionListener<MLTaskResponse> listener, Predictable predictor) {
+        input.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
         BatchableInput handler = registry.get(input);
         if (handler == null) {
             return new QueueEntry(input, listener, predictor, null, null, null);
@@ -156,13 +160,21 @@ public class ModelBatchQueueTests {
             .builder()
             .maxItemsPerRequest(maxItems)
             .maxBytesPerRequest(maxBytes)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(flushMs).build())
             .build();
     }
 
     @Test
     public void flushesOnCountThresholdAndRoutesEachResultToItsCaller() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(3, null, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(3, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -183,7 +195,15 @@ public class ModelBatchQueueTests {
 
     @Test
     public void flushesViaTimerWhenBelowThreshold() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -203,7 +223,15 @@ public class ModelBatchQueueTests {
 
     @Test
     public void multiDocEntryKeepsOrderAndOwnershipAcrossCallers() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(null, null);
 
         AtomicReference<MLTaskResponse> a = new AtomicReference<>();
@@ -219,7 +247,15 @@ public class ModelBatchQueueTests {
     @Test
     public void oversizeSingleEntryIsSplitButReassembledForItsOneCaller() {
         // One caller with 5 docs against a 2-item limit: 5 items >= 2 flushes, splitter makes 3 sub-batches.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -235,7 +271,15 @@ public class ModelBatchQueueTests {
         // Byte limit only: each 30-byte doc lands in its own sub-batch, so callers do not share a call.
         String docA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; // 30 bytes
         String docB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"; // 30 bytes
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(null, 40L, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(null, 40L, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(null, docB); // fail the sub-batch carrying docB
 
         AtomicReference<MLTaskResponse> a = new AtomicReference<>();
@@ -249,9 +293,134 @@ public class ModelBatchQueueTests {
         assertTrue("only the caller in the failed sub-batch fails", bErr.get().getMessage().contains(docB));
     }
 
+    /** A model whose call fails with the given exception, whatever the docs are. */
+    private Predictable failingModel(Exception failure) {
+        return new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                listener.onFailure(failure);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+    }
+
+    /**
+     * A provider error carries the provider's raw response body, which describes the merged call rather than any
+     * one request in it, so a merged sub-batch reports a generic failure instead of passing it to each request.
+     */
+    @Test
+    public void mergedSubBatchFailureReportsAGenericErrorToEachRequest() {
+        // Count limit 2 with no byte limit: both callers' docs go out in one call.
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        Predictable predictor = failingModel(
+            new OpenSearchStatusException(REMOTE_SERVICE_ERROR + "{\"error\":\"bad input doc-of-b\"}", RestStatus.BAD_REQUEST)
+        );
+
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, aErr::set), "doc-of-a"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), "doc-of-b"));
+
+        assertNotNull("both callers in the merged call fail", aErr.get());
+        assertNotNull(bErr.get());
+        for (Exception e : new Exception[] { aErr.get(), bErr.get() }) {
+            assertFalse("the provider message was passed through to an individual request", e.getMessage().contains("doc-of-b"));
+            assertTrue(e.getMessage().contains("merged with other requests"));
+            // The status has to survive, or a client retrying on 429 and giving up on 500 would stop retrying a
+            // temporary provider throttle.
+            assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) e).status());
+        }
+    }
+
+    /**
+     * The failure listener also receives errors raised before the provider was called - throttling, a guardrail
+     * rejection, a model that is not deployed. Masking those would hide the caller's own reason from them.
+     */
+    @Test
+    public void mergedSubBatchPassesThroughErrorsWeRaisedOurselves() {
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        Predictable predictor = failingModel(
+            new OpenSearchStatusException("Request is throttled at user level.", RestStatus.TOO_MANY_REQUESTS)
+        );
+
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, aErr::set), "doc-of-a"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), "doc-of-b"));
+
+        for (Exception e : new Exception[] { aErr.get(), bErr.get() }) {
+            assertEquals("Request is throttled at user level.", e.getMessage());
+            assertEquals(RestStatus.TOO_MANY_REQUESTS, ((OpenSearchStatusException) e).status());
+        }
+    }
+
+    /**
+     * The other half: a sub-batch holding one caller's items keeps the provider's message, which is what makes
+     * the failure diagnosable. This is also the only shape that exists when coalescing is off.
+     */
+    @Test
+    public void singleCallerSubBatchFailureKeepsTheProviderError() {
+        // Byte limit only, so each 30-byte doc lands in its own call.
+        String docA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        String docB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(null, 40L, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        String providerBody = REMOTE_SERVICE_ERROR + "{\"error\":\"bad input\"}";
+        Predictable predictor = failingModel(new OpenSearchStatusException(providerBody, RestStatus.BAD_REQUEST));
+
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), docA));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), docB));
+
+        assertEquals(providerBody, bErr.get().getMessage());
+    }
+
     @Test
     public void notifiesEachListenerExactlyOnce() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(null, null);
         AtomicInteger aCount = new AtomicInteger();
         AtomicInteger bCount = new AtomicInteger();
@@ -268,7 +437,15 @@ public class ModelBatchQueueTests {
         // A valid text-docs request and a mismatched-type request land in the same flush. The mismatched
         // one has no handler, so it is dispatched on its own and fails; the valid one is in its own group
         // and still succeeds.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(null, null);
 
         AtomicReference<MLTaskResponse> aResult = new AtomicReference<>();
@@ -294,7 +471,15 @@ public class ModelBatchQueueTests {
     @Test
     public void aThrowingListenerDoesNotStopOtherCallersFromBeingSettled() {
         // A flush settles many independent callers; one whose listener throws must not strand the rest.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(null, null);
 
         AtomicReference<MLTaskResponse> b = new AtomicReference<>();
@@ -316,7 +501,15 @@ public class ModelBatchQueueTests {
             scheduledFlush.set(invocation.getArgument(0));
             return mock(Scheduler.ScheduledCancellable.class);
         });
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(new AtomicInteger(), null);
 
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a")); // first schedule fails, swallowed
@@ -330,7 +523,15 @@ public class ModelBatchQueueTests {
     public void timerReschedulesAfterFireTimeRejection() {
         // Pool rejection happens when the timer fires, not when schedule() is called, so onRejection (not
         // the schedule() call site) must clear the flag. Otherwise the model's timed flush is stuck off.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(new AtomicInteger(), null);
 
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a"));
@@ -345,7 +546,15 @@ public class ModelBatchQueueTests {
     @Test
     public void timerReschedulesAfterTheScheduledTaskFails() {
         // If the scheduled flush task fails (onFailure), the flag must be cleared so the timer reschedules.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(new AtomicInteger(), null);
 
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a"));
@@ -360,7 +569,15 @@ public class ModelBatchQueueTests {
     public void fireTimeRejectionFailsQueuedCallersWithoutDispatchingOnTheSchedulerThread() {
         // Under pool rejection the queue must surface the failure to callers, not run dispatch (which
         // would burn the shared scheduler thread and self-feed a reschedule loop) and not strand them.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         AtomicInteger predictCalls = new AtomicInteger();
         Predictable predictor = model(predictCalls, null);
 
@@ -376,7 +593,15 @@ public class ModelBatchQueueTests {
     public void divergentParametersAreNotCoalescedIntoOneCall() {
         // Two callers to the same model send different result filters. They must not share a model call,
         // or one caller's parameters would be applied to the other's document.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -395,7 +620,15 @@ public class ModelBatchQueueTests {
     public void divergentContentTypeParametersAreNotCoalescedIntoOneCall() {
         // The query-vs-passage content type is the classic leakage hazard: two callers to the same model
         // with different embedding content types must not share a call.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
@@ -414,19 +647,132 @@ public class ModelBatchQueueTests {
 
     @Test
     public void enqueueRejectsWithBackpressureWhenMemoryBudgetIsExhausted() {
+        String doc = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+        // Room for one entry and no more, and a threshold high enough that the first entry stays pending, so the
+        // second is rejected because the budget is held rather than because it is too large to ever admit.
+        long oneEntry = entry(predictor, ActionListener.wrap(r -> {}, e -> {}), doc).getRetainedByteSize();
+        QueueMemoryBudget fullBudget = new QueueMemoryBudget(oneEntry + 1);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            fullBudget,
+            ignored -> {}
+        );
+
+        AtomicReference<Exception> admittedErr = new AtomicReference<>();
+        AtomicReference<Exception> err = new AtomicReference<>();
+        assertTrue(queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, admittedErr::set), doc)));
+        assertTrue(
+            "a request rejected for backpressure is settled here, not handed back to run unqueued",
+            queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err::set), doc))
+        );
+
+        assertNull("the admitted request is unaffected", admittedErr.get());
+        assertNotNull("the caller is failed, not silently dropped", err.get());
+        assertTrue(err.get() instanceof OpenSearchRejectedExecutionException);
+        assertEquals("a rejected request never reaches the model", 0, calls.get());
+        assertEquals("a rejected request holds no reservation of its own", oneEntry, fullBudget.getReservedBytes());
+    }
+
+    @Test
+    public void requestTooLargeForTheWholeBudgetIsHandedBackToRunUnqueued() {
+        // No amount of backoff frees enough budget for this request, so failing it with a retryable 429 would be
+        // a permanent rejection. The queue declines it and the router runs it through the splitter instead.
         QueueMemoryBudget tinyBudget = new QueueMemoryBudget(10L);
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, tinyBudget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            tinyBudget,
+            ignored -> {}
+        );
         AtomicInteger calls = new AtomicInteger();
         Predictable predictor = model(calls, null);
 
         AtomicReference<Exception> err = new AtomicReference<>();
-        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, err::set), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        AtomicReference<MLTaskResponse> response = new AtomicReference<>();
+        boolean queued = queue.enqueue(entry(predictor, ActionListener.wrap(response::set, err::set), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
 
-        assertNotNull("the caller is failed, not silently dropped", err.get());
-        assertTrue(err.get() instanceof OpenSearchRejectedExecutionException);
-        assertEquals("a rejected request never reaches the model", 0, calls.get());
-        assertNull("no timer is scheduled for a rejected request", scheduledFlush.get());
-        assertEquals("a rejected request holds no reservation", 0, tinyBudget.getReservedBytes());
+        assertFalse("the caller must be told to run the request itself", queued);
+        assertNull("the listener is left for the caller to settle", err.get());
+        assertNull(response.get());
+        assertEquals("the queue does not call the model for a request it declined", 0, calls.get());
+        assertNull("no timer is scheduled for a request that was never queued", scheduledFlush.get());
+        assertEquals("a declined request holds no reservation", 0, tinyBudget.getReservedBytes());
+    }
+
+    @Test
+    public void resultCountMismatchFailsTheCallersInsteadOfMisroutingResults() {
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        // Two single-doc callers coalesce into one call, and the model answers with three tensors.
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                List<ModelTensor> tensors = new ArrayList<>();
+                for (int i = 0; i < 3; i++) {
+                    tensors.add(ModelTensor.builder().name("t" + i).build());
+                }
+                listener
+                    .onResponse(
+                        new MLTaskResponse(
+                            ModelTensorOutput
+                                .builder()
+                                .mlModelOutputs(ImmutableList.of(ModelTensors.builder().mlModelTensors(tensors).build()))
+                                .build()
+                        )
+                    );
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue
+            .enqueue(
+                entry(
+                    predictor,
+                    ActionListener.wrap(r -> { throw new AssertionError("must not receive a misrouted result"); }, aErr::set),
+                    "a"
+                )
+            );
+        queue
+            .enqueue(
+                entry(
+                    predictor,
+                    ActionListener.wrap(r -> { throw new AssertionError("must not receive a misrouted result"); }, bErr::set),
+                    "b"
+                )
+            );
+
+        assertTrue(aErr.get().getMessage().contains("Model returned 3 results for a sub-batch of 2 items"));
+        assertTrue(bErr.get().getMessage().contains("Model returned 3 results for a sub-batch of 2 items"));
     }
 
     @Test
@@ -436,7 +782,15 @@ public class ModelBatchQueueTests {
         String doc = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         QueueEntry first = entry(predictor, ActionListener.wrap(r -> {}, e -> {}), doc);
         QueueMemoryBudget exactBudget = new QueueMemoryBudget(first.getRetainedByteSize());
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, exactBudget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(1, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            exactBudget,
+            ignored -> {}
+        );
 
         AtomicReference<Exception> err1 = new AtomicReference<>();
         AtomicReference<Exception> err2 = new AtomicReference<>();
@@ -493,7 +847,15 @@ public class ModelBatchQueueTests {
         };
         QueueEntry entry = entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a");
         QueueMemoryBudget inFlightBudget = new QueueMemoryBudget(entry.getRetainedByteSize());
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, inFlightBudget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(1, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            inFlightBudget,
+            ignored -> {}
+        );
 
         queue.enqueue(entry);
 
@@ -534,7 +896,15 @@ public class ModelBatchQueueTests {
                 return super.tryReserve(bytes);
             }
         };
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, blockingBudget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            blockingBudget,
+            ignored -> {}
+        );
         AtomicReference<MLTaskResponse> response = new AtomicReference<>();
         QueueEntry entry = entry(model(null, null), ActionListener.wrap(response::set, e -> {}), "a");
 
@@ -563,7 +933,15 @@ public class ModelBatchQueueTests {
             timer.set(cancellable);
             return cancellable;
         });
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(2, null, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(new AtomicInteger(), null);
 
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a"));
@@ -575,7 +953,15 @@ public class ModelBatchQueueTests {
 
     @Test
     public void isIdleTracksPendingEntries() {
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(100, null, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         Predictable predictor = model(new AtomicInteger(), null);
 
         assertTrue("a fresh queue is idle", queue.isIdle());
@@ -589,7 +975,15 @@ public class ModelBatchQueueTests {
     public void unsupportedInputTypeFailsInIsolationConsistentlyWithTheNonQueuedPath() {
         // A model configured for batching must be sent a splittable input type. An unsupported type fails
         // just that entry (isolated), matching the non-queued path, rather than being sent unsplit.
-        ModelBatchQueue queue = new ModelBatchQueue("m", config(1, null, 10_000L), registry, splitter, threadPool, budget);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(1, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
         AtomicInteger predictCalls = new AtomicInteger();
         Predictable predictor = model(predictCalls, null);
 

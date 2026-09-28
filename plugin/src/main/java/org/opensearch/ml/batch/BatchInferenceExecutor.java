@@ -25,7 +25,8 @@ import lombok.extern.log4j.Log4j2;
 
 /**
  * Splits one predict request into size-bounded sub-batches, runs them concurrently, and reassembles
- * the outputs in input order. Every sub-batch is waited for; if any failed, the request fails and
+ * the outputs in input order. A configured request that fits in one call is also checked for exactly
+ * one result per input item. Every sub-batch is waited for; if any failed, the request fails and
  * reports all of their errors. The request completes once.
  */
 @Log4j2
@@ -42,10 +43,12 @@ public class BatchInferenceExecutor {
     /**
      * Splits into sub-batches only when there is a config, a handler for the input type, and the request
      * needs more than one sub-batch. A request runs as a single call when the model has no config or
-     * already fits within the limits, and fails when the model has a config but the input type has no
-     * handler, rather than being sent unsplit.
+     * already fits within the limits. When a configured, non-streaming request fits in one call, the
+     * response is still validated against the input item count. A request fails when the model has a
+     * config but the input type has no handler, rather than being sent unsplit.
      */
     public void execute(
+        String modelId,
         MLInput input,
         BatchInferenceConfig config,
         Predictable predictor,
@@ -71,23 +74,65 @@ public class BatchInferenceExecutor {
             return;
         }
 
+        List<BatchItem> items;
         List<List<BatchItem>> batches;
         try {
-            batches = splitter.split(handler.toItems(input), config);
+            items = handler.toItems(input);
+            batches = splitter.split(items, config);
         } catch (Exception e) {
             listener.onFailure(e);
             return;
         }
 
         if (batches.size() == 1) {
-            predictor.asyncPredict(input, listener, channel);
+            if (channel == null) {
+                executeSingleCall(modelId, input, handler, items.size(), predictor, channel, listener);
+            } else {
+                predictor.asyncPredict(input, listener, channel);
+            }
             return;
         }
 
-        dispatchBatches(input, handler, batches, predictor, channel, listener);
+        dispatchBatches(modelId, input, handler, batches, predictor, channel, listener);
+    }
+
+    private void executeSingleCall(
+        String modelId,
+        MLInput input,
+        BatchableInput handler,
+        int itemCount,
+        Predictable predictor,
+        TransportChannel channel,
+        ActionListener<MLTaskResponse> listener
+    ) {
+        ActionListener<MLTaskResponse> validatingListener = new ActionListener<>() {
+            @Override
+            public void onResponse(MLTaskResponse response) {
+                try {
+                    handler.ensureResultCount(response.getOutput(), itemCount);
+                } catch (Exception invalidOutput) {
+                    log
+                        .error(
+                            "Single model call for model {} returned results that could not be matched to its input items",
+                            modelId,
+                            invalidOutput
+                        );
+                    listener.onFailure(invalidOutput);
+                    return;
+                }
+                listener.onResponse(response);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
+        predictor.asyncPredict(input, validatingListener, channel);
     }
 
     private void dispatchBatches(
+        String modelId,
         MLInput input,
         BatchableInput handler,
         List<List<BatchItem>> batches,
@@ -101,7 +146,7 @@ public class BatchInferenceExecutor {
             for (List<BatchItem> b : batches) {
                 items += b.size();
             }
-            log.debug("Size-based batching: split {} items into {} sub-batches", items, total);
+            log.debug("Size-based batching for model {}: split {} items into {} sub-batches", modelId, items, total);
         }
 
         AtomicReferenceArray<MLOutput> results = new AtomicReferenceArray<>(total);
@@ -115,7 +160,26 @@ public class BatchInferenceExecutor {
             List<BatchItem> batch = batches.get(i);
             ActionListener<MLTaskResponse> subListener = ActionListener.wrap(response -> {
                 try {
-                    results.set(index, response.getOutput());
+                    MLOutput output = response.getOutput();
+                    // A sub-batch whose result count does not match its item count is a failure, not a result:
+                    // combine() concatenates per sub-batch, so keeping it would splice misaligned results into the
+                    // middle of the response and silently displace every result after it. The distributed results
+                    // themselves are only needed by the queue path, which routes them back per caller.
+                    handler.distributeExactly(output, batch.size());
+                    results.set(index, output);
+                } catch (Exception misaligned) {
+                    // Deliberately not asserting a cause here: this also catches anything else distribute() rejects
+                    // the output for. The attached exception carries the real reason, with the counts when it is a
+                    // misalignment.
+                    log
+                        .error(
+                            "Sub-batch {} of {} for model {} could not be used, so the whole predict request fails",
+                            index + 1,
+                            total,
+                            modelId,
+                            misaligned
+                        );
+                    failures.set(index, misaligned);
                 } finally {
                     if (remaining.decrementAndGet() == 0) {
                         complete(failures, results, handler, listener);

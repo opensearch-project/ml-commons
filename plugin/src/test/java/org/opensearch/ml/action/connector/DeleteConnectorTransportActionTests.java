@@ -28,6 +28,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -43,6 +44,8 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -181,6 +184,35 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals(deleteResponse.getIndex(), actualResponse.getIndex());
         assertEquals(deleteResponse.getVersion(), actualResponse.getVersion());
         assertEquals(deleteResponse.getResult(), actualResponse.getResult());
+    }
+
+    /**
+     * Regression test for https://github.com/opensearch-project/ml-commons/issues/5032: the "is this connector still
+     * referenced?" guard used an analysed match query on the `connector_id` text field, so a connector whose custom id
+     * merely shared a token with a referenced id (e.g. `vfy-conn-idle` vs `mock-embed-conn`) became undeletable.
+     */
+    public void testDeleteConnector_ReferenceGuardUsesExactTermQuery() {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        SearchResponse searchResponse = getEmptySearchResponse();
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
+
+        ArgumentCaptor<SearchRequest> searchRequestCaptor = forClass(SearchRequest.class);
+        verify(client).search(searchRequestCaptor.capture(), any());
+        QueryBuilder query = searchRequestCaptor.getValue().source().query();
+        assertTrue("Expected TermQueryBuilder but got: " + query.getClass().getSimpleName(), query instanceof TermQueryBuilder);
+        assertEquals(MLModel.CONNECTOR_ID_KEYWORD_FIELD, ((TermQueryBuilder) query).fieldName());
+        assertEquals(CONNECTOR_ID, ((TermQueryBuilder) query).value());
     }
 
     public void testDeleteConnector_BlockedByModel() throws IOException {

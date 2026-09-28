@@ -60,15 +60,29 @@ import org.opensearch.ml.common.utils.ToolUtils;
 // todo: refactor the processing so providers have to only provide the constants
 public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
 
+    // The system message carries a default because not every caller of this connector sets system_prompt.
+    // Every agent runner does (AbstractV2AgentRunner for V2, MLChatAgentRunner#constructLLMParams for V1
+    // conversational and AG_UI, MLPlanExecuteAndReflectAgentRunner for PER), but a direct _predict against
+    // the auto-created model runs without a runner, and an unfilled placeholder is rejected by
+    // Connector#validatePayload.
+    // Unlike the other *_TEMPLATE constants here this one is a fragment, not a standalone JSON value: it
+    // carries the trailing comma that separates it from whatever message follows it in the array.
+    private static final String SYSTEM_MESSAGE_TEMPLATE =
+        "{\"role\":\"system\",\"content\":\"${parameters.system_prompt:-You are a helpful assistant}\"},";
+
     private static final String REQUEST_BODY_TEMPLATE = "{\"model\":\"${parameters.model}\","
-        + "\"messages\":[${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
+        + "\"messages\":["
+        + SYSTEM_MESSAGE_TEMPLATE
+        + "${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
         + "${parameters.tool_configs:-}"
         + ",\"max_completion_tokens\":${parameters.max_tokens:-4096}"
         + ",\"temperature\":${parameters.temperature:-1.0}"
         + "${parameters.top_p_field:-}}";
 
     private static final String REQUEST_BODY_REASONING_TEMPLATE = "{\"model\":\"${parameters.model}\","
-        + "\"messages\":[${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
+        + "\"messages\":["
+        + SYSTEM_MESSAGE_TEMPLATE
+        + "${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
         + "${parameters.tool_configs:-}"
         + ",\"max_completion_tokens\":${parameters.max_tokens:-4096}"
         + ",\"reasoning_effort\":\"${parameters.reasoning_effort}\"}";

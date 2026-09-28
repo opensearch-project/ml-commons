@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
@@ -888,5 +889,109 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(exceptionCaptor.capture());
         assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
         assertEquals("agent id 'my-per-agent' already exists", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_WithModelSpec_deletesOrphanedModelOnRegistrationFailure() {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        CompletableFuture<org.opensearch.remote.metadata.client.DeleteDataObjectResponse> deleteFuture = CompletableFuture
+            .completedFuture(mock(org.opensearch.remote.metadata.client.DeleteDataObjectResponse.class));
+
+        Exception failure = registerUnifiedAgentExpectingFailure(mockSdkClient, deleteFuture);
+
+        ArgumentCaptor<DeleteDataObjectRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteDataObjectRequest.class);
+        verify(mockSdkClient).deleteDataObjectAsync(deleteRequestCaptor.capture());
+        assertEquals(ML_MODEL_INDEX, deleteRequestCaptor.getValue().index());
+        assertEquals("created_model_id", deleteRequestCaptor.getValue().id());
+
+        // The original failure is what reaches the caller, not anything from the cleanup.
+        assertTrue(failure instanceof OpenSearchStatusException);
+        assertEquals("agent id 'my-unified-agent' already exists", failure.getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_WithModelSpec_orphanedModelDeleteFailureDoesNotMaskParentFailure() {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        CompletableFuture<org.opensearch.remote.metadata.client.DeleteDataObjectResponse> deleteFuture = new CompletableFuture<>();
+        deleteFuture.completeExceptionally(new RuntimeException("model delete failed"));
+
+        Exception failure = registerUnifiedAgentExpectingFailure(mockSdkClient, deleteFuture);
+
+        verify(mockSdkClient).deleteDataObjectAsync(any(DeleteDataObjectRequest.class));
+        assertTrue(failure instanceof OpenSearchStatusException);
+        assertEquals("agent id 'my-unified-agent' already exists", failure.getMessage());
+    }
+
+    /**
+     * Registers a unified-interface agent whose model is provisioned successfully but whose agent document
+     * then conflicts with an existing id, so the orphaned-model cleanup runs. Returns the failure the caller saw.
+     */
+    private Exception registerUnifiedAgentExpectingFailure(
+        SdkClient mockSdkClient,
+        CompletableFuture<org.opensearch.remote.metadata.client.DeleteDataObjectResponse> deleteFuture
+    ) {
+        TransportRegisterAgentAction action = new TransportRegisterAgentAction(
+            transportService,
+            actionFilters,
+            client,
+            mockSdkClient,
+            mlIndicesHandler,
+            clusterService,
+            mlFeatureEnabledSetting,
+            contextManagementTemplateService
+        );
+
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_key");
+        credential.put("secret_key", "test_secret");
+
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
+            .modelProvider("bedrock/converse")
+            .modelId("anthropic.claude-v2")
+            .credential(credential)
+            .build();
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("test_agent_with_model")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Test agent with model spec")
+            .model(modelSpec)
+            .agentId("my-unified-agent")
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        org.opensearch.ml.common.transport.register.MLRegisterModelResponse modelResponse = mock(
+            org.opensearch.ml.common.transport.register.MLRegisterModelResponse.class
+        );
+        when(modelResponse.getModelId()).thenReturn("created_model_id");
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.ml.common.transport.register.MLRegisterModelResponse> al = invocation.getArgument(2);
+            al.onResponse(modelResponse);
+            return null;
+        }).when(client).execute(eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        CompletableFuture<PutDataObjectResponse> agentFailureFuture = new CompletableFuture<>();
+        agentFailureFuture
+            .completeExceptionally(
+                new VersionConflictEngineException(new ShardId(ML_AGENT_INDEX, "_na_", 0), "my-unified-agent", "document already exists")
+            );
+        when(mockSdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(agentFailureFuture);
+        when(mockSdkClient.deleteDataObjectAsync(any(DeleteDataObjectRequest.class))).thenReturn(deleteFuture);
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        return exceptionCaptor.getValue();
     }
 }

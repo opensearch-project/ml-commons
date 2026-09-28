@@ -39,7 +39,6 @@ import lombok.extern.log4j.Log4j2;
 @Getter
 public abstract class AbstractConnector implements Connector {
     private static final Pattern PARAMETER_PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{parameters\\.[^}]+\\}");
-    private static final Set<String> MCP_PROTOCOLS = Set.of(ConnectorProtocols.MCP_SSE, ConnectorProtocols.MCP_STREAMABLE_HTTP);
     private static final Set<String> BLOCKED_DYNAMIC_HEADERS = Set
         .of(
             "authorization",
@@ -298,7 +297,7 @@ public abstract class AbstractConnector implements Connector {
             return;
         }
 
-        boolean isMcpProtocol = connectorProtocol != null && MCP_PROTOCOLS.contains(connectorProtocol.toLowerCase(Locale.ROOT));
+        boolean isMcpProtocol = ConnectorProtocols.isMcpProtocol(connectorProtocol);
 
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             String headerValue = entry.getValue();

@@ -88,6 +88,12 @@ public class GoogleCredentialProvider {
         if (!OAUTH2_TOKEN_HOST.equals(host.toLowerCase(java.util.Locale.ROOT))) {
             throw new IllegalArgumentException("token_uri host must be " + OAUTH2_TOKEN_HOST + ", got: " + host);
         }
+        // Pinning only the host still allows an arbitrary port on it, which would send the signed JWT
+        // somewhere other than the real token endpoint. Accept only the default https port.
+        int port = uri.getPort();
+        if (port != -1 && port != 443) {
+            throw new IllegalArgumentException("token_uri must use the default https port, got port: " + port);
+        }
         return uri;
     }
 

@@ -82,6 +82,17 @@ public class MLMcpToolsRegisterNodesRequest extends BaseNodesRequest<MLMcpToolsR
             exception.addValidationError("tools list can not be null");
             return exception;
         }
+        // The tool name is the document id in the MCP tools index and is what the duplicate-detection lookup queries,
+        // so reject a missing name here with a clear message. Without this the name flows into the lookup and fails
+        // deep in the query layer instead. The update path requires a name too, though only a non-null one
+        // (McpToolUpdateInput), so a blank name is rejected here but not there.
+        for (McpToolRegisterInput mcpTool : mcpTools) {
+            if (mcpTool.getName() == null || mcpTool.getName().isBlank()) {
+                ActionRequestValidationException exception = new ActionRequestValidationException();
+                exception.addValidationError("tool name can not be null or blank");
+                return exception;
+            }
+        }
         return null;
     }
 
