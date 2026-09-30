@@ -51,6 +51,7 @@ public class MLConnectorResourceSharingRestIT extends MLCommonsRestTestCase {
     private static final String CONNECTOR_RESOURCE_TYPE = "ml-connector";
     private static final String READ_ONLY = "ml_read_only";
     private static final String READ_WRITE = "ml_read_write";
+    private static final String CREDENTIAL_VALUE = "rs_secret_key_value";
 
     private final String owner = "rs_connector_owner";
     private final String other = "rs_connector_other";
@@ -192,13 +193,62 @@ public class MLConnectorResourceSharingRestIT extends MLCommonsRestTestCase {
         assertEquals(RestStatus.OK, TestHelper.restStatus(deleteConnector(ownerClient, connectorId)));
     }
 
+    public void testSearchVisibilityMatchesPointCheck() throws IOException {
+        String connectorId = createConnectorAs(ownerClient);
+
+        // A connector the caller cannot get must not appear in their search results either. This is the assertion that
+        // catches the point check and the search filter disagreeing.
+        String beforeShare = searchConnectors(otherClient);
+        assertFalse(
+            "an unshared connector must not appear in another user's search results, but the response contained it: " + beforeShare,
+            beforeShare.contains(connectorId)
+        );
+        assertForbidden(() -> getConnector(otherClient, connectorId));
+
+        shareConnector(connectorId, READ_ONLY, other);
+
+        String afterShare = searchConnectors(otherClient);
+        assertTrue(
+            "a shared connector must appear in search results, but the response was: " + afterShare,
+            afterShare.contains(connectorId)
+        );
+        assertEquals(RestStatus.OK, TestHelper.restStatus(getConnector(otherClient, connectorId)));
+    }
+
+    /**
+     * Connector execute is not covered end to end: {@code MLExecuteConnectorAction} has no REST route, so the only way
+     * in is the transport action. It is also the one connector operation whose request does not implement
+     * {@code DocRequest}, so the plugin's own check is the only thing authorizing it; that the check asks about the
+     * action being performed is asserted in {@code ConnectorAccessControlHelperTests}.
+     */
+    public void testShareRecipientDoesNotSeeCredentials() throws IOException {
+        String connectorId = createConnectorAs(ownerClient);
+        shareConnector(connectorId, READ_ONLY, other);
+
+        // Sharing grants access to the connector, not to the secret it holds. Asserted on the key's value rather than on
+        // the field name, so an encrypted or masked placeholder still passes while a leak does not.
+        String body = TestHelper.httpEntityToString(getConnector(otherClient, connectorId).getEntity());
+        assertFalse(
+            "a share recipient must not receive the connector credential, but the response was: " + body,
+            body.contains(CREDENTIAL_VALUE)
+        );
+
+        String searchBody = searchConnectors(otherClient);
+        assertFalse(
+            "connector search must not return credentials, but the response was: " + searchBody,
+            searchBody.contains(CREDENTIAL_VALUE)
+        );
+    }
+
     private String createConnectorAs(RestClient client) throws IOException {
         String body = "{\"name\":\"rs test connector\","
             + "\"description\":\"a connector used to check resource sharing\","
             + "\"version\":1,"
             + "\"protocol\":\"http\","
             + "\"parameters\":{\"endpoint\":\"api.openai.com\",\"model\":\"gpt-3.5-turbo-instruct\"},"
-            + "\"credential\":{\"openAI_key\":\"test_key\"},"
+            + "\"credential\":{\"openAI_key\":\""
+            + CREDENTIAL_VALUE
+            + "\"},"
             + "\"actions\":[{\"action_type\":\"predict\","
             + "\"method\":\"POST\","
             + "\"url\":\"https://api.openai.com/v1/completions\","
@@ -240,6 +290,17 @@ public class MLConnectorResourceSharingRestIT extends MLCommonsRestTestCase {
                 + " within 10s, so no resource-sharing record was created for it. last response: "
                 + last
         );
+    }
+
+    private String searchConnectors(RestClient client) throws IOException {
+        try {
+            Response response = TestHelper
+                .makeRequest(client, "POST", "_plugins/_ml/connectors/_search", null, "{\"query\":{\"match_all\":{}},\"size\":100}", null);
+            return TestHelper.httpEntityToString(response.getEntity());
+        } catch (ResponseException e) {
+            // A search the caller is not allowed to run at all is reported as-is rather than silently treated as empty.
+            return "<error: " + e.getMessage() + ">";
+        }
     }
 
     private Response getConnector(RestClient client, String connectorId) throws IOException {
