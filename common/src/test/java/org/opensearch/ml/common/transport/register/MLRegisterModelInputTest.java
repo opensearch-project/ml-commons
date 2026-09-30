@@ -307,12 +307,13 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
-    public void parse_RejectsUnknownFieldInBatchInferenceQueueConfig() throws Exception {
+    public void parse_RejectsUnknownFieldInBatchInferenceDynamicBatchingConfig() throws Exception {
         String json = "{\"function_name\":\"REMOTE\",\"name\":\"m\",\"model_group_id\":\"g\","
-            + "\"batch_inference_config\":{\"max_items_per_request\":2,\"queue\":{\"enabled\":true,\"flush_timeout\":100}}}";
+            + "\"batch_inference_config\":{\"max_items_per_request\":2,\"dynamic_batching\":{\"enabled\":true,\"flush_timeout\":100}}}";
 
         Exception e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(true, json, parsed -> {}));
         assertTrue(e.getMessage().contains("Unsupported field [flush_timeout]"));
+        assertTrue(e.getMessage().contains("batch_inference_config dynamic_batching block"));
     }
 
     private void testParseFromJsonString(

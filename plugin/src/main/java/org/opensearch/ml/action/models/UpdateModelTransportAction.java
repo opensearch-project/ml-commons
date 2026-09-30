@@ -311,7 +311,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             || (newConnectorId != null)
             || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled())
             || (updateModelInput.getGuardrails() != null)
-            || (updateModelInput.getModelInterface() != null);
+            || (updateModelInput.getModelInterface() != null)
+            || (updateModelInput.getBatchInferenceConfig() != null);
         if (MLRateLimiter.updateValidityPreCheck(mlModel.getRateLimiter(), updateModelInput.getRateLimiter())) {
             MLRateLimiter updatedRateLimiterConfig = MLRateLimiter.update(mlModel.getRateLimiter(), updateModelInput.getRateLimiter());
             updateModelInput.setRateLimiter(updatedRateLimiterConfig);

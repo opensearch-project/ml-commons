@@ -9,16 +9,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_IDLE_TTL;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,9 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -41,21 +37,20 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
-import org.opensearch.ml.common.model.BatchQueueConfig;
+import org.opensearch.ml.common.model.DynamicBatchingConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.Predictable;
-import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
 
 public class BatchInferenceRouterTests {
 
     private BatchInferenceExecutor executor;
-    private ModelBatchQueueManager queueManager;
+    private DynamicBatchingQueueManager queueManager;
     private BatchInferenceRouter router;
 
     private final MLInput input = mock(MLInput.class);
@@ -66,7 +61,7 @@ public class BatchInferenceRouterTests {
     @Before
     public void setUp() {
         executor = mock(BatchInferenceExecutor.class);
-        queueManager = mock(ModelBatchQueueManager.class);
+        queueManager = mock(DynamicBatchingQueueManager.class);
         router = new BatchInferenceRouter(executor, queueManager);
     }
 
@@ -74,7 +69,7 @@ public class BatchInferenceRouterTests {
         return BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(96)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(10L).build())
             .build();
     }
 
@@ -113,12 +108,12 @@ public class BatchInferenceRouterTests {
         ThreadPool threadPool = mock(ThreadPool.class);
         BatchInferenceRouter realRouter = new BatchInferenceRouter(
             new BatchInferenceExecutor(registry, splitter),
-            new ModelBatchQueueManager(registry, splitter, threadPool, new QueueMemoryBudget(1L), () -> Long.MAX_VALUE)
+            new DynamicBatchingQueueManager(registry, splitter, threadPool, new QueueMemoryBudget(1L))
         );
         BatchInferenceConfig config = BatchInferenceConfig
             .builder()
             .maxItemsPerRequest(2)
-            .queue(BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build())
+            .dynamicBatching(DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(10L).build())
             .build();
         MLInput fiveDocs = MLInput
             .builder()
@@ -184,8 +179,8 @@ public class BatchInferenceRouterTests {
             IllegalArgumentException.class,
             () -> BatchInferenceRouter.validateMemoryBounds(new ByteSizeValue(64L, ByteSizeUnit.MB), new ByteSizeValue(1L, ByteSizeUnit.MB))
         );
-        assertTrue(e.getMessage().contains(ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey()));
-        assertTrue(e.getMessage().contains(ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey()));
+        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey()));
+        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey()));
     }
 
     @Test
@@ -218,9 +213,8 @@ public class BatchInferenceRouterTests {
     }
 
     @Test
-    public void productionConstructorWiresSettingsUpdatesAndShutdownHook() {
+    public void productionConstructorWiresSettingsUpdates() {
         ThreadPool threadPool = mock(ThreadPool.class);
-        when(threadPool.scheduleWithFixedDelay(any(), any(), anyString())).thenReturn(mock(Scheduler.Cancellable.class));
         ClusterService clusterService = mock(ClusterService.class);
         Settings settings = Settings.EMPTY;
         ClusterSettings clusterSettings = new ClusterSettings(
@@ -228,10 +222,9 @@ public class BatchInferenceRouterTests {
             new HashSet<>(
                 Arrays
                     .asList(
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION,
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR,
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING,
-                        ML_COMMONS_BATCH_QUEUE_IDLE_TTL
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
                     )
             )
         );
@@ -239,20 +232,17 @@ public class BatchInferenceRouterTests {
 
         new BatchInferenceRouter(threadPool, clusterService, settings);
 
+        // Applying valid memory settings exercises the registered update consumers; a wiring or validation
+        // mistake would throw here.
         clusterSettings
             .applySettings(
                 Settings
                     .builder()
-                    .put(ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(), 0.02)
-                    .put(ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey(), "128mb")
-                    .put(ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey(), "256mb")
-                    .put(ML_COMMONS_BATCH_QUEUE_IDLE_TTL.getKey(), "10m")
+                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.02)
+                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "128mb")
+                    .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "256mb")
                     .build()
             );
-
-        ArgumentCaptor<LifecycleListener> lifecycle = ArgumentCaptor.forClass(LifecycleListener.class);
-        verify(clusterService).addLifecycleListener(lifecycle.capture());
-        lifecycle.getValue().beforeStop();
     }
 
     @Test
@@ -266,20 +256,20 @@ public class BatchInferenceRouterTests {
                 .applySettings(
                     Settings
                         .builder()
-                        .put(ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey(), "128mb")
-                        .put(ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey(), "1mb")
+                        .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "128mb")
+                        .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "1mb")
                         .build()
                 )
         );
-        assertTrue(e.getMessage().contains(ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey()));
+        assertTrue(e.getMessage().contains(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey()));
     }
 
     @Test
     public void nodeStartsUpRejectingCeilingBelowFloorInSettings() {
         Settings bad = Settings
             .builder()
-            .put(ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR.getKey(), "128mb")
-            .put(ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey(), "1mb")
+            .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN.getKey(), "128mb")
+            .put(ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey(), "1mb")
             .build();
         ThreadPool threadPool = mock(ThreadPool.class);
         ClusterService clusterService = mock(ClusterService.class);
@@ -294,10 +284,9 @@ public class BatchInferenceRouterTests {
             new HashSet<>(
                 Arrays
                     .asList(
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION,
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_FLOOR,
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING,
-                        ML_COMMONS_BATCH_QUEUE_IDLE_TTL
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN,
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX
                     )
             )
         );
@@ -305,7 +294,6 @@ public class BatchInferenceRouterTests {
 
     private static BatchInferenceRouter newProductionRouter(ClusterSettings clusterSettings) {
         ThreadPool threadPool = mock(ThreadPool.class);
-        when(threadPool.scheduleWithFixedDelay(any(), any(), anyString())).thenReturn(mock(Scheduler.Cancellable.class));
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         return new BatchInferenceRouter(threadPool, clusterService, Settings.EMPTY);

@@ -22,21 +22,21 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-public class BatchQueueConfigTest {
+public class DynamicBatchingConfigTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Test
     public void defaultsToDisabledWithDefaultTimeout() {
-        BatchQueueConfig config = BatchQueueConfig.builder().build();
+        DynamicBatchingConfig config = DynamicBatchingConfig.builder().build();
         assertFalse(config.isEnabled());
-        assertEquals(BatchQueueConfig.DEFAULT_FLUSH_TIMEOUT_MS, config.getFlushTimeoutMs());
+        assertEquals(DynamicBatchingConfig.DEFAULT_FLUSH_TIMEOUT_MS, config.getFlushTimeoutMs());
     }
 
     @Test
     public void enabledWithExplicitTimeout() {
-        BatchQueueConfig config = BatchQueueConfig.builder().enabled(true).flushTimeoutMs(10L).build();
+        DynamicBatchingConfig config = DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(10L).build();
         assertTrue(config.isEnabled());
         assertEquals(10L, config.getFlushTimeoutMs());
     }
@@ -45,29 +45,29 @@ public class BatchQueueConfigTest {
     public void rejectsNonPositiveFlushTimeout() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("flush_timeout_ms");
-        BatchQueueConfig.builder().enabled(true).flushTimeoutMs(0L).build();
+        DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(0L).build();
     }
 
     @Test
     public void rejectsFlushTimeoutAboveMax() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("flush_timeout_ms");
-        BatchQueueConfig.builder().enabled(true).flushTimeoutMs(BatchQueueConfig.MAX_FLUSH_TIMEOUT_MS + 1).build();
+        DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(DynamicBatchingConfig.MAX_FLUSH_TIMEOUT_MS + 1).build();
     }
 
     @Test
     public void streamRoundTrip() throws IOException {
-        BatchQueueConfig original = BatchQueueConfig.builder().enabled(true).flushTimeoutMs(100L).build();
+        DynamicBatchingConfig original = DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(100L).build();
         BytesStreamOutput out = new BytesStreamOutput();
         original.writeTo(out);
-        BatchQueueConfig restored = new BatchQueueConfig(out.bytes().streamInput());
+        DynamicBatchingConfig restored = new DynamicBatchingConfig(out.bytes().streamInput());
         assertTrue(restored.isEnabled());
         assertEquals(100L, restored.getFlushTimeoutMs());
     }
 
     @Test
     public void xContentRoundTrip() throws IOException {
-        BatchQueueConfig original = BatchQueueConfig.builder().enabled(true).flushTimeoutMs(50L).build();
+        DynamicBatchingConfig original = DynamicBatchingConfig.builder().enabled(true).flushTimeoutMs(50L).build();
         XContentBuilder builder = XContentType.JSON.contentBuilder();
         original.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
@@ -75,7 +75,7 @@ public class BatchQueueConfigTest {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString());
         parser.nextToken();
-        BatchQueueConfig parsed = BatchQueueConfig.parse(parser);
+        DynamicBatchingConfig parsed = DynamicBatchingConfig.parse(parser);
         assertTrue(parsed.isEnabled());
         assertEquals(50L, parsed.getFlushTimeoutMs());
     }
@@ -87,9 +87,9 @@ public class BatchQueueConfigTest {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
         parser.nextToken();
-        BatchQueueConfig parsed = BatchQueueConfig.parse(parser);
+        DynamicBatchingConfig parsed = DynamicBatchingConfig.parse(parser);
         assertTrue(parsed.isEnabled());
-        assertEquals(BatchQueueConfig.DEFAULT_FLUSH_TIMEOUT_MS, parsed.getFlushTimeoutMs());
+        assertEquals(DynamicBatchingConfig.DEFAULT_FLUSH_TIMEOUT_MS, parsed.getFlushTimeoutMs());
     }
 
     @Test
@@ -97,14 +97,14 @@ public class BatchQueueConfigTest {
         // flush_timeout instead of flush_timeout_ms would otherwise be accepted and leave the 50 ms default.
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Unsupported field [flush_timeout]");
-        BatchQueueConfig.parse(jsonParser("{\"enabled\":true,\"flush_timeout\":2000}"), true);
+        DynamicBatchingConfig.parse(jsonParser("{\"enabled\":true,\"flush_timeout\":2000}"), true);
     }
 
     @Test
     public void skipsUnknownFieldWhenReadingAStoredModel() throws IOException {
-        BatchQueueConfig parsed = BatchQueueConfig.parse(jsonParser("{\"enabled\":true,\"some_future_field\":2000}"));
+        DynamicBatchingConfig parsed = DynamicBatchingConfig.parse(jsonParser("{\"enabled\":true,\"some_future_field\":2000}"));
         assertTrue(parsed.isEnabled());
-        assertEquals(BatchQueueConfig.DEFAULT_FLUSH_TIMEOUT_MS, parsed.getFlushTimeoutMs());
+        assertEquals(DynamicBatchingConfig.DEFAULT_FLUSH_TIMEOUT_MS, parsed.getFlushTimeoutMs());
     }
 
     private static XContentParser jsonParser(String json) throws IOException {

@@ -6,8 +6,8 @@
 package org.opensearch.ml.batch;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 
 import java.util.ArrayDeque;
@@ -21,12 +21,14 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.function.Consumer;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
@@ -45,7 +47,7 @@ import lombok.extern.log4j.Log4j2;
  * retries are left to the connector.
  */
 @Log4j2
-public class ModelBatchQueue {
+public class DynamicBatchingQueue {
 
     private final String modelId;
     private final BatchInferenceConfig config;
@@ -54,6 +56,7 @@ public class ModelBatchQueue {
     private final BatchSplitter splitter;
     private final ThreadPool threadPool;
     private final QueueMemoryBudget budget;
+    private final Consumer<DynamicBatchingQueue> onIdle;
 
     private final Object stateLock = new Object();
     private final ArrayDeque<QueueEntry> queue = new ArrayDeque<>();
@@ -61,31 +64,32 @@ public class ModelBatchQueue {
     private final AtomicBoolean draining = new AtomicBoolean(false);
     private boolean timerScheduled;
     private Scheduler.Cancellable scheduledTimer;
-    private volatile long lastUsedNanos = System.nanoTime();
 
-    public ModelBatchQueue(
+    public DynamicBatchingQueue(
         String modelId,
         BatchInferenceConfig config,
         BatchableInputRegistry registry,
         BatchSplitter splitter,
         ThreadPool threadPool,
-        QueueMemoryBudget budget
+        QueueMemoryBudget budget,
+        Consumer<DynamicBatchingQueue> onIdle
     ) {
         this.modelId = modelId;
         this.config = config;
-        this.flushTimeoutMs = config.getQueue().getFlushTimeoutMs();
+        this.flushTimeoutMs = config.getDynamicBatching().getFlushTimeoutMs();
         this.registry = registry;
         this.splitter = splitter;
         this.threadPool = threadPool;
         this.budget = budget;
+        this.onIdle = onIdle;
+    }
+
+    String getModelId() {
+        return modelId;
     }
 
     BatchInferenceConfig getConfig() {
         return config;
-    }
-
-    long getLastUsedNanos() {
-        return lastUsedNanos;
     }
 
     boolean isIdle() {
@@ -111,7 +115,6 @@ public class ModelBatchQueue {
             if (!budget.tryReserve(entry.getRetainedByteSize())) {
                 return EnqueueDecision.REJECTED;
             }
-            lastUsedNanos = System.nanoTime();
             queue.addLast(entry);
             totals = totals.plus(entry);
 
@@ -135,12 +138,14 @@ public class ModelBatchQueue {
                         modelId,
                         entry.getRetainedByteSize(),
                         budget.getMaxBytes(),
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_FRACTION.getKey(),
-                        ML_COMMONS_BATCH_QUEUE_MEMORY_CEILING.getKey()
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(),
+                        ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX.getKey()
                     );
+                notifyIdle(); // nothing entered the queue; drop it if this request created an empty one
                 break;
             case REJECTED:
                 notifyRejected(entry);
+                notifyIdle(); // nothing entered the queue; drop it if this request created an empty one
                 break;
             case FLUSH:
                 flush();
@@ -198,8 +203,12 @@ public class ModelBatchQueue {
         if (!batch.isEmpty()) {
             dispatch(batch);
         }
+        // A concurrent enqueue may have added an entry after the drain; reschedule the timer for it. Otherwise the
+        // queue is empty and asks the manager to remove it, so the map does not retain a queue per transient model.
         if (hasPendingEntries()) {
             scheduleTimer();
+        } else {
+            notifyIdle();
         }
     }
 
@@ -231,6 +240,9 @@ public class ModelBatchQueue {
         List<QueueEntry> batch = drain();
         if (batch != null) {
             failAll(batch, error);
+            if (!hasPendingEntries()) {
+                notifyIdle();
+            }
         }
     }
 
@@ -245,7 +257,9 @@ public class ModelBatchQueue {
                 notifyFailure(entry, new IllegalStateException("Could not compute a batch group key for the predict request"));
                 continue;
             }
-            GroupKey groupId = new GroupKey(entry.getInput().getInputDataset().getInputDataType(), entry.getGroupKey());
+            FunctionName callerAlgorithm = entry.getInput().getCallerAlgorithm();
+            Object callerAlgorithmKey = callerAlgorithm != null ? callerAlgorithm : entry;
+            GroupKey groupId = new GroupKey(entry.getInput().getInputDataset().getInputDataType(), callerAlgorithmKey, entry.getGroupKey());
             groups.computeIfAbsent(groupId, k -> new ArrayList<>()).add(entry);
         }
         for (List<QueueEntry> group : groups.values()) {
@@ -514,6 +528,12 @@ public class ModelBatchQueue {
         }
     }
 
+    private void notifyIdle() {
+        if (onIdle != null) {
+            onIdle.accept(this);
+        }
+    }
+
     enum EnqueueDecision {
         /** Bigger than the whole node budget; not queued and not reserved, the caller runs it unqueued. */
         TOO_LARGE,
@@ -522,7 +542,7 @@ public class ModelBatchQueue {
         SCHEDULE_TIMER
     }
 
-    private record GroupKey(Object inputType, String parametersKey) {
+    private record GroupKey(Object inputType, Object callerAlgorithm, String parametersKey) {
     }
 
     private record Totals(int entries, long items, long payloadBytes) {

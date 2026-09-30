@@ -292,6 +292,32 @@ public class BatchInferenceExecutorTests {
     }
 
     @Test
+    public void noConfigRemoteRequestDoesNotAssumeOneResultPerTextDoc() {
+        MLInput input = textInput("text", "image");
+        input.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
+        input.setAlgorithm(FunctionName.REMOTE);
+        AtomicReference<MLTaskResponse> result = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(1)));
+
+        executor.execute("m", input, null, predictor, null, ActionListener.wrap(result::set, e -> { throw new AssertionError(e); }));
+
+        assertEquals(ImmutableList.of("t0"), resultNames(result.get()));
+    }
+
+    @Test
+    public void configuredSingleCallReturningFewerResultsThanItemsFailsTheRequest() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(10).build();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        Predictable predictor = model((subInput, listener) -> listener.onResponse(fixedSizeResponse(1)));
+
+        executor.execute("m", textInput("a", "b"), config, predictor, null, ActionListener.wrap(r -> {
+            throw new AssertionError("a single call under the configured limit must still validate its result count");
+        }, failure::set));
+
+        assertTrue(failure.get().getMessage().contains("Model returned 1 results for a sub-batch of 2 items"));
+    }
+
+    @Test
     public void subBatchReturningMoreResultsThanItemsFailsTheRequest() {
         // 6 docs split into 3 sub-batches of 2, against a model that always answers with 3 tensors. Combining
         // these would return 9 embeddings for 6 documents, with each sub-batch's extra shifting the rest.

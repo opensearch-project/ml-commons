@@ -7,65 +7,49 @@ package org.opensearch.ml.batch;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.LongSupplier;
 
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.Predictable;
-import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
 
 import lombok.extern.log4j.Log4j2;
 
 /**
- * Owns the per-model ModelBatchQueues and routes predict requests into them. A queue is created lazily on
+ * Owns the per-model DynamicBatchingQueues and routes predict requests into them. A queue is created lazily on
  * the first request for a queue-enabled model and replaced when that model's queue-relevant config changes;
- * the old queue is flushed after replacement so its callers are not stranded. Admission and idle eviction
- * both run through the map's per-key compute operation, so a queue cannot be removed between lookup and
- * enqueue. Idle queues are evicted by a periodic sweep so the map does not grow unbounded with transient
- * model IDs. Requests for models with no config or a disabled queue never reach here.
+ * the old queue is flushed after replacement so its callers are not stranded. Admission and empty-queue
+ * removal both run through the map's per-key compute operation, so a queue cannot be removed between lookup
+ * and enqueue. A queue is removed as soon as it drains empty, and the next request recreates one — creating a
+ * queue is cheap, so the map does not accumulate idle queues for transient model IDs. Requests for models
+ * with no config or a disabled queue never reach here.
  */
 @Log4j2
-public class ModelBatchQueueManager {
-
-    private static final TimeValue SWEEP_INTERVAL = TimeValue.timeValueMinutes(1);
+public class DynamicBatchingQueueManager {
 
     private final BatchableInputRegistry registry;
     private final BatchSplitter splitter;
     private final ThreadPool threadPool;
     private final QueueMemoryBudget budget;
-    private final LongSupplier idleTtlNanos;
-    private final ConcurrentHashMap<String, ModelBatchQueue> queues = new ConcurrentHashMap<>();
-    private final Scheduler.Cancellable idleSweep;
+    private final ConcurrentHashMap<String, DynamicBatchingQueue> queues = new ConcurrentHashMap<>();
 
-    public ModelBatchQueueManager(
+    public DynamicBatchingQueueManager(
         BatchableInputRegistry registry,
         BatchSplitter splitter,
         ThreadPool threadPool,
-        QueueMemoryBudget budget,
-        LongSupplier idleTtlNanos
+        QueueMemoryBudget budget
     ) {
         this.registry = registry;
         this.splitter = splitter;
         this.threadPool = threadPool;
         this.budget = budget;
-        this.idleTtlNanos = idleTtlNanos;
-        this.idleSweep = threadPool.scheduleWithFixedDelay(this::evictIdleQueues, SWEEP_INTERVAL, ThreadPool.Names.GENERIC);
-    }
-
-    /** Stops the idle-eviction sweep. Wired to node shutdown so the recurring task does not outlive the manager. */
-    public void close() {
-        if (idleSweep != null) {
-            idleSweep.cancel();
-        }
     }
 
     public boolean shouldQueue(BatchInferenceConfig config) {
-        return config != null && config.isQueueEnabled();
+        return config != null && config.isDynamicBatchingEnabled();
     }
 
     /**
@@ -88,14 +72,14 @@ public class ModelBatchQueueManager {
             return true;
         }
 
-        ModelBatchQueue[] replaced = new ModelBatchQueue[1];
-        ModelBatchQueue[] target = new ModelBatchQueue[1];
-        ModelBatchQueue.EnqueueDecision[] decision = new ModelBatchQueue.EnqueueDecision[1];
+        DynamicBatchingQueue[] replaced = new DynamicBatchingQueue[1];
+        DynamicBatchingQueue[] target = new DynamicBatchingQueue[1];
+        DynamicBatchingQueue.EnqueueDecision[] decision = new DynamicBatchingQueue.EnqueueDecision[1];
         queues.compute(modelId, (id, existing) -> {
-            ModelBatchQueue queue = existing;
+            DynamicBatchingQueue queue = existing;
             if (queue == null || !queue.getConfig().equals(config)) {
                 replaced[0] = queue; // null on first create; the previous queue when config changed
-                queue = new ModelBatchQueue(id, config, registry, splitter, threadPool, budget);
+                queue = new DynamicBatchingQueue(id, config, registry, splitter, threadPool, budget, this::removeIfIdle);
             }
             target[0] = queue;
             decision[0] = queue.offer(entry);
@@ -107,7 +91,7 @@ public class ModelBatchQueueManager {
             replaced[0].flush();
         }
         target[0].completeEnqueue(entry, decision[0]);
-        return decision[0] != ModelBatchQueue.EnqueueDecision.TOO_LARGE;
+        return decision[0] != DynamicBatchingQueue.EnqueueDecision.TOO_LARGE;
     }
 
     private QueueEntry toEntry(
@@ -152,16 +136,25 @@ public class ModelBatchQueueManager {
         }
     }
 
-    void evictIdleQueues() {
-        long ttl = idleTtlNanos.getAsLong();
-        long now = System.nanoTime();
-        for (String modelId : queues.keySet()) {
-            queues.computeIfPresent(modelId, (id, queue) -> now - queue.getLastUsedNanos() > ttl && queue.isIdle() ? null : queue);
-        }
+    /**
+     * Removes a queue once it has drained empty. Runs under the map's per-key compute lock, which the enqueue
+     * path also holds, so a request that arrives first keeps the queue and a request that arrives after removal
+     * simply recreates one. The identity check leaves a replacement queue (installed on a config change) in place.
+     */
+    private void removeIfIdle(DynamicBatchingQueue queue) {
+        queues.computeIfPresent(queue.getModelId(), (id, existing) -> existing == queue && existing.isIdle() ? null : existing);
     }
 
     // Test seam: number of live per-model queues.
     int queueCount() {
         return queues.size();
+    }
+
+    // Test seam: runs the same idle-removal check the flush path performs, for the given model.
+    void removeIfIdleForTest(String modelId) {
+        DynamicBatchingQueue queue = queues.get(modelId);
+        if (queue != null) {
+            removeIfIdle(queue);
+        }
     }
 }

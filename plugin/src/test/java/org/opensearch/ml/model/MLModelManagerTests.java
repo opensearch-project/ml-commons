@@ -131,6 +131,7 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -1558,6 +1559,28 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(nodeHelper.filterEligibleNodes(any(), any())).thenReturn(eligibleNodes);
         String[] workerNodes = modelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
         assertArrayEquals(eligibleNodes, workerNodes);
+    }
+
+    @Test
+    public void updateModelCacheRefreshesCachedModelInfo() {
+        MLModel model = MLModel
+            .builder()
+            .modelId(modelId)
+            .name("test_model")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelState(MLModelState.DEPLOYED)
+            .batchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(96).build())
+            .build();
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(model);
+            return null;
+        }).when(modelManager).getModel(eq(modelId), any());
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(new String[] {});
+
+        modelManager.updateModelCache(modelId, mock(ActionListener.class));
+
+        verify(modelCacheHelper).setModelInfo(eq(modelId), eq(model));
     }
 
     public void testGetWorkerNodes_FilterEligibleNodes_Null() {
