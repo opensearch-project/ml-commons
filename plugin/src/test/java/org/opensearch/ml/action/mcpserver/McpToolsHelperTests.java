@@ -43,6 +43,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.IdsQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
@@ -60,6 +63,8 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
+
+import io.modelcontextprotocol.spec.McpSchema;
 
 public class McpToolsHelperTests extends OpenSearchTestCase {
 
@@ -304,7 +309,44 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         assertThrows(RuntimeException.class, () -> mcpToolsHelper.createToolSpecification(tool));
     }
 
+    @Test
+    public void test_createToolSpecification_callTool_stringOutput() {
+        McpSchema.CallToolResult result = callMockTool("plain text output");
+        assertFalse(result.isError());
+        assertEquals("plain text output", ((McpSchema.TextContent) result.content().get(0)).text());
+    }
+
+    @Test
+    public void test_createToolSpecification_callTool_modelTensorOutput() {
+        ModelTensor tensor = ModelTensor.builder().name("MockTool").dataAsMap(Map.of("took", 5)).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        McpSchema.CallToolResult result = callMockTool(output);
+        assertFalse(result.isError());
+        String text = ((McpSchema.TextContent) result.content().get(0)).text();
+        assertTrue(text.contains("\"name\":\"MockTool\""));
+        assertTrue(text.contains("\"took\":5"));
+    }
+
     // ==================== HELPER METHODS ====================
+
+    @SuppressWarnings("unchecked")
+    private McpSchema.CallToolResult callMockTool(Object toolOutput) {
+        Tool mockTool = mock(Tool.class);
+        doAnswer(invocationOnMock -> {
+            ActionListener<Object> listener = invocationOnMock.getArgument(1);
+            listener.onResponse(toolOutput);
+            return null;
+        }).when(mockTool).run(any(), any());
+        Tool.Factory<Tool> mockFactory = mock(Tool.Factory.class);
+        when(mockFactory.create(any())).thenReturn(mockTool);
+        when(toolFactoryWrapper.getToolsFactories()).thenReturn(Map.of("MockTool", mockFactory));
+
+        McpToolBaseInput tool = new McpToolRegisterInput("MockTool", "MockTool", "Test tool", Map.of(), Map.of(), null, null);
+        var specification = mcpToolsHelper.createToolSpecification(tool);
+        return specification.callHandler().apply(null, new McpSchema.CallToolRequest("MockTool", Map.of())).block();
+    }
 
     private McpToolRegisterInput getRegisterMcpTool() {
         McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
