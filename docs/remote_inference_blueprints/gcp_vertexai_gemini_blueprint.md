@@ -47,7 +47,7 @@ PUT /_cluster/settings
 {
     "persistent": {
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "<each pattern returned above>",
+            "REPLACE THIS LINE WITH EVERY PATTERN FROM THE RESPONSE ABOVE",
             "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$"
         ]
     }
