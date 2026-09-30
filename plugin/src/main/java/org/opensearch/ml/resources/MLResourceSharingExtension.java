@@ -24,9 +24,9 @@ import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 public class MLResourceSharingExtension implements ResourceSharingExtension {
 
     /**
-     * Sharing a model group is deprecated: models are the shareable unit now, and this registration is slated for
-     * removal in 4.0. It stays registered until then so existing group shares keep working, and so the migration can
-     * derive each model's owner and recipients from its group's sharing record.
+     * Models are the shareable unit now, so sharing a model group is superseded. The registration stays so existing
+     * group shares keep working, and so the migration can derive each model's owner and recipients from its group's
+     * sharing record; its removal is gated on a shipped migration path (ml-commons issue 5107).
      */
     private static final ResourceProvider MODEL_GROUP_PROVIDER = new ResourceProvider() {
 

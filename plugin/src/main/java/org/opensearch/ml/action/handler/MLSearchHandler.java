@@ -150,9 +150,11 @@ public class MLSearchHandler {
                     CommonValue.ML_MODEL_GROUP_INDEX
                 );
 
-            // When models are protected in their own right, filter on the models the caller can actually access rather
-            // than on their groups, so search agrees with the per-model permission check. Because the provider declares
-            // the model group as the model's parent, a group-level share is already reflected in these ids.
+            // When models are protected in their own right, search has to admit exactly what a per-model permission
+            // check would admit, which is the model's own sharing record OR its parent group's. Filtering on the
+            // model's own record alone would hide a model that the caller can nonetheless GET through a group-level
+            // share, because a group share does not write the recipient into the model document's
+            // all_shared_principals - inheritance is resolved at check time, not denormalized.
             //
             // This deliberately does not lean on the security plugin's DLS filter. That filter only engages for a
             // search the security plugin sees as an internal/plugin request, and this search does not reach it that
@@ -161,16 +163,23 @@ public class MLSearchHandler {
             if (shouldUseResourceAuthz(ML_MODEL_RESOURCE_TYPE) && user != null) {
                 var rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
                 rsc.getAccessibleResourceIds(ML_MODEL_RESOURCE_TYPE, ActionListener.wrap(accessibleModelIds -> {
-                    SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
-                    gated.query(restrictToIds(gated.query(), accessibleModelIds));
-                    request.source(gated);
-                    SearchDataObjectRequest modelSearch = SearchDataObjectRequest
-                        .builder()
-                        .indices(request.indices())
-                        .searchSourceBuilder(request.source())
-                        .tenantId(tenantId)
-                        .build();
-                    sdkClient.searchDataObjectAsync(modelSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                    rsc.getAccessibleResourceIds(ML_MODEL_GROUP_RESOURCE_TYPE, ActionListener.wrap(accessibleGroupIds -> {
+                        SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
+                        gated.query(restrictToAccessible(gated.query(), accessibleModelIds, accessibleGroupIds));
+                        request.source(gated);
+                        SearchDataObjectRequest modelSearch = SearchDataObjectRequest
+                            .builder()
+                            .indices(request.indices())
+                            .searchSourceBuilder(request.source())
+                            .tenantId(tenantId)
+                            .build();
+                        sdkClient
+                            .searchDataObjectAsync(modelSearch)
+                            .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                    }, e -> {
+                        log.error("Failed to resolve accessible ml-model-group ids", e);
+                        wrappedListener.onFailure(e);
+                    }));
                 }, e -> {
                     log.error("Failed to resolve accessible ml-model ids", e);
                     wrappedListener.onFailure(e);
@@ -273,14 +282,35 @@ public class MLSearchHandler {
      */
     @VisibleForTesting
     /**
-     * Restricts a model search to the given document ids. Unlike the model-group gate below there is no "missing"
-     * escape hatch: every model is a resource once {@code ml-model} is protected, so an id that is not in the
-     * accessible set is not visible. An empty set denies everything, which keeps the search fail-closed.
+     * Restricts a model search to what a per-model permission check would allow: a model whose own sharing record
+     * grants the caller, or a model whose group's record does. The second clause is what keeps search consistent with
+     * GET - a group-level share is resolved by inheritance at check time and is not written into the model document, so
+     * matching only the model's own principals would hide a model the caller can read.
+     * <p>
+     * Unlike the model-group gate below there is no "missing id" escape hatch: every model is a resource once
+     * {@code ml-model} is protected. Both sets being empty denies everything, which keeps the search fail-closed.
      */
-    static QueryBuilder restrictToIds(QueryBuilder existing, @Nullable Collection<String> accessibleIds) {
-        final QueryBuilder gate = (accessibleIds == null || accessibleIds.isEmpty())
-            ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery())
-            : QueryBuilders.idsQuery().addIds(accessibleIds.toArray(new String[0]));
+    static QueryBuilder restrictToAccessible(
+        QueryBuilder existing,
+        @Nullable Collection<String> accessibleModelIds,
+        @Nullable Collection<String> accessibleGroupIds
+    ) {
+        boolean noModels = accessibleModelIds == null || accessibleModelIds.isEmpty();
+        boolean noGroups = accessibleGroupIds == null || accessibleGroupIds.isEmpty();
+
+        final QueryBuilder gate;
+        if (noModels && noGroups) {
+            gate = QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery());
+        } else {
+            BoolQueryBuilder anyOf = QueryBuilders.boolQuery().minimumShouldMatch(1);
+            if (!noModels) {
+                anyOf.should(QueryBuilders.idsQuery().addIds(accessibleModelIds.toArray(new String[0])));
+            }
+            if (!noGroups) {
+                anyOf.should(QueryBuilders.termsQuery(MLModel.MODEL_GROUP_ID_FIELD, accessibleGroupIds));
+            }
+            gate = anyOf;
+        }
 
         if (existing == null) {
             return gate;

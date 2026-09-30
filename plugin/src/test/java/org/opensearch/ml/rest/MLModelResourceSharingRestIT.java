@@ -58,12 +58,14 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
     private static final String SHARE_ENDPOINT = "_plugins/_security/api/resource/share";
     private static final String RESOURCE_LIST_ENDPOINT = "_plugins/_security/api/resource/list";
     private static final String MODEL_RESOURCE_TYPE = "ml-model";
+    private static final String GROUP_RESOURCE_TYPE = "ml-model-group";
     private static final String READ_ONLY = "ml_read_only";
 
     private final String owner = "rs_model_owner";
     private final String other = "rs_model_other";
     private RestClient ownerClient;
     private RestClient otherClient;
+    private String lastModelGroupId;
 
     /**
      * On a security-enabled cluster the node starts accepting connections before the security plugin has initialized
@@ -208,6 +210,34 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
         assertEquals(RestStatus.OK, TestHelper.restStatus(getModel(otherClient, modelId)));
     }
 
+    /**
+     * A group-level share grants access to the models in it by parent inheritance, so GET succeeds. Search has to admit
+     * the same model: inheritance is resolved when a permission is checked and is not written into the model document,
+     * so a search that matched only each model's own principals would hide a model the caller can read. Raised in
+     * review on https://github.com/opensearch-project/ml-commons/pull/5031.
+     */
+    public void testGroupShareGrantsBothGetAndSearch() throws IOException {
+        String modelId = registerModelAs(ownerClient);
+        String groupId = lastModelGroupId;
+
+        // Nothing shared yet: denied on both paths
+        assertForbidden(() -> getModel(otherClient, modelId));
+        assertFalse(searchModels(otherClient).contains(modelId));
+
+        // Share the GROUP, not the model
+        shareResource(groupId, GROUP_RESOURCE_TYPE, READ_ONLY, other);
+
+        assertEquals(RestStatus.OK, TestHelper.restStatus(getModel(otherClient, modelId)));
+        String afterGroupShare = searchModels(otherClient);
+        assertTrue(
+            "a model reachable through a group share must also appear in search, but the response was: " + afterGroupShare,
+            afterGroupShare.contains(modelId)
+        );
+
+        // read_only on the group must not grant writes on the model either
+        assertForbidden(() -> updateModel(otherClient, modelId, "renamed_via_group_share"));
+    }
+
     public void testModelChunksAreNotShareableResources() throws IOException {
         String modelId = registerModelAs(ownerClient);
         uploadChunk(ownerClient, modelId, 0);
@@ -253,6 +283,7 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
             .makeRequest(client, "POST", "_plugins/_ml/model_groups/_register", null, TestHelper.toHttpEntity(groupInput), null);
         String modelGroupId = (String) parseResponse(groupResponse).get("model_group_id");
         assertNotNull(modelGroupId);
+        lastModelGroupId = modelGroupId;
         // The group's sharing record is written by an index listener after the REST call returns. Registering a model
         // into the group authorizes against that record, and a missing one surfaces as a 500 rather than a deny, so
         // wait for the group to be readable by its owner before continuing.
@@ -395,10 +426,14 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
     }
 
     private void shareModel(String modelId, String accessLevel, String targetUser) throws IOException {
+        shareResource(modelId, MODEL_RESOURCE_TYPE, accessLevel, targetUser);
+    }
+
+    private void shareResource(String resourceId, String resourceType, String accessLevel, String targetUser) throws IOException {
         String payload = "{\"resource_id\":\""
-            + modelId
+            + resourceId
             + "\",\"resource_type\":\""
-            + MODEL_RESOURCE_TYPE
+            + resourceType
             + "\",\"share_with\":{\""
             + accessLevel
             + "\":{\"users\":[\""
