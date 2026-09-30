@@ -95,9 +95,9 @@ public class CommonValue {
 
     // Resource type used in resource-access-control
     /**
-     * Model groups were the shareable unit before models became shareable in their own right. Sharing a group is
-     * deprecated and the type registration is slated for removal in 4.0; share models instead. See
-     * docs/model_access_control.md for the migration path.
+     * Model groups were the shareable unit before models became shareable in their own right. Share models instead.
+     * This registration stays until group-derived access is removed, which is gated on a shipped migration path
+     * (ml-commons issue 5107). See docs/model_access_control.md.
      */
     public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
     public static final String ML_MODEL_RESOURCE_TYPE = "ml-model";

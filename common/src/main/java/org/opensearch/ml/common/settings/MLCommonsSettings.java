@@ -252,23 +252,19 @@ public final class MLCommonsSettings {
 
     /**
      * Backend-role and access-mode based control over model groups. Superseded by the security plugin's resource
-     * sharing and access control: listing a type in {@code plugins.security.resource_sharing.protected_types}
-     * authorizes each resource by the access level it is shared at, which is what this setting's group modes and
-     * backend-role checks approximate. Slated for removal in 4.0 along with model-group-derived access.
-     * <p>
-     * Deprecated now rather than at removal so the direction is visible, but note the sequencing: existing models
-     * cannot move to per-model sharing until the security plugin's migrate endpoint can inherit a parent's owner and
-     * recipients (security issue 6525) and restrict a migration to part of an index (security issue 6526). Until then
-     * this setting remains the working control for models registered before the type was protected, and the deprecation
-     * warning is a signal rather than an instruction to turn it off. See docs/model_access_control.md.
+     * sharing and access control, which authorizes each model by the access level it is shared at. It is neither
+     * deprecated nor scheduled for removal: existing models cannot be migrated to per-model sharing until the security
+     * plugin's migrate endpoint can inherit a parent's owner and recipients and restrict a migration to part of an
+     * index, and on a cluster that does not run resource sharing this remains the only access control over models.
+     * Removal is tracked in ml-commons issue 5107, gated on a migration path that has shipped in 3.x. See
+     * docs/model_access_control.md.
      */
     public static final Setting<Boolean> ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "model_access_control_enabled",
             false,
             Setting.Property.NodeScope,
-            Setting.Property.Dynamic,
-            Setting.Property.Deprecated
+            Setting.Property.Dynamic
         );
 
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting

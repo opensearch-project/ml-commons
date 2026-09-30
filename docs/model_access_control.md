@@ -11,7 +11,7 @@ We have implemented backend role-based access in which members of the same back-
 
 Note: 
 - Model access control is an experimental feature. If you see any bug or have any suggestion, feel free to cut Github issue.
-- **Superseded.** Everything on this page — `plugins.ml_commons.model_access_control_enabled`, model-group access modes, and backend-role based access — is superseded by the security plugin's resource sharing and access control, and is slated for removal in 4.0. Models are now shareable in their own right; see [Resource sharing for models](#resource-sharing-for-models) below. The setting is marked deprecated, so it logs a deprecation warning when set. That is a signal of direction, not an instruction to turn it off: existing models cannot move to per-model sharing until the migrate endpoint gains the two capabilities listed in that section, and until then this setting remains their working control.
+- **Superseded.** Everything on this page — `plugins.ml_commons.model_access_control_enabled`, model-group access modes, and backend-role based access — is superseded by the security plugin's resource sharing and access control. Models are now shareable in their own right; see [Resource sharing for models](#resource-sharing-for-models) below. Nothing here is deprecated or scheduled for removal: existing models cannot be migrated to per-model sharing until the migrate endpoint gains the two capabilities listed in that section, and on a cluster that does not run resource sharing this page describes the only access control over models. Removal is tracked in [issue 5107](https://github.com/opensearch-project/ml-commons/issues/5107), gated on a migration path that has shipped in 3.x.
 
 
 
@@ -22,7 +22,7 @@ The security plugin's resource sharing and access control authorizes a resource 
 | Resource type | Index | Status |
 |---|---|---|
 | `ml-model` | `.plugins-ml-model` | current — models are the shareable unit |
-| `ml-model-group` | `.plugins-ml-model-group` | deprecated, registration removed in 4.0 |
+| `ml-model-group` | `.plugins-ml-model-group` | superseded — share models instead; removal gated on [issue 5107](https://github.com/opensearch-project/ml-commons/issues/5107) |
 
 Model documents carry a `resource_type` field that marks them as resources. Model chunks live in the same index and deliberately omit it, so they receive no sharing records.
 

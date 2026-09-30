@@ -104,7 +104,7 @@ public class ModelAccessControlHelper {
      * Creating a model is not covered here: there is no model to authorize against yet, so registration authorizes
      * write access on the destination group instead.
      * <p>
-     * <b>When model-group-derived access is removed in 4.0</b>, this method collapses. {@code modelGroupId} and
+     * <b>When model-group-derived access is removed</b> (gated on ml-commons issue 5107), this method collapses. {@code modelGroupId} and
      * {@code client} exist only to fetch and evaluate the group document, so both go, along with
      * {@code mlFeatureEnabledSetting}, {@code tenantId} and {@code sdkClient} on the overload below - which exists
      * solely because the group lookup needs them. The two overloads become one
@@ -143,7 +143,7 @@ public class ModelAccessControlHelper {
     /**
      * SdkClient-aware variant of {@link #validateModelAccess(User, String, String, String, Client, ActionListener)}.
      * Its extra parameters serve the model-group fallback only; see that method for what happens to this overload when
-     * model-group-derived access is removed in 4.0.
+     * model-group-derived access is removed.
      */
     public void validateModelAccess(
         User user,
