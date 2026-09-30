@@ -7,6 +7,7 @@ package org.opensearch.ml.action.connector;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -36,6 +37,7 @@ import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -122,11 +124,15 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testExecute_NoConnectorIndex() {
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
-        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
-                .build());
+        stubConnectorAccess(true);
+        when(request.getMlInput())
+            .thenReturn(
+                org.opensearch.ml.common.input.MLInput
+                    .builder()
+                    .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                    .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                    .build()
+            );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argCaptor.capture());
@@ -134,12 +140,16 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testExecute_FailedToGetConnector() {
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        stubConnectorAccess(true);
         when(metaData.hasIndex(anyString())).thenReturn(true);
-        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
-                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
-                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
-                .build());
+        when(request.getMlInput())
+            .thenReturn(
+                org.opensearch.ml.common.input.MLInput
+                    .builder()
+                    .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                    .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                    .build()
+            );
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -178,7 +188,7 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
 
         // Connector access validation returns false
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+        stubConnectorAccess(false);
 
         action.doExecute(task, request, actionListener);
 
@@ -215,7 +225,7 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             .credential(Map.of("key", "value"))
             .build();
         // Authorization runs first: the protocol is only reported to a caller allowed to see the connector.
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        stubConnectorAccess(true);
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
             listener.onResponse(mcpConnector);
@@ -250,7 +260,7 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             .url("https://api.openai.com/mcp")
             .credential(Map.of("key", "value"))
             .build();
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+        stubConnectorAccess(false);
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
             listener.onResponse(mcpConnector);
@@ -281,7 +291,7 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
                 .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(params, null))
                 .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -302,7 +312,7 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
                 .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
                 .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -319,7 +329,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
 
         // Verify connector access was validated
-        verify(connectorAccessControlHelper).validateConnectorAccess(eq(client), eq(connector));
+        verify(connectorAccessControlHelper)
+            .validateConnectorAccess(eq(client), any(), eq(connector), eq(MLExecuteConnectorAction.NAME), any());
     }
 
     public void testExecute_WithNullParameters() {
@@ -330,7 +341,7 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
                 .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(null, null))
                 .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -350,7 +361,7 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
                 .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
                 .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -369,5 +380,17 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
         assertTrue(captor.getValue().getMessage().contains("Failed to decrypt credentials"));
+    }
+
+    /**
+     * The access check is asynchronous now, so it is stubbed by completing its listener rather than by returning a
+     * boolean.
+     */
+    private void stubConnectorAccess(boolean allowed) {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(4);
+            listener.onResponse(allowed);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), isA(ActionListener.class));
     }
 }

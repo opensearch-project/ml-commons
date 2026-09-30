@@ -267,6 +267,14 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    /**
+     * Backend-role and access-mode based control over connectors. Superseded by the security plugin's resource sharing
+     * and access control, which authorizes each connector by the access level it is shared at. It is neither deprecated
+     * nor scheduled for removal, for the same reasons as
+     * {@link #ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED}: connectors that exist already cannot be migrated to per-resource
+     * sharing until the security plugin's migrate endpoint can attribute a document that carries no owner, and on a
+     * cluster that does not run resource sharing this is the only access control over connectors.
+     */
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "connector_access_control_enabled",

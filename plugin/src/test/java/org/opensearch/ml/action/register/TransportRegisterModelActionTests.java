@@ -613,10 +613,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
         doAnswer(invocation -> {
             ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
@@ -640,10 +640,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -937,10 +937,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getModelInterface()).thenReturn(null);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
         OpenSearchStatusException lookupFailure = new OpenSearchStatusException(
             "Failed to find connector:mockConnectorId",
             RestStatus.NOT_FOUND
@@ -972,10 +972,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getModelInterface()).thenReturn(Map.of("input", "{}"));
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
         OpenSearchStatusException lookupFailure = new OpenSearchStatusException(
             "Failed to find connector:mockConnectorId",
             RestStatus.NOT_FOUND
@@ -1105,10 +1105,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     /** Grants connector access and returns the given connector for "mockConnectorId". */
     private void stubConnectorLookup(Connector storedConnector) {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
         stubConnectorLookup("mockConnectorId", storedConnector);
     }
 
@@ -1421,10 +1421,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(request.getRegisterModelInput()).thenReturn(input);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         stubConnectorLookup("connector-id", httpConnector());
 

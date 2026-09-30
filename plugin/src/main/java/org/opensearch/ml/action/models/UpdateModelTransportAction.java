@@ -53,6 +53,7 @@ import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
@@ -522,6 +523,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     newConnectorId,
                     tenantId,
                     mlFeatureEnabledSetting,
+                    // Pointing a model at a connector reads it rather than changes it, so read access is what is required
+                    MLConnectorGetAction.NAME,
                     ActionListener.wrap(hasNewConnectorPermission -> {
                         if (hasNewConnectorPermission) {
                             // The new connector has to be one a model can predict with. Model register rejects MCP

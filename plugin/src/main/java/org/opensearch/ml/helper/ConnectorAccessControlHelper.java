@@ -41,7 +41,6 @@ import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -75,10 +74,15 @@ public class ConnectorAccessControlHelper {
             || (isRestrictedConnector(connector) && isUserHasBackendRole(user, connector));
     }
 
-    public void validateConnectorAccess(Client client, String connectorId, ActionListener<Boolean> listener) {
+    /**
+     * Authorizes {@code action} on a connector, reading the connector document when the pre-resource-sharing path needs
+     * it. The action matters: under resource sharing it is matched against the access level the connector is shared at,
+     * so passing a read action for a write operation would let a read-only recipient perform it.
+     */
+    public void validateConnectorAccess(Client client, String connectorId, String action, ActionListener<Boolean> listener) {
         User user = RestActionUtils.getUserContext(client);
         if (shouldUseResourceAuthz(ML_CONNECTOR_RESOURCE_TYPE)) {
-            verifyConnectorAccess(user, connectorId, listener);
+            verifyConnectorAccess(user, connectorId, action, listener);
             return;
         }
         if (isAdmin(user) || accessControlNotEnabled(user)) {
@@ -97,18 +101,22 @@ public class ConnectorAccessControlHelper {
         }
     }
 
+    /**
+     * SdkClient-aware variant of {@link #validateConnectorAccess(Client, String, String, ActionListener)}.
+     */
     public void validateConnectorAccess(
         SdkClient sdkClient,
         Client client,
         String connectorId,
         String tenantId,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        String action,
         ActionListener<Boolean> listener
     ) {
 
         User user = RestActionUtils.getUserContext(client);
         if (shouldUseResourceAuthz(ML_CONNECTOR_RESOURCE_TYPE)) {
-            verifyConnectorAccess(user, connectorId, listener);
+            verifyConnectorAccess(user, connectorId, action, listener);
             return;
         }
         if (!mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
@@ -143,40 +151,45 @@ public class ConnectorAccessControlHelper {
      * Turns a resource-sharing verdict into {@code true} or a 403, so the message and the fail-closed behaviour are the
      * same at every connector call site.
      */
-    private void verifyConnectorAccess(User user, String connectorId, ActionListener<Boolean> listener) {
+    private void verifyConnectorAccess(User user, String connectorId, String action, ActionListener<Boolean> listener) {
         var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-        resourceSharingClient
-            .verifyAccess(connectorId, ML_CONNECTOR_RESOURCE_TYPE, MLConnectorGetAction.NAME, ActionListener.wrap(isAuthorized -> {
-                if (!isAuthorized) {
-                    listener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "User "
-                                    + (user == null ? "" : user.getName())
-                                    + " is not authorized to access ml-connector id: "
-                                    + connectorId,
-                                RestStatus.FORBIDDEN
-                            )
-                        );
-                    return;
-                }
-                listener.onResponse(true);
-            }, listener::onFailure));
+        resourceSharingClient.verifyAccess(connectorId, ML_CONNECTOR_RESOURCE_TYPE, action, ActionListener.wrap(isAuthorized -> {
+            if (!isAuthorized) {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "User " + (user == null ? "" : user.getName()) + " is not authorized to access ml-connector id: " + connectorId,
+                            RestStatus.FORBIDDEN
+                        )
+                    );
+                return;
+            }
+            listener.onResponse(true);
+        }, listener::onFailure));
     }
 
     /**
-     * Synchronous variant, kept on the pre-resource-sharing path. {@code verifyAccess} is asynchronous, so it cannot be
-     * called from a method that returns a boolean; the two callers that use this - ExecuteConnectorTransportAction and
-     * UpdateConnectorTransportAction - have to be restructured to an async check before connectors can be authorized
-     * through resource sharing end to end. Until then those two actions authorize on access modes and backend roles
-     * only, which is why {@code connector_access_control_enabled} is not deprecated in this change.
+     * Authorizes {@code action} on a connector the caller has already read, so the document is not fetched twice. Used by
+     * the two actions that need the connector itself before they can authorize it: execute reads the protocol, update
+     * compares the stored protocol with the incoming one.
      */
-    public boolean validateConnectorAccess(Client client, Connector connector) {
+    public void validateConnectorAccess(
+        Client client,
+        String connectorId,
+        Connector connector,
+        String action,
+        ActionListener<Boolean> listener
+    ) {
         User user = RestActionUtils.getUserContext(client);
-        if (isAdmin(user) || accessControlNotEnabled(user)) {
-            return true;
+        if (shouldUseResourceAuthz(ML_CONNECTOR_RESOURCE_TYPE)) {
+            verifyConnectorAccess(user, connectorId, action, listener);
+            return;
         }
-        return hasPermission(user, connector);
+        if (isAdmin(user) || accessControlNotEnabled(user)) {
+            listener.onResponse(true);
+            return;
+        }
+        listener.onResponse(hasPermission(user, connector));
     }
 
     // TODO will remove this method in favor of other getConnector method. This method is still being used in update model/update connect.
