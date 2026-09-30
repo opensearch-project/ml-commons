@@ -9,14 +9,36 @@
 
 ### GCP VertexAI Embedding Connector Blueprint:
 
-## 1. Confirm the VertexAI endpoint is trusted:
+## 1. Add the VertexAI endpoint to trusted URLs:
 
-No cluster-settings change is needed. The Vertex AI host is already matched by the default
-`plugins.ml_commons.trusted_connector_endpoints_regex`.
+This blueprint is retained for versions predating the `google_cloud` protocol. Those versions have
+no Vertex AI pattern in the default `plugins.ml_commons.trusted_connector_endpoints_regex`, so on
+them you must add one. Starting in 3.10 the default covers it and no change is needed. Check which
+applies to your cluster:
 
-If your cluster has overridden that setting, add a Vertex AI pattern to whatever it is currently
-set to. It is a list setting, so a `PUT` replaces the defaults rather than adding to them, and
-dropping them would break every other remote connector in the cluster.
+```json
+GET /_cluster/settings?include_defaults=true&filter_path=**.trusted_connector_endpoints_regex
+```
+
+If no pattern in the response matches `*-aiplatform.googleapis.com`, re-send the list with one
+added. The setting is a list and a `PUT` replaces it rather than appending, so include every
+pattern the response returned:
+
+```json
+PUT /_cluster/settings
+{
+    "persistent": {
+        "plugins.ml_commons.trusted_connector_endpoints_regex": [
+            "<each pattern returned above>",
+            "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$"
+        ]
+    }
+}
+```
+
+Assigning only the Vertex AI pattern replaces the defaults, which breaks connector creation and
+inference for every other provider in the cluster, including SageMaker, OpenAI, Cohere, DeepSeek
+and Bedrock.
 
 This blueprint uses `"protocol": "http"` with a hand-managed `Authorization` header, so it is not
 gated by `plugins.ml_commons.connector.vertexai_enabled`. That flag applies only to the

@@ -15,10 +15,11 @@ it, so `batch_predict_status` and `cancel_batch_predict` are not declared separa
 Batch input and output are configured in the request body via GCS or BigQuery locations. See
 the [Vertex AI batch prediction docs](https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/batch-prediction).
 
-## 1. Enable the connector
+## 1. Enable the connector and check trusted endpoints
 
 The `google_cloud` connector is opt-in. With `plugins.ml_commons.connector.vertexai_enabled`
-left at its default of `false`, creating the connector in step 2 fails with `403`.
+left at its default of `false`, creating the connector in step 2 fails with `403` and the message
+"The Vertex AI (google_cloud) connector is not enabled."
 
 ```json
 PUT /_cluster/settings
@@ -29,11 +30,34 @@ PUT /_cluster/settings
 }
 ```
 
-The Vertex AI host is already matched by the default
-`plugins.ml_commons.trusted_connector_endpoints_regex`, so no endpoint change is needed. If your
-cluster has overridden that setting, add a Vertex AI pattern to whatever it is currently set to:
-it is a list setting, so a `PUT` replaces the defaults rather than adding to them, and dropping
-them would break every other remote connector in the cluster.
+**Trusted endpoints.** Starting in 3.10, the Vertex AI host is matched by the default
+`plugins.ml_commons.trusted_connector_endpoints_regex`, so no endpoint change is needed. On 3.9,
+and on any cluster that has overridden that setting, you must add a Vertex AI pattern yourself.
+Check which applies to your cluster:
+
+```json
+GET /_cluster/settings?include_defaults=true&filter_path=**.trusted_connector_endpoints_regex
+```
+
+If no pattern in the response matches `*-aiplatform.googleapis.com`, re-send the list with one
+added. The setting is a list and a `PUT` replaces it rather than appending, so include every
+pattern the response returned:
+
+```json
+PUT /_cluster/settings
+{
+    "persistent": {
+        "plugins.ml_commons.trusted_connector_endpoints_regex": [
+            "<each pattern returned above>",
+            "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$"
+        ]
+    }
+}
+```
+
+Assigning only the Vertex AI pattern replaces the defaults, which breaks connector creation and
+inference for every other provider in the cluster, including SageMaker, OpenAI, Cohere, DeepSeek
+and Bedrock.
 
 ## 2. Create the connector
 
