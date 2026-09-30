@@ -65,6 +65,8 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
     private final String other = "rs_model_other";
     private RestClient ownerClient;
     private RestClient otherClient;
+    private boolean ownerCreated;
+    private boolean otherCreated;
     private String lastModelGroupId;
 
     /**
@@ -144,15 +146,18 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
         if (!isHttps()) {
             throw new IllegalArgumentException("Resource-sharing tests require HTTPS; run with -Dhttps=true");
         }
+        assumeTypeIsProtected(MODEL_RESOURCE_TYPE);
 
         String ownerPw = generatePassword(owner);
         createUser(owner, ownerPw, ImmutableList.of());
+        ownerCreated = true;
         ownerClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), owner, ownerPw)
             .setSocketTimeout(60000)
             .build();
 
         String otherPw = generatePassword(other);
         createUser(other, otherPw, ImmutableList.of());
+        otherCreated = true;
         otherClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), other, otherPw)
             .setSocketTimeout(60000)
             .build();
@@ -171,8 +176,14 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
         if (otherClient != null) {
             otherClient.close();
         }
-        deleteUser(owner);
-        deleteUser(other);
+        // Only users this run created: when the suite skips because the type is not protected, setup returns before
+        // creating them, and deleting a user that does not exist fails the whole class on top of the skip.
+        if (ownerCreated) {
+            deleteUser(owner);
+        }
+        if (otherCreated) {
+            deleteUser(other);
+        }
     }
 
     public void testUnsharedModelIsDeniedAndSharingGrantsReadOnly() throws IOException {
@@ -461,5 +472,20 @@ public class MLModelResourceSharingRestIT extends MLCommonsRestTestCase {
 
     private interface ThrowingRequest {
         Response run() throws IOException;
+    }
+
+    /**
+     * These assertions only hold when the type is protected, which the integTest cluster does when run with
+     * {@code -Dresource_sharing.enabled=true}. A secure cluster without that flag authorizes by role alone, where a user
+     * holding {@code ml_full_access} is allowed everything, so every denial below would fail for a reason that has
+     * nothing to do with the code under test. Skip rather than report that as a failure.
+     */
+    private void assumeTypeIsProtected(String resourceType) throws IOException {
+        Response response = TestHelper.makeRequest(client(), "GET", "_nodes/settings?flat_settings=true", null, "", null);
+        String settings = TestHelper.httpEntityToString(response.getEntity());
+        assumeTrue(
+            "resource sharing does not protect " + resourceType + " on this cluster; run with -Dresource_sharing.enabled=true",
+            settings.contains(resourceType)
+        );
     }
 }
