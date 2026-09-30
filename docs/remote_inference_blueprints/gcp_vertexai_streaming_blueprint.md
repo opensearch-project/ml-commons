@@ -25,6 +25,14 @@ PUT /_cluster/settings
 }
 ```
 
+**Streaming prerequisites.** `plugins.ml_commons.stream_enabled` is necessary but not sufficient.
+The `_predict/stream` call in step 4 also needs cluster-level setup that this blueprint does not
+cover: the `transport-reactor-netty4`, `arrow-base` and `arrow-flight-rpc` plugins, which ship with
+OpenSearch but are not installed by default, plus `http.type` and
+`opensearch.experimental.feature.transport.stream.enabled` in `opensearch.yml`. Those two settings
+are static, so `_cluster/settings` rejects them and a node restart is required. See
+[Predict Stream API prerequisites](https://docs.opensearch.org/latest/ml-commons-plugin/api/train-predict/predict-stream/#prerequisites).
+
 **Trusted endpoints.** Starting in 3.10, the Vertex AI host is matched by the default
 `plugins.ml_commons.trusted_connector_endpoints_regex`, so no endpoint change is needed. On 3.9,
 and on any cluster that has overridden that setting, you must add a Vertex AI pattern yourself.
