@@ -6,6 +6,7 @@
 package org.opensearch.ml.batch;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -101,6 +102,74 @@ public class BatchInferenceExecutorTests {
             }
         }
         return names;
+    }
+
+    @Test
+    public void subBatchThatAnswersAndThenThrowsIsCountedOnce() {
+        BatchInferenceConfig config = BatchInferenceConfig.builder().maxItemsPerRequest(2).build();
+        List<ActionListener<MLTaskResponse>> held = new ArrayList<>();
+        List<MLInput> heldInputs = new ArrayList<>();
+        Predictable predictor = model((subInput, listener) -> {
+            if (docsOf(subInput).contains("a")) {
+                listener.onResponse(responseFor(subInput));
+                throw new IllegalStateException("predictor threw after answering");
+            }
+            held.add(listener);
+            heldInputs.add(subInput);
+        });
+        AtomicInteger notifications = new AtomicInteger();
+        AtomicReference<MLTaskResponse> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        executor.execute("m", textInput("a", "b", "c"), config, predictor, null, ActionListener.wrap(r -> {
+            notifications.incrementAndGet();
+            result.set(r);
+        }, e -> {
+            notifications.incrementAndGet();
+            error.set(e);
+        }));
+        assertEquals("the held sub-batch has not answered yet", 0, notifications.get());
+
+        held.get(0).onResponse(responseFor(heldInputs.get(0)));
+
+        assertEquals(1, notifications.get());
+        assertNull(error.get());
+        assertEquals(ImmutableList.of("a", "b", "c"), resultNames(result.get()));
+    }
+
+    @Test
+    public void singleCallThatAnswersAndThenThrowsNotifiesTheCallerOnce() {
+        BatchInferenceConfig fits = BatchInferenceConfig.builder().maxItemsPerRequest(10).build();
+        Predictable predictor = model((subInput, listener) -> {
+            listener.onResponse(responseFor(subInput));
+            throw new IllegalStateException("predictor threw after answering");
+        });
+        AtomicInteger notifications = new AtomicInteger();
+        AtomicReference<MLTaskResponse> result = new AtomicReference<>();
+
+        executor.execute("m", textInput("a", "b"), fits, predictor, null, ActionListener.wrap(r -> {
+            notifications.incrementAndGet();
+            result.set(r);
+        }, e -> notifications.incrementAndGet()));
+
+        assertEquals(1, notifications.get());
+        assertEquals(ImmutableList.of("a", "b"), resultNames(result.get()));
+    }
+
+    @Test
+    public void singleCallThatThrowsWithoutAnsweringFailsTheListenerInsteadOfThrowing() {
+        BatchInferenceConfig fits = BatchInferenceConfig.builder().maxItemsPerRequest(10).build();
+        Predictable predictor = model((subInput, listener) -> { throw new IllegalStateException("model call failed"); });
+        AtomicInteger notifications = new AtomicInteger();
+        AtomicReference<Exception> error = new AtomicReference<>();
+
+        executor.execute("m", textInput("a", "b"), fits, predictor, null, ActionListener.wrap(r -> notifications.incrementAndGet(), e -> {
+            notifications.incrementAndGet();
+            error.set(e);
+        }));
+
+        assertEquals(1, notifications.get());
+        assertEquals("model call failed", error.get().getMessage());
     }
 
     @Test
