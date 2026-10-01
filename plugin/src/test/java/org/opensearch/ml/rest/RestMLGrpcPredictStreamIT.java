@@ -272,7 +272,7 @@ public class RestMLGrpcPredictStreamIT extends MLCommonsRestTestCase {
             + "      \"endpoint\": \"api.openai.com\",\n"
             + "      \"auth\": \"API_Key\",\n"
             + "      \"content_type\": \"application/json\",\n"
-            + "      \"model\": \"gpt-3.5-turbo\"\n"
+            + "      \"model\": \"gpt-4o-mini\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
