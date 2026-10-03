@@ -355,7 +355,20 @@ public class AGUIInputConverter {
             // Convert content blocks
             List<ContentBlock> contentBlocks = message.getContent();
             if (contentBlocks != null && !contentBlocks.isEmpty()) {
-                if (contentBlocks.size() == 1 && contentBlocks.get(0).getType() == ContentType.TEXT) {
+                if ("assistant".equalsIgnoreCase(message.getRole())) {
+                    // AssistantMessage.content must be a plain string — concatenate all TEXT blocks,
+                    // skipping internal types such as COMPACTION which are not part of the AGUI schema.
+                    StringBuilder textBuilder = new StringBuilder();
+                    for (ContentBlock block : contentBlocks) {
+                        if (block.getType() == ContentType.TEXT && block.getText() != null) {
+                            textBuilder.append(block.getText());
+                        }
+                    }
+                    String text = textBuilder.toString();
+                    if (!text.isEmpty()) {
+                        aguiMsg.put(AGUI_FIELD_CONTENT, text);
+                    }
+                } else if (contentBlocks.size() == 1 && contentBlocks.get(0).getType() == ContentType.TEXT) {
                     // Single text block → string form
                     aguiMsg.put(AGUI_FIELD_CONTENT, contentBlocks.get(0).getText());
                 } else {
