@@ -1,0 +1,97 @@
+# Sample Docker Compose configuration for agent tracing setup
+# This is an example configuration for development purposes
+version: '3'
+services:
+  opensearch-node1:
+    image: opensearchproject/opensearch:3.1.0 # NOTE: Ensure versions are consistent across all OpenSearch services (OpenSearch, Dashboards, plugins)
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m -Dopensearch.experimental.feature.telemetry.enabled=true"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=<PASSWORD>
+      - DISABLE_SECURITY_PLUGIN=true
+      - opensearch.experimental.feature.telemetry.enabled=true
+      - telemetry.feature.tracer.enabled=true
+      - telemetry.tracer.enabled=true
+      - telemetry.tracer.sampler.probability=1.0
+      - telemetry.otel.tracer.span.exporter.class=io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter
+      - plugins.ml_commons.tracing_enabled=true
+      - plugins.ml_commons.agent_tracing_enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
+        hard: 65536
+    volumes:
+      - opensearch-data1:/usr/share/opensearch/data
+      # USE THE BELOW TO MOUNT YOUR LOCAL BUILD TO AN INSTANCE
+      - <YOUR_ML_COMMONS_DIRECTORY>/plugin/build/distributions:/usr/share/opensearch/<YOUR_NAME> 
+    command: >
+      bash -c "
+      bin/opensearch-plugin remove opensearch-skills; 
+      bin/opensearch-plugin remove opensearch-ml; 
+      bin/opensearch-plugin install --batch telemetry-otel;
+      bin/opensearch-plugin install --batch file:///usr/share/opensearch/<YOUR_NAME>/opensearch-ml-3.1.0.0-SNAPSHOT.zip;
+      OPENSEARCH_LOG4J_CONFIG_FILE=/usr/share/opensearch/config/telemetry-log4j2.xml ./opensearch-docker-entrypoint.sh opensearch"
+    ports:
+      - 9200:9200
+      - 9600:9600 # required for Performance Analyzer
+    networks:
+      - opensearch-net
+    depends_on:
+      - otel-collector
+    extra_hosts:
+      - "localhost:172.17.0.1"  # This maps localhost to the Docker host IP
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.1.0 # Must match OpenSearch version
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601
+    expose:
+      - "5601"
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch-node1:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    networks:
+      - opensearch-net
+    depends_on:
+      - opensearch-node1
+
+  data-prepper:
+    restart: unless-stopped
+    container_name: data-prepper
+    image: opensearchproject/data-prepper:2
+    volumes:
+      - ./data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml
+      - ./pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml
+      - <PATH_TO_INDEX_MAPPING>/ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
+    ports:
+      - "21890:21890"
+    networks:
+      - opensearch-net
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"  # OTLP gRPC port
+      - "4318:4318"  # OTLP HTTP port
+    networks:
+      - opensearch-net
+    depends_on:
+      - data-prepper
+
+volumes:
+  opensearch-data1:
+
+networks:
+  opensearch-net:
