@@ -24,6 +24,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpConnectorListToolsAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.list.MLMcpConnectorListToolsRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpConnectorListToolsResponse;
@@ -80,29 +81,39 @@ public class TransportMcpConnectorListToolsAction extends HandledTransportAction
         }
 
         connectorAccessControlHelper
-            .validateConnectorAccess(sdkClient, client, connectorId, tenantId, mlFeatureEnabledSetting, ActionListener.wrap(allowed -> {
-                if (!allowed) {
-                    listener
-                        .onFailure(
-                            new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN)
-                        );
-                    return;
-                }
-                fetchToolSpecsFromConnector(connectorId, tenantId, ActionListener.wrap(toolSpecs -> {
-                    try {
-                        if (toolSpecs.isEmpty()) {
-                            log.debug("No tools defined for connector: {}", connectorId);
-                        }
-                        List<McpToolInfo> toolInfos = toolSpecs.stream().map(this::toMcpToolInfo).toList();
-                        listener.onResponse(MLMcpConnectorListToolsResponse.builder().tools(toolInfos).build());
-                    } finally {
-                        cleanUpResource(toolSpecs);
+            // Listing a connector's tools reads it, so read access is what is required. The list-tools action name is
+            // deliberately not used: it is not a connector access level, so it would match none of them.
+            .validateConnectorAccess(
+                sdkClient,
+                client,
+                connectorId,
+                tenantId,
+                mlFeatureEnabledSetting,
+                MLConnectorGetAction.NAME,
+                ActionListener.wrap(allowed -> {
+                    if (!allowed) {
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN)
+                            );
+                        return;
                     }
-                }, e -> {
-                    log.error("Failed to list tools for MCP connector: {}", connectorId, e);
-                    listener.onFailure(e);
-                }));
-            }, listener::onFailure));
+                    fetchToolSpecsFromConnector(connectorId, tenantId, ActionListener.wrap(toolSpecs -> {
+                        try {
+                            if (toolSpecs.isEmpty()) {
+                                log.debug("No tools defined for connector: {}", connectorId);
+                            }
+                            List<McpToolInfo> toolInfos = toolSpecs.stream().map(this::toMcpToolInfo).toList();
+                            listener.onResponse(MLMcpConnectorListToolsResponse.builder().tools(toolInfos).build());
+                        } finally {
+                            cleanUpResource(toolSpecs);
+                        }
+                    }, e -> {
+                        log.error("Failed to list tools for MCP connector: {}", connectorId, e);
+                        listener.onFailure(e);
+                    }));
+                }, listener::onFailure)
+            );
     }
 
     /**

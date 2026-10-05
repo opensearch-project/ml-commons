@@ -8,6 +8,7 @@ package org.opensearch.ml.helper;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_RESOURCE_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -55,16 +57,21 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
+import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -75,6 +82,9 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Mock
     ClusterService clusterService;
+
+    @Mock
+    ResourceSharingClient resourceSharingClient;
 
     @Mock
     Client client;
@@ -215,7 +225,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userString);
 
-        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
         verify(actionListener).onResponse(true);
     }
 
@@ -228,7 +238,8 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userString);
 
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, MLConnectorGetAction.NAME, actionListener);
         verify(actionListener).onResponse(true);
     }
 
@@ -245,7 +256,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
-        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
         verify(actionListener).onResponse(false);
     }
 
@@ -274,7 +285,8 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
 
         // Execute the validation
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, MLConnectorGetAction.NAME, actionListener);
 
         // Verify the action listener was called with false
         verify(actionListener).onResponse(false);
@@ -282,13 +294,14 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Test
     public void test_validateConnectorAccess_user_isNotAdmin_hasBackendRole_return_true() {
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, MLConnectorGetAction.NAME, actionListener);
         verify(actionListener).onResponse(true);
     }
 
     // todo will remove later
     public void test_validateConnectorAccess_user_isNotAdmin_hasBackendRole_return_true_old() {
-        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
         verify(actionListener).onResponse(true);
     }
 
@@ -303,8 +316,9 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
-        // connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
+        // connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, MLConnectorGetAction.NAME, actionListener);
         verify(actionListener, times(1)).onFailure(any(OpenSearchStatusException.class));
     }
 
@@ -320,7 +334,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
-        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
         verify(actionListener, times(1)).onFailure(any(OpenSearchStatusException.class));
     }
 
@@ -335,8 +349,9 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
-        // connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
+        // connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, MLConnectorGetAction.NAME, actionListener);
         verify(actionListener, times(1)).onFailure(any(RuntimeException.class));
     }
 
@@ -347,7 +362,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             .when(connectorAccessControlHelper)
             .getConnector(any(Client.class), anyString(), any());
 
-        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
@@ -362,7 +377,8 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             .when(connectorAccessControlHelper)
             .getConnector(any(), any(), any(), any(), any(), any());
 
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(sdkClient, client, "anyId", null, mlFeatureEnabledSetting, MLConnectorGetAction.NAME, actionListener);
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
@@ -382,7 +398,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
-        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", MLConnectorGetAction.NAME, actionListener);
         verify(actionListener).onFailure(any(OpenSearchStatusException.class));
     }
 
@@ -436,7 +452,16 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
 
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", "tenant-a", mlFeatureEnabledSetting, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(
+                sdkClient,
+                client,
+                "anyId",
+                "tenant-a",
+                mlFeatureEnabledSetting,
+                MLConnectorGetAction.NAME,
+                actionListener
+            );
 
         verify(connectorAccessControlHelper, times(1)).getConnector(any(), any(), any(), any(), any(), any());
         verify(actionListener).onResponse(true);
@@ -453,30 +478,39 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
 
-        connectorAccessControlHelper.validateConnectorAccess(sdkClient, client, "anyId", "tenant-a", mlFeatureEnabledSetting, actionListener);
+        connectorAccessControlHelper
+            .validateConnectorAccess(
+                sdkClient,
+                client,
+                "anyId",
+                "tenant-a",
+                mlFeatureEnabledSetting,
+                MLConnectorGetAction.NAME,
+                actionListener
+            );
 
         verify(actionListener, times(1)).onFailure(any(OpenSearchStatusException.class));
         verify(actionListener, never()).onResponse(anyBoolean());
     }
 
     @Test
-    public void test_validateConnectorAccess_syncRestrictedConnector_userWithoutRole_returnsFalse() {
+    public void test_validateConnectorAccess_alreadyReadRestrictedConnector_userWithoutRole_returnsFalse() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         HttpConnector httpConnector = createRestrictedConnectorWithTenant(null, ImmutableList.of("role-3"));
 
-        boolean hasAccess = connectorAccessControlHelper.validateConnectorAccess(client, httpConnector);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", httpConnector, MLUpdateConnectorAction.NAME, actionListener);
 
-        assertFalse(hasAccess);
+        verify(actionListener).onResponse(false);
     }
 
     @Test
-    public void test_validateConnectorAccess_syncRestrictedConnector_admin_returnsTrue() {
+    public void test_validateConnectorAccess_alreadyReadRestrictedConnector_admin_returnsTrue() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|role-1|all_access");
         HttpConnector httpConnector = createRestrictedConnectorWithTenant(null, ImmutableList.of("role-3"));
 
-        boolean hasAccess = connectorAccessControlHelper.validateConnectorAccess(client, httpConnector);
+        connectorAccessControlHelper.validateConnectorAccess(client, "anyId", httpConnector, MLUpdateConnectorAction.NAME, actionListener);
 
-        assertTrue(hasAccess);
+        verify(actionListener).onResponse(true);
     }
 
     @Test
@@ -882,5 +916,30 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             .tenantId(tenantId)
             .accessMode(AccessMode.RESTRICTED)
             .build();
+    }
+
+    /**
+     * Under resource sharing the action decides which access level suffices, so the action the caller asked about has to
+     * be the one that reaches {@code verifyAccess}. Authorizing every connector operation against the read action would
+     * let a read-only recipient update or delete one.
+     * <p>
+     * Asserted here rather than through the REST API because the get, update and delete requests implement
+     * {@code DocRequest}: the security plugin's evaluator gates those with their own action names before the transport
+     * action runs, so an end-to-end test cannot tell the two behaviours apart. Execute is not typed, and for it this is
+     * the only check.
+     */
+    public void test_validateConnectorAccess_resourceSharing_passesTheRequestedActionThrough() {
+        when(resourceSharingClient.isFeatureEnabledForType(ML_CONNECTOR_RESOURCE_TYPE)).thenReturn(true);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
+        try {
+            connectorAccessControlHelper
+                .validateConnectorAccess(client, "anyId", MLExecuteConnectorAction.NAME, actionListener);
+
+            ArgumentCaptor<String> action = ArgumentCaptor.forClass(String.class);
+            verify(resourceSharingClient).verifyAccess(eq("anyId"), eq(ML_CONNECTOR_RESOURCE_TYPE), action.capture(), any());
+            assertEquals(MLExecuteConnectorAction.NAME, action.getValue());
+        } finally {
+            ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+        }
     }
 }

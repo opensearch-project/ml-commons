@@ -244,10 +244,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         Task task = mock(Task.class);
         transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
@@ -279,10 +279,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onFailure(new OpenSearchStatusException("Testing OpenSearchStatusException", RestStatus.BAD_REQUEST));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -301,10 +301,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onFailure(new MLResourceNotFoundException("Testing MLResourceNotFoundException"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -324,10 +324,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onFailure(new CircuitBreakingException("Memory Circuit Breaker is open, please check your resources!", CircuitBreaker.Durability.TRANSIENT));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -348,10 +348,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(false);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         Task task = mock(Task.class);
         transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
@@ -371,10 +371,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(modelCacheHelper.getRateLimiter("test_id").request()).thenReturn(false);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         Task task = mock(Task.class);
         transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
@@ -396,10 +396,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(modelCacheHelper.getUserRateLimiter("test_id", "admin").request()).thenReturn(false);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         Task task = mock(Task.class);
         transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
@@ -421,10 +421,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(modelCacheHelper.getUserRateLimiter("test_id", "admin").request()).thenReturn(true);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         Task task = mock(Task.class);
         transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
@@ -443,10 +443,10 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
         when(modelCacheHelper.getOptionalFunctionName("test_id")).thenReturn(java.util.Optional.of(FunctionName.REMOTE));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> listener = invocation.getArgument(3);

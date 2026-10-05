@@ -12,23 +12,34 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.mock;
 
-import java.util.Iterator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.After;
 import org.junit.Test;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.security.spi.resources.ResourceProvider;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 
 public class MLResourceSharingExtensionTests {
-    private static String extractIndexFrom(Set<ResourceProvider> providers) {
+    private static Map<String, String> indicesByType(Set<ResourceProvider> providers) {
         assertThat("providers should not be null", providers, is(not(nullValue())));
-        assertThat("Expected exactly one provider", providers.size(), equalTo(1));
-        Iterator<ResourceProvider> it = providers.iterator();
-        assertThat(it.hasNext(), equalTo(true));
-        return it.next().resourceIndexName();
+        Map<String, String> byType = new HashMap<>();
+        for (ResourceProvider provider : providers) {
+            byType.put(provider.resourceType(), provider.resourceIndexName());
+        }
+        return byType;
+    }
+
+    private static ResourceProvider providerFor(Set<ResourceProvider> providers, String resourceType) {
+        return providers
+            .stream()
+            .filter(p -> resourceType.equals(p.resourceType()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No provider registered for " + resourceType));
     }
 
     @After
@@ -42,23 +53,56 @@ public class MLResourceSharingExtensionTests {
     }
 
     @Test
-    public void testGetResourceProviders_returnsExpectedSingleProvider() {
+    public void testGetResourceProviders_returnsModelGroupModelAndConnectorProviders() {
         MLResourceSharingExtension ext = new MLResourceSharingExtension();
 
         Set<ResourceProvider> providers = ext.getResourceProviders();
         assertThat(providers, is(not(nullValue())));
-        assertThat(providers.size(), equalTo(1));
+        assertThat(providers.size(), equalTo(3));
 
-        ResourceProvider provider = providers.iterator().next();
-        assertThat(
-            "Resource type should be MLModelGroup canonical name",
-            provider.resourceType(),
-            equalTo(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE)
-        );
+        Map<String, String> indicesByType = indicesByType(providers);
+        assertThat(indicesByType.get(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), equalTo(CommonValue.ML_MODEL_GROUP_INDEX));
+        assertThat(indicesByType.get(CommonValue.ML_MODEL_RESOURCE_TYPE), equalTo(CommonValue.ML_MODEL_INDEX));
+        assertThat(indicesByType.get(CommonValue.ML_CONNECTOR_RESOURCE_TYPE), equalTo(CommonValue.ML_CONNECTOR_INDEX));
+    }
 
-        String index = provider.resourceIndexName();
-        assertThat("Index must not be empty", index.trim(), equalTo(CommonValue.ML_MODEL_GROUP_INDEX));
+    @Test
+    public void testConnectorProviderDeclarations() {
+        Set<ResourceProvider> providers = new MLResourceSharingExtension().getResourceProviders();
+        ResourceProvider connector = providerFor(providers, CommonValue.ML_CONNECTOR_RESOURCE_TYPE);
 
+        // The connector index holds only connectors, so there is nothing to discriminate and no parent to inherit from.
+        assertThat(connector.typeField(), is(nullValue()));
+        assertThat(connector.parentType(), is(nullValue()));
+        // owner is populated on connector documents, so migration can attribute them without inheriting from a parent
+        assertThat(connector.ownerNamePath(), equalTo("/owner/name"));
+        assertThat(connector.ownerBackendRolesPath(), equalTo("/owner/backend_roles"));
+        assertThat("connector index maps no workspaces field", connector.workspacesField(), is(nullValue()));
+    }
+
+    @Test
+    public void testModelProviderDeclarations() {
+        Set<ResourceProvider> providers = new MLResourceSharingExtension().getResourceProviders();
+        ResourceProvider model = providerFor(providers, CommonValue.ML_MODEL_RESOURCE_TYPE);
+
+        // The framework returns the extracted typeField value as the resource type, so the stamped value must be
+        // the type identifier itself — see MLModel.toXContent.
+        assertThat(model.typeField(), equalTo(CommonValue.RESOURCE_TYPE_FIELD));
+        assertThat(model.parentType(), equalTo(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE));
+        assertThat(model.parentIdField(), equalTo(MLModel.MODEL_GROUP_ID_FIELD));
+        assertThat(model.ownerNamePath(), equalTo("/user/name"));
+        assertThat(model.ownerBackendRolesPath(), equalTo("/user/backend_roles"));
+        assertThat("model index maps no workspaces field", model.workspacesField(), is(nullValue()));
+    }
+
+    @Test
+    public void testModelGroupProviderHasNoTypeFieldOrParent() {
+        Set<ResourceProvider> providers = new MLResourceSharingExtension().getResourceProviders();
+        ResourceProvider group = providerFor(providers, CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE);
+
+        // The group index holds a single resource type, so no discriminator is needed and it has no parent.
+        assertThat(group.typeField(), is(nullValue()));
+        assertThat(group.parentType(), is(nullValue()));
     }
 
     @Test(expected = UnsupportedOperationException.class)
@@ -119,8 +163,6 @@ public class MLResourceSharingExtensionTests {
         assertThat(first, equalTo(second));
 
         // Extract and compare details for additional safety
-        String idx1 = extractIndexFrom(first);
-        String idx2 = extractIndexFrom(second);
-        assertThat(idx1, equalTo(idx2));
+        assertThat(indicesByType(first), equalTo(indicesByType(second)));
     }
 }

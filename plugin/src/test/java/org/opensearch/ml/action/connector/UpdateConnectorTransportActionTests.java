@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
@@ -232,6 +233,26 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
     }
 
+    /**
+     * The access check is asynchronous now, so it is stubbed by completing its listener rather than by returning a
+     * boolean.
+     */
+    private void stubConnectorAccess(boolean allowed) {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(4);
+            listener.onResponse(allowed);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), isA(ActionListener.class));
+    }
+
+    private void stubConnectorAccessFailure(Exception failure) {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(4);
+            listener.onFailure(failure);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), isA(ActionListener.class));
+    }
+
     @Test
     public void testUpdateConnectorUpdatesHttpConnectorTimeFields() {
         HttpConnector connector = HttpConnector
@@ -262,7 +283,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
         assert (connector.getCreatedTime().toEpochMilli() == connector.getLastUpdateTime().toEpochMilli());
 
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -292,7 +313,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteConnectorAccessControlSuccess() throws InterruptedException {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -317,7 +338,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
      */
     @Test
     public void testUpdateConnector_ReferenceGuardUsesExactTermQuery() {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -351,7 +372,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteConnectorAccessControlNoPermission() {
-        doReturn(false).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(false);
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -364,9 +385,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteConnectorAccessControlAccessError() {
-        doThrow(new RuntimeException("Connector Access Control Error"))
-            .when(connectorAccessControlHelper)
-            .validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccessFailure(new RuntimeException("Connector Access Control Error"));
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -376,9 +395,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteConnectorAccessControlException() {
-        doThrow(new RuntimeException("exception in access control"))
-            .when(connectorAccessControlHelper)
-            .validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccessFailure(new RuntimeException("exception in access control"));
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -388,7 +405,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteUpdateWrongStatus() throws InterruptedException {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -413,7 +430,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteUpdateException() throws InterruptedException {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -435,7 +452,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteSearchResponseNotEmpty() throws IOException, InterruptedException {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -453,7 +470,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteSearchResponseError() throws InterruptedException {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -469,7 +486,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteSearchIndexNotFoundError() throws InterruptedException {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -521,7 +538,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteWithValidDynamicHeaders() {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         MLCreateConnectorInput updateContent = MLCreateConnectorInput
             .builder()
@@ -561,7 +578,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testExecuteWithBlockedDynamicHeaderThrowsException() {
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         MLCreateConnectorInput updateContent = MLCreateConnectorInput
             .builder()
@@ -618,7 +635,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
         when(updateRequest.getUpdateContent())
             .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build());
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
@@ -635,7 +652,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
         when(updateRequest.getUpdateContent())
             .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build());
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
         stubSearchReturnsNoModels();
         stubUpdateSucceeds();
 
@@ -656,7 +673,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
         when(updateRequest.getUpdateContent())
             .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_SSE).build());
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
@@ -696,7 +713,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                     )
                     .build()
             );
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(5);
             listener
@@ -727,7 +744,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
         when(updateRequest.getUpdateContent())
             .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP).build());
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
         // The stored connector is already MCP, so this update stays on the same side of the boundary.
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(5);
@@ -760,7 +777,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     public void testUpdateConnectorRejectsUnsupportedProtocol() {
         when(updateRequest.getUpdateContent())
             .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol("not_a_real_protocol").build());
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
@@ -788,7 +805,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                     .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build())
                     .build()
             );
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
@@ -810,7 +827,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                     .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build())
                     .build()
             );
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
@@ -852,7 +869,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                     .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).maxConnections(50).build())
                     .build()
             );
-        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubConnectorAccess(true);
         stubSearchReturnsNoModels();
         stubUpdateSucceeds();
 

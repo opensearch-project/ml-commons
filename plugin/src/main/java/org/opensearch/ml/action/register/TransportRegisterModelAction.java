@@ -47,6 +47,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -309,6 +310,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         registerModelInput.getConnectorId(),
                         registerModelInput.getTenantId(),
                         mlFeatureEnabledSetting,
+                        // Registering a model against a connector reads it rather than changes it
+                        MLConnectorGetAction.NAME,
                         ActionListener.wrap(r -> {
                             if (Boolean.TRUE.equals(r)) {
                                 // The connector is fetched even when the request carries its own interface, because
