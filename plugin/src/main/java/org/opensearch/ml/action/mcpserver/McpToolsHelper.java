@@ -28,7 +28,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.IdsQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
@@ -295,8 +295,15 @@ public class McpToolsHelper {
         SearchRequest searchRequest = new SearchRequest();
         searchRequest.indices(MLIndex.MCP_TOOLS.getIndexName());
 
-        BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
-        toolNames.forEach(toolName -> queryBuilder.should(QueryBuilders.matchQuery("name", toolName)));
+        // Tool documents are always indexed, updated and deleted with the tool name as the document id, so look the
+        // tools up by document id. An analysed match query on the `name` text field splits on '-' and lowercases, so it
+        // returned every tool sharing a single token, which made `_remove` delete unrelated tools. (Note '_' does not
+        // split: it is Word_Break=ExtendNumLet in UAX #29, so `a_b` stays one token. Only '-' breaks.)
+        //
+        // Callers must pass a non-empty list: an ids query with no ids matches nothing, whereas the bool/should query
+        // this replaced matched everything when it had no clauses. Every caller reaches here via a request whose
+        // validate() rejects an empty tool list, so this is a precondition rather than a case to handle.
+        IdsQueryBuilder queryBuilder = QueryBuilders.idsQuery().addIds(toolNames.toArray(new String[0]));
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(queryBuilder);
         searchRequest.source(searchSourceBuilder);

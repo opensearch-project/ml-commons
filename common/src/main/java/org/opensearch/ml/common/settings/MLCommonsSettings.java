@@ -156,6 +156,42 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    public static final Setting<Double> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION = Setting
+        .doubleSetting(
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.fraction",
+            0.01,
+            0.0,
+            0.1,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // The floor and the ceiling clamp the fraction of heap the dynamic batching queue may retain, so both are bounded below
+    // by 1 byte: a zero or negative bound would clamp the budget to nothing and reject every queued predict
+    // request for the life of the node, reported as a 429 that no amount of backoff could clear.
+    private static final ByteSizeValue MIN_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(1L, ByteSizeUnit.BYTES);
+    private static final ByteSizeValue MAX_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(Long.MAX_VALUE, ByteSizeUnit.BYTES);
+
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN = Setting
+        .byteSizeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.min",
+            new ByteSizeValue(64L, ByteSizeUnit.MB),
+            MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
+            MAX_DYNAMIC_BATCHING_MEMORY_BOUND,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX = Setting
+        .byteSizeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.max",
+            new ByteSizeValue(512L, ByteSizeUnit.MB),
+            MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
+            MAX_DYNAMIC_BATCHING_MEMORY_BOUND,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
     public static final Setting<String> ML_COMMONS_EXCLUDE_NODE_NAMES = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + "exclude_nodes._name", Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Boolean> ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN = Setting
@@ -363,7 +399,7 @@ public final class MLCommonsSettings {
 
     // This setting is to enable/disable unified agent API (agent registration with model creation and standardized execution interface)
     public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     // This setting enables/disables the agentic search template CRUD APIs (register/get/update/delete/list).
     // Disabled by default pending security review of the new APIs.
@@ -585,6 +621,31 @@ public final class MLCommonsSettings {
         "Cannot set pinned: the memory retention feature is not enabled. To enable it, please update the cluster setting "
             + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
 
+    // Feature flag for the Vertex AI (google_cloud) connector. Disabled by default (opt-in): gates connector
+    // creation keyed on the google_cloud protocol behind a cluster-level kill switch pending security review.
+    public static final Setting<Boolean> ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "connector.vertexai_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE =
+        "The Vertex AI (google_cloud) connector is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.getKey();
+
+    // Feature flag for connector mutual TLS. Disabled by default (opt-in).
+    //
+    // Support for mutual_tls_enabled is not complete: it is not applied on the streaming path, and some
+    // adjacent certificate and CA handling does not yet match what the field implies. Until that is finished,
+    // an operator needs a way to keep the field from being accepted rather than having it stored and reported
+    // back as configured. Gating it matches how the other new connector surfaces ship
+    // (connector.vertexai_enabled, stream_enabled) and is reversible in one setting.
+    public static final Setting<Boolean> ML_COMMONS_MUTUAL_TLS_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.mutual_tls_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE =
+        "Connector mutual TLS is not enabled. To enable it, please update the cluster setting " + ML_COMMONS_MUTUAL_TLS_ENABLED.getKey();
+
     // Feature flag for global tenant id in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
         .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);
@@ -701,8 +762,18 @@ public final class MLCommonsSettings {
         );
 
     private static void validateRegexSafety(String regex) {
-        // Reject nested quantifiers or backreferences
-        if (regex.matches(".*\\([^)]*[*+?]\\)[*+?{].*") || regex.matches(".*\\\\[1-9].*")) {
+        // Reject nested quantifiers or backreferences. The outer quantifier set intentionally includes '{':
+        // a counted repetition of a group that already contains a quantifier, such as "(a+){1,1000}", is the
+        // shape that actually backtracks exponentially. '?' is excluded because "(a+)?" matches at most once
+        // and cannot blow up, so rejecting it only produced false positives on patterns like "(:\d+)?".
+        //
+        // This is a deliberately shallow check: it only sees the character immediately before the closing
+        // paren, so a nested form such as "((a+)){1,1000}" still gets through. Tightening it structurally was
+        // tried and rejected - it also flags legitimate patterns like "([a-z0-9-]+\.){1,5}", and persisted
+        // cluster settings are re-validated on restart, so a new false positive would break upgrades. The
+        // setting is admin-only, so treat this as a guard against operator error rather than a security
+        // boundary; a match-time budget on Connector#validateResolvedEndpoint is the robust fix.
+        if (regex.matches(".*\\([^)]*[*+?]\\)[*+{].*") || regex.matches(".*\\\\[1-9].*")) {
             throw new IllegalArgumentException(
                 "Regex pattern contains nested quantifiers or backreferences that may cause ReDoS: " + regex
             );

@@ -11,10 +11,11 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.jobs.MLJobType;
-import org.opensearch.ml.utils.TestHelper;
 
 /**
  * Integration test proving that a live {@code PUT _cluster/settings} for
@@ -68,10 +69,16 @@ public class RestMemoryRetentionJobIntervalIT extends MLCommonsRestTestCase {
     private int getPersistedIntervalHours() throws IOException {
         Response response;
         try {
-            response = TestHelper.makeRequest(client(), "GET", JOBS_INDEX + "/_doc/" + RETENTION_JOB_ID, null, (String) null, null);
+            Request request = new Request("GET", "/" + JOBS_INDEX + "/_doc/" + RETENTION_JOB_ID);
+            response = adminClient().performRequest(request);
         } catch (ResponseException e) {
-            // The jobs index or the document may not exist yet; treat as not-yet-present so assertBusy keeps polling.
-            return -1;
+            int status = e.getResponse().getStatusLine().getStatusCode();
+            if (status == RestStatus.NOT_FOUND.getStatus() || status == RestStatus.SERVICE_UNAVAILABLE.getStatus()) {
+                // The jobs index or document may not exist yet, or its primary shard may still be recovering.
+                return -1;
+            }
+            // Do not hide authentication, authorization, or other unexpected server failures.
+            throw e;
         }
         Map<String, Object> responseMap = parseResponseToMap(response);
         if (responseMap == null || !Boolean.TRUE.equals(responseMap.get("found"))) {

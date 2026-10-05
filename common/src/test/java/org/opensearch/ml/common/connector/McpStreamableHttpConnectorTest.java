@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.supportedProtocols;
 import static org.opensearch.ml.common.connector.RetryBackoffPolicy.CONSTANT;
 
 import java.io.IOException;
@@ -50,7 +51,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void constructor_InvalidProtocol() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of " + supportedProtocols());
 
         McpStreamableHttpConnector.builder().protocol("wrong protocol").build();
     }

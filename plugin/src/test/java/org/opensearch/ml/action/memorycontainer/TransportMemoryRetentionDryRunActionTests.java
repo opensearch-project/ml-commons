@@ -23,6 +23,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -134,6 +135,12 @@ public class TransportMemoryRetentionDryRunActionTests extends OpenSearchTestCas
         lenient().when(clusterService.state()).thenReturn(clusterState);
         lenient().when(clusterState.metadata()).thenReturn(metadata);
         lenient().when(metadata.hasIndex(anyString())).thenReturn(true);
+
+        lenient().doAnswer(inv -> {
+            ActionListener<GetResponse> l = inv.getArgument(1);
+            l.onResponse(existsGet(true, "{}"));
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
         action = new TransportMemoryRetentionDryRunAction(
             transportService,

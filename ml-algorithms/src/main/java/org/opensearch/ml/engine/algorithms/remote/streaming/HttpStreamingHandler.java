@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.io.IOException;
@@ -76,6 +77,23 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         Duration connectionTimeout = Duration.ofSeconds(connectorClientConfig.getConnectionTimeout());
         Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeout());
+
+        // The client built below carries no mutual-TLS material, so a connector that asked for
+        // mutual_tls_enabled would stream without presenting its client certificate.
+        // ConnectorProtocolValidator rejects that combination on the protocols whose executors never apply
+        // mutual TLS, but http is not one of them: the non-streaming http executor does apply it, so the field
+        // is legitimately accepted for the protocol and only this path cannot honour it. Fail the stream
+        // instead of proceeding without it.
+        if (Boolean.TRUE.equals(connectorClientConfig.getMutualTlsEnabled())) {
+            throw new IllegalArgumentException(
+                "Mutual TLS is not supported on the streaming path. "
+                    + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                    + " is applied only by the non-streaming http executor, so streaming this connector would "
+                    + "connect without a client certificate. Either do not stream this connector, or remove "
+                    + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                    + "."
+            );
+        }
 
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
@@ -178,6 +196,9 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
                     onOpenAIEvent(data);
                     break;
+                case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
+                    onGeminiEvent(data);
+                    break;
                 default:
                     throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
             }
@@ -238,6 +259,50 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             try {
                 Map<String, Object> dataMap = gson.fromJson(data, Map.class);
                 processStreamChunk(dataMap);
+            } catch (Exception e) {
+                log.debug("Skipping malformed chunk: {}", data);
+            }
+        }
+
+        private void onGeminiEvent(String data) {
+            // Vertex AI streamGenerateContent emits JSON chunks shaped like:
+            // {"candidates":[{"content":{"parts":[{"text":"..."}]},"finishReason":"STOP"}]}
+            try {
+                Map<String, Object> dataMap = gson.fromJson(data, Map.class);
+
+                // A prompt rejected by Vertex safety filters carries a promptFeedback.blockReason
+                // with no candidates and no finishReason. Without terminating here the completion
+                // sentinel below never fires and the client hangs waiting on the stream.
+                String blockReason = extractPath(dataMap, "$.promptFeedback.blockReason");
+                if (blockReason != null) {
+                    log.warn("Vertex blocked the prompt before generation. blockReason={}", blockReason);
+                    sendCompletionResponse(isStreamClosed, streamActionListener);
+                    return;
+                }
+
+                String content = extractPath(dataMap, "$.candidates[0].content.parts[0].text");
+                if (content != null && !content.isEmpty()) {
+                    if (!firstTokenReceived.get()) {
+                        long timeToFirstToken = System.currentTimeMillis() - streamStartTime;
+                        String modelId = parameters != null ? parameters.get("model") : null;
+                        String tenantId = connector != null ? connector.getTenantId() : null;
+                        log
+                            .info(
+                                "First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}",
+                                modelId,
+                                tenantId,
+                                timeToFirstToken
+                            );
+                        AgentUtils.logTimeToFirstToken(modelId, tenantId, timeToFirstToken);
+                        firstTokenReceived.set(true);
+                    }
+                    sendContentResponse(content, false, streamActionListener);
+                }
+
+                String finishReason = extractPath(dataMap, "$.candidates[0].finishReason");
+                if (finishReason != null) {
+                    sendCompletionResponse(isStreamClosed, streamActionListener);
+                }
             } catch (Exception e) {
                 log.debug("Skipping malformed chunk: {}", data);
             }

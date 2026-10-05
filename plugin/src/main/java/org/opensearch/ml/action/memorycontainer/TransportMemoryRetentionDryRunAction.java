@@ -115,11 +115,13 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         User user = RestActionUtils.getUserContext(client);
         MemoryRetentionJobProcessor processor = MemoryRetentionJobProcessor.getInstance(clusterService, client, threadPool);
 
-        if (dryRunRequest.isClusterWide()) {
-            executeClusterWide(processor, user, tenantId, actionListener);
-        } else {
-            executeSingle(processor, user, dryRunRequest.getMemoryContainerId(), tenantId, actionListener);
-        }
+        processor.resolveRetentionJobWarning(ActionListener.wrap(retentionJobWarning -> {
+            if (dryRunRequest.isClusterWide()) {
+                executeClusterWide(processor, user, tenantId, retentionJobWarning, actionListener);
+            } else {
+                executeSingle(processor, user, dryRunRequest.getMemoryContainerId(), tenantId, retentionJobWarning, actionListener);
+            }
+        }, actionListener::onFailure));
     }
 
     private void executeSingle(
@@ -127,6 +129,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         User user,
         String containerId,
         String tenantId,
+        String retentionJobWarning,
         ActionListener<MLMemoryRetentionDryRunResponse> actionListener
     ) {
         GetRequest getRequest = new GetRequest(ML_MEMORY_CONTAINER_INDEX, containerId);
@@ -163,6 +166,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
                         container.getConfiguration(),
                         containerId,
                         baseline,
+                        retentionJobWarning,
                         ActionListener
                             .wrap(
                                 result -> wrapped.onResponse(new MLMemoryRetentionDryRunResponse(List.of(result), false, 0)),
@@ -187,6 +191,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         MemoryRetentionJobProcessor processor,
         User user,
         String tenantId,
+        String retentionJobWarning,
         ActionListener<MLMemoryRetentionDryRunResponse> actionListener
     ) {
         List<MemoryRetentionDryRunResult> results = new ArrayList<>();
@@ -198,7 +203,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         boolean[] truncated = new boolean[] { false };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLMemoryRetentionDryRunResponse> wrapped = ActionListener.runBefore(actionListener, context::restore);
-            searchContainerPage(processor, user, tenantId, null, results, skipped, truncated, wrapped);
+            searchContainerPage(processor, user, tenantId, retentionJobWarning, null, results, skipped, truncated, wrapped);
         } catch (Exception e) {
             log.error("Failed to run cluster-wide retention dry-run", e);
             actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
@@ -224,6 +229,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         MemoryRetentionJobProcessor processor,
         User user,
         String tenantId,
+        String retentionJobWarning,
         Object[] searchAfter,
         List<MemoryRetentionDryRunResult> results,
         int[] skipped,
@@ -251,7 +257,19 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
             Object[] nextPageSort = hits.length == CONTAINER_PAGE_SIZE ? hits[hits.length - 1].getSortValues() : null;
             // Iterative drain over the page's hits (see drainPage): O(1) added stack depth per page even when the
             // client completes synchronously, replacing the former per-container callback recursion.
-            drainPage(processor, user, tenantId, hits, new int[] { 0 }, nextPageSort, results, skipped, truncated, listener);
+            drainPage(
+                processor,
+                user,
+                tenantId,
+                retentionJobWarning,
+                hits,
+                new int[] { 0 },
+                nextPageSort,
+                results,
+                skipped,
+                truncated,
+                listener
+            );
         }, e -> {
             if (ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
                 // No container index yet: nothing to evaluate, return an empty array rather than an error.
@@ -277,6 +295,7 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
         MemoryRetentionJobProcessor processor,
         User user,
         String tenantId,
+        String retentionJobWarning,
         SearchHit[] hits,
         int[] index,
         Object[] nextPageSort,
@@ -291,7 +310,17 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
                 // Page exhausted. Fetch the next page only if the cap has not been reached; otherwise stop and, if
                 // more pages existed, flag truncation.
                 if (nextPageSort != null && !capReached) {
-                    searchContainerPage(processor, user, tenantId, nextPageSort, results, skipped, truncated, listener);
+                    searchContainerPage(
+                        processor,
+                        user,
+                        tenantId,
+                        retentionJobWarning,
+                        nextPageSort,
+                        results,
+                        skipped,
+                        truncated,
+                        listener
+                    );
                 } else {
                     if (nextPageSort != null) {
                         truncated[0] = true;
@@ -337,21 +366,52 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
             // arrives first, so the loop below observes handoff already set and continues iteratively (no recursion).
             final java.util.concurrent.atomic.AtomicBoolean handoff = new java.util.concurrent.atomic.AtomicBoolean(false);
             try {
-                processor.dryRunContainer(container.getConfiguration(), containerId, baseline, ActionListener.wrap(result -> {
-                    results.add(result);
-                    index[0]++;
-                    if (!handoff.compareAndSet(false, true)) {
-                        // Loop already yielded (async completion): this callback is the second arriver, resume draining.
-                        drainPage(processor, user, tenantId, hits, index, nextPageSort, results, skipped, truncated, listener);
-                    }
-                }, e -> {
-                    log.warn("Skipping container {} in retention dry-run: evaluation failed", containerId, e);
-                    skipped[0]++;
-                    index[0]++;
-                    if (!handoff.compareAndSet(false, true)) {
-                        drainPage(processor, user, tenantId, hits, index, nextPageSort, results, skipped, truncated, listener);
-                    }
-                }));
+                processor
+                    .dryRunContainer(
+                        container.getConfiguration(),
+                        containerId,
+                        baseline,
+                        retentionJobWarning,
+                        ActionListener.wrap(result -> {
+                            results.add(result);
+                            index[0]++;
+                            if (!handoff.compareAndSet(false, true)) {
+                                // Loop already yielded (async completion): this callback is the second arriver, resume draining.
+                                drainPage(
+                                    processor,
+                                    user,
+                                    tenantId,
+                                    retentionJobWarning,
+                                    hits,
+                                    index,
+                                    nextPageSort,
+                                    results,
+                                    skipped,
+                                    truncated,
+                                    listener
+                                );
+                            }
+                        }, e -> {
+                            log.warn("Skipping container {} in retention dry-run: evaluation failed", containerId, e);
+                            skipped[0]++;
+                            index[0]++;
+                            if (!handoff.compareAndSet(false, true)) {
+                                drainPage(
+                                    processor,
+                                    user,
+                                    tenantId,
+                                    retentionJobWarning,
+                                    hits,
+                                    index,
+                                    nextPageSort,
+                                    results,
+                                    skipped,
+                                    truncated,
+                                    listener
+                                );
+                            }
+                        })
+                    );
             } catch (Exception e) {
                 // dryRunContainer threw synchronously before ever invoking the listener (e.g. a client that rejects
                 // the dispatch inline). Mirror the async onFailure handler so the container is skipped and the drain
@@ -360,7 +420,19 @@ public class TransportMemoryRetentionDryRunAction extends HandledTransportAction
                 skipped[0]++;
                 index[0]++;
                 if (!handoff.compareAndSet(false, true)) {
-                    drainPage(processor, user, tenantId, hits, index, nextPageSort, results, skipped, truncated, listener);
+                    drainPage(
+                        processor,
+                        user,
+                        tenantId,
+                        retentionJobWarning,
+                        hits,
+                        index,
+                        nextPageSort,
+                        results,
+                        skipped,
+                        truncated,
+                        listener
+                    );
                 }
             }
             if (handoff.compareAndSet(false, true)) {

@@ -134,7 +134,9 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
     private SearchDataObjectRequest buildModelSearchRequest(String connectorId, String tenantId) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+        // Exact match on the keyword subfield. An analysed match query on the `connector_id` text field splits on '-'
+        // and lowercases, so any model referencing a connector id that shares a single token would block this delete.
+        sourceBuilder.query(QueryBuilders.termQuery(MLModel.CONNECTOR_ID_KEYWORD_FIELD, connectorId));
 
         return SearchDataObjectRequest.builder().indices(ML_MODEL_INDEX).tenantId(tenantId).searchSourceBuilder(sourceBuilder).build();
     }

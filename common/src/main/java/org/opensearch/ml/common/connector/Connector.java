@@ -78,6 +78,8 @@ public interface Connector extends ToXContentObject, Writeable {
 
     ConnectorClientConfig getConnectorClientConfig();
 
+    BatchJobStatusMapping getBatchJobStatus();
+
     String getActionEndpoint(String action, Map<String, String> parameters);
 
     String getActionHttpMethod(String action);

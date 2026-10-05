@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
 import java.security.AccessController;
+import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -253,11 +254,24 @@ public class RestActionUtils {
             return false;
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
-                String userContext = objectMapper.writeValueAsString(userObject);
-                final JsonNode node = objectMapper.readTree(userContext);
-                final String userName = node.get("name").asText();
-
-                return isAdminDN(userName);
+                // On security 3.9+ (security#6419) org.opensearch.security.user.User implements Principal,
+                // and its getPrincipal() returns `this` — a direct self-reference Jackson 3 rejects by
+                // default ("Direct self-reference leading to cycle"). Read the name straight off the
+                // Principal to avoid serializing that self-referential bean. See ml-commons issue #4990.
+                if (userObject instanceof Principal principal) {
+                    return isAdminDN(principal.getName());
+                }
+                // Backport safety, do not delete: on security < 3.9 (3.8, 2.19) User is not a Principal but a
+                // plain serializable bean, and ml-commons 3.8 already runs Jackson 3. Those versions have no
+                // User#getPrincipal(), so there is no self-reference to trip on and the bean serializes
+                // cleanly — read the name off the JSON.
+                final JsonNode node = objectMapper.readTree(objectMapper.writeValueAsString(userObject));
+                final JsonNode nameNode = node.get("name");
+                if (nameNode == null) {
+                    // Fail loud rather than silently deciding this is not an admin on a security-relevant path.
+                    throw new IllegalStateException("Security user transient has no name: " + userObject.getClass().getName());
+                }
+                return isAdminDN(nameNode.asText());
             });
         } catch (PrivilegedActionException e) {
             throw new RuntimeException(e);

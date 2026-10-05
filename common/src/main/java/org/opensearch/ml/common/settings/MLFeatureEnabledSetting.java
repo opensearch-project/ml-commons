@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
@@ -29,6 +30,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STA
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -74,6 +76,10 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isMemoryRetentionEnabled;
 
+    private volatile Boolean isVertexAIConnectorEnabled;
+
+    private volatile Boolean isMutualTlsEnabled;
+
     private volatile Boolean isIndexInsightEnabled;
 
     private volatile Boolean isStreamEnabled;
@@ -107,6 +113,8 @@ public class MLFeatureEnabledSetting {
         isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
         isRemoteAgenticMemoryEnabled = ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.get(settings);
         isMemoryRetentionEnabled = ML_COMMONS_MEMORY_RETENTION_ENABLED.get(settings);
+        isVertexAIConnectorEnabled = ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.get(settings);
+        isMutualTlsEnabled = ML_COMMONS_MUTUAL_TLS_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
         maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
@@ -152,6 +160,10 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MEMORY_RETENTION_ENABLED, it -> isMemoryRetentionEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED, it -> isVertexAIConnectorEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MUTUAL_TLS_ENABLED, it -> isMutualTlsEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
         clusterService
             .getClusterSettings()
@@ -309,6 +321,25 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isMemoryRetentionEnabled() {
         return isMemoryRetentionEnabled;
+    }
+
+    /**
+     * Whether the Vertex AI (google_cloud) connector is enabled. Disabled by default (opt-in); when disabled,
+     * connector creation with the google_cloud protocol is rejected.
+     * @return whether the Vertex AI connector feature is enabled.
+     */
+    public boolean isVertexAIConnectorEnabled() {
+        return isVertexAIConnectorEnabled;
+    }
+
+    /**
+     * Whether connector mutual TLS is enabled. Disabled by default (opt-in); when disabled, a connector request
+     * that sets {@code mutual_tls_enabled} is rejected rather than silently storing a transport protection that
+     * is not consistently applied.
+     * @return whether connector mutual TLS is enabled.
+     */
+    public boolean isMutualTlsEnabled() {
+        return isMutualTlsEnabled;
     }
 
     @VisibleForTesting

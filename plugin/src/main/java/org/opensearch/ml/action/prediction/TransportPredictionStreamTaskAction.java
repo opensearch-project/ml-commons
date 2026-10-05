@@ -169,6 +169,11 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                     if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
                         throw new UnsupportedOperationException("Streaming is not supported for local model.");
                     }
+                    if (mlPredictionTaskRequest.getMlInput().getCallerAlgorithm() == null
+                        && (mlPredictionTaskRequest.getMlInput().getAlgorithm() != FunctionName.REMOTE
+                            || mlPredictionTaskRequest.isDispatchTask())) {
+                        mlPredictionTaskRequest.getMlInput().setCallerAlgorithm(mlPredictionTaskRequest.getMlInput().getAlgorithm());
+                    }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                     // Validate user access to model group
                     modelAccessControlHelper

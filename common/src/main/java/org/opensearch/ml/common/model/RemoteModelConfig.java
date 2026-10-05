@@ -48,6 +48,20 @@ public class RemoteModelConfig extends BaseModelConfig {
         Integer modelMaxLength,
         Map<String, Object> additionalConfig
     ) {
+        this(modelType, embeddingDimension, frameworkType, allConfig, poolingMode, normalizeResult, modelMaxLength, additionalConfig, true);
+    }
+
+    private RemoteModelConfig(
+        String modelType,
+        Integer embeddingDimension,
+        BaseModelConfig.FrameworkType frameworkType,
+        String allConfig,
+        BaseModelConfig.PoolingMode poolingMode,
+        boolean normalizeResult,
+        Integer modelMaxLength,
+        Map<String, Object> additionalConfig,
+        boolean validate
+    ) {
         super(
             modelType,
             allConfig,
@@ -60,11 +74,20 @@ public class RemoteModelConfig extends BaseModelConfig {
             null,
             null
         );
-        validateNoDuplicateKeys(allConfig, additionalConfig);
-        validateTextEmbeddingConfig();
+        if (validate) {
+            validateTextEmbeddingConfig();
+        }
     }
 
     public static RemoteModelConfig parse(XContentParser parser) throws IOException {
+        return parse(parser, true);
+    }
+
+    /**
+     * Parses a remote model config. Pass {@code validate = false} when reading back a stored
+     * model document, which may predate the space_type requirement (issue #4999).
+     */
+    public static RemoteModelConfig parse(XContentParser parser, boolean validate) throws IOException {
         String modelType = null;
         Integer embeddingDimension = null;
         BaseModelConfig.FrameworkType frameworkType = null;
@@ -117,7 +140,8 @@ public class RemoteModelConfig extends BaseModelConfig {
             poolingMode,
             normalizeResult,
             modelMaxLength,
-            additionalConfig
+            additionalConfig,
+            validate
         );
     }
 

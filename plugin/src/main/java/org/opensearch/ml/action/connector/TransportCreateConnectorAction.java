@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.time.Instant;
@@ -14,7 +13,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -33,7 +31,6 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
-import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -45,6 +42,7 @@ import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -107,11 +105,19 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 AbstractConnector.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
             }
         }
-        if (mlCreateConnectorInput.getProtocol() != null
-            && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
-            && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
-            // MCP connector provided but MCP feature is disabled, so abort.
-            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
+        try {
+            ConnectorProtocolValidator.validateProtocolEnabled(mlCreateConnectorInput.getProtocol(), mlFeatureEnabledSetting);
+            ConnectorProtocolValidator
+                .validateMutualTlsSupported(mlCreateConnectorInput.getProtocol(), mlCreateConnectorInput.getConnectorClientConfig());
+            ConnectorProtocolValidator.validateMutualTlsEnabled(mlCreateConnectorInput.getConnectorClientConfig(), mlFeatureEnabledSetting);
+            ConnectorProtocolValidator
+                .validateMutualTlsScheme(
+                    mlCreateConnectorInput.getActions(),
+                    mlCreateConnectorInput.getParameters(),
+                    mlCreateConnectorInput.getConnectorClientConfig()
+                );
+        } catch (Exception e) {
+            listener.onFailure(e);
             return;
         }
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {

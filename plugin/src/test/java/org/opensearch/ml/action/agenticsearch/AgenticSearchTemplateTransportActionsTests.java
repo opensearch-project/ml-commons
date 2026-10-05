@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -61,6 +62,9 @@ public class AgenticSearchTemplateTransportActionsTests extends OpenSearchTestCa
 
     private final RuntimeException failure = new RuntimeException("boom");
 
+    /** Transient used to observe which identity a step runs under. */
+    private static final String CALLER_MARKER = "_test_caller_marker";
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -93,6 +97,39 @@ public class AgenticSearchTemplateTransportActionsTests extends OpenSearchTestCa
         verify(listener).onResponse(captor.capture());
         assertEquals("tmpl", captor.getValue().getTemplateId());
         assertEquals("created", captor.getValue().getStatus());
+    }
+
+    /**
+     * Registration reads a stored script and an index mapping on the caller's behalf, so this action must
+     * hand off to the service in the caller's thread context - the stash belongs further down, on the
+     * system-index write. Observed via a caller transient because the scoping is invisible in the response:
+     * re-adding a stash here would still return "created", it would just read as the plugin again.
+     */
+    @Test
+    public void register_invokesServiceInCallerContext() {
+        RegisterAgenticSearchTemplateTransportAction action = new RegisterAgenticSearchTemplateTransportAction(
+            transportService,
+            actionFilters,
+            client,
+            service
+        );
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+        threadContext.putTransient(CALLER_MARKER, "present");
+
+        AtomicReference<String> duringRegister = new AtomicReference<>();
+        doAnswer((Answer<Void>) inv -> {
+            duringRegister.set(threadContext.getTransient(CALLER_MARKER));
+            ActionListener<AgenticSearchTemplate> l = inv.getArgument(5);
+            l.onResponse(AgenticSearchTemplate.builder().templateId("tmpl").build());
+            return null;
+        }).when(service).register(any(), any(), any(), any(), any(), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<MLRegisterAgenticSearchTemplateResponse> listener = mock(ActionListener.class);
+        action.doExecute(null, new MLRegisterAgenticSearchTemplateRequest("tmpl", "idx", "d", null), listener);
+
+        verify(listener).onResponse(any(MLRegisterAgenticSearchTemplateResponse.class));
+        assertEquals("service.register must be invoked in the caller's context", "present", duringRegister.get());
     }
 
     @Test

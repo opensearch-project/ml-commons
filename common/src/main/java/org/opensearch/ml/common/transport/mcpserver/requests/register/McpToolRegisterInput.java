@@ -64,10 +64,10 @@ public class McpToolRegisterInput extends McpToolBaseInput {
 
             switch (fieldName) {
                 case TYPE_FIELD:
-                    type = parser.text();
+                    type = parser.textOrNull();
                     break;
                 case NAME_FIELD:
-                    name = parser.text();
+                    name = parser.textOrNull();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.textOrNull();

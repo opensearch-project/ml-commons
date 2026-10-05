@@ -131,6 +131,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
                         throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
                     }
+                    if (mlPredictionTaskRequest.getMlInput().getCallerAlgorithm() == null
+                        && (mlPredictionTaskRequest.getMlInput().getAlgorithm() != FunctionName.REMOTE
+                            || mlPredictionTaskRequest.isDispatchTask())) {
+                        mlPredictionTaskRequest.getMlInput().setCallerAlgorithm(mlPredictionTaskRequest.getMlInput().getAlgorithm());
+                    }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                     if (mlModel.getIsHidden()) {
                         handleModelAccessForHiddenModel(modelId, mlPredictionTaskRequest, userInfo, wrappedListener, functionName);

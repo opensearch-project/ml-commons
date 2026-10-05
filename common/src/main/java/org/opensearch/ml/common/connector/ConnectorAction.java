@@ -49,8 +49,11 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String COHERE = "cohere";
     public static final String BEDROCK = "bedrock";
     public static final String SAGEMAKER = "sagemaker";
+    // Matches the Vertex AI host (e.g. us-central1-aiplatform.googleapis.com) for batch job status/cancel.
+    public static final String VERTEX_AI = "aiplatform";
     public static final String SAGEMAKER_PRE_POST_FUNC_TEXT = "default";
-    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List.of(SAGEMAKER, OPENAI, BEDROCK, COHERE);
+    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List
+        .of(SAGEMAKER, OPENAI, BEDROCK, COHERE, VERTEX_AI);
 
     private static final String INBUILT_FUNC_PREFIX = "connector.";
     private static final String PRE_PROCESS_FUNC = "PreProcessFunction";

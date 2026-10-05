@@ -39,7 +39,6 @@ import lombok.extern.log4j.Log4j2;
 @Getter
 public abstract class AbstractConnector implements Connector {
     private static final Pattern PARAMETER_PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{parameters\\.[^}]+\\}");
-    private static final Set<String> MCP_PROTOCOLS = Set.of(ConnectorProtocols.MCP_SSE, ConnectorProtocols.MCP_STREAMABLE_HTTP);
     private static final Set<String> BLOCKED_DYNAMIC_HEADERS = Set
         .of(
             "authorization",
@@ -74,6 +73,7 @@ public abstract class AbstractConnector implements Connector {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";
+    public static final String BATCH_JOB_STATUS_FIELD = "batch_job_status";
 
     protected String name;
     protected String description;
@@ -104,6 +104,8 @@ public abstract class AbstractConnector implements Connector {
     protected String tenantId;
     @Setter
     protected String provisionedBy;
+    @Setter
+    protected BatchJobStatusMapping batchJobStatus;
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
@@ -248,6 +250,10 @@ public abstract class AbstractConnector implements Connector {
         ActionListener<Boolean> listener
     ) {
         if (credential == null || credential.isEmpty()) {
+            // Credential-less connectors (e.g. google_cloud ADC/Workload Identity, MCP) still get an
+            // empty (non-null) decryptedCredential so downstream accessors read an empty map rather
+            // than NPE on a null.
+            this.decryptedCredential = new HashMap<>();
             this.decryptedHeaders = createDecryptedHeaders(getAllHeaders(action));
             listener.onResponse(true);
             return;
@@ -291,7 +297,7 @@ public abstract class AbstractConnector implements Connector {
             return;
         }
 
-        boolean isMcpProtocol = connectorProtocol != null && MCP_PROTOCOLS.contains(connectorProtocol.toLowerCase(Locale.ROOT));
+        boolean isMcpProtocol = ConnectorProtocols.isMcpProtocol(connectorProtocol);
 
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             String headerValue = entry.getValue();
