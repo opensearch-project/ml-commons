@@ -9,11 +9,10 @@ predictions are issued against the streaming predict endpoint.
 
 ## 1. Enable the connector and streaming, and check trusted endpoints
 
-The `google_cloud` connector and the streaming API are both opt-in, and both default to `false`.
-Without `plugins.ml_commons.connector.vertexai_enabled`, creating the connector in step 2 fails
-with `403` and the message "The Vertex AI (google_cloud) connector is not enabled." Without
-`plugins.ml_commons.stream_enabled`, the `_predict/stream` call in step 4 fails with "Streaming is
-currently disabled".
+The `google_cloud` connector and the streaming API are both opt-in. Creating the connector fails
+with `403` until the first is enabled, and `_predict/stream` fails until the second is. From 3.10
+the Vertex AI host is already covered by the default
+`plugins.ml_commons.trusted_connector_endpoints_regex`, so these are all that are needed:
 
 ```json
 PUT /_cluster/settings
@@ -33,23 +32,20 @@ OpenSearch but are not installed by default, plus `http.type` and
 are static, so `_cluster/settings` rejects them and a node restart is required. See
 [Predict Stream API prerequisites](https://docs.opensearch.org/latest/ml-commons-plugin/api/train-predict/predict-stream/#prerequisites).
 
-**Trusted endpoints.** Starting in 3.10, the Vertex AI host is matched by the default
-`plugins.ml_commons.trusted_connector_endpoints_regex`, so no endpoint change is needed. On 3.9,
-and on any cluster that has overridden that setting, you must add a Vertex AI pattern yourself.
-Check which applies to your cluster:
+On 3.9 and earlier, or if that regex setting has been overridden, a Vertex AI pattern is
+needed too. It is a list setting and a `PUT` replaces it, so read it first and send every
+pattern back, otherwise the other providers in the cluster stop working:
 
 ```json
 GET /_cluster/settings?include_defaults=true&filter_path=**.trusted_connector_endpoints_regex
 ```
 
-If no pattern in the response matches `*-aiplatform.googleapis.com`, re-send the list with one
-added. The setting is a list and a `PUT` replaces it rather than appending, so include every
-pattern the response returned:
-
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
+        "plugins.ml_commons.connector.vertexai_enabled": true,
+        "plugins.ml_commons.stream_enabled": true,
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
             "REPLACE THIS LINE WITH EVERY PATTERN FROM THE RESPONSE ABOVE",
             "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$"
@@ -57,10 +53,6 @@ PUT /_cluster/settings
     }
 }
 ```
-
-Assigning only the Vertex AI pattern replaces the defaults, which breaks connector creation and
-inference for every other provider in the cluster, including SageMaker, OpenAI, Cohere, DeepSeek
-and Bedrock.
 
 ## 2. Create the connector
 

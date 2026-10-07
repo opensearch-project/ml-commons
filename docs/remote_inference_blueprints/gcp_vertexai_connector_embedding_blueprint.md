@@ -11,6 +11,11 @@
 
 ## 1. Add the VertexAI endpoint to trusted URLs:
 
+This blueprint uses `"protocol": "http"` with a hand-managed `Authorization` header, so it is not
+gated by `plugins.ml_commons.connector.vertexai_enabled`. That flag applies only to the
+`google_cloud` protocol used by
+[`gcp_vertexai_embedding_blueprint.md`](./gcp_vertexai_embedding_blueprint.md).
+
 This blueprint is retained for versions predating the `google_cloud` protocol. Those versions have
 no Vertex AI pattern in the default `plugins.ml_commons.trusted_connector_endpoints_regex`, so on
 them you must add one. Starting in 3.10 the default covers it and no change is needed. Check which
@@ -39,11 +44,6 @@ PUT /_cluster/settings
 Assigning only the Vertex AI pattern replaces the defaults, which breaks connector creation and
 inference for every other provider in the cluster, including SageMaker, OpenAI, Cohere, DeepSeek
 and Bedrock.
-
-This blueprint uses `"protocol": "http"` with a hand-managed `Authorization` header, so it is not
-gated by `plugins.ml_commons.connector.vertexai_enabled`. That flag applies only to the
-`google_cloud` protocol used by
-[`gcp_vertexai_embedding_blueprint.md`](./gcp_vertexai_embedding_blueprint.md).
 
 ## 2. Generate access-token to access Vertex AI
 
@@ -83,7 +83,6 @@ Sample response:
 }
 ```
 
-
 ## 3. Register model for VertexAI embedding model:
 
 Refer to [VertexAI Service REST API reference - Embedding](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings#get_text_embeddings_for_a_snippet_of_text).
@@ -93,7 +92,6 @@ In order to use this, you need to supply the values for the below attributes
 * Project Id
 * Model Id
 * Access token
-
 
 ```json
 POST /_plugins/_ml/models/_register
@@ -143,7 +141,6 @@ Sample response:
 GET /_plugins/_ml/tasks/pX8scY4B2QHLlv0i6LYZ
 ```
 Sample response:
-
 
 ```Response:
 {
@@ -195,7 +192,6 @@ Sample response:
   "is_async": false
 }
 ```
-
 
 ## 7. Test model inference
 
@@ -261,7 +257,6 @@ Response:
   ]
 }
 ```
-
 
 ## 8. Update the access token
 
