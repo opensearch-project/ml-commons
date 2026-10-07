@@ -278,9 +278,8 @@ public interface Connector extends ToXContentObject, Writeable {
         }
         String canonical = canonicalUrl(uri);
         for (String urlRegex : urlRegexes) {
-            Pattern pattern = Pattern.compile(urlRegex);
-            Matcher matcher = pattern.matcher(canonical);
-            if (matcher.matches()) {
+            // Runs on every predict, so use cached patterns and bound the matching work (see TrustedEndpointMatcher).
+            if (TrustedEndpointMatcher.matches(urlRegex, canonical)) {
                 return;
             }
         }
