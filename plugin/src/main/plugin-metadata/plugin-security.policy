@@ -22,6 +22,9 @@ grant {
     permission java.util.PropertyPermission "*", "read,write";
     permission java.lang.RuntimePermission "shutdownHooks";
 
+    // bc-fips 2.1.3+ reads the ASN.1 nesting-depth limit as a security property
+    permission java.security.SecurityPermission "getProperty.org.bouncycastle.asn1.max_cons_depth";
+
     // Circuit Breaker
     permission java.lang.RuntimePermission "getFileSystemAttributes";
 

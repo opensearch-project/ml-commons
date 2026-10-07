@@ -36,7 +36,7 @@ dependencies {
     implementation project(':opensearch-ml-memory')
     implementation group: 'org.opensearch', name: 'common-utils', version: "${common_utils_version}"
     // https://mvnrepository.com/artifact/org.apache.httpcomponents.core5/httpcore5
-    implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: "5.2.2"
+    implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: "5.4.3"
     implementation (group: 'com.google.guava', name: 'guava', version: '32.1.2-jre') {
 	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
