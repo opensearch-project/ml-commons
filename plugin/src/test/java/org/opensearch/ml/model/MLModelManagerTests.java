@@ -127,6 +127,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
@@ -144,6 +145,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -231,7 +233,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(null, masterKey);
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
+        mlEngine = spy(new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor));
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
@@ -1289,6 +1291,89 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(listener).onFailure(exception.capture());
         assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
         verify(modelCacheHelper).removeModel(modelId);
+    }
+
+    /**
+     * A remote model whose predictor fails to initialise (for example because the master key used to decrypt the
+     * connector credential is not ready yet on a freshly started node) must not leave its DEPLOYING entry in the node
+     * cache. Otherwise isModelRunningOnNode stays true and every later deploy on this node fails with "Duplicate deploy
+     * model task", leaving the model stuck PARTIALLY_DEPLOYED.
+     */
+    public void testDeployModel_RemoteModelInitFailed_removesModelFromCache() {
+        MLModel remoteModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(HttpConnector.builder().name("http").protocol(ConnectorProtocols.HTTP).credential(Map.of("key", "value")).build())
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(remoteModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Predictable> predictableListener = invocation.getArgument(2);
+            predictableListener.onFailure(new RuntimeException("Fetching master key timed out."));
+            return null;
+        }).when(mlEngine).deploy(any(MLModel.class), anyMap(), any(ActionListener.class));
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertEquals("Fetching master key timed out.", exception.getValue().getMessage());
+        verify(modelCacheHelper).removeModel(modelId);
+        verify(modelCacheHelper, never()).setModelState(modelId, MLModelState.DEPLOYED);
+        verify(mlStats)
+            .createCounterStatIfAbsent(eq(FunctionName.REMOTE), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+    }
+
+    /** Same cleanup when the connector cannot be fetched by id. */
+    public void testDeployModel_RemoteModelGetConnectorFailed_removesModelFromCache() {
+        MLModel remoteModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connectorId("connectorId")
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(remoteModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Connector> connectorListener = invocation.getArgument(2);
+            connectorListener.onFailure(new RuntimeException("Failed to get connector"));
+            return null;
+        }).when(modelManager).getConnector(eq("connectorId"), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertEquals("Failed to get connector", exception.getValue().getMessage());
+        verify(modelCacheHelper).removeModel(modelId);
+        verify(mlEngine, never()).deploy(any(MLModel.class), anyMap(), any(ActionListener.class));
     }
 
     /**
