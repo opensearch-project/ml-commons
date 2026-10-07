@@ -1595,7 +1595,10 @@ public class MLModelManager {
             wrappedListener.onResponse(r);
         }, e -> {
             log.error("Failed to deploy model, model id: {}", modelId, e);
-            wrappedListener.onFailure(e);
+            // deployModel has already put this model into DEPLOYING in the node cache. If that entry is left behind,
+            // isModelRunningOnNode stays true and every later deploy on this node is refused with "Duplicate deploy
+            // model task", so the model is stuck PARTIALLY_DEPLOYED until it is undeployed by hand.
+            handleDeployModelException(modelId, mlModel.getAlgorithm(), wrappedListener, e);
         });
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
             setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
@@ -1609,7 +1612,10 @@ public class MLModelManager {
             }
             setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
-        }, wrappedListener::onFailure));
+        }, e -> {
+            log.error("Failed to get connector {} for model {}", mlModel.getConnectorId(), modelId, e);
+            handleDeployModelException(modelId, mlModel.getAlgorithm(), wrappedListener, e);
+        }));
     }
 
     /**
