@@ -266,8 +266,8 @@ public class AgenticSearchTemplateService {
      * {@link TemplateStructureAnalyzer}). Best-effort: any failure, or a body that will not
      * render to parseable JSON, leaves the base derivation untouched. Only writes an empty
      * description and only adds an enum a param does not already carry. A field-name enum
-     * from {@link #deriveSchema} is kept unless the recovered role contradicts it: a sort slot
-     * narrows it to {@code sortable}, a value slot drops it.
+     * from {@link #deriveSchema} is kept only for a field role: a sort slot narrows it to
+     * {@code sortable}, a field-selector slot keeps it, and any other recovered role drops it.
      */
     String enrichStructurally(String body, Map<String, Object> schema, Set<String> sortable) {
         try {
@@ -367,8 +367,10 @@ public class AgenticSearchTemplateService {
     /**
      * Let the recovered role beat the name heuristic for a mapping-derived field-name enum
      * ({@code source=mapping}): a sort slot can only take a sortable field, so the enum is
-     * narrowed to {@code sortable} (dropped when none is); a value slot takes free text or a
-     * term, not a field name, so the enum is removed. No role leaves the enum as is.
+     * narrowed to {@code sortable} (dropped when none is); a field-selector slot takes any
+     * field, so the enum is kept; every other role is a value or option slot that never takes
+     * a field name, so the enum is removed (letting a closed vocabulary such as asc/desc apply
+     * instead). No role leaves the enum as is.
      */
     private static void reconcileMappingEnum(Map<String, Object> spec, String role, Set<String> sortable) {
         if (role == null || !MustacheTemplateAnalyzer.SOURCE_MAPPING.equals(spec.get(MustacheTemplateAnalyzer.SOURCE_KEY))) {
@@ -381,23 +383,11 @@ public class AgenticSearchTemplateService {
             } else {
                 spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(sortable));
             }
-        } else if (VALUE_ROLES.contains(role)) {
+        } else if (!TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR.equals(role)) {
             spec.remove(MustacheTemplateAnalyzer.ENUM_KEY);
             spec.remove(MustacheTemplateAnalyzer.SOURCE_KEY);
         }
     }
-
-    /** Roles whose slot takes a query or filter value rather than a field name. */
-    private static final Set<String> VALUE_ROLES = Set
-        .of(
-            TemplateStructureAnalyzer.ROLE_FULL_TEXT,
-            TemplateStructureAnalyzer.ROLE_PHRASE,
-            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
-            TemplateStructureAnalyzer.ROLE_FILTER_TERMS,
-            TemplateStructureAnalyzer.ROLE_PATTERN,
-            TemplateStructureAnalyzer.ROLE_FUZZY,
-            TemplateStructureAnalyzer.ROLE_RANGE_BOUND
-        );
 
     /** A field selector that picks the sort key, scoped to sortable fields only. */
     private static boolean isSortSelector(String name) {
