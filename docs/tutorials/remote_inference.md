@@ -158,7 +158,7 @@ POST /_plugins/_ml/connectors/_create
     "protocol": "http",
     "parameters": {
         "endpoint": "api.openai.com",
-        "model": "gpt-3.5-turbo"
+        "model": "gpt-4o-mini"
     },
     "credential": {
         "openAI_key": "<Your OpenAI API key>"
@@ -217,7 +217,7 @@ POST /_plugins/_ml/connectors/_create
     "version": 1,
     "protocol": "http",
     "parameters": {
-        "model": "gpt-3.5-turbo"
+        "model": "gpt-4o-mini"
     },
     "credential": {
         "openAI_key": "..."
@@ -248,7 +248,7 @@ Sample request:
 ```
 POST /_plugins/_ml/models/_register
 {
-    "name": "openAI-gpt-3.5-turbo",
+    "name": "openAI-gpt-4o-mini",
     "function_name": "remote",
     "model_group_id": "WSmckYkBrQ7TyjgDAhjb",
     "description": "test model",
@@ -353,7 +353,7 @@ Sample response
             "id": "chatcmpl-7e6s5DYEutmM677UZokF9eH40dIY7",
             "object": "chat.completion",
             "created": 1689793889,
-            "model": "gpt-3.5-turbo-0613",
+            "model": "gpt-4o-mini",
             "choices": [
               {
                 "index": 0,
@@ -398,7 +398,7 @@ POST /_plugins/_ml/models/_register
     "version": 1,
     "protocol": "http",
     "parameters": {
-      "model": "gpt-3.5-turbo"
+      "model": "gpt-4o-mini"
     },
     "credential": {
       "openAI_key": "..."
