@@ -1323,7 +1323,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testAddToolsToFunctionCalling_noTools_removesToolConfigs() {
+    public void testAddToolsToFunctionCalling_noTools_blanksToolConfigs() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put(TOOL_TEMPLATE, "{\"name\": \"${tool.name}\"}");
         parameters.put(TOOL_CONFIGS, ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
@@ -1331,7 +1331,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
         AgentUtils.addToolsToFunctionCalling(new HashMap<>(), parameters, List.of(), "");
 
         assertEquals("", parameters.get(TOOLS));
-        assertFalse(parameters.containsKey(TOOL_CONFIGS));
+        assertEquals("", parameters.get(TOOL_CONFIGS));
     }
 
     @Test

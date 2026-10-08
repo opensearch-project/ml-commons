@@ -266,9 +266,11 @@ public class AgentUtils {
             toolInfos.add(chatQuestionMessage);
         }
         parameters.put(TOOLS, String.join(", ", toolInfos));
-        // With no tools, drop the tool config block entirely: Bedrock Converse rejects "toolConfig": {"tools": []}.
+        // With no tools, blank the tool config block: Bedrock Converse rejects "toolConfig": {"tools": []}.
+        // Blank rather than remove, so ${parameters.tool_configs} without a default still resolves and a
+        // connector-level tool_configs can't win the parameter merge.
         if (toolInfos.isEmpty()) {
-            parameters.remove(TOOL_CONFIGS);
+            parameters.put(TOOL_CONFIGS, "");
         }
 
         // Setting ${parameters.tool_descriptions} / ${parameters.tool_names} values to empty string
