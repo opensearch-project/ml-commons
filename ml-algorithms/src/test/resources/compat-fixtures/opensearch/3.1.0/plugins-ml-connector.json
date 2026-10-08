@@ -1,0 +1,65 @@
+[
+  {
+    "_id": "T51XEKEB1VKPfCowI00x",
+    "_source": {
+      "actions": [
+        {
+          "action_type": "PREDICT",
+          "headers": {
+            "content-type": "application/json",
+            "x-amz-content-sha256": "required"
+          },
+          "method": "POST",
+          "post_process_function": "connector.post_process.bedrock.embedding",
+          "pre_process_function": "connector.pre_process.bedrock.embedding",
+          "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+          "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
+        }
+      ],
+      "created_time": 1791275508526,
+      "credential": {
+        "access_key": "AgV4Ul0Brgzuq2NyE5kpzFMYxdKw4Vu0q4VVcwSbFQm50KsAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREFyQ1BvMXViRDVoU2tSQmNyUmp6ZUJwMkpyN2FHSDhwYlJzVzU4MDNTUFNXUGcrNFhxY3gyeS9IRis2VFBLRFg0UT09AAEABkN1c3RvbQAUAAAAgAAAAAwlk9c03cRaRXA/X6sAMPTzvojYMEGDwpp8KTP2ZW/oxAOowUV0lhPLMXP1f1ufOLfuVd7qvMFDDn59l1u9jQIAABAAsldTb3JCbOH1TCyD0Wfjm/mHD4BA/U7mP/ImFI0Pq57Hp4Xqnit8c2w5JiYXdxgU/////wAAAAEAAAAAAAAAAAAAAAEAAAAULVWNyJ4kTl1ryR4omLHq4ydPZ8+iR9MaqrUdKiRi0BY4rP0jAGcwZQIwTe3hvAXQP56p0lpgWj4borQj0MXbufWeh7MgWeyfQJunN8JUnxpemInHMBybcc9QAjEA4a7jJDWmZBdznrCefNHFylTnH/DaVcNMRXKTllHMu0/rsXOD2MUEX7d+45g9gw+S",
+        "secret_key": "AgV4wWfcBR1kcj8vYIIjPPweUsxB5fq11cgOhHoa6UYBLzwAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREF5ellRNXBjNnhKR084SXZOMmoyKzdNTTk0eXh0NFFKeTB1c0tCZkxVWWhVTG1CSVVoMGlYS3RNVlg5MU5GZTdFdz09AAEABkN1c3RvbQAUAAAAgAAAAAysrfLPjYOnIVGzYJEAMFJGYWO6+FtMqjRyw3AUB23kcIzmnZfjPlCl7/v0h0dVQQemE2dJxuL422ItBjkavAIAABAALtF7JcMnWsLHUg4Rga7TMFy5xf1ZlG3gxJyyqBeY6tMsUB8PTSUDKiymgvSi0Oxl/////wAAAAEAAAAAAAAAAAAAAAEAAAAU5Y1c+VUHeyJCRKmxuwyzYaqN5W3Av82hdSbl26V1YS81RGXbAGcwZQIwRfnRhs95MKWfpqQ3eoK51IcBU7a/WuTG2SEo3sRolVlsxPA43MsrOIgqO+UK1CFdAjEAnj8QZQF6Jcrc+GNgSFuOt/YbrxiXR8CPOhCRLxLEhYJOTeMgd31rXCdCq4tPX6Mw",
+        "session_token": "AgV4NSy7w6XnopdFuCEOhLizbDtJ7VYw4l5rJLc0oOvcZrgAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREEzc25kY1JNYjhCanp0Y25Yb2hZZzZQN1RhT2kvNVZibUUrMGRVclQ5azNjZnRUU21SOThuSDNMZzRVdkRod2krUT09AAEABkN1c3RvbQAUAAAAgAAAAAybYMsvaZDb3Q6nsQsAMOoJj5TXwTEmAENkXKUkkBaN9TLFjFMl4Tk/pvNLRCsKz3uVYbirMmI876i/WnQKtwIAABAAIHG01SD/RAScbJz7pNCP1nh+TqSxJXcoahJaxYyhIpyqKHTQrC6j0Kpdnzl2roPw/////wAAAAEAAAAAAAAAAAAAAAEAAAAT97eANk9xBzvHkyYn4ip4SnNPOZYblOTM2YXjlZErVdTfC6UAZzBlAjA5nBDWwL2Di2thbIjFmlanwWpRq4HUd6Q6T8Rea0EATjcAxmurm8u/iofBj9Upx/QCMQDSwNuOCIMT1xRZMqVc+ssJBz15/nUEc/pxyEjX6N48/AwK2kJ8oMnWfmonXU5QS0c="
+      },
+      "description": "fixture, dummy creds",
+      "last_updated_time": 1791275508526,
+      "name": "compat-bedrock-titan-embed",
+      "parameters": {
+        "region": "us-east-1",
+        "service_name": "bedrock"
+      },
+      "protocol": "aws_sigv4",
+      "version": "1"
+    }
+  },
+  {
+    "_id": "UJ1XEKEB1VKPfCowI01e",
+    "_source": {
+      "actions": [
+        {
+          "action_type": "PREDICT",
+          "headers": {
+            "Authorization": "Bearer ${credential.openAI_key}"
+          },
+          "method": "POST",
+          "request_body": "{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }",
+          "url": "https://${parameters.endpoint}/v1/chat/completions"
+        }
+      ],
+      "created_time": 1791275508574,
+      "credential": {
+        "openAI_key": "AgV4B+LOTdK1MtwARyION3xIFzm3F7WqR0CAC+Eiqyvoh4MAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREE3SWtwTmh4ZStYYkNkd1Fsb3B3c0QvRVJxbmx4QnE3YVJqdmM3eldBdEZDd2Z1d0hCVDRyMk1DUW90cjRFblBrQT09AAEABkN1c3RvbQAUAAAAgAAAAAyX7QFFTrHWk+BbFZwAMMZOjrbgcrPptPp4yHaIjyXwsv1VFapI5slh2bi5yoqlGfjIXtPaxckg4HJa3I3ujQIAABAAw9psJTdyzy4M6jLenVdei/tv1eR7grWbnieaHsweTyNRHHkHw0/Irlg1xr9L+Ii4/////wAAAAEAAAAAAAAAAAAAAAEAAAAQ5Zte0/1SWm6VCPKOTnD0jnZAyiT4Y9dNboormkSFlMIAZzBlAjEA06fnrd7wjX8IwHlyR/VfV9o8/HbQzc6gZ/aPY7CIApdZLs+pJ6V6tZ9V0mQy7Pm1AjBYNaLn2FnDpYjaZnX4aU0S4nk7i0Ba5kYucNFm+oHovUpZF6Nnef2tjseLxaSNsHU="
+      },
+      "description": "fixture, dummy creds",
+      "last_updated_time": 1791275508574,
+      "name": "compat-openai-chat",
+      "parameters": {
+        "endpoint": "api.openai.com",
+        "model": "gpt-4o-mini"
+      },
+      "protocol": "http",
+      "version": "1"
+    }
+  }
+]

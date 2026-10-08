@@ -1,0 +1,37 @@
+[
+  {
+    "_id": "48pWEKEBA3WI_k51TnhJ",
+    "_source": {
+      "algorithm": "REMOTE",
+      "connector_id": "3cpWEKEBA3WI_k51S3jF",
+      "created_time": 1791275454024,
+      "description": "fixture",
+      "is_hidden": false,
+      "last_updated_time": 1791275454024,
+      "model_group_id": "4cpWEKEBA3WI_k51TngK",
+      "model_state": "REGISTERED",
+      "model_version": "1",
+      "name": "compat-openai-chat"
+    }
+  },
+  {
+    "_id": "4MpWEKEBA3WI_k51TXi0",
+    "_source": {
+      "algorithm": "REMOTE",
+      "connector_id": "3MpWEKEBA3WI_k51S3ib",
+      "created_time": 1791275453760,
+      "description": "fixture",
+      "is_hidden": false,
+      "last_updated_time": 1791275453760,
+      "model_config": {
+        "embedding_dimension": 1024,
+        "framework_type": "SENTENCE_TRANSFORMERS",
+        "model_type": "text_embedding"
+      },
+      "model_group_id": "3spWEKEBA3WI_k51THhg",
+      "model_state": "REGISTERED",
+      "model_version": "1",
+      "name": "compat-titan-embed"
+    }
+  }
+]

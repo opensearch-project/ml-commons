@@ -156,3 +156,11 @@ jacocoTestCoverageVerification {
 }
 check.dependsOn jacocoTestCoverageVerification
 compileJava.dependsOn(':opensearch-ml-common:shadowJar')
+
+// Stored-document compatibility test (org.opensearch.ml.compat): `./gradlew :opensearch-ml-algorithms:test
+// --tests '*StoredDocumentCompatibility*' -PmlCompatRecord` rewrites expected-requests.json under
+// src/test/resources/compat-fixtures after an intentional change to outgoing requests.
+test {
+    systemProperty 'ml.compat.record', project.hasProperty('mlCompatRecord').toString()
+    systemProperty 'ml.compat.recordDir', file('src/test/resources').absolutePath
+}
