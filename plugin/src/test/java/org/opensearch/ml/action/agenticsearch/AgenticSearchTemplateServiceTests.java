@@ -334,6 +334,119 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         verify(client, never()).index(any(IndexRequest.class), any());
     }
 
+    // ---- pre-flight: top-level object --------------------------------------
+
+    @Test
+    public void preflight_scalarRender_isRejected() {
+        // {{n}} renders a bare number: legal JSON, but not a search body.
+        stubRenderReturns(params -> "1");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.preflightValidate("{{n}}", ImmutableMap.of("n", specMap("number", true, "")))
+        );
+        assertTrue(e.getMessage().contains("must render to a JSON object (all-filled)"));
+    }
+
+    @Test
+    public void preflight_emptyRender_isRejected() {
+        // A comment-only body renders to "", which parser.map() alone accepts.
+        stubRenderReturns(params -> "");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.preflightValidate("{{! c }}", ImmutableMap.of())
+        );
+        assertTrue(e.getMessage().contains("must render to a JSON object"));
+    }
+
+    @Test
+    public void preflight_requiredOnlyRenderEmpty_isRejected() {
+        // {{#a}}{...}{{/a}}: all-filled renders the object, but the required-only pass omits
+        // the only section and renders "", so the template cannot run without a.
+        stubRenderReturns(params -> params.isEmpty() ? "" : "{\"query\":{\"match_all\":{}}}");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> service
+                .preflightValidate("{{#a}}{\"query\":{\"match_all\":{}}}{{/a}}", ImmutableMap.of("a", specMap("boolean", false, "")))
+        );
+        assertTrue(e.getMessage().contains("must render to a JSON object (required-only)"));
+    }
+
+    @Test
+    public void preflight_emptyObjectRender_isAccepted() {
+        // {} is a valid search body (match_all, default size).
+        stubRenderReturns(params -> "{ }");
+        service.preflightValidate("{ {{#a}}\"size\":1{{/a}} }", ImmutableMap.of("a", specMap("boolean", false, "")));
+    }
+
+    // ---- register: derive-path rejections ----------------------------------
+
+    @Test
+    public void register_derivedSchemaEmpty_failsValidation() {
+        stubStoredScript("{\"query\":{\"match_all\":{}}}");
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", null, null, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        assertTrue(ex.getValue().getMessage().contains("declares no parameters"));
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    private static final String ITERATOR_BODY = "{\"query\":{\"terms\":{\"brand\":[{{#brands}}\"{{.}}\",{{/brands}}\"zzz\"]}}}";
+
+    @Test
+    public void register_listIterationBody_derivePathFailsWithGuidance() {
+        stubStoredScript(ITERATOR_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
+        stubRenderSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", null, null, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        assertTrue(ex.getValue().getMessage().contains("'brands' is iterated as a list"));
+        assertTrue(ex.getValue().getMessage().contains("supply param_schema"));
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    @Test
+    public void register_listIterationBody_withProvidedSchema_registers() {
+        // The workaround the derive-path error points to: a supplied schema naming the
+        // iterated param passes rejectUnknownParams (lenient) and is stored as sent.
+        stubStoredScript(ITERATOR_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
+        stubRenderSucceeds();
+        stubStoreSucceeds();
+
+        Map<String, Object> provided = ImmutableMap.of("brands", ImmutableMap.of("type", "array", "required", false));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(provided, captor.getValue().getParamSchema());
+    }
+
+    @Test
+    public void rejectUnknownParams_toJsonBody_acceptsInnerParamName() {
+        String body = "{\"query\":{\"terms\":{\"brand\":{{#toJson}}brands{{/toJson}}}}}";
+        service.rejectUnknownParams(ImmutableMap.of("brands", ImmutableMap.of("type", "array")), body);
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.rejectUnknownParams(ImmutableMap.of("toJson", ImmutableMap.of("type", "boolean")), body)
+        );
+    }
+
     // ---- structural enrichment ---------------------------------------------
 
     @Test
@@ -732,6 +845,18 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
         when(factory.newInstance(any())).thenReturn(templateScript);
         when(templateScript.execute()).thenReturn("{\"query\":{\"match_all\":{}}}");
+    }
+
+    /** Stub the script-compile chain so a render returns {@code render.apply(params)}. */
+    private void stubRenderReturns(java.util.function.Function<Map<String, Object>, String> render) {
+        TemplateScript.Factory factory = mock(TemplateScript.Factory.class);
+        when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
+        when(factory.newInstance(any())).thenAnswer((Answer<TemplateScript>) inv -> {
+            Map<String, Object> params = inv.getArgument(0);
+            TemplateScript ts = mock(TemplateScript.class);
+            when(ts.execute()).thenReturn(render.apply(params));
+            return ts;
+        });
     }
 
     private void stubStoredScript(String body) {
