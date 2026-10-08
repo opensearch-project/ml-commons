@@ -183,15 +183,30 @@ public class MustacheTemplateAnalyzerTests {
         assertEquals("array", spec(schema, "x").get("type"));
     }
 
-    // ---- 3.5: list iteration and lang-mustache built-ins fail loud ----------
+    // ---- 3.5: list iteration derives list; lang-mustache built-ins fail loud ---
 
     private static final String ITERATOR_BODY = "{\"query\":{\"terms\":{\"brand\":[{{#brands}}\"{{.}}\",{{/brands}}\"zzz\"]}}}";
 
     @Test
-    public void derive_implicitIteratorInSection_throwsNamingSection() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(ITERATOR_BODY));
-        assertTrue(e.getMessage().contains("param 'brands' is iterated as a list ({{.}})"));
-        assertTrue(e.getMessage().contains("supply param_schema explicitly"));
+    public void derive_implicitIteratorInSection_isOptionalList() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive(ITERATOR_BODY);
+        assertEquals(Set.of("brands"), schema.keySet());
+        assertEquals("list", spec(schema, "brands").get("type"));
+        assertEquals(Boolean.FALSE, spec(schema, "brands").get("required"));
+        assertEquals("A list of values; the clause repeats once per value.", spec(schema, "brands").get("description"));
+    }
+
+    @Test
+    public void derive_nestedImplicitIterator_attributesListToInnermostSection() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"a\":[{{#outer}}{{#inner}}\"{{.}}\",{{/inner}}{{/outer}}\"z\"]}");
+        assertEquals("list", spec(schema, "inner").get("type"));
+        assertEquals("boolean", spec(schema, "outer").get("type"));
+    }
+
+    @Test
+    public void derive_sectionWithoutImplicitIterator_staysBoolean() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"query\":{\"match_all\":{}}{{#flag}},\"size\":5{{/flag}}}");
+        assertEquals("boolean", spec(schema, "flag").get("type"));
     }
 
     @Test
@@ -224,6 +239,30 @@ public class MustacheTemplateAnalyzerTests {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(joinDelim));
         assertTrue(e.getMessage().contains("{{#join}}"));
         assertEquals(Set.of("terms"), MustacheTemplateAnalyzer.paramNames(joinDelim));
+    }
+
+    @Test
+    public void derive_builtinNamesMatchCaseInsensitively() {
+        // The engine matches toJson/join/url ignoring case, so {{#TOJSON}} is still toJson.
+        String body = "{\"query\":{\"terms\":{\"brand\":{{#TOJSON}}xs{{/TOJSON}}}}}";
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(body));
+        assertTrue(e.getMessage().contains("param 'xs' is rendered through {{#TOJSON}}"));
+        assertEquals(Set.of("xs"), MustacheTemplateAnalyzer.paramNames(body));
+
+        String joinDelim = "{\"q\":\"{{#JOIN DELIMITER=' OR '}}terms{{/JOIN DELIMITER=' OR '}}\"}";
+        assertTrue(
+            assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(joinDelim))
+                .getMessage()
+                .contains("{{#join}}")
+        );
+        assertEquals(Set.of("terms"), MustacheTemplateAnalyzer.paramNames(joinDelim));
+    }
+
+    @Test
+    public void derive_valueInsideUrlSection_staysRequired() {
+        // {{#url}} renders unconditionally, so a value used only inside it is still required.
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"q\":\"{{#url}}{{term}}{{/url}}\"}");
+        assertEquals(Boolean.TRUE, spec(schema, "term").get("required"));
     }
 
     @Test
