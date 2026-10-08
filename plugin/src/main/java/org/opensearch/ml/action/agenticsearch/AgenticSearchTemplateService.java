@@ -159,6 +159,11 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                             // mapping for field-name enums (a param whose name is *_field
                             // or that targets a field can only choose an existing field).
                             paramSchema = deriveSchema(body, mappingFields);
+                            if (paramSchema.isEmpty()) {
+                                // Mirrors the REST layer's rejection of a supplied empty schema:
+                                // a template with nothing to fill gives the model no choices.
+                                throw new IllegalArgumentException("Template body declares no parameters");
+                            }
                             // Enrich the derived schema with descriptions and
                             // fixed-value enums recovered from where each param renders, and
                             // derive a template-level description for multi-template selection.
@@ -390,17 +395,26 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         } catch (Exception e) {
             throw new IllegalArgumentException("Template failed to render (" + label + "): " + e.getMessage(), e);
         }
-        // JSON-legality only. Parsing as a search body would be stricter, but the
-        // sampleValue placeholders aren't domain-valid ("x" for a sort order or a
+        // JSON-legality plus a top-level object. Parsing as a search body would be stricter,
+        // but the sampleValue placeholders aren't domain-valid ("x" for a sort order or a
         // boost_mode), so real templates would fail here on the placeholder, not the body.
+        // parser.map() alone accepts an empty or scalar render, which search rejects; {}
+        // stays valid (match_all).
+        boolean isObject;
         try (
             XContentParser parser = MediaTypeRegistry.JSON
                 .xContent()
                 .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, rendered)
         ) {
-            parser.map();
+            isObject = parser.nextToken() == XContentParser.Token.START_OBJECT;
+            if (isObject) {
+                parser.map();
+            }
         } catch (Exception e) {
             throw new IllegalArgumentException("Template rendered invalid JSON (" + label + "): " + e.getMessage(), e);
+        }
+        if (!isObject) {
+            throw new IllegalArgumentException("Template must render to a JSON object (" + label + ")");
         }
     }
 
@@ -977,9 +991,11 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * enforce the same contract.
      */
     void rejectUnknownParams(Map<String, Object> paramSchema, String body) {
-        Map<String, Object> bodyParams = MustacheTemplateAnalyzer.derive(body);
+        // Lenient name collection: a body derive() rejects (e.g. list iteration) is exactly
+        // the one a caller must supply a schema for, so that schema must still pass here.
+        Set<String> bodyParams = MustacheTemplateAnalyzer.paramNames(body);
         for (String name : paramSchema.keySet()) {
-            if (!bodyParams.containsKey(name)) {
+            if (!bodyParams.contains(name)) {
                 throw new IllegalArgumentException(
                     "param '"
                         + name
