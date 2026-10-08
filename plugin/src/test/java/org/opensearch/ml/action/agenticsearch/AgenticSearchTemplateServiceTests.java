@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -334,6 +335,172 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         verify(client, never()).index(any(IndexRequest.class), any());
     }
 
+    // ---- pre-flight: top-level object --------------------------------------
+
+    @Test
+    public void preflight_scalarRender_isRejected() {
+        // {{n}} renders a bare number: legal JSON, but not a search body.
+        stubRenderReturns(params -> "1");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.preflightValidate("{{n}}", ImmutableMap.of("n", specMap("number", true, "")))
+        );
+        assertTrue(e.getMessage().contains("must render to a JSON object (all-filled)"));
+    }
+
+    @Test
+    public void preflight_emptyRender_isRejected() {
+        // A comment-only body renders to "", which parser.map() alone accepts.
+        stubRenderReturns(params -> "");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.preflightValidate("{{! c }}", ImmutableMap.of())
+        );
+        assertTrue(e.getMessage().contains("must render to a JSON object"));
+    }
+
+    @Test
+    public void preflight_requiredOnlyRenderEmpty_isRejected() {
+        // {{#a}}{...}{{/a}}: all-filled renders the object, but the required-only pass omits
+        // the only section and renders "", so the template cannot run without a.
+        stubRenderReturns(params -> params.isEmpty() ? "" : "{\"query\":{\"match_all\":{}}}");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> service
+                .preflightValidate("{{#a}}{\"query\":{\"match_all\":{}}}{{/a}}", ImmutableMap.of("a", specMap("boolean", false, "")))
+        );
+        assertTrue(e.getMessage().contains("must render to a JSON object (required-only)"));
+    }
+
+    @Test
+    public void preflight_emptyObjectRender_isAccepted() {
+        // {} is a valid search body (match_all, default size).
+        stubRenderReturns(params -> "{ }");
+        service.preflightValidate("{ {{#a}}\"size\":1{{/a}} }", ImmutableMap.of("a", specMap("boolean", false, "")));
+    }
+
+    // ---- register: derive-path rejections ----------------------------------
+
+    @Test
+    public void register_zeroParamBody_registersAndPreflights() {
+        // A static body has nothing to fill, but an agent choosing among templates can still
+        // pick it, so it registers with an empty schema after both pre-flight renders.
+        stubStoredScript("{\"query\":{\"term\":{\"status\":\"active\"}},\"size\":10}");
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("status", ImmutableMap.of("type", "keyword"))));
+        List<Map<String, Object>> renders = new ArrayList<>();
+        stubRenderReturns(params -> {
+            renders.add(params);
+            return "{\"query\":{\"term\":{\"status\":\"active\"}},\"size\":10}";
+        });
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().getParamSchema().isEmpty());
+        // Pre-flight rendered the body (all-filled and required-only), both with no params.
+        assertTrue(renders.size() >= 2);
+        assertTrue(renders.stream().allMatch(Map::isEmpty));
+    }
+
+    private static final String ITERATOR_BODY = "{\"query\":{\"terms\":{\"brand\":[{{#brands}}\"{{.}}\",{{/brands}}\"zzz\"]}}}";
+
+    @Test
+    public void register_listIterationBody_derivesListType() {
+        stubStoredScript(ITERATOR_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
+        stubRenderSucceeds();
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", null, null, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> brands = (Map<String, Object>) captor.getValue().getParamSchema().get("brands");
+        assertEquals("list", brands.get("type"));
+        assertEquals(Boolean.FALSE, brands.get("required"));
+        assertEquals("A list of values; the clause repeats once per value.", brands.get("description"));
+    }
+
+    @Test
+    public void preflight_listParam_rendersWithRealList() {
+        // The sample value must be a real List so the engine iterates the section; a
+        // string would render one bogus item. An enum's first value is the element.
+        List<Object> sampled = new ArrayList<>();
+        stubRenderReturns(params -> {
+            if (params.containsKey("brands")) {
+                sampled.add(params.get("brands"));
+            }
+            return "{\"query\":{\"terms\":{\"brand\":[\"x\",\"zzz\"]}}}";
+        });
+        service.preflightValidate(ITERATOR_BODY, ImmutableMap.of("brands", specMap("list", false, "")));
+        assertEquals(List.of(List.of("x")), sampled);
+
+        sampled.clear();
+        Map<String, Object> withEnum = specMap("list", false, "");
+        withEnum.put("enum", List.of("acme", "globex"));
+        service.preflightValidate(ITERATOR_BODY, ImmutableMap.of("brands", withEnum));
+        assertEquals(List.of(List.of("acme")), sampled);
+    }
+
+    @Test
+    public void valueFitsType_list_requiresListOfStrings() {
+        assertTrue(AgenticSearchTemplateService.valueFitsType(List.of("a", "b"), "list"));
+        assertFalse(AgenticSearchTemplateService.valueFitsType("a", "list"));
+        assertFalse(AgenticSearchTemplateService.valueFitsType(true, "list"));
+        assertFalse(AgenticSearchTemplateService.valueFitsType(List.of(1), "list"));
+    }
+
+    @Test
+    public void validateParamSchema_listEnum_checksElementsAsStrings() {
+        Map<String, Object> ok = specMap("list", false, "");
+        ok.put("enum", List.of("acme", "globex"));
+        AgenticSearchTemplateService.validateParamSchema(ImmutableMap.of("brands", ok));
+
+        Map<String, Object> bad = specMap("list", false, "");
+        bad.put("enum", List.of(1));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> AgenticSearchTemplateService.validateParamSchema(ImmutableMap.of("brands", bad))
+        );
+    }
+
+    @Test
+    public void register_listIterationBody_withProvidedSchema_registers() {
+        // A schema supplied for the iterated param (as on 3.9.0) still passes
+        // rejectUnknownParams (lenient) and is stored as sent.
+        stubStoredScript(ITERATOR_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
+        stubRenderSucceeds();
+        stubStoreSucceeds();
+
+        Map<String, Object> provided = ImmutableMap.of("brands", ImmutableMap.of("type", "array", "required", false));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", provided, null, listener);
+
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(provided, captor.getValue().getParamSchema());
+    }
+
+    @Test
+    public void rejectUnknownParams_toJsonBody_acceptsInnerParamName() {
+        String body = "{\"query\":{\"terms\":{\"brand\":{{#toJson}}brands{{/toJson}}}}}";
+        service.rejectUnknownParams(ImmutableMap.of("brands", ImmutableMap.of("type", "array")), body);
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.rejectUnknownParams(ImmutableMap.of("toJson", ImmutableMap.of("type", "boolean")), body)
+        );
+    }
+
     // ---- structural enrichment ---------------------------------------------
 
     @Test
@@ -343,12 +510,14 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("flag", specMap("boolean", false, ""));
         schema.put("extra", specMap("array", false, ""));
+        schema.put("brands", specMap("list", false, ""));
         TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
 
         service.applyStructuralEnrichment(schema, markers, new LinkedHashMap<>(), null);
 
         assertEquals("Set to true to enable the optional flag clause.", descOf(schema, "flag"));
         assertEquals("A JSON array or object passed as a raw JSON string.", descOf(schema, "extra"));
+        assertEquals("A list of values; the clause repeats once per value.", descOf(schema, "brands"));
     }
 
     @Test
@@ -732,6 +901,18 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
         when(factory.newInstance(any())).thenReturn(templateScript);
         when(templateScript.execute()).thenReturn("{\"query\":{\"match_all\":{}}}");
+    }
+
+    /** Stub the script-compile chain so a render returns {@code render.apply(params)}. */
+    private void stubRenderReturns(java.util.function.Function<Map<String, Object>, String> render) {
+        TemplateScript.Factory factory = mock(TemplateScript.Factory.class);
+        when(scriptService.compile(any(Script.class), any())).thenReturn(factory);
+        when(factory.newInstance(any())).thenAnswer((Answer<TemplateScript>) inv -> {
+            Map<String, Object> params = inv.getArgument(0);
+            TemplateScript ts = mock(TemplateScript.class);
+            when(ts.execute()).thenReturn(render.apply(params));
+            return ts;
+        });
     }
 
     private void stubStoredScript(String body) {

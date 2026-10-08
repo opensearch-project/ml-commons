@@ -11,6 +11,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Test;
 import org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate;
@@ -132,5 +133,189 @@ public class MustacheTemplateAnalyzerTests {
         assertEquals("boolean", spec(schema, "sem_enabled").get("type"));
         // lex_fields is a triple-stache -> array.
         assertEquals("array", spec(schema, "lex_fields").get("type"));
+    }
+
+    // ---- 3.3: quote state from literal text only ----------------------------
+
+    @Test
+    public void derive_quoteInsideComment_doesNotFlipLaterScalars() {
+        // One-line (minified) body: the " inside the comment is not JSON, so q stays a
+        // string and n stays a number.
+        Map<String, Object> schema = MustacheTemplateAnalyzer
+            .derive("{{! dont use a \" quote here }}{\"query\":{\"match\":{\"title\":\"{{q}}\"}},\"size\":{{n}}}");
+        assertEquals("string", spec(schema, "q").get("type"));
+        assertEquals("number", spec(schema, "n").get("type"));
+    }
+
+    @Test
+    public void derive_quoteInsideCustomDelimiterTag_doesNotCount() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{{=<% %>=}}<%! a \" here %>{\"q\":\"<%q%>\",\"size\":<%n%>}");
+        assertEquals("string", spec(schema, "q").get("type"));
+        assertEquals("number", spec(schema, "n").get("type"));
+    }
+
+    // ---- 3.2: quoted triple-stache is a string ------------------------------
+
+    @Test
+    public void derive_quotedTriple_isString() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"query\":{\"match\":{\"title\":\"{{{q}}}\"}}}");
+        assertEquals("string", spec(schema, "q").get("type"));
+        assertEquals(Boolean.TRUE, spec(schema, "q").get("required"));
+    }
+
+    @Test
+    public void derive_quotedAmpersand_isString() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"query\":{\"match\":{\"title\":\"{{&q}}\"}}}");
+        assertEquals("string", spec(schema, "q").get("type"));
+    }
+
+    @Test
+    public void derive_unquotedAmpersand_isArray() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{ \"fields\": {{&lex_fields}} }");
+        assertEquals("array", spec(schema, "lex_fields").get("type"));
+    }
+
+    @Test
+    public void derive_tripleQuotedAndUnquoted_staysArray() {
+        // Conflict rule: the unquoted use injects raw JSON, so array wins (a string value
+        // would break that slot).
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"a\":\"{{{x}}}\",\"b\":{{{x}}}}");
+        assertEquals("array", spec(schema, "x").get("type"));
+    }
+
+    // ---- 3.5: list iteration derives list; lang-mustache built-ins fail loud ---
+
+    private static final String ITERATOR_BODY = "{\"query\":{\"terms\":{\"brand\":[{{#brands}}\"{{.}}\",{{/brands}}\"zzz\"]}}}";
+
+    @Test
+    public void derive_implicitIteratorInSection_isOptionalList() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive(ITERATOR_BODY);
+        assertEquals(Set.of("brands"), schema.keySet());
+        assertEquals("list", spec(schema, "brands").get("type"));
+        assertEquals(Boolean.FALSE, spec(schema, "brands").get("required"));
+        assertEquals("A list of values; the clause repeats once per value.", spec(schema, "brands").get("description"));
+    }
+
+    @Test
+    public void derive_nestedImplicitIterator_attributesListToInnermostSection() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"a\":[{{#outer}}{{#inner}}\"{{.}}\",{{/inner}}{{/outer}}\"z\"]}");
+        assertEquals("list", spec(schema, "inner").get("type"));
+        assertEquals("boolean", spec(schema, "outer").get("type"));
+    }
+
+    @Test
+    public void derive_sectionWithoutImplicitIterator_staysBoolean() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"query\":{\"match_all\":{}}{{#flag}},\"size\":5{{/flag}}}");
+        assertEquals("boolean", spec(schema, "flag").get("type"));
+    }
+
+    @Test
+    public void paramNames_implicitIteratorInSection_returnsSectionName() {
+        assertEquals(Set.of("brands"), MustacheTemplateAnalyzer.paramNames(ITERATOR_BODY));
+    }
+
+    @Test
+    public void derive_implicitIteratorAtRootOrInInvertedSection_isIgnored() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{ {{.}} {{^skip}}\"a\":\"{{.}}\"{{/skip}} }");
+        assertEquals(Set.of("skip"), schema.keySet());
+        assertEquals("boolean", spec(schema, "skip").get("type"));
+    }
+
+    @Test
+    public void derive_toJsonSection_throws_paramNamesReturnsInnerName() {
+        String body = "{\"query\":{\"terms\":{\"brand\":{{#toJson}}brands{{/toJson}}}}}";
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(body));
+        assertTrue(e.getMessage().contains("param 'brands' is rendered through {{#toJson}}"));
+        assertEquals(Set.of("brands"), MustacheTemplateAnalyzer.paramNames(body));
+    }
+
+    @Test
+    public void derive_joinSections_throw_paramNamesReturnsInnerName() {
+        String join = "{\"query\":{\"query_string\":{\"query\":\"{{#join}}terms{{/join}}\"}}}";
+        assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(join));
+        assertEquals(Set.of("terms"), MustacheTemplateAnalyzer.paramNames(join));
+
+        String joinDelim = "{\"query\":{\"query_string\":{\"query\":\"{{#join delimiter=' OR '}}terms{{/join delimiter=' OR '}}\"}}}";
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(joinDelim));
+        assertTrue(e.getMessage().contains("{{#join}}"));
+        assertEquals(Set.of("terms"), MustacheTemplateAnalyzer.paramNames(joinDelim));
+    }
+
+    @Test
+    public void derive_builtinNamesMatchCaseInsensitively() {
+        // The engine matches toJson/join/url ignoring case, so {{#TOJSON}} is still toJson.
+        String body = "{\"query\":{\"terms\":{\"brand\":{{#TOJSON}}xs{{/TOJSON}}}}}";
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(body));
+        assertTrue(e.getMessage().contains("param 'xs' is rendered through {{#TOJSON}}"));
+        assertEquals(Set.of("xs"), MustacheTemplateAnalyzer.paramNames(body));
+
+        String joinDelim = "{\"q\":\"{{#JOIN DELIMITER=' OR '}}terms{{/JOIN DELIMITER=' OR '}}\"}";
+        assertTrue(
+            assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(joinDelim))
+                .getMessage()
+                .contains("{{#join}}")
+        );
+        assertEquals(Set.of("terms"), MustacheTemplateAnalyzer.paramNames(joinDelim));
+    }
+
+    @Test
+    public void derive_valueInsideUrlSection_staysRequired() {
+        // {{#url}} renders unconditionally, so a value used only inside it is still required.
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"q\":\"{{#url}}{{term}}{{/url}}\"}");
+        assertEquals(Boolean.TRUE, spec(schema, "term").get("required"));
+    }
+
+    @Test
+    public void derive_urlSection_isNotAParam_innerTagsStillScanned() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"q\":\"{{#url}}{{term}}{{/url}}\"}");
+        assertEquals(Set.of("term"), schema.keySet());
+        assertEquals("string", spec(schema, "term").get("type"));
+    }
+
+    // ---- 3.4: malformed delimiter change -----------------------------------
+
+    @Test
+    public void derive_delimiterChangeWithoutTrailingEquals_throws() {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> MustacheTemplateAnalyzer.derive("{{=<% %>}}{\"size\":<%n%>}")
+        );
+        assertTrue(e.getMessage().contains("Malformed delimiter change"));
+        // Lenient name collection still walks the body.
+        assertEquals(Set.of("n"), MustacheTemplateAnalyzer.paramNames("{{=<% %>}}{\"size\":<%n%>}"));
+    }
+
+    @Test
+    public void derive_wellFormedDelimiterChange_derives() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{{=<% %>=}}{\"q\":\"<%q%>\",\"size\":<%n%>}");
+        assertEquals("string", spec(schema, "q").get("type"));
+        assertEquals("number", spec(schema, "n").get("type"));
+    }
+
+    @Test
+    public void paramNames_unbalancedOrEmpty_throws() {
+        assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.paramNames("{ {{#a}} x }"));
+        assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.paramNames(""));
+    }
+
+    @Test
+    public void paramNames_matchesDeriveKeysForDerivableBody() {
+        assertEquals(MustacheTemplateAnalyzer.derive(PRODUCT_BODY).keySet(), MustacheTemplateAnalyzer.paramNames(PRODUCT_BODY));
+    }
+
+    @Test
+    public void derive_realDefaultSearchTemplate_typesUnchanged() {
+        // Regression: the shipped template's three triple-staches sit in unquoted slots,
+        // so they stay arrays; the quote-state rewrite must not shift any scalar's type.
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive(QueryPlanningPromptTemplate.DEFAULT_SEARCH_TEMPLATE);
+        assertEquals("string", spec(schema, "lex_query").get("type"));
+        assertEquals("string", spec(schema, "lex_type").get("type"));
+        assertEquals("string", spec(schema, "sem_field").get("type"));
+        assertEquals("number", spec(schema, "from").get("type"));
+        assertEquals("number", spec(schema, "lex_boost").get("type"));
+        assertEquals("array", spec(schema, "lex_fields").get("type"));
+        assertEquals("array", spec(schema, "filters").get("type"));
+        assertEquals("array", spec(schema, "sort").get("type"));
+        assertEquals("boolean", spec(schema, "sem_enabled").get("type"));
     }
 }
