@@ -313,6 +313,21 @@ public class TemplateStructureAnalyzerTests {
     }
 
     @Test
+    public void classify_sortKeyAsValueIsSortField() {
+        checkSingle("string", mk -> map("sort", mk), TemplateStructureAnalyzer.ROLE_SORT_FIELD, "Field to sort results by.");
+    }
+
+    @Test
+    public void classify_sortKeyInSortArrayIsSortField() {
+        checkSingle(
+            "string",
+            mk -> map("sort", list("_score", mk)),
+            TemplateStructureAnalyzer.ROLE_SORT_FIELD,
+            "Field to sort results by."
+        );
+    }
+
+    @Test
     public void classify_zeroTermsQueryIsEnum() {
         checkSingle(
             "string",
