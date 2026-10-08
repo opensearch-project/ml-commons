@@ -94,6 +94,8 @@ public class MustacheTemplateAnalyzer {
         boolean tripleUnquoted;     // a {{{x}}}/{{&x}} OUTSIDE "..." -> raw JSON array/object
         boolean quotedScalar;       // a value that sat inside "..." -> string, else number
         boolean iteratedWithDot;    // its {{#x}} section renders {{.}} -> a list, unless x is also a value
+        boolean usedAsPositive;     // appeared as {{#x}} (true renders the section)
+        boolean usedAsInverted;     // appeared as {{^x}} (true omits the section)
     }
 
     /** An open section on the scan stack. */
@@ -243,7 +245,13 @@ public class MustacheTemplateAnalyzer {
                     if (function) {
                         scan.builtinSections.add(name);
                     } else {
-                        scan.facts.computeIfAbsent(name, k -> new ParamFacts()).usedAsSection = true;
+                        ParamFacts f = scan.facts.computeIfAbsent(name, k -> new ParamFacts());
+                        f.usedAsSection = true;
+                        if (inverted) {
+                            f.usedAsInverted = true;
+                        } else {
+                            f.usedAsPositive = true;
+                        }
                     }
                     break;
                 }
@@ -424,7 +432,17 @@ public class MustacheTemplateAnalyzer {
             // body still renders a legal query without them.
             boolean required = f.usedAsValueAtRoot && !f.usedAsSection;
             spec.put(REQUIRED_KEY, required);
-            spec.put(DESCRIPTION_KEY, TYPE_LIST.equals(spec.get(TYPE_KEY)) ? LIST_DESCRIPTION : "");
+            // A boolean used only as {{^x}} removes its clause when true, so the generic
+            // "enable" wording would invert its meaning; describe it here, where the sigil
+            // is known (enrichment only fills an empty description).
+            boolean invertedOnly = f.usedAsSection && !f.usedAsValue && f.usedAsInverted && !f.usedAsPositive;
+            String description = "";
+            if (TYPE_LIST.equals(spec.get(TYPE_KEY))) {
+                description = LIST_DESCRIPTION;
+            } else if (invertedOnly) {
+                description = "Set to true to omit the optional " + e.getKey() + " clause.";
+            }
+            spec.put(DESCRIPTION_KEY, description);
 
             schema.put(e.getKey(), spec);
         }
