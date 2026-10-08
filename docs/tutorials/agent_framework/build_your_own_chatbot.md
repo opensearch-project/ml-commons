@@ -584,17 +584,17 @@ POST _plugins/_ml/agents/o0LDyI0Bn3OCesyvr-Zq/_execute
 
 #### Example2: OpenAI model with custom prompt
 
-Create a connector for the OpenAI "gpt-3.5-turbo" model:
+Create a connector for the OpenAI "gpt-4o-mini" model:
 
 ```
 POST _plugins/_ml/connectors/_create
 {
-  "name": "My openai connector: gpt-3.5-turbo",
+  "name": "My openai connector: gpt-4o-mini",
   "description": "The connector to openai chat model",
   "version": 1,
   "protocol": "http",
   "parameters": {
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o-mini",
     "response_filter": "$.choices[0].message.content",
     "stop": ["\n\nHuman:","\nObservation:","\n\tObservation:","\n\tObservation","\n\nQuestion"],
     "system_instruction": "You are an Assistant which can answer kinds of questions."

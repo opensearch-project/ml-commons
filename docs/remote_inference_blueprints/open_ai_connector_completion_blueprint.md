@@ -1,5 +1,22 @@
 ### OpenAI connector blueprint example for completion:
 
+> [!WARNING]
+> **`gpt-3.5-turbo-instruct` is retired, so this blueprint no longer works as written.** OpenAI
+> announced the shutdown of the legacy GPT model snapshots on 2025-09-26 with a shutdown date of
+> 2026-09-28, which has now passed. The remaining legacy completions alias
+> (`gpt-3.5-turbo-completions`) shuts down on 2026-10-23. See
+> [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations).
+>
+> Migrate to [open_ai_connector_chat_blueprint.md](open_ai_connector_chat_blueprint.md), which
+> targets `/v1/chat/completions`. This repository's integration tests use `gpt-4o-mini`, which
+> accepts the same `max_tokens` and `temperature` parameters shown below.
+>
+> OpenAI lists `gpt-5.6-terra` as the substitute for `gpt-3.5-turbo-instruct`, but it is not a
+> drop-in replacement for the request body below: it rejects `max_tokens` (requiring
+> `max_completion_tokens`) and rejects a `temperature` override.
+>
+> The example below is retained for reference.
+
 #### this blueprint is created from OpenAI doc: https://platform.openai.com/docs/api-reference/completions
 
 ```json
