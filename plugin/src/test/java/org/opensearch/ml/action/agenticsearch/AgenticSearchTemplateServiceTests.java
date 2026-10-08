@@ -345,7 +345,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         schema.put("extra", specMap("array", false, ""));
         TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
 
-        service.applyStructuralEnrichment(schema, markers, new LinkedHashMap<>(), null);
+        service.applyStructuralEnrichment(schema, markers, new LinkedHashMap<>(), null, null);
 
         assertEquals("Set to true to enable the optional flag clause.", descOf(schema, "flag"));
         assertEquals("A JSON array or object passed as a raw JSON string.", descOf(schema, "extra"));
@@ -363,7 +363,7 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         Object marker = markers.renderParams().get("sort_order");
         Map<String, Object> rendered = ImmutableMap.of("sort", List.of(ImmutableMap.of("price", ImmutableMap.of("order", marker))));
 
-        service.applyStructuralEnrichment(schema, markers, rendered, null);
+        service.applyStructuralEnrichment(schema, markers, rendered, null, null);
 
         assertEquals("Caller-set sort direction.", descOf(schema, "sort_order"));
         assertEquals(Arrays.asList("ASC", "DESC"), ((Map<?, ?>) schema.get("sort_order")).get("enum"));

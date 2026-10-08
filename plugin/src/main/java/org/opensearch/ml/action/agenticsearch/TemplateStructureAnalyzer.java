@@ -212,6 +212,11 @@ public final class TemplateStructureAnalyzer {
         String prev = n >= 2 ? keys.get(n - 2) : null;
         String prev2 = n >= 3 ? keys.get(n - 3) : null;
 
+        // A bare sort key given as a value: "sort":"{{x}}" or "sort":["{{x}}"].
+        if ("sort".equals(last)) {
+            return new Facts(ROLE_SORT_FIELD, List.of(), null);
+        }
+
         // Top-level paging controls.
         if (n == 1) {
             if ("size".equals(last)) {
