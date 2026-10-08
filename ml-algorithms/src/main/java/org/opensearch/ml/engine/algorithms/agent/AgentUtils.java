@@ -166,6 +166,7 @@ public class AgentUtils {
     public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
+    public static final String TOOL_CONFIGS = "tool_configs";
     public static final String TOOL_TEMPLATE = "tool_template";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS = "interaction_template.assistant_tool_calls";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH = "interaction_template.assistant_tool_calls_path";
@@ -265,6 +266,12 @@ public class AgentUtils {
             toolInfos.add(chatQuestionMessage);
         }
         parameters.put(TOOLS, String.join(", ", toolInfos));
+        // With no tools, blank the tool config block: Bedrock Converse rejects "toolConfig": {"tools": []}.
+        // Blank rather than remove, so ${parameters.tool_configs} without a default still resolves and a
+        // connector-level tool_configs can't win the parameter merge.
+        if (toolInfos.isEmpty()) {
+            parameters.put(TOOL_CONFIGS, "");
+        }
 
         // Setting ${parameters.tool_descriptions} / ${parameters.tool_names} values to empty string
         // if not set explicitly.

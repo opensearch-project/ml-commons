@@ -43,6 +43,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TO
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CONFIGS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_DESCRIPTIONS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
@@ -1319,6 +1320,36 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
         assertEquals("custom tool descriptions", parameters.get(TOOL_DESCRIPTIONS));
         assertEquals("Tool1,Tool2", parameters.get(TOOL_NAMES));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_noTools_blanksToolConfigs() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_TEMPLATE, "{\"name\": \"${tool.name}\"}");
+        parameters.put(TOOL_CONFIGS, ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
+
+        AgentUtils.addToolsToFunctionCalling(new HashMap<>(), parameters, List.of(), "");
+
+        assertEquals("", parameters.get(TOOLS));
+        assertEquals("", parameters.get(TOOL_CONFIGS));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_withTools_keepsToolConfigs() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        when(tool1.getName()).thenReturn("Tool1");
+        when(tool1.getDescription()).thenReturn("Description of Tool1");
+        when(tool1.getAttributes()).thenReturn(null);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_TEMPLATE, "{\"name\": \"${tool.name}\"}");
+        String toolConfigs = ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}";
+        parameters.put(TOOL_CONFIGS, toolConfigs);
+
+        AgentUtils.addToolsToFunctionCalling(tools, parameters, List.of("Tool1"), "");
+
+        assertEquals(toolConfigs, parameters.get(TOOL_CONFIGS));
     }
 
     private static MLToolSpec buildTool(String name) {
