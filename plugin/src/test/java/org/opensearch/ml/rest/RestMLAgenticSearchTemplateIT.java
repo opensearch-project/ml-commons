@@ -37,6 +37,8 @@ public class RestMLAgenticSearchTemplateIT extends MLCommonsRestTestCase {
     private String prefix;
     private String index;
     private final Set<String> registered = new HashSet<>();
+    // Stored scripts live in cluster state, which is also shared, so they are deleted too.
+    private final Set<String> scripts = new HashSet<>();
 
     @Before
     public void setUpTemplates() throws IOException {
@@ -62,6 +64,16 @@ public class RestMLAgenticSearchTemplateIT extends MLCommonsRestTestCase {
             }
         }
         registered.clear();
+        for (String id : scripts) {
+            try {
+                request("DELETE", "/_scripts/" + id, null);
+            } catch (ResponseException e) {
+                if (e.getResponse().getStatusLine().getStatusCode() != 404) {
+                    throw e;
+                }
+            }
+        }
+        scripts.clear();
         deleteIndexWithAdminClient(index);
         updateClusterSettings(ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.getKey(), null);
     }
@@ -171,7 +183,15 @@ public class RestMLAgenticSearchTemplateIT extends MLCommonsRestTestCase {
 
     public void testCommentOnlyBody_rejected() throws IOException {
         String id = putScript("commentonly", "{{! only a comment }}");
-        assertBadRequest(() -> register(id, null), "declares no parameters");
+        assertBadRequest(() -> register(id, null), "must render to a JSON object");
+    }
+
+    public void testZeroParamBody_registers() throws IOException {
+        // A static body has nothing to fill but is still a legitimate choice for an agent.
+        String id = putScript("static", "{\"query\":{\"term\":{\"brand\":\"acme\"}},\"size\":10}");
+        register(id, null);
+        Map<String, Object> got = get(id);
+        assertTrue(got.get("param_schema") == null || ((Map<?, ?>) got.get("param_schema")).isEmpty());
     }
 
     public void testBodyEmptyWithoutOptionalSection_rejected() throws IOException {
@@ -191,16 +211,30 @@ public class RestMLAgenticSearchTemplateIT extends MLCommonsRestTestCase {
         assertEquals("boolean", param(get(id), "sized").get("type"));
     }
 
-    // ---- #5035 3.5: list iteration and toJson fail loud --------------------
+    // ---- #5035 3.5: list iteration derives list; toJson fails loud ----------
 
-    public void testImplicitIterator_derivePathRejected_suppliedSchemaRegisters() throws IOException {
+    @SuppressWarnings("unchecked")
+    public void testImplicitIterator_derivesListAndAdvertisedValueSearches() throws IOException {
+        request("PUT", "/" + index + "/_doc/2?refresh=true", "{\"title\":\"desk lamp\",\"brand\":\"globex\",\"price\":25}");
         String id = putScript("iter", "{\"query\":{\"terms\":{\"brand\":[{{#brands}}\"{{.}}\",{{/brands}}\"zzz\"]}}}");
-        assertBadRequest(() -> register(id, null), "'brands' is iterated as a list");
+        register(id, null);
+        Map<String, Object> brands = param(get(id), "brands");
+        assertEquals("list", brands.get("type"));
+        assertEquals(Boolean.FALSE, brands.get("required"));
 
-        register(id, "{\"brands\":{\"type\":\"array\",\"required\":false,\"description\":\"Brands to match.\"}}");
-        assertEquals("array", param(get(id), "brands").get("type"));
-        Map<String, Object> hits = searchTemplate(id, "{\"brands\":[\"acme\",\"globex\"]}");
-        assertEquals(1, ((Number) ((Map<?, ?>) hits.get("total")).get("value")).intValue());
+        // A real JSON array is what the schema advertises, and the loop matches every value.
+        Response response = request(
+            "GET",
+            "/" + index + "/_search/template",
+            "{\"id\":\"" + id + "\",\"params\":{\"brands\":[\"acme\",\"globex\"]}}"
+        );
+        Map<String, Object> hits = (Map<String, Object>) parseResponseToMap(response).get("hits");
+        assertEquals(2, ((Number) ((Map<?, ?>) hits.get("total")).get("value")).intValue());
+        Set<String> ids = new HashSet<>();
+        for (Map<String, Object> hit : (List<Map<String, Object>>) hits.get("hits")) {
+            ids.add((String) hit.get("_id"));
+        }
+        assertEquals(Set.of("1", "2"), ids);
     }
 
     public void testToJsonSection_derivePathRejected_suppliedSchemaRegisters() throws IOException {
@@ -227,6 +261,7 @@ public class RestMLAgenticSearchTemplateIT extends MLCommonsRestTestCase {
         String id = prefix + name;
         String payload = "{\"script\":{\"lang\":\"mustache\",\"source\":" + gson.toJson(body) + "}}";
         request("POST", "/_scripts/" + id, payload);
+        scripts.add(id);
         return id;
     }
 

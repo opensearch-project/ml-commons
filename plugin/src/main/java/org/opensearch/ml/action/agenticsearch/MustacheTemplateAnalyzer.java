@@ -38,11 +38,13 @@ import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplate;
  *   <tr><td>{@code {{x}}{{^x}}default{{/x}}}</td><td>optional, with default</td></tr>
  *   <tr><td>{@code {{{x}}}} or {@code {{&x}}} in an unquoted slot</td><td>array (raw JSON injected as-is)</td></tr>
  *   <tr><td>{@code {{{x}}}} or {@code {{&x}}} inside {@code "..."}</td><td>string (unescaped)</td></tr>
+ *   <tr><td>{@code {{#xs}}..{{.}}..{{/xs}}}</td><td>optional list (the section repeats per value)</td></tr>
  * </table>
  *
- * <p>Some legal bodies cannot be typed from the body alone: list iteration
- * ({@code {{#xs}}{{.}}{{/xs}}}), the {@code lang-mustache} {@code toJson}/{@code join}
- * built-ins, and a malformed delimiter change. {@link #derive} rejects these and asks the
+ * <p>Some legal bodies cannot be typed from the body alone: the {@code lang-mustache}
+ * {@code toJson}/{@code join} built-ins and a malformed delimiter change. A loop over
+ * objects ({@code {{#xs}}{{name}}{{/xs}}}) is indistinguishable from a guard section and
+ * derives as one. {@link #derive} rejects these and asks the
  * caller to supply {@code param_schema}; {@link #paramNames} still reports the names such
  * a body references, so a supplied schema can be checked against it.
  *
@@ -63,6 +65,11 @@ public class MustacheTemplateAnalyzer {
     static final String TYPE_NUMBER = "number";
     static final String TYPE_BOOLEAN = "boolean";
     static final String TYPE_ARRAY = "array";
+    // A real JSON array of strings that a {{#xs}}..{{.}}..{{/xs}} section iterates. Unlike
+    // TYPE_ARRAY (raw JSON passed as a string), the engine must receive a List.
+    static final String TYPE_LIST = "list";
+
+    static final String LIST_DESCRIPTION = "A list of values; the clause repeats once per value.";
 
     // Value of SOURCE_KEY for an enum derived from the index mapping.
     static final String SOURCE_MAPPING = "mapping";
@@ -86,6 +93,7 @@ public class MustacheTemplateAnalyzer {
         boolean usedAsValueAtRoot;  // a value use OUTSIDE any section -> unconditionally rendered
         boolean tripleUnquoted;     // a {{{x}}}/{{&x}} OUTSIDE "..." -> raw JSON array/object
         boolean quotedScalar;       // a value that sat inside "..." -> string, else number
+        boolean iteratedWithDot;    // its {{#x}} section renders {{.}} -> x is a list of values
     }
 
     /** An open section on the scan stack. */
@@ -117,8 +125,8 @@ public class MustacheTemplateAnalyzer {
      * (ordered by first appearance), suitable for {@link AgenticSearchTemplate}.
      *
      * @throws IllegalArgumentException if the body has an unbalanced section, or uses a
-     *     construct whose params cannot be derived (list iteration, a {@code toJson}/{@code
-     *     join} built-in, a malformed delimiter change); the caller must then supply
+     *     construct whose params cannot be derived (a {@code toJson}/{@code join} built-in,
+     *     a malformed delimiter change); the caller must then supply
      *     {@code param_schema} explicitly.
      */
     public static Map<String, Object> derive(String body) {
@@ -230,7 +238,7 @@ public class MustacheTemplateAnalyzer {
                         throw new IllegalArgumentException("Unbalanced Mustache section near '" + name + "'");
                     }
                     OpenSection section = openSections.pop();
-                    if (section.function && !FN_URL.equals(section.name)) {
+                    if (section.function && !FN_URL.equalsIgnoreCase(section.name)) {
                         recordFunctionParam(scan, section, body.substring(section.contentStart, start).trim(), open);
                     }
                     break;
@@ -253,8 +261,16 @@ public class MustacheTemplateAnalyzer {
         return scan;
     }
 
+    /** The engine matches built-in names case-insensitively, so {@code {{#TOJSON}}} is still toJson. */
     private static boolean isBuiltinFunction(String name) {
-        return FN_TO_JSON.equals(name) || FN_JOIN.equals(name) || FN_URL.equals(name) || name.startsWith(FN_JOIN_DELIMITER_PREFIX);
+        return FN_TO_JSON.equalsIgnoreCase(name)
+            || FN_JOIN.equalsIgnoreCase(name)
+            || FN_URL.equalsIgnoreCase(name)
+            || isJoinWithDelimiter(name);
+    }
+
+    private static boolean isJoinWithDelimiter(String name) {
+        return name.regionMatches(true, 0, FN_JOIN_DELIMITER_PREFIX, 0, FN_JOIN_DELIMITER_PREFIX.length());
     }
 
     /**
@@ -262,14 +278,14 @@ public class MustacheTemplateAnalyzer {
      * That name is a real param, but its shape (list or object) is invisible to the scanner.
      */
     private static void recordFunctionParam(Scan scan, OpenSection section, String inner, String open) {
-        String fn = section.name.startsWith(FN_JOIN_DELIMITER_PREFIX) ? FN_JOIN : section.name;
+        String fn = isJoinWithDelimiter(section.name) ? FN_JOIN : section.name;
         if (inner.isEmpty() || inner.contains(open)) {
             scan.issues.add("{{#" + fn + "}} section must name a single param; supply param_schema explicitly");
             return;
         }
         scan.functionParams.add(inner);
         scan.issues
-            .add("param '" + inner + "' is rendered through {{#" + fn + "}}; its type cannot be derived — supply param_schema explicitly");
+            .add("param '" + inner + "' is rendered through {{#" + fn + "}}; its type cannot be derived; supply param_schema explicitly");
     }
 
     private static void recordValue(Scan scan, Deque<OpenSection> openSections, String name, boolean triple, boolean quoted) {
@@ -277,23 +293,21 @@ public class MustacheTemplateAnalyzer {
             return;
         }
         if (".".equals(name)) {
-            // The implicit iterator: inside {{#xs}}, xs is a list the body iterates. The
-            // schema has no list type, and deriving xs as a boolean guard would make a
-            // filled value silently render a wrong query, so this is a derive failure.
-            OpenSection section = openSections.peek();
-            if (section != null && !section.inverted && !section.function) {
-                scan.issues
-                    .add(
-                        "param '"
-                            + section.name
-                            + "' is iterated as a list ({{.}}); list params cannot be derived — supply param_schema explicitly"
-                    );
+            // The implicit iterator: inside {{#xs}}, xs is a list the body iterates, so it
+            // must be filled with a real list (a boolean guard would render one bogus item).
+            // A built-in such as {{#url}} is not the list, so skip it; at root or directly in
+            // an inverted section there is no list to attribute it to.
+            OpenSection section = innermostParamSection(openSections);
+            if (section != null && !section.inverted) {
+                scan.facts.computeIfAbsent(section.name, k -> new ParamFacts()).iteratedWithDot = true;
             }
             return;
         }
         ParamFacts f = scan.facts.computeIfAbsent(name, k -> new ParamFacts());
         f.usedAsValue = true;
-        if (openSections.isEmpty()) {
+        // A built-in such as {{#url}} renders its content unconditionally, so it does not
+        // make the value conditional; only a real param section does.
+        if (innermostParamSection(openSections) == null) {
             f.usedAsValueAtRoot = true;
         }
         if (triple && !quoted) {
@@ -302,6 +316,16 @@ public class MustacheTemplateAnalyzer {
         if (quoted) {
             f.quotedScalar = true;
         }
+    }
+
+    /** The innermost open section that is a param ({{#x}} or {{^x}}), skipping built-ins. */
+    private static OpenSection innermostParamSection(Deque<OpenSection> openSections) {
+        for (OpenSection section : openSections) { // ArrayDeque iterates from the top of the stack
+            if (!section.function) {
+                return section;
+            }
+        }
+        return null;
     }
 
     /**
@@ -353,8 +377,11 @@ public class MustacheTemplateAnalyzer {
             // an inverted-section default (optional). A triple-stache in an unquoted slot
             // is an injected JSON array/object; one inside "..." is just an unescaped
             // string. A param used both ways keeps array, so its unquoted use still fits.
+            // A section that renders {{.}} iterates a list, and a section is always optional.
             if (f.tripleUnquoted) {
                 spec.put(TYPE_KEY, TYPE_ARRAY);
+            } else if (f.iteratedWithDot) {
+                spec.put(TYPE_KEY, TYPE_LIST);
             } else if (f.usedAsSection && !f.usedAsValue) {
                 spec.put(TYPE_KEY, TYPE_BOOLEAN);
             } else if (f.quotedScalar) {
@@ -370,7 +397,7 @@ public class MustacheTemplateAnalyzer {
             // body still renders a legal query without them.
             boolean required = f.usedAsValueAtRoot && !f.usedAsSection;
             spec.put(REQUIRED_KEY, required);
-            spec.put(DESCRIPTION_KEY, "");
+            spec.put(DESCRIPTION_KEY, TYPE_LIST.equals(spec.get(TYPE_KEY)) ? LIST_DESCRIPTION : "");
 
             schema.put(e.getKey(), spec);
         }
