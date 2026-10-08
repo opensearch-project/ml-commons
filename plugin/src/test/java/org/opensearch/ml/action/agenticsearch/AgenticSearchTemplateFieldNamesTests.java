@@ -367,6 +367,116 @@ public class AgenticSearchTemplateFieldNamesTests {
         assertEquals(List.of("title"), enumOf(schema, "sem_field"));
     }
 
+    // ---- literal "field" keys and non-field roles ---------------------------
+
+    // A mapping wide enough that "keeps the full enum" is not satisfied by accident.
+    private static final List<String> WIDE = List
+        .of("brand", "category", "color", "created_at", "description", "price", "rating", "sku", "stock", "tags", "title", "title.keyword");
+    private static final Set<String> WIDE_SORTABLE = new LinkedHashSet<>(
+        List.of("brand", "category", "color", "created_at", "price", "rating", "sku", "stock", "tags", "title.keyword")
+    );
+
+    /** Derive {@code body}, then enrich against {@code renderWith} applied to its marker values. */
+    private static Map<String, Object> deriveAndEnrich(
+        String body,
+        List<String> all,
+        Set<String> sortable,
+        java.util.function.Function<Map<String, Object>, Map<String, Object>> renderWith
+    ) {
+        AgenticSearchTemplateService service = new AgenticSearchTemplateService(null, null, null, null, null);
+        Map<String, Object> schema = service.deriveSchema(body, fields(all, sortable));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = renderWith.apply(markers.renderParams());
+        service.applyStructuralEnrichment(schema, markers, rendered, null, sortable);
+        return schema;
+    }
+
+    @Test
+    public void enrichment_termsAggFieldKeepsFullEnum() {
+        // aggs.<name>.terms.field holds a field name: it must not be read as a terms filter value.
+        String body = "{\"size\":0,\"aggs\":{\"by_brand\":{\"terms\":{\"field\":\"{{agg_field}}\"}}}}";
+        Map<String, Object> schema = deriveAndEnrich(
+            body,
+            WIDE,
+            WIDE_SORTABLE,
+            rp -> map("size", 0, "aggs", map("by_brand", map("terms", map("field", rp.get("agg_field")))))
+        );
+
+        assertEquals(WIDE, enumOf(schema, "agg_field"));
+        assertEquals("mapping", specOf(schema, "agg_field").get("source"));
+        assertEquals("Field name to target.", specOf(schema, "agg_field").get("description"));
+    }
+
+    @Test
+    public void enrichment_sortOrderSlotDropsMappingEnumForVocabulary() {
+        // order_field is named like a selector but fills a sort order: asc/desc replaces the field enum.
+        String body = "{\"sort\":[{\"price\":{\"order\":\"{{order_field}}\"}}]}";
+        Map<String, Object> schema = deriveAndEnrich(
+            body,
+            WIDE,
+            WIDE_SORTABLE,
+            rp -> map("sort", List.of(map("price", map("order", rp.get("order_field")))))
+        );
+
+        assertEquals(List.of("asc", "desc"), enumOf(schema, "order_field"));
+        assertFalse(specOf(schema, "order_field").containsKey("source"));
+    }
+
+    @Test
+    public void enrichment_resultCountSlotDropsMappingEnum() {
+        String body = "{\"query\":{\"match_all\":{}},\"size\":\"{{size_field}}\"}";
+        Map<String, Object> schema = deriveAndEnrich(
+            body,
+            WIDE,
+            WIDE_SORTABLE,
+            rp -> map("query", map("match_all", map()), "size", rp.get("size_field"))
+        );
+
+        assertFalse(specOf(schema, "size_field").containsKey("enum"));
+        assertFalse(specOf(schema, "size_field").containsKey("source"));
+    }
+
+    @Test
+    public void geoPoint_notSortable() {
+        // Pinned choice: geo_point sorts only via _geo_distance, so it is not offered to sort selectors.
+        Map<String, Object> props = map("location", map("type", "geo_point"), "price", map("type", "double"));
+
+        assertEquals(List.of("location", "price"), collect(props));
+        assertEquals(Set.of("price"), sortable(props));
+    }
+
+    // ---- the issue's repro, end to end -------------------------------------
+
+    @Test
+    public void issueRepro_mappingToDerivedSchema() {
+        // Mapping from #5035, in the alphabetical order GET <index>/_mapping returns it.
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex
+            .put(
+                "products",
+                map(
+                    "brand",
+                    map("type", "keyword"),
+                    "price",
+                    map("type", "float"),
+                    "tags",
+                    map("type", "keyword"),
+                    "title",
+                    map("type", "text", "fields", map("keyword", map("type", "keyword", "ignore_above", 256)))
+                )
+            );
+        String body = "{\"query\":{\"match\":{\"title\":\"{{query_text}}\"}},\"sort\":[{\"{{sort_by}}\":\"asc\"}]}";
+
+        AgenticSearchTemplateService service = new AgenticSearchTemplateService(null, null, null, null, null);
+        Map<String, Object> schema = service.deriveSchema(body, AgenticSearchTemplateService.extractFieldNames(indexResponse(byIndex)));
+
+        // The text field itself cannot be sorted on; its keyword sub-field can.
+        assertEquals(List.of("brand", "price", "tags", "title.keyword"), enumOf(schema, "sort_by"));
+        assertFalse(enumOf(schema, "sort_by").contains("title"));
+        assertFalse(specOf(schema, "query_text").containsKey("enum"));
+        assertFalse(specOf(schema, "query_text").containsKey("source"));
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> specOf(Map<String, Object> schema, String param) {
         return (Map<String, Object>) schema.get(param);
