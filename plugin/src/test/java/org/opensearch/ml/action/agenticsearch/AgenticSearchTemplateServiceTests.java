@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -381,46 +382,99 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     // ---- register: derive-path rejections ----------------------------------
 
     @Test
-    public void register_derivedSchemaEmpty_failsValidation() {
-        stubStoredScript("{\"query\":{\"match_all\":{}}}");
-        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
-        stubRenderSucceeds();
+    public void register_zeroParamBody_registersAndPreflights() {
+        // A static body has nothing to fill, but an agent choosing among templates can still
+        // pick it, so it registers with an empty schema after both pre-flight renders.
+        stubStoredScript("{\"query\":{\"term\":{\"status\":\"active\"}},\"size\":10}");
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("status", ImmutableMap.of("type", "keyword"))));
+        List<Map<String, Object>> renders = new ArrayList<>();
+        stubRenderReturns(params -> {
+            renders.add(params);
+            return "{\"query\":{\"term\":{\"status\":\"active\"}},\"size\":10}";
+        });
+        stubStoreSucceeds();
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
-        service.register("tmpl", "my-index", null, null, null, listener);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
 
-        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(ex.capture());
-        assertTrue(ex.getValue() instanceof IllegalArgumentException);
-        assertTrue(ex.getValue().getMessage().contains("declares no parameters"));
-        verify(client, never()).index(any(IndexRequest.class), any());
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().getParamSchema().isEmpty());
+        // Pre-flight rendered the body (all-filled and required-only), both with no params.
+        assertTrue(renders.size() >= 2);
+        assertTrue(renders.stream().allMatch(Map::isEmpty));
     }
 
     private static final String ITERATOR_BODY = "{\"query\":{\"terms\":{\"brand\":[{{#brands}}\"{{.}}\",{{/brands}}\"zzz\"]}}}";
 
     @Test
-    public void register_listIterationBody_derivePathFailsWithGuidance() {
+    public void register_listIterationBody_derivesListType() {
         stubStoredScript(ITERATOR_BODY);
         stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
         stubRenderSucceeds();
+        stubStoreSucceeds();
 
         @SuppressWarnings("unchecked")
         ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
         service.register("tmpl", "my-index", null, null, null, listener);
 
-        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(ex.capture());
-        assertTrue(ex.getValue() instanceof IllegalArgumentException);
-        assertTrue(ex.getValue().getMessage().contains("'brands' is iterated as a list"));
-        assertTrue(ex.getValue().getMessage().contains("supply param_schema"));
-        verify(client, never()).index(any(IndexRequest.class), any());
+        ArgumentCaptor<AgenticSearchTemplate> captor = ArgumentCaptor.forClass(AgenticSearchTemplate.class);
+        verify(listener).onResponse(captor.capture());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> brands = (Map<String, Object>) captor.getValue().getParamSchema().get("brands");
+        assertEquals("list", brands.get("type"));
+        assertEquals(Boolean.FALSE, brands.get("required"));
+        assertEquals("A list of values; the clause repeats once per value.", brands.get("description"));
+    }
+
+    @Test
+    public void preflight_listParam_rendersWithRealList() {
+        // The sample value must be a real List so the engine iterates the section; a
+        // string would render one bogus item. An enum's first value is the element.
+        List<Object> sampled = new ArrayList<>();
+        stubRenderReturns(params -> {
+            if (params.containsKey("brands")) {
+                sampled.add(params.get("brands"));
+            }
+            return "{\"query\":{\"terms\":{\"brand\":[\"x\",\"zzz\"]}}}";
+        });
+        service.preflightValidate(ITERATOR_BODY, ImmutableMap.of("brands", specMap("list", false, "")));
+        assertEquals(List.of(List.of("x")), sampled);
+
+        sampled.clear();
+        Map<String, Object> withEnum = specMap("list", false, "");
+        withEnum.put("enum", List.of("acme", "globex"));
+        service.preflightValidate(ITERATOR_BODY, ImmutableMap.of("brands", withEnum));
+        assertEquals(List.of(List.of("acme")), sampled);
+    }
+
+    @Test
+    public void valueFitsType_list_requiresListOfStrings() {
+        assertTrue(AgenticSearchTemplateService.valueFitsType(List.of("a", "b"), "list"));
+        assertFalse(AgenticSearchTemplateService.valueFitsType("a", "list"));
+        assertFalse(AgenticSearchTemplateService.valueFitsType(true, "list"));
+        assertFalse(AgenticSearchTemplateService.valueFitsType(List.of(1), "list"));
+    }
+
+    @Test
+    public void validateParamSchema_listEnum_checksElementsAsStrings() {
+        Map<String, Object> ok = specMap("list", false, "");
+        ok.put("enum", List.of("acme", "globex"));
+        AgenticSearchTemplateService.validateParamSchema(ImmutableMap.of("brands", ok));
+
+        Map<String, Object> bad = specMap("list", false, "");
+        bad.put("enum", List.of(1));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> AgenticSearchTemplateService.validateParamSchema(ImmutableMap.of("brands", bad))
+        );
     }
 
     @Test
     public void register_listIterationBody_withProvidedSchema_registers() {
-        // The workaround the derive-path error points to: a supplied schema naming the
-        // iterated param passes rejectUnknownParams (lenient) and is stored as sent.
+        // A schema supplied for the iterated param (as on 3.9.0) still passes
+        // rejectUnknownParams (lenient) and is stored as sent.
         stubStoredScript(ITERATOR_BODY);
         stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
         stubRenderSucceeds();
@@ -456,12 +510,14 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("flag", specMap("boolean", false, ""));
         schema.put("extra", specMap("array", false, ""));
+        schema.put("brands", specMap("list", false, ""));
         TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
 
         service.applyStructuralEnrichment(schema, markers, new LinkedHashMap<>(), null);
 
         assertEquals("Set to true to enable the optional flag clause.", descOf(schema, "flag"));
         assertEquals("A JSON array or object passed as a raw JSON string.", descOf(schema, "extra"));
+        assertEquals("A list of values; the clause repeats once per value.", descOf(schema, "brands"));
     }
 
     @Test

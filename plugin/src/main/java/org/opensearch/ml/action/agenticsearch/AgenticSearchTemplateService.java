@@ -146,11 +146,6 @@ public class AgenticSearchTemplateService {
                             // mapping for field-name enums (a param whose name is *_field
                             // or that targets a field can only choose an existing field).
                             paramSchema = deriveSchema(body, mappingFields);
-                            if (paramSchema.isEmpty()) {
-                                // Mirrors the REST layer's rejection of a supplied empty schema:
-                                // a template with nothing to fill gives the model no choices.
-                                throw new IllegalArgumentException("Template body declares no parameters");
-                            }
                             // Enrich the derived schema with descriptions and
                             // fixed-value enums recovered from where each param renders, and
                             // derive a template-level description for multi-template selection.
@@ -320,10 +315,14 @@ public class AgenticSearchTemplateService {
             ? (String) spec.get(MustacheTemplateAnalyzer.TYPE_KEY)
             : MustacheTemplateAnalyzer.TYPE_STRING;
 
-        // Array and boolean params carry no single clause or field, so describe them from
-        // their type alone (no marker to locate).
+        // Array, list and boolean params carry no single clause or field, so describe them
+        // from their type alone (no marker to locate).
         if (!hasDescription && MustacheTemplateAnalyzer.TYPE_ARRAY.equals(type)) {
             spec.put(MustacheTemplateAnalyzer.DESCRIPTION_KEY, "A JSON array or object passed as a raw JSON string.");
+            return;
+        }
+        if (!hasDescription && MustacheTemplateAnalyzer.TYPE_LIST.equals(type)) {
+            spec.put(MustacheTemplateAnalyzer.DESCRIPTION_KEY, MustacheTemplateAnalyzer.LIST_DESCRIPTION);
             return;
         }
         if (!hasDescription && MustacheTemplateAnalyzer.TYPE_BOOLEAN.equals(type)) {
@@ -447,10 +446,15 @@ public class AgenticSearchTemplateService {
 
     private static Object sampleValue(Map<String, Object> spec) {
         Object enumValues = spec.get(MustacheTemplateAnalyzer.ENUM_KEY);
-        if (enumValues instanceof List && !((List<?>) enumValues).isEmpty()) {
-            return ((List<?>) enumValues).get(0);
-        }
+        Object firstEnum = enumValues instanceof List && !((List<?>) enumValues).isEmpty() ? ((List<?>) enumValues).get(0) : null;
         String type = String.valueOf(spec.get(MustacheTemplateAnalyzer.TYPE_KEY));
+        if (MustacheTemplateAnalyzer.TYPE_LIST.equals(type)) {
+            // A real one-item List, so pre-flight renders the section body once.
+            return List.of(firstEnum != null ? firstEnum : "x");
+        }
+        if (firstEnum != null) {
+            return firstEnum;
+        }
         switch (type) {
             case MustacheTemplateAnalyzer.TYPE_NUMBER:
                 return 1;
@@ -795,8 +799,10 @@ public class AgenticSearchTemplateService {
             if (!(enumValues instanceof List) || ((List<?>) enumValues).isEmpty()) {
                 throw new IllegalArgumentException("param '" + name + "' has an empty or non-list 'enum'");
             }
+            // A list's enum names the values its elements may take, so check each as a string.
+            String elementType = MustacheTemplateAnalyzer.TYPE_LIST.equals(type) ? MustacheTemplateAnalyzer.TYPE_STRING : (String) type;
             for (Object value : (List<?>) enumValues) {
-                if (!valueFitsType(value, (String) type)) {
+                if (!valueFitsType(value, elementType)) {
                     throw new IllegalArgumentException(
                         "param '" + name + "' enum value '" + value + "' does not fit declared type '" + type + "'"
                     );
@@ -809,9 +815,10 @@ public class AgenticSearchTemplateService {
      * Whether a schema-supplied value is usable for a param of {@code type}. An
      * {@code array} param is a triple-stache slot and must carry raw JSON as a string:
      * the Mustache engine stringifies a {@code List} instead of emitting JSON
-     * ({@code [{"term":{"t":"a"}}]} becomes {@code {0={term={t=a}}}}).
+     * ({@code [{"term":{"t":"a"}}]} becomes {@code {0={term={t=a}}}}). A {@code list}
+     * param is the opposite: a section iterates it, so it must be a real {@code List} of strings.
      */
-    private static boolean valueFitsType(Object value, String type) {
+    static boolean valueFitsType(Object value, String type) {
         if (value == null) {
             return false;
         }
@@ -822,6 +829,8 @@ public class AgenticSearchTemplateService {
                 return value instanceof Boolean;
             case MustacheTemplateAnalyzer.TYPE_ARRAY:
                 return value instanceof String;
+            case MustacheTemplateAnalyzer.TYPE_LIST:
+                return value instanceof List && ((List<?>) value).stream().allMatch(v -> v instanceof String);
             default:
                 return value instanceof String;
         }
