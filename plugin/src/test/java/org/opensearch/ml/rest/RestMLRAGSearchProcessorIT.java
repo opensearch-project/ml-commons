@@ -108,12 +108,12 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
 
-    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET = "anthropic.claude-3-5-sonnet-20240620-v1:0";
-    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_SONNET = "anthropic.claude-3-sonnet-20240229-v1:0";
+    private static final String BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5 = "us.anthropic.claude-sonnet-4-5-20250929-v1:0";
+    private static final String BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5 = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
     private static final String BEDROCK_CONNECTOR_BLUEPRINT_INVOKE = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
-        + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
+        + "  \"name\": \"Bedrock Connector: claude sonnet 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude sonnet 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"parameters\": {\n"
@@ -122,7 +122,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
         + "    \"model\": \""
-        + "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        + "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
         + "\",\n"
         + "    \"system_prompt\": \"You are a helpful assistant.\",\n"
         + "\"response_filter\": \"$.content[0].text\""
@@ -150,7 +150,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
         + ".amazonaws.com/model/"
-        + "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        + "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
         + "/invoke\",\n"
         + "           \"request_body\": \"{\\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.inputs}\\\"}]}], \\\"max_tokens\\\":300, \\\"temperature\\\":0.5,  \\\"anthropic_version\\\":\\\"bedrock-2023-05-31\\\" }\"\n"
         + "        }\n"
@@ -228,8 +228,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "}";
 
     static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
-        + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
+        + "  \"name\": \"Bedrock Connector: claude sonnet 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude sonnet 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"parameters\": {\n"
@@ -238,7 +238,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
         + "    \"model\": \""
-        + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5
         + "\",\n"
         + "    \"system_prompt\": \"You are a helpful assistant.\"\n"
         + "  },\n"
@@ -263,16 +263,16 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
         + ".amazonaws.com/model/"
-        + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5
         + "/converse\",\n"
-        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
+        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
 
     private static final String BEDROCK_DOCUMENT_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude 3\",\n"
-        + "  \"description\": \"The connector to bedrock claude 3 model\",\n"
+        + "  \"name\": \"Bedrock Connector: claude haiku 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude haiku 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"parameters\": {\n"
@@ -281,7 +281,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
         + "    \"model\": \""
-        + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5
         + "\",\n"
         + "    \"system_prompt\": \"You are a helpful assistant.\"\n"
         + "  },\n"
@@ -306,9 +306,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
         + ".amazonaws.com/model/"
-        + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5
         + "/converse\",\n"
-        + "            \"request_body\": \"{ \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
+        + "            \"request_body\": \"{ \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
@@ -530,8 +530,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     private static final String OPENAI_MODEL = "gpt-4o-mini";
     private static final String BEDROCK_ANTHROPIC_CLAUDE = "bedrock/anthropic-claude";
-    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET;
-    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_3 = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET;
+    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5;
+    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_3 = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5;
     private static final String TEST_DOC_PATH = "org/opensearch/ml/rest/test_data/";
     private static Set<String> testDocs = Set.of("qa_doc1.json", "qa_doc2.json", "qa_doc3.json");
     private static final String DEFAULT_USER_AGENT = "Kibana";
