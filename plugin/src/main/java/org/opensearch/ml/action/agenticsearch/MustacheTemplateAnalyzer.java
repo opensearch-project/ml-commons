@@ -64,6 +64,8 @@ public class MustacheTemplateAnalyzer {
         boolean usedAsValueAtRoot;  // a value use OUTSIDE any section -> unconditionally rendered
         boolean triple;             // appeared as {{{x}}} -> unescaped (JSON array/object)
         boolean quotedScalar;       // a {{x}} that sat inside "..." -> string, else number
+        boolean usedAsPositive;     // appeared as {{#x}} (true renders the section)
+        boolean usedAsInverted;     // appeared as {{^x}} (true omits the section)
     }
 
     /**
@@ -125,7 +127,13 @@ public class MustacheTemplateAnalyzer {
                 case '^': { // inverted section open
                     String name = raw.substring(1).trim();
                     openSections.push(name);
-                    facts.computeIfAbsent(name, k -> new ParamFacts()).usedAsSection = true;
+                    ParamFacts f = facts.computeIfAbsent(name, k -> new ParamFacts());
+                    f.usedAsSection = true;
+                    if (sigil == '#') {
+                        f.usedAsPositive = true;
+                    } else {
+                        f.usedAsInverted = true;
+                    }
                     break;
                 }
                 case '/': { // section close
@@ -237,7 +245,11 @@ public class MustacheTemplateAnalyzer {
             // body still renders a legal query without them.
             boolean required = f.usedAsValueAtRoot && !f.usedAsSection;
             spec.put(REQUIRED_KEY, required);
-            spec.put(DESCRIPTION_KEY, "");
+            // A boolean used only as {{^x}} removes its clause when true, so the generic
+            // "enable" wording would invert its meaning; describe it here, where the sigil
+            // is known (enrichment only fills an empty description).
+            boolean invertedOnly = f.usedAsSection && !f.usedAsValue && f.usedAsInverted && !f.usedAsPositive;
+            spec.put(DESCRIPTION_KEY, invertedOnly ? "Set to true to omit the optional " + e.getKey() + " clause." : "");
 
             schema.put(e.getKey(), spec);
         }
