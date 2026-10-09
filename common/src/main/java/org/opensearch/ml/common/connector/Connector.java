@@ -202,9 +202,8 @@ public interface Connector extends ToXContentObject, Writeable {
             throw new IllegalArgumentException("Resolved connector URL is null");
         }
         for (String urlRegex : urlRegexes) {
-            Pattern pattern = Pattern.compile(urlRegex);
-            Matcher matcher = pattern.matcher(resolvedUrl);
-            if (matcher.matches()) {
+            // Runs on every predict, so use cached patterns and bound the matching work (see TrustedEndpointMatcher).
+            if (TrustedEndpointMatcher.matches(urlRegex, resolvedUrl)) {
                 return;
             }
         }
