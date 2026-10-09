@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -63,6 +64,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -101,6 +103,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
@@ -127,6 +130,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
@@ -144,6 +148,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -231,7 +236,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(null, masterKey);
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
+        mlEngine = spy(new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor));
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
@@ -1242,7 +1247,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
         assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception.getValue()));
         // Without this the model stays DEPLOYING in the node cache and the next deploy is refused as a duplicate.
-        verify(modelCacheHelper).removeModel(modelId);
+        verify(modelCacheHelper).removeModelIfOwner(eq(modelId), notNull());
     }
 
     /** Same rejection when the connector is fetched by id rather than carried inline on the model. */
@@ -1288,7 +1293,364 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
-        verify(modelCacheHelper).removeModel(modelId);
+        verify(modelCacheHelper).removeModelIfOwner(eq(modelId), notNull());
+    }
+
+    /**
+     * A remote model whose predictor fails to initialise (for example because the master key used to decrypt the
+     * connector credential is not ready yet on a freshly started node) must not leave its DEPLOYING entry in the node
+     * cache. Otherwise isModelRunningOnNode stays true and every later deploy on this node fails with "Duplicate deploy
+     * model task", leaving the model stuck PARTIALLY_DEPLOYED.
+     */
+    public void testDeployModel_RemoteModelInitFailed_removesModelFromCache() {
+        MLModel remoteModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(HttpConnector.builder().name("http").protocol(ConnectorProtocols.HTTP).credential(Map.of("key", "value")).build())
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(remoteModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Predictable> predictableListener = invocation.getArgument(2);
+            predictableListener.onFailure(new RuntimeException("Fetching master key timed out."));
+            return null;
+        }).when(mlEngine).deploy(any(MLModel.class), anyMap(), any(ActionListener.class));
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertEquals("Fetching master key timed out.", exception.getValue().getMessage());
+        verify(modelCacheHelper).removeModelIfOwner(eq(modelId), notNull());
+        verify(modelCacheHelper, never()).setModelState(modelId, MLModelState.DEPLOYED);
+        verify(mlStats)
+            .createCounterStatIfAbsent(eq(FunctionName.REMOTE), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+    }
+
+    /** Same cleanup when the connector cannot be fetched by id. */
+    public void testDeployModel_RemoteModelGetConnectorFailed_removesModelFromCache() {
+        MLModel remoteModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connectorId("connectorId")
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(remoteModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Connector> connectorListener = invocation.getArgument(2);
+            connectorListener.onFailure(new RuntimeException("Failed to get connector"));
+            return null;
+        }).when(modelManager).getConnector(eq("connectorId"), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertEquals("Failed to get connector", exception.getValue().getMessage());
+        verify(modelCacheHelper).removeModelIfOwner(eq(modelId), notNull());
+        verify(mlEngine, never()).deploy(any(MLModel.class), anyMap(), any(ActionListener.class));
+    }
+
+    /**
+     * Concurrent automatic deploys of one model on a node run as a single attempt: the first request deploys and the
+     * others wait for its result, so there is no second attempt whose late failure could evict the first one's work.
+     */
+    public void testAutoDeploy_ConcurrentRequestsShareOneAttempt() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> first = mock(ActionListener.class);
+        ActionListener<String> second = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), first);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), second);
+        assertEquals(1, engineDeploys.size());
+
+        Predictable predictor = mock(Predictable.class);
+        engineDeploys.get(0).onResponse(predictor);
+
+        verify(first).onResponse("successful");
+        verify(second).onResponse("successful");
+        assertTrue(cacheHelper.isModelDeployed(modelId));
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+        verify(predictor, never()).close();
+    }
+
+    /**
+     * A failure that arrives after another attempt has deployed the model must not evict it. Here an explicit deploy
+     * replaces the cache entry of an automatic deploy that is still fetching its connector; when that fetch later
+     * fails, the explicit deploy's predictor stays loaded.
+     */
+    public void testAutoDeploy_LateFailureAfterSuccessfulDeploy_keepsDeployedModel() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModel remoteModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connectorId("connectorId")
+            .build();
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModel);
+        List<ActionListener<Connector>> connectorFetches = new ArrayList<>();
+        doAnswer(invocation -> {
+            connectorFetches.add(invocation.getArgument(2));
+            return null;
+        }).when(manager).getConnector(eq("connectorId"), any(), any());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> autoDeploy = mock(ActionListener.class);
+        ActionListener<String> explicitDeploy = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), autoDeploy);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, false, localDeployTask(), explicitDeploy);
+        assertEquals(2, connectorFetches.size());
+        connectorFetches.get(1).onResponse(httpConnector());
+        Predictable predictor = mock(Predictable.class);
+        engineDeploys.get(0).onResponse(predictor);
+        verify(explicitDeploy).onResponse("successful");
+
+        connectorFetches.get(0).onFailure(new RuntimeException("Failed to get connector"));
+
+        verify(autoDeploy).onFailure(any(RuntimeException.class));
+        assertTrue(cacheHelper.isModelDeployed(modelId));
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+        verify(predictor, never()).close();
+    }
+
+    /**
+     * After a failed automatic deploy, every waiting request sees the failure and the node is left clean, so a
+     * retry deploys the model instead of being refused as a duplicate deploy task.
+     */
+    public void testAutoDeploy_FailureThenRetry_succeeds() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> first = mock(ActionListener.class);
+        ActionListener<String> waiting = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), first);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), waiting);
+        engineDeploys.get(0).onFailure(new RuntimeException("Fetching master key timed out."));
+
+        verify(first).onFailure(any(RuntimeException.class));
+        verify(waiting).onFailure(any(RuntimeException.class));
+        assertFalse(cacheHelper.isModelRunningOnNode(modelId));
+        assertNull(cacheHelper.getPredictor(modelId));
+
+        ActionListener<String> retry = mock(ActionListener.class);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, false, localDeployTask(), retry);
+        assertEquals(2, engineDeploys.size());
+        Predictable predictor = mock(Predictable.class);
+        engineDeploys.get(1).onResponse(predictor);
+
+        verify(retry).onResponse("successful");
+        assertTrue(cacheHelper.isModelDeployed(modelId));
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+    }
+
+    /**
+     * A request that joins an in-flight automatic deploy is notified on the leader's thread, after the leader's thread
+     * context has been restored. It must still see its own thread context, because the predict it goes on to run reads
+     * the requesting user from there (for example for user-level rate limiting).
+     */
+    public void testAutoDeploy_JoinedRequestKeepsItsOwnThreadContext() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        String userKey = ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT;
+        List<Object> leaderSaw = new ArrayList<>();
+        List<Object> joinerSaw = new ArrayList<>();
+
+        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
+            threadContext.putTransient(userKey, "alice||");
+            manager
+                .deployModel(
+                    modelId,
+                    null,
+                    null,
+                    FunctionName.REMOTE,
+                    false,
+                    true,
+                    localDeployTask(),
+                    ActionListener.wrap(r -> leaderSaw.add(threadContext.getTransient(userKey)), e -> fail(e.getMessage()))
+                );
+        }
+        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
+            threadContext.putTransient(userKey, "bob||");
+            manager
+                .deployModel(
+                    modelId,
+                    null,
+                    null,
+                    FunctionName.REMOTE,
+                    false,
+                    true,
+                    localDeployTask(),
+                    ActionListener.wrap(r -> joinerSaw.add(threadContext.getTransient(userKey)), e -> fail(e.getMessage()))
+                );
+        }
+        assertEquals(1, engineDeploys.size());
+
+        // The deploy completes on some other thread, in a context that belongs to neither request.
+        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
+            threadContext.putTransient(userKey, "system||");
+            engineDeploys.get(0).onResponse(mock(Predictable.class));
+        }
+
+        assertEquals(List.of("alice||"), leaderSaw);
+        assertEquals(List.of("bob||"), joinerSaw);
+    }
+
+    /**
+     * One predict on a cold cluster can start two deploys on the same node: the coordinator's cluster-wide deploy and
+     * the serving node's local auto-deploy. When both succeed, the first predictor published is kept and the second
+     * attempt closes its own, instead of overwriting the first and leaking it.
+     */
+    public void testDeploy_TwoSuccessfulAttempts_keepFirstPredictorAndCloseSecond() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> clusterDeploy = mock(ActionListener.class);
+        ActionListener<String> autoDeploy = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, false, localDeployTask(), clusterDeploy);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), autoDeploy);
+        assertEquals(2, engineDeploys.size());
+        Predictable first = mock(Predictable.class);
+        Predictable second = mock(Predictable.class);
+        engineDeploys.get(1).onResponse(first);
+        engineDeploys.get(0).onResponse(second);
+
+        verify(autoDeploy).onResponse("successful");
+        verify(clusterDeploy).onResponse("successful");
+        assertTrue(cacheHelper.isModelDeployed(modelId));
+        assertSame(first, cacheHelper.getPredictor(modelId));
+        verify(first, never()).close();
+        verify(second).close();
+        assertEquals(1L, mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).getValue());
+    }
+
+    /**
+     * The other order of the same overlap: the auto-deploy joins the entry the cluster-wide deploy created, deploys
+     * first, and only then does the cluster-wide deploy fail. The entry was created by the failing attempt, but the
+     * working predictor in it is not, so the failure must not evict it.
+     */
+    public void testDeploy_CreatorFailsAfterJoinedAttemptDeployed_keepsDeployedModel() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> clusterDeploy = mock(ActionListener.class);
+        ActionListener<String> autoDeploy = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, false, localDeployTask(), clusterDeploy);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), autoDeploy);
+        Predictable predictor = mock(Predictable.class);
+        engineDeploys.get(1).onResponse(predictor);
+        verify(autoDeploy).onResponse("successful");
+
+        engineDeploys.get(0).onFailure(new RuntimeException("Fetching master key timed out."));
+
+        verify(clusterDeploy).onFailure(any(RuntimeException.class));
+        assertTrue(cacheHelper.isModelDeployed(modelId));
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+        verify(predictor, never()).close();
+    }
+
+    private MLModelManager managerWithRealCache(MLModelCacheHelper cacheHelper, MLModel remoteModel) {
+        MLModelManager manager = spy(
+            new MLModelManager(
+                clusterService,
+                scriptService,
+                client,
+                sdkClient,
+                threadPool,
+                xContentRegistry,
+                modelHelper,
+                settings,
+                mlStats,
+                mlCircuitBreakerService,
+                mlIndicesHandler,
+                mlTaskManager,
+                cacheHelper,
+                mlEngine,
+                nodeHelper,
+                mlFeatureEnabledSetting
+            )
+        );
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(remoteModel.toBuilder().build());
+            return null;
+        }).when(manager).getModel(any(), any(), any());
+        return manager;
+    }
+
+    private MLModel remoteModelWithConnector() {
+        return MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(httpConnector())
+            .build();
+    }
+
+    private Connector httpConnector() {
+        return HttpConnector.builder().name("http").protocol(ConnectorProtocols.HTTP).credential(Map.of("key", "value")).build();
+    }
+
+    /** Holds every mlEngine.deploy call open so the test decides when, and how, each attempt finishes. */
+    private List<ActionListener<Predictable>> captureEngineDeploys() {
+        List<ActionListener<Predictable>> engineDeploys = new ArrayList<>();
+        doAnswer(invocation -> {
+            engineDeploys.add(invocation.getArgument(2));
+            return null;
+        }).when(mlEngine).deploy(any(MLModel.class), anyMap(), any(ActionListener.class));
+        return engineDeploys;
+    }
+
+    private MLTask localDeployTask() {
+        return MLTask
+            .builder()
+            .taskId(randomAlphaOfLength(10))
+            .functionName(FunctionName.REMOTE)
+            .taskType(MLTaskType.DEPLOY_MODEL)
+            .state(MLTaskState.RUNNING)
+            .workerNodes(List.of("node1"))
+            .build();
     }
 
     /**
@@ -1356,6 +1718,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
      */
     private void assertNoMcpRejection(ActionListener<String> listener) {
         verify(modelCacheHelper, never()).removeModel(modelId);
+        verify(modelCacheHelper, never()).removeModelIfOwner(any(), any());
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener, atMost(1)).onFailure(exception.capture());
         for (Exception e : exception.getAllValues()) {
@@ -1445,7 +1808,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
         modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
-        verify(modelCacheHelper).removeModel(eq(modelId));
+        verify(modelCacheHelper).removeModelIfOwner(eq(modelId), notNull());
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
 
@@ -1648,7 +2011,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
         modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
-        verify(modelCacheHelper).removeModel(eq(modelId));
+        verify(modelCacheHelper).removeModelIfOwner(eq(modelId), notNull());
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
         verify(mlStats).getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT));
     }
