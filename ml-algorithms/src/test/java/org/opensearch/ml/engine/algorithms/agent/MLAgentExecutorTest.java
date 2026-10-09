@@ -921,6 +921,44 @@ public class MLAgentExecutorTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void testExecute_legacyAgentWithUnifiedInput_doesNotFailWithNullPointerException() throws IOException {
+        // A CONVERSATIONAL agent registered without the model field, executed with the unified input
+        // format. The unified input has to be converted to an input dataset, otherwise the execution
+        // path dereferences a null dataset and the request fails with a NullPointerException.
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(localNode.getId()).thenReturn("test-node");
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent", false, null);
+
+        when(sdkClient.getDataObjectAsync(any(), any())).thenAnswer(inv -> {
+            GetDataObjectResponse mockResponse = new GetDataObjectResponse(agentGetResponse);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(mockResponse, null);
+                return stage;
+            });
+            return stage;
+        });
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("list indices");
+        AgentMLInput unifiedInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, agentInput, null, false);
+        mlAgentExecutor.execute(unifiedInput, listener, channel);
+
+        // The request now progresses past input processing, so it fails on the unsupported memory
+        // type of the test agent instead of failing on a missing input dataset
+        verify(listener, timeout(5000).atLeastOnce()).onFailure(exceptionCaptor.capture());
+        assertFalse(
+            "Legacy agent executed with unified input must not fail with NullPointerException",
+            exceptionCaptor.getValue() instanceof NullPointerException
+        );
+    }
+
+    @Test
     public void test_PerformInitialMemoryOperations_WithHistoryAndInputMessages() {
         // Setup: history has 2 messages, input has 1 message
         List<Message> historyMessages = new ArrayList<>();
@@ -1401,8 +1439,10 @@ public class MLAgentExecutorTest {
         // Flow agents don't require model validation
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
 
-        // Should complete without error
-        assertNotNull(agentMLInput.getAgentInput());
+        // Unified input is converted to the legacy question parameter
+        assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        assertEquals("Test input", dataset.getParameters().get(QUESTION));
     }
 
     @Test
@@ -1425,6 +1465,152 @@ public class MLAgentExecutorTest {
         // Should have created AgentInput from question
         assertNotNull(agentMLInput.getAgentInput());
         assertEquals(InputType.TEXT, agentMLInput.getAgentInput().getInputType());
+    }
+
+    @Test
+    public void test_ProcessAgentInput_LegacyAgent_UnifiedTextInput() {
+        // Agent registered without the model field, executed with the unified input format
+        MLAgent agent = MLAgent.builder().name("legacy_flow").type(MLAgentType.FLOW.name()).build();
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("list indices");
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // An input dataset must be created, otherwise the execution path has no parameters to read
+        assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        assertEquals("list indices", dataset.getParameters().get(QUESTION));
+        // Standardized input is cleared so the request follows the legacy execution path
+        assertNull(agentMLInput.getAgentInput());
+    }
+
+    @Test
+    public void test_ProcessAgentInput_LegacyConversationalAgent_UnifiedTextInput() {
+        MLAgent agent = createTestAgent(MLAgentType.CONVERSATIONAL.name());
+
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput("What is AI?");
+        Map<String, String> existingParams = new HashMap<>();
+        existingParams.put("existing_key", "existing_value");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(existingParams).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, dataset, false);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        assertEquals("What is AI?", updatedDataset.getParameters().get(QUESTION));
+        assertEquals("existing_value", updatedDataset.getParameters().get("existing_key"));
+        assertNull(agentMLInput.getAgentInput());
+    }
+
+    @Test
+    public void test_ProcessAgentInput_LegacyAgent_UnifiedMessagesInput() {
+        MLAgent agent = createTestAgent(MLAgentType.CONVERSATIONAL.name());
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Hello");
+        Message message = new Message("user", Collections.singletonList(textBlock));
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(message));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        try {
+            mlAgentExecutor.processAgentInput(agentMLInput, agent);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException exception) {
+            assertTrue(exception.getMessage().contains("CONVERSATIONAL agents registered without the unified agent interface"));
+            assertTrue(exception.getMessage().contains("Found input type: MESSAGES"));
+            assertTrue(exception.getMessage().contains("{\"input\": \"your text here\"}"));
+        }
+    }
+
+    @Test
+    public void test_ProcessAgentInput_LegacyAgent_UnifiedContentBlocksInput() {
+        MLAgent agent = MLAgent.builder().name("legacy_flow").type(MLAgentType.FLOW.name()).build();
+
+        ContentBlock textBlock = new ContentBlock();
+        textBlock.setType(ContentType.TEXT);
+        textBlock.setText("Describe this image");
+        AgentInput agentInput = new AgentInput();
+        agentInput.setInput(Collections.singletonList(textBlock));
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, agentInput, null, false);
+
+        try {
+            mlAgentExecutor.processAgentInput(agentMLInput, agent);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException exception) {
+            assertTrue(exception.getMessage().contains("FLOW agents registered without the unified agent interface"));
+            assertTrue(exception.getMessage().contains("Found input type: CONTENT_BLOCKS"));
+        }
+    }
+
+    @Test
+    public void test_ProcessAgentInput_LegacyAgent_LegacyParametersUnchanged() {
+        MLAgent agent = MLAgent.builder().name("legacy_flow").type(MLAgentType.FLOW.name()).build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "list indices");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // Legacy payload on a legacy agent stays untouched
+        assertNull(agentMLInput.getAgentInput());
+        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        assertEquals(1, updatedDataset.getParameters().size());
+        assertEquals("list indices", updatedDataset.getParameters().get(QUESTION));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_V2Agent_LegacyQuestionInput() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent_v2")
+            .type(MLAgentType.CONVERSATIONAL_V2.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "hi");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.processAgentInput(agentMLInput, agent);
+
+        // V2 agents execute from AgentInput, so the legacy question must be converted
+        assertNotNull(agentMLInput.getAgentInput());
+        assertEquals(InputType.TEXT, agentMLInput.getAgentInput().getInputType());
+        assertEquals("hi", agentMLInput.getAgentInput().getInput());
+        // Legacy parameters are kept as is
+        RemoteInferenceInputDataSet updatedDataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        assertEquals("hi", updatedDataset.getParameters().get(QUESTION));
+    }
+
+    @Test
+    public void test_ProcessAgentInput_V2Agent_NoQuestionAndNoAgentInput() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent_v2")
+            .type(MLAgentType.CONVERSATIONAL_V2.name())
+            .model(MLAgentModelSpec.builder().modelId("anthropic.claude-v2").modelProvider("bedrock/converse").build())
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_id", "test_memory_id");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        try {
+            mlAgentExecutor.processAgentInput(agentMLInput, agent);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException exception) {
+            assertTrue(exception.getMessage().contains("CONVERSATIONAL_V2 agents require an input"));
+            assertTrue(exception.getMessage().contains("{\"input\": \"your text here\"}"));
+        }
     }
 
     @Test
@@ -1475,8 +1661,10 @@ public class MLAgentExecutorTest {
         // Conversational flow agents don't require unified model validation
         mlAgentExecutor.processAgentInput(agentMLInput, agent);
 
-        // Should complete successfully
-        assertNotNull(agentMLInput.getAgentInput());
+        // Should complete successfully with the unified input converted to the legacy question parameter
+        assertNotNull(agentMLInput.getInputDataset());
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        assertEquals("Test question", dataset.getParameters().get(QUESTION));
     }
 
     @Test
