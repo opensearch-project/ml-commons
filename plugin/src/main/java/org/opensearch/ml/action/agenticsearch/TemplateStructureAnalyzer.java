@@ -208,9 +208,22 @@ public final class TemplateStructureAnalyzer {
             return new Facts(role, List.of(), null);
         }
 
+        // A key literally named "field" always holds a field name in the DSL (terms agg,
+        // collapse, exists, rank_feature), never a value, so it must not fall through to the
+        // <clause>.<field> value rules below (e.g. aggs.<name>.terms.field is not a terms filter).
+        if (n >= 1 && "field".equals(keys.get(n - 1))) {
+            String role = keys.contains("sort") ? ROLE_SORT_FIELD : ROLE_FIELD_SELECTOR;
+            return new Facts(role, List.of(), null);
+        }
+
         String last = n >= 1 ? keys.get(n - 1) : null;
         String prev = n >= 2 ? keys.get(n - 2) : null;
         String prev2 = n >= 3 ? keys.get(n - 3) : null;
+
+        // A bare sort key given as a value: "sort":"{{x}}" or "sort":["{{x}}"].
+        if ("sort".equals(last)) {
+            return new Facts(ROLE_SORT_FIELD, List.of(), null);
+        }
 
         // Top-level paging controls.
         if (n == 1) {

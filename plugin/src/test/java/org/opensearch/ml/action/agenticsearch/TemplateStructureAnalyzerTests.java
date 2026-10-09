@@ -203,7 +203,8 @@ public class TemplateStructureAnalyzerTests {
         schema.put("x", spec("string", true));
         TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
         Map<String, Object> rp = markers.renderParams();
-        Map<String, Object> rendered = map("custom_clause", map("field", rp.get("x")));
+        // Not keyed "field": a literal field key is a field selector in any clause.
+        Map<String, Object> rendered = map("custom_clause", map("value", rp.get("x")));
 
         TemplateStructureAnalyzer.Facts f = TemplateStructureAnalyzer
             .classify(TemplateStructureAnalyzer.locate(rendered, markers).get("x"), rendered);
@@ -309,6 +310,52 @@ public class TemplateStructureAnalyzerTests {
             mk -> map("sort", list(map("price", map("order", mk)))),
             TemplateStructureAnalyzer.ROLE_SORT_ORDER,
             "Sort direction for the price sort."
+        );
+    }
+
+    @Test
+    public void classify_sortKeyAsValueIsSortField() {
+        checkSingle("string", mk -> map("sort", mk), TemplateStructureAnalyzer.ROLE_SORT_FIELD, "Field to sort results by.");
+    }
+
+    @Test
+    public void classify_sortKeyInSortArrayIsSortField() {
+        checkSingle(
+            "string",
+            mk -> map("sort", list("_score", mk)),
+            TemplateStructureAnalyzer.ROLE_SORT_FIELD,
+            "Field to sort results by."
+        );
+    }
+
+    @Test
+    public void classify_termsAggFieldIsFieldSelector() {
+        // A literal "field" key holds a field name, so a terms agg is not read as a terms filter.
+        checkSingle(
+            "string",
+            mk -> map("aggs", map("by_brand", map("terms", map("field", mk)))),
+            TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR,
+            "Field name to target."
+        );
+    }
+
+    @Test
+    public void classify_collapseFieldIsFieldSelector() {
+        checkSingle("string", mk -> map("collapse", map("field", mk)), TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, null);
+    }
+
+    @Test
+    public void classify_existsFieldIsFieldSelector() {
+        checkSingle("string", mk -> map("query", map("exists", map("field", mk))), TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, null);
+    }
+
+    @Test
+    public void classify_rankFeatureFieldIsFieldSelector() {
+        checkSingle(
+            "string",
+            mk -> map("query", map("rank_feature", map("field", mk, "boost", 2))),
+            TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR,
+            null
         );
     }
 
