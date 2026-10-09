@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.agents;
 
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
