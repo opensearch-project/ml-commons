@@ -1,0 +1,67 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+apply plugin: 'jacoco'
+
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+/**
+ * Sets up JaCoCo coverage reporting for integTest.
+ *
+ * The OS integTest task doesn't implement Gradle's JavaForkOptions, so we manually
+ * start the JaCoCo agent on the cluster JVM. The cluster is stopped with 'kill -9'
+ * which prevents normal JaCoCo shutdown hooks from writing data, so we use JMX to
+ * dump execution data before the cluster is killed.
+ *
+ * This only works reliably with a single-node cluster.
+ */
+afterEvaluate {
+    integTest {
+        jacoco {
+            jmx = true
+        }
+
+        systemProperty 'jacoco.dir', project.layout.buildDirectory.get().file("jacoco").asFile.absolutePath
+        systemProperty 'jmx.serviceUrl', "service:jmx:rmi:///jndi/rmi://127.0.0.1:7777/jmxrmi"
+    }
+
+    jacocoTestReport {
+        dependsOn integTest, test
+        executionData.from = [integTest.jacoco.destinationFile, test.jacoco.destinationFile]
+        reports {
+            html.getRequired().set(true)
+            csv.getRequired().set(true)
+            xml.getRequired().set(true)
+        }
+    }
+
+    task jacocoIntegTestReport(type: JacocoReport) {
+        dependsOn integTest
+        executionData.from = [integTest.jacoco.destinationFile]
+        sourceSets sourceSets.main
+        reports {
+            html.getRequired().set(true)
+            html.outputLocation.set(project.layout.buildDirectory.dir("reports/jacoco/integTest/html"))
+            csv.getRequired().set(true)
+            csv.outputLocation.set(project.layout.buildDirectory.file("reports/jacoco/integTest/jacocoIntegTestReport.csv"))
+            xml.getRequired().set(true)
+            xml.outputLocation.set(project.layout.buildDirectory.file("reports/jacoco/integTest/jacocoIntegTestReport.xml"))
+        }
+    }
+
+    check.dependsOn jacocoIntegTestReport
+
+    testClusters.integTest {
+        jvmArgs " ${integTest.jacoco.getAsJvmArg()}"
+
+        systemProperty 'com.sun.management.jmxremote', "true"
+        systemProperty 'com.sun.management.jmxremote.authenticate', "false"
+        systemProperty 'com.sun.management.jmxremote.port', "7777"
+        systemProperty 'com.sun.management.jmxremote.ssl', "false"
+        systemProperty 'java.rmi.server.hostname', "127.0.0.1"
+    }
+}
