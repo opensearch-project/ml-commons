@@ -107,7 +107,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
             + interaction.getCreateTime()
             + "\"update_time\":\""
             + interaction.getUpdatedTime()
-            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"}}],\"next_token\":2}";
+            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"}}],\"next_token\":2,\"next_page_token\":\"Mg\"}";
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         assert (ld.getDistance(result, expected) > 0.95);

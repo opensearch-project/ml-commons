@@ -40,6 +40,14 @@ public class ActionConstants {
     public final static String REQUEST_MAX_RESULTS_FIELD = "max_results";
     /** name of nextToken field name in all messages */
     public final static String NEXT_TOKEN_FIELD = "next_token";
+    /**
+     * name of the opaque pagination token field. Additive companion to {@link #NEXT_TOKEN_FIELD}: the same
+     * underlying offset, exposed as an opaque Base64 string so clients treat it as a handle instead of doing
+     * offset arithmetic. The field name follows the Google/AIP-158 {@code next_page_token} convention rather
+     * than core's own opaque token (which is named {@code next_token}), since {@code next_token} here already
+     * denotes the legacy integer offset.
+     */
+    public final static String NEXT_PAGE_TOKEN_FIELD = "next_page_token";
     /** name of input field in all requests */
     public final static String INPUT_FIELD = "input";
     /** name of AI response field in all respopnses */

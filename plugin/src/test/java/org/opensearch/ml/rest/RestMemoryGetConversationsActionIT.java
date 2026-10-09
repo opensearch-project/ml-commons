@@ -194,4 +194,53 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (((String) conversations.get(0).get(CONVERSATION_ID_FIELD)).equals(id1));
         assert (((Double) map.get("next_token")).intValue() == 2);
     }
+
+    public void testGetConversations_nextPage_withOpaquePageToken() throws IOException, InterruptedException {
+        Response ccresponse1 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
+        assert (TestHelper.restStatus(ccresponse1) == RestStatus.OK);
+        Map ccmap1 = gson.fromJson(TestHelper.httpEntityToString(ccresponse1.getEntity()), Map.class);
+        String id1 = (String) ccmap1.get(CONVERSATION_ID_FIELD);
+
+        // ensure distinct update times
+        TimeUnit.MICROSECONDS.sleep(100);
+
+        Response ccresponse2 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
+        assert (TestHelper.restStatus(ccresponse2) == RestStatus.OK);
+
+        // page 1: capture the opaque next_page_token
+        Response response1 = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                ActionConstants.GET_CONVERSATIONS_REST_PATH,
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
+                "",
+                null
+            );
+        assert (TestHelper.restStatus(response1) == RestStatus.OK);
+        Map map1 = gson.fromJson(TestHelper.httpEntityToString(response1.getEntity()), Map.class);
+        assert (map1.containsKey("next_token"));
+        assert (map1.containsKey(ActionConstants.NEXT_PAGE_TOKEN_FIELD));
+        String nextPageToken = (String) map1.get(ActionConstants.NEXT_PAGE_TOKEN_FIELD);
+        assert (nextPageToken != null && !nextPageToken.isEmpty());
+
+        // page 2: pass the token back verbatim
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                ActionConstants.GET_CONVERSATIONS_REST_PATH,
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1", ActionConstants.NEXT_PAGE_TOKEN_FIELD, nextPageToken),
+                "",
+                null
+            );
+        assert (TestHelper.restStatus(response) == RestStatus.OK);
+        Map map = gson.fromJson(TestHelper.httpEntityToString(response.getEntity()), Map.class);
+        @SuppressWarnings("unchecked")
+        ArrayList<Map> conversations = (ArrayList<Map>) map.get(RESPONSE_CONVERSATION_LIST_FIELD);
+        assert (conversations.size() == 1);
+        // opaque-token paging lands on the same item as the legacy flow
+        assert (((String) conversations.get(0).get(CONVERSATION_ID_FIELD)).equals(id1));
+        assert (((Double) map.get("next_token")).intValue() == 2);
+    }
 }

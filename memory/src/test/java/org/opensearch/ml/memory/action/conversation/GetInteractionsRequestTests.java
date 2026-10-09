@@ -125,4 +125,27 @@ public class GetInteractionsRequestTests extends OpenSearchTestCase {
         assert (gir1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gir2.getMaxResults() == 4);
         assert (gir3.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gir4.getMaxResults() == 2);
     }
+
+    public void testFromRestRequest_withOpaquePageToken() throws IOException {
+        // "Ng" = offset 6
+        Map<String, String> pageTokenOnly = Map.of(ActionConstants.MEMORY_ID, "cid1", ActionConstants.NEXT_PAGE_TOKEN_FIELD, "Ng");
+        Map<String, String> bothMaxAndPageToken = Map
+            .of(
+                ActionConstants.MEMORY_ID,
+                "cid2",
+                ActionConstants.REQUEST_MAX_RESULTS_FIELD,
+                "2",
+                ActionConstants.NEXT_PAGE_TOKEN_FIELD,
+                "Ng"
+            );
+        RestRequest req1 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(pageTokenOnly).build();
+        RestRequest req2 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(bothMaxAndPageToken).build();
+        GetInteractionsRequest gir1 = GetInteractionsRequest.fromRestRequest(req1);
+        GetInteractionsRequest gir2 = GetInteractionsRequest.fromRestRequest(req2);
+
+        assert (gir1.validate() == null && gir2.validate() == null);
+        assert (gir1.getConversationId().equals("cid1") && gir2.getConversationId().equals("cid2"));
+        assert (gir1.getFrom() == 6 && gir2.getFrom() == 6);
+        assert (gir1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gir2.getMaxResults() == 2);
+    }
 }
