@@ -15,6 +15,8 @@ import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.asMap;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.jsonType;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.rawType;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -97,7 +99,7 @@ public final class FillValueValidator {
                 continue;
             }
             if (member instanceof Number && normalized instanceof Number) {
-                if (((Number) member).doubleValue() == ((Number) normalized).doubleValue()) {
+                if (numericallyEqual((Number) member, (Number) value)) {
                     return member instanceof Double || member instanceof Float ? member : normalizeNumber((Number) member);
                 }
             } else if (member.equals(normalized) || String.valueOf(member).equals(String.valueOf(normalized))) {
@@ -105,6 +107,31 @@ public final class FillValueValidator {
             }
         }
         throw new IllegalArgumentException("param '" + name + "' value '" + value + "' is not one of " + members);
+    }
+
+    /**
+     * Exact numeric equality, so integers beyond a double's exact range are not conflated (5 and 5.0 are
+     * still equal).
+     */
+    private static boolean numericallyEqual(Number a, Number b) {
+        BigDecimal x = toBigDecimal(a);
+        BigDecimal y = toBigDecimal(b);
+        return x != null && y != null ? x.compareTo(y) == 0 : a.doubleValue() == b.doubleValue();
+    }
+
+    /** Null for NaN or infinity, which have no decimal form. */
+    private static BigDecimal toBigDecimal(Number n) {
+        if (n instanceof BigDecimal) {
+            return (BigDecimal) n;
+        }
+        if (n instanceof BigInteger) {
+            return new BigDecimal((BigInteger) n);
+        }
+        if (n instanceof Double || n instanceof Float) {
+            double d = n.doubleValue();
+            return Double.isNaN(d) || Double.isInfinite(d) ? null : new BigDecimal(d);
+        }
+        return BigDecimal.valueOf(n.longValue());
     }
 
     private static Object integer(String name, Object value) {
@@ -146,15 +173,15 @@ public final class FillValueValidator {
     /**
      * An array slot renders raw through a triple brace, so the model's text would otherwise control the
      * query's structure. The value is parsed as exactly one JSON value and re-serialized, so it can only fill
-     * its own slot; a scalar (or plain text) becomes a one-element array. An object is kept, since a triple
-     * brace may also inject an object.
+     * its own slot; a scalar (or plain text) becomes a one-element array. An object is rejected, so the model
+     * supplies values only and cannot insert a clause (a terms lookup, say) into the slot.
      */
     private static Object jsonLiteral(String name, Object value) {
         Object parsed = value;
         if (value instanceof String) {
             parsed = parseSingleJsonValue((String) value);
         }
-        if (parsed instanceof List || parsed instanceof Map) {
+        if (parsed instanceof List) {
             return StringUtils.toJson(parsed);
         }
         if (parsed instanceof String || parsed instanceof Number || parsed instanceof Boolean) {

@@ -317,6 +317,17 @@ public class AgenticSearchTemplateResolverTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void renderTemplate_scalarOrEmpty_fails() {
+        stubStoredScript("{{q}}", new AtomicReference<>());
+        for (String rendered : List.of("true", "1", "")) {
+            stubRender(rendered, new AtomicReference<>());
+            AtomicReference<Exception> failure = new AtomicReference<>();
+            service.renderTemplate("product_search", Map.of("q", "x"), ActionListener.wrap(r -> fail("expected failure"), failure::set));
+            assertTrue(rendered, failure.get() instanceof IllegalArgumentException);
+        }
+    }
+
+    @Test
     public void renderTemplate_trailingContent_fails() {
         stubStoredScript("{{{q}}}", new AtomicReference<>());
         stubRender("{\"query\":{\"match_all\":{}}} {\"extra\":1}", new AtomicReference<>());

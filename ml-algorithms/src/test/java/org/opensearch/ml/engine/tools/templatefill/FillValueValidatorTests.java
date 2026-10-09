@@ -96,11 +96,29 @@ public class FillValueValidatorTests {
         assertEquals("[\"a\"]", FillValueValidator.validate(schema, filled("tags", "[\"a\"]")).get("tags"));
         assertEquals("[\"a\",\"b\"]", FillValueValidator.validate(schema, filled("tags", " [ \"a\", \"b\" ] ")).get("tags"));
         assertEquals("[\"a\",\"b\"]", FillValueValidator.validate(schema, filled("tags", List.of("a", "b"))).get("tags"));
-        // An object slot is kept.
-        assertEquals(
-            "{\"term\":{\"t\":\"a\"}}",
-            FillValueValidator.validate(schema, filled("tags", "{\"term\":{\"t\":\"a\"}}")).get("tags")
+    }
+
+    @Test
+    public void array_rejectsObjects() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("tags", spec("array", true, "", null));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> FillValueValidator.validate(schema, filled("tags", "{\"index\":\"other\",\"id\":\"1\",\"path\":\"ids\"}"))
         );
+        assertThrows(IllegalArgumentException.class, () -> FillValueValidator.validate(schema, filled("tags", Map.of("a", 1))));
+    }
+
+    @Test
+    public void enum_matchesLargeIntegersExactly() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("id", spec("integer", true, "", List.of(9007199254740993L, 9007199254740992L)));
+        assertEquals(9007199254740992L, FillValueValidator.validate(schema, filled("id", 9007199254740992L)).get("id"));
+        assertEquals(9007199254740993L, FillValueValidator.validate(schema, filled("id", 9007199254740993L)).get("id"));
+        // An integral double still matches its integer member.
+        Map<String, Object> small = new LinkedHashMap<>();
+        small.put("size", spec("integer", true, "", List.of(5L, 10L)));
+        assertEquals(5L, FillValueValidator.validate(small, filled("size", 5.0)).get("size"));
     }
 
     @Test
