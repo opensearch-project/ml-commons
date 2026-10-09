@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
@@ -246,7 +248,6 @@ public class DynamicBatchingQueueTests {
 
     @Test
     public void oversizeSingleEntryIsSplitButReassembledForItsOneCaller() {
-        // One caller with 5 docs against a 2-item limit: 5 items >= 2 flushes, splitter makes 3 sub-batches.
         DynamicBatchingQueue queue = new DynamicBatchingQueue(
             "m",
             config(2, null, 10_000L),
@@ -262,8 +263,208 @@ public class DynamicBatchingQueueTests {
         AtomicReference<MLTaskResponse> result = new AtomicReference<>();
         queue.enqueue(entry(predictor, ActionListener.wrap(result::set, e -> {}), "d1", "d2", "d3", "d4", "d5"));
 
-        assertEquals("5 items at limit 2 -> 3 sub-batches -> 3 model calls", 3, calls.get());
+        assertEquals("only the full calls are sent on the threshold", 2, calls.get());
+        assertNull("the request is not complete while its tail is still queued", result.get());
+        assertFalse("the carried tail keeps the queue alive", queue.isIdle());
+
+        scheduledFlush.get().run();
+
+        assertEquals("the timer sends the tail on its own", 3, calls.get());
         assertEquals(ImmutableList.of("d1", "d2", "d3", "d4", "d5"), resultNames(result.get()));
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void partialTailIsCarriedOverAndFilledByTheNextRequests() {
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(4, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        List<List<String>> sentCalls = new ArrayList<>();
+        Predictable echo = model(null, null);
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                sentCalls.add(((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs());
+                echo.asyncPredict(mlInput, listener, channel);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> c = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> d = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(a::set, e -> {}), "a1", "a2", "a3", "a4", "a5"));
+        assertEquals(ImmutableList.of(ImmutableList.of("a1", "a2", "a3", "a4")), sentCalls);
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, e -> {}), "b1"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(c::set, e -> {}), "c1"));
+        assertEquals("3 pending items stay below the limit of 4", 1, sentCalls.size());
+        assertNull(a.get());
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(d::set, e -> {}), "d1", "d2", "d3"));
+        assertEquals("the carried tail leads the next full call", ImmutableList.of("a5", "b1", "c1", "d1"), sentCalls.get(1));
+        assertEquals(ImmutableList.of("a1", "a2", "a3", "a4", "a5"), resultNames(a.get()));
+        assertEquals(ImmutableList.of("b1"), resultNames(b.get()));
+        assertEquals(ImmutableList.of("c1"), resultNames(c.get()));
+        assertNull("D still has two docs queued", d.get());
+
+        scheduledFlush.get().run();
+
+        assertEquals(ImmutableList.of("d2", "d3"), sentCalls.get(2));
+        assertEquals("10 docs at limit 4 cost 3 calls, not the 4 an immediate tail flush would", 3, sentCalls.size());
+        assertEquals(ImmutableList.of("d1", "d2", "d3"), resultNames(d.get()));
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void thresholdFlushKeepsTheDeadlineOfOtherGroupsPendingRequests() {
+        AtomicLong nowNanos = new AtomicLong();
+        when(threadPool.preciseRelativeTimeInNanos()).thenAnswer(invocation -> nowNanos.get());
+        List<TimeValue> delays = new ArrayList<>();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            scheduledFlush.set(invocation.getArgument(0));
+            delays.add(invocation.getArgument(1));
+            return mock(Scheduler.ScheduledCancellable.class);
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 100L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+        ModelResultFilter groupX = new ModelResultFilter(false, true, null, null);
+        ModelResultFilter groupY = new ModelResultFilter(true, false, null, null);
+
+        AtomicReference<MLTaskResponse> x = new AtomicReference<>();
+        queue.enqueue(filteredEntry(predictor, groupX, ActionListener.wrap(x::set, e -> {}), "x"));
+        nowNanos.set(TimeUnit.MILLISECONDS.toNanos(60));
+        queue.enqueue(filteredEntry(predictor, groupY, ActionListener.wrap(r -> {}, e -> {}), "y1"));
+        queue.enqueue(filteredEntry(predictor, groupY, ActionListener.wrap(r -> {}, e -> {}), "y2"));
+
+        assertEquals("only the full group is sent", 1, calls.get());
+        assertNull(x.get());
+        assertEquals(ImmutableList.of(TimeValue.timeValueMillis(100), TimeValue.timeValueMillis(40)), delays);
+
+        scheduledFlush.get().run();
+        assertEquals(ImmutableList.of("x"), resultNames(x.get()));
+    }
+
+    @Test
+    public void requestSpanningTwoFlushesCompletesExactlyOnceWhenItsTailFails() {
+        List<ActionListener<MLTaskResponse>> inFlight = new ArrayList<>();
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                inFlight.add(listener);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+        QueueMemoryBudget trackedBudget = new QueueMemoryBudget(Long.MAX_VALUE);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            trackedBudget,
+            ignored -> {}
+        );
+        AtomicInteger notifications = new AtomicInteger();
+        AtomicReference<Exception> err = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> notifications.incrementAndGet(), e -> {
+            notifications.incrementAndGet();
+            err.set(e);
+        }), "a1", "a2", "a3"));
+        assertEquals("a1 and a2 are sent, a3 is carried", 1, inFlight.size());
+
+        ((AbstractRunnable) scheduledFlush.get()).onRejection(new OpenSearchRejectedExecutionException("pool full"));
+        assertEquals("A is not complete while its first call is still in flight", 0, notifications.get());
+        assertTrue(trackedBudget.getReservedBytes() > 0);
+
+        ModelTensorOutput output = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                ImmutableList
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                ImmutableList.of(ModelTensor.builder().name("a1").build(), ModelTensor.builder().name("a2").build())
+                            )
+                            .build()
+                    )
+            )
+            .build();
+        inFlight.get(0).onResponse(new MLTaskResponse(output));
+
+        assertEquals(1, notifications.get());
+        assertTrue(err.get() instanceof OpenSearchRejectedExecutionException);
+        assertEquals(0L, trackedBudget.getReservedBytes());
+    }
+
+    @Test
+    public void unbatchableRequestsFailAtEnqueueWithoutReservingBudget() {
+        QueueMemoryBudget trackedBudget = new QueueMemoryBudget(Long.MAX_VALUE);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            trackedBudget,
+            ignored -> {}
+        );
+        Predictable predictor = model(new AtomicInteger(), null);
+        MLInput input = textInput("a");
+        input.setCallerAlgorithm(FunctionName.TEXT_EMBEDDING);
+
+        AtomicReference<Exception> noKeyErr = new AtomicReference<>();
+        AtomicReference<Exception> noItemsErr = new AtomicReference<>();
+        List<BatchItem> items = registry.get(input).toItems(input);
+        assertTrue(queue.enqueue(new QueueEntry(input, ActionListener.wrap(r -> {}, noKeyErr::set), predictor, null, items, null)));
+        assertTrue(queue.enqueue(new QueueEntry(input, ActionListener.wrap(r -> {}, noItemsErr::set), predictor, null, List.of(), "k")));
+
+        assertTrue(noKeyErr.get().getMessage().contains("Could not compute a batch group key"));
+        assertTrue(noItemsErr.get().getMessage().contains("no input items"));
+        assertEquals(0L, trackedBudget.getReservedBytes());
+        assertNull("nothing was queued, so no timer is scheduled", scheduledFlush.get());
+        assertTrue(queue.isIdle());
     }
 
     @Test
@@ -287,6 +488,7 @@ public class DynamicBatchingQueueTests {
         AtomicReference<Exception> bErr = new AtomicReference<>();
         queue.enqueue(entry(predictor, ActionListener.wrap(a::set, aErr::set), docA));
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), docB)); // second enqueue crosses 40 bytes -> flush
+        scheduledFlush.get().run(); // docB's call is a partial tail, sent by the timer
 
         assertEquals("unaffected caller still succeeds", ImmutableList.of(docA), resultNames(a.get()));
         assertNull(aErr.get());
@@ -406,6 +608,7 @@ public class DynamicBatchingQueueTests {
         AtomicReference<Exception> bErr = new AtomicReference<>();
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), docA));
         queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, bErr::set), docB));
+        scheduledFlush.get().run(); // docB's call is a partial tail, sent by the timer
 
         assertEquals(providerBody, bErr.get().getMessage());
     }
@@ -434,9 +637,6 @@ public class DynamicBatchingQueueTests {
 
     @Test
     public void mismatchedTypeEntryIsIsolatedAndDoesNotFailOtherCallers() {
-        // A valid text-docs request and a mismatched-type request land in the same flush. The mismatched
-        // one has no handler, so it is dispatched on its own and fails; the valid one is in its own group
-        // and still succeeds.
         DynamicBatchingQueue queue = new DynamicBatchingQueue(
             "m",
             config(100, null, 10L),
@@ -998,5 +1198,736 @@ public class DynamicBatchingQueueTests {
         assertEquals("an unsupported type is never sent to the model", 0, predictCalls.get());
         assertNotNull(err.get());
         assertTrue(err.get().getMessage().contains("does not support batch inference"));
+    }
+
+    private static ModelTensorOutput namedTensors(List<String> names) {
+        List<ModelTensor> tensors = new ArrayList<>();
+        for (String name : names) {
+            tensors.add(ModelTensor.builder().name(name).build());
+        }
+        return ModelTensorOutput.builder().mlModelOutputs(ImmutableList.of(ModelTensors.builder().mlModelTensors(tensors).build())).build();
+    }
+
+    private Predictable holdingModel(List<List<String>> docsPerCall, List<ActionListener<MLTaskResponse>> listeners) {
+        return new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                docsPerCall.add(((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs());
+                listeners.add(listener);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+    }
+
+    @Test
+    public void supersededTimerThatStillRunsDoesNothing() {
+        List<AbstractRunnable> timers = new ArrayList<>();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            timers.add(invocation.getArgument(0));
+            return mock(Scheduler.ScheduledCancellable.class);
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a1"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, bErr::set), "b1", "b2")); // sends [a1, b1], carries b2
+        assertEquals(1, calls.get());
+        assertEquals("the round re-armed a timer for the carried tail", 2, timers.size());
+
+        timers.get(0).run();
+        timers.get(0).onRejection(new OpenSearchRejectedExecutionException("late rejection of the superseded timer"));
+        assertEquals("a superseded timer must not send the tail", 1, calls.get());
+        assertNull("a superseded timer must not fail the waiting request", bErr.get());
+        assertNull(b.get());
+
+        timers.get(1).run();
+        assertEquals(2, calls.get());
+        assertEquals(ImmutableList.of("b1", "b2"), resultNames(b.get()));
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void flushAskedForDuringARunningRoundIsNotDropped() throws Exception {
+        CountDownLatch splitEntered = new CountDownLatch(1);
+        CountDownLatch releaseSplit = new CountDownLatch(1);
+        AtomicInteger splits = new AtomicInteger();
+        BatchSplitter blockingSplitter = new BatchSplitter() {
+            @Override
+            public List<List<BatchItem>> split(List<BatchItem> items, BatchInferenceConfig config) {
+                if (splits.incrementAndGet() == 1) {
+                    splitEntered.countDown();
+                    try {
+                        assertTrue(releaseSplit.await(5, TimeUnit.SECONDS));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(e);
+                    }
+                }
+                return super.split(items, config);
+            }
+        };
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(3, null, 10_000L),
+            registry,
+            blockingSplitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        List<List<String>> sent = new ArrayList<>();
+        Predictable echo = model(null, null);
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                sent.add(((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs());
+                echo.asyncPredict(mlInput, listener, channel);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        Thread drainer = new Thread(() -> queue.enqueue(entry(predictor, ActionListener.wrap(a::set, e -> {}), "a1", "a2", "a3", "a4")));
+        drainer.start();
+        assertTrue(splitEntered.await(5, TimeUnit.SECONDS));
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, e -> {}), "b1")); // a fresh group while A is detached
+        queue.flush(); // the timer firing mid-round
+        assertFalse("the round is still running, so it is not idle", queue.isIdle());
+
+        releaseSplit.countDown();
+        drainer.join(5_000L);
+        assertFalse(drainer.isAlive());
+
+        assertEquals(ImmutableList.of(ImmutableList.of("a1", "a2", "a3"), ImmutableList.of("a4", "b1")), sent);
+        assertEquals(ImmutableList.of("a1", "a2", "a3", "a4"), resultNames(a.get()));
+        assertEquals(ImmutableList.of("b1"), resultNames(b.get()));
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void carriedTailTimerIsArmedBeforeTheModelIsCalled() {
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicReference<Boolean> timerArmedAtFirstCall = new AtomicReference<>();
+        Predictable echo = model(null, null);
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                timerArmedAtFirstCall.compareAndSet(null, scheduledFlush.get() != null);
+                echo.asyncPredict(mlInput, listener, channel);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "a1", "a2", "a3"));
+
+        assertEquals(Boolean.TRUE, timerArmedAtFirstCall.get());
+    }
+
+    @Test
+    public void concurrentCallbacksCompleteEachRequestExactlyOnce() throws Exception {
+        List<List<String>> docsPerCall = new ArrayList<>();
+        List<ActionListener<MLTaskResponse>> listeners = new ArrayList<>();
+        Predictable predictor = holdingModel(docsPerCall, listeners);
+        QueueMemoryBudget trackedBudget = new QueueMemoryBudget(Long.MAX_VALUE);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            trackedBudget,
+            ignored -> {}
+        );
+
+        String[][] requests = { { "a1", "a2", "a3" }, { "b1" }, { "c1", "c2" } };
+        List<AtomicInteger> notifications = new ArrayList<>();
+        List<AtomicReference<MLTaskResponse>> responses = new ArrayList<>();
+        for (String[] docs : requests) {
+            AtomicInteger count = new AtomicInteger();
+            AtomicReference<MLTaskResponse> response = new AtomicReference<>();
+            notifications.add(count);
+            responses.add(response);
+            queue.enqueue(entry(predictor, ActionListener.wrap(r -> {
+                count.incrementAndGet();
+                response.set(r);
+            }, e -> count.incrementAndGet()), docs));
+        }
+        assertEquals(
+            ImmutableList.of(ImmutableList.of("a1", "a2"), ImmutableList.of("a3", "b1"), ImmutableList.of("c1", "c2")),
+            docsPerCall
+        );
+
+        CountDownLatch go = new CountDownLatch(1);
+        List<Thread> answerers = new ArrayList<>();
+        for (int call = listeners.size() - 1; call >= 0; call--) {
+            ActionListener<MLTaskResponse> listener = listeners.get(call);
+            List<String> docs = docsPerCall.get(call);
+            Thread answerer = new Thread(() -> {
+                try {
+                    go.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                listener.onResponse(new MLTaskResponse(namedTensors(docs)));
+            });
+            answerers.add(answerer);
+            answerer.start();
+        }
+        go.countDown();
+        for (Thread answerer : answerers) {
+            answerer.join(5_000L);
+            assertFalse(answerer.isAlive());
+        }
+
+        for (int i = 0; i < requests.length; i++) {
+            assertEquals("each request completes exactly once", 1, notifications.get(i).get());
+            assertEquals(ImmutableList.copyOf(requests[i]), resultNames(responses.get(i).get()));
+        }
+        assertEquals(0L, trackedBudget.getReservedBytes());
+    }
+
+    @Test
+    public void byteLimitTailIsCarriedAndFilledByTheNextRequest() {
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(null, 10L, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(a::set, e -> {}), "aaaaaa", "bbbbbb"));
+        assertEquals(1, calls.get());
+        assertNull(a.get());
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, e -> {}), "cccc"));
+
+        assertEquals("6 + 4 bytes fill the 10-byte call, so no timer is needed", 2, calls.get());
+        assertEquals(ImmutableList.of("aaaaaa", "bbbbbb"), resultNames(a.get()));
+        assertEquals(ImmutableList.of("cccc"), resultNames(b.get()));
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void outOfOrderCallbacksCompleteEachRequestWithItsOwnResults() {
+        List<List<String>> docsPerCall = new ArrayList<>();
+        List<ActionListener<MLTaskResponse>> listeners = new ArrayList<>();
+        Predictable predictor = holdingModel(docsPerCall, listeners);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> c = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(a::set, e -> {}), "a1", "a2", "a3"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, e -> {}), "b1"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(c::set, e -> {}), "c1", "c2"));
+        assertEquals(3, listeners.size());
+
+        listeners.get(1).onResponse(new MLTaskResponse(namedTensors(docsPerCall.get(1))));
+        assertEquals(ImmutableList.of("b1"), resultNames(b.get()));
+        assertNull("A still waits for its first call", a.get());
+
+        listeners.get(2).onResponse(new MLTaskResponse(namedTensors(docsPerCall.get(2))));
+        assertEquals(ImmutableList.of("c1", "c2"), resultNames(c.get()));
+        assertNull(a.get());
+
+        listeners.get(0).onResponse(new MLTaskResponse(namedTensors(docsPerCall.get(0))));
+        assertEquals(ImmutableList.of("a1", "a2", "a3"), resultNames(a.get()));
+    }
+
+    @Test
+    public void predictorThatAnswersAndThenThrowsSettlesItsItemsOnce() {
+        AtomicInteger calls = new AtomicInteger();
+        List<ActionListener<MLTaskResponse>> held = new ArrayList<>();
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                List<String> docs = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs();
+                if (calls.incrementAndGet() == 1) {
+                    listener.onResponse(new MLTaskResponse(namedTensors(docs)));
+                    throw new IllegalStateException("predictor threw after answering");
+                }
+                held.add(listener);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+        QueueMemoryBudget trackedBudget = new QueueMemoryBudget(Long.MAX_VALUE);
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            trackedBudget,
+            ignored -> {}
+        );
+        AtomicInteger aNotifications = new AtomicInteger();
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {
+            aNotifications.incrementAndGet();
+            a.set(r);
+        }, e -> {
+            aNotifications.incrementAndGet();
+            aErr.set(e);
+        }), "a1", "a2", "a3"));
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, e -> {}), "b1"));
+        assertEquals("A's second call is still in flight", 0, aNotifications.get());
+
+        held.get(0).onResponse(new MLTaskResponse(namedTensors(ImmutableList.of("a3", "b1"))));
+
+        assertEquals(1, aNotifications.get());
+        assertNull(aErr.get());
+        assertEquals(ImmutableList.of("a1", "a2", "a3"), resultNames(a.get()));
+        assertEquals(0L, trackedBudget.getReservedBytes());
+    }
+
+    @Test
+    public void scheduleFailureFailsItsRequestsBeforeTheRoundCallsTheModel() {
+        AtomicInteger scheduleAttempts = new AtomicInteger();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            if (scheduleAttempts.incrementAndGet() == 2) {
+                throw new OpenSearchRejectedExecutionException("scheduler is shutting down");
+            }
+            scheduledFlush.set(invocation.getArgument(0));
+            return mock(Scheduler.ScheduledCancellable.class);
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicReference<Exception> xErr = new AtomicReference<>();
+        AtomicReference<Boolean> xFailedBeforeTheCall = new AtomicReference<>();
+        Predictable echo = model(null, null);
+        Predictable predictor = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                xFailedBeforeTheCall.set(xErr.get() != null);
+                echo.asyncPredict(mlInput, listener, channel);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+        ModelResultFilter groupX = new ModelResultFilter(false, true, null, null);
+        ModelResultFilter groupY = new ModelResultFilter(true, false, null, null);
+
+        AtomicReference<MLTaskResponse> y = new AtomicReference<>();
+        queue.enqueue(filteredEntry(predictor, groupX, ActionListener.wrap(r -> {}, xErr::set), "x"));
+        queue.enqueue(filteredEntry(predictor, groupY, ActionListener.wrap(r -> {}, e -> {}), "y1"));
+        queue.enqueue(filteredEntry(predictor, groupY, ActionListener.wrap(y::set, e -> {}), "y2"));
+
+        assertTrue(xErr.get() instanceof OpenSearchRejectedExecutionException);
+        assertEquals(Boolean.TRUE, xFailedBeforeTheCall.get());
+        assertEquals(ImmutableList.of("y2"), resultNames(y.get()));
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void immediateRerunSurvivesTimerScheduleFailure() throws Exception {
+        CountDownLatch splitEntered = new CountDownLatch(1);
+        CountDownLatch releaseSplit = new CountDownLatch(1);
+        AtomicInteger splits = new AtomicInteger();
+        BatchSplitter blockingSplitter = new BatchSplitter() {
+            @Override
+            public List<List<BatchItem>> split(List<BatchItem> items, BatchInferenceConfig config) {
+                if (splits.incrementAndGet() == 1) {
+                    splitEntered.countDown();
+                    try {
+                        assertTrue(releaseSplit.await(5, TimeUnit.SECONDS));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(e);
+                    }
+                }
+                return super.split(items, config);
+            }
+        };
+        AtomicInteger scheduleAttempts = new AtomicInteger();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            scheduleAttempts.incrementAndGet();
+            throw new OpenSearchRejectedExecutionException("scheduler is shutting down");
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            blockingSplitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        Predictable predictor = model(new AtomicInteger(), null);
+        ModelResultFilter groupB = new ModelResultFilter(true, false, null, null);
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b1 = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b2 = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+
+        Thread drainer = new Thread(() -> queue.enqueue(entry(predictor, ActionListener.wrap(a::set, e -> {}), "a1", "a2")));
+        drainer.start();
+        assertTrue(splitEntered.await(5, TimeUnit.SECONDS));
+
+        queue.enqueue(filteredEntry(predictor, groupB, ActionListener.wrap(b1::set, bErr::set), "b1"));
+        queue.enqueue(filteredEntry(predictor, groupB, ActionListener.wrap(b2::set, bErr::set), "b2"));
+
+        releaseSplit.countDown();
+        drainer.join(5_000L);
+        assertFalse(drainer.isAlive());
+
+        assertEquals(1, scheduleAttempts.get());
+        assertEquals(ImmutableList.of("a1", "a2"), resultNames(a.get()));
+        assertEquals(ImmutableList.of("b1"), resultNames(b1.get()));
+        assertEquals(ImmutableList.of("b2"), resultNames(b2.get()));
+        assertNull(bErr.get());
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void staleThresholdHandoffArmsTimerForPartialWork() throws Exception {
+        CountDownLatch splitEntered = new CountDownLatch(1);
+        CountDownLatch releaseSplit = new CountDownLatch(1);
+        AtomicInteger splits = new AtomicInteger();
+        BatchSplitter blockingSplitter = new BatchSplitter() {
+            @Override
+            public List<List<BatchItem>> split(List<BatchItem> items, BatchInferenceConfig config) {
+                if (splits.incrementAndGet() == 1) {
+                    splitEntered.countDown();
+                    try {
+                        assertTrue(releaseSplit.await(5, TimeUnit.SECONDS));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(e);
+                    }
+                }
+                return super.split(items, config);
+            }
+        };
+        // The round end cannot arm B's timer because a rerun is due; the empty rerun round must arm it.
+        AtomicInteger scheduleAttempts = new AtomicInteger();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            if (scheduleAttempts.incrementAndGet() == 1) {
+                throw new OpenSearchRejectedExecutionException("first schedule fails");
+            }
+            scheduledFlush.set(invocation.getArgument(0));
+            return mock(Scheduler.ScheduledCancellable.class);
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            blockingSplitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        Predictable predictor = model(new AtomicInteger(), null);
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        QueueEntry entryA = entry(predictor, ActionListener.wrap(a::set, e -> {}), "a1", "a2");
+        DynamicBatchingQueue.EnqueueDecision staleFlush = queue.offer(entryA);
+        assertEquals(DynamicBatchingQueue.EnqueueDecision.FLUSH, staleFlush);
+
+        Thread drainer = new Thread(queue::flush);
+        drainer.start();
+        assertTrue(splitEntered.await(5, TimeUnit.SECONDS));
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, e -> {}), "b"));
+        queue.completeEnqueue(entryA, staleFlush);
+
+        releaseSplit.countDown();
+        drainer.join(5_000L);
+        assertFalse(drainer.isAlive());
+
+        assertEquals(ImmutableList.of("a1", "a2"), resultNames(a.get()));
+        assertNull(b.get());
+        assertEquals("the round end failed to arm B's timer and the empty rerun round retried", 2, scheduleAttempts.get());
+        assertNotNull("the handed-off empty threshold round supplied B's missing timer", scheduledFlush.get());
+
+        scheduledFlush.get().run();
+        assertEquals(ImmutableList.of("b"), resultNames(b.get()));
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void staleScheduleDecisionFlushesAGroupThatNowFillsACall() {
+        AtomicInteger scheduleAttempts = new AtomicInteger();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            scheduleAttempts.incrementAndGet();
+            throw new OpenSearchRejectedExecutionException("scheduler is shutting down");
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        QueueEntry entryA = entry(predictor, ActionListener.wrap(a::set, aErr::set), "a");
+        QueueEntry entryB = entry(predictor, ActionListener.wrap(b::set, bErr::set), "b");
+
+        DynamicBatchingQueue.EnqueueDecision decisionA = queue.offer(entryA);
+        DynamicBatchingQueue.EnqueueDecision decisionB = queue.offer(entryB);
+        assertEquals(DynamicBatchingQueue.EnqueueDecision.SCHEDULE_TIMER, decisionA);
+        assertEquals(DynamicBatchingQueue.EnqueueDecision.FLUSH, decisionB);
+
+        queue.completeEnqueue(entryA, decisionA);
+        queue.completeEnqueue(entryB, decisionB);
+
+        assertEquals(0, scheduleAttempts.get());
+        assertEquals(1, calls.get());
+        assertEquals(ImmutableList.of("a"), resultNames(a.get()));
+        assertEquals(ImmutableList.of("b"), resultNames(b.get()));
+        assertNull(aErr.get());
+        assertNull(bErr.get());
+        assertTrue(queue.isIdle());
+    }
+
+    @Test
+    public void scheduleFailureLeavesRequestsAdmittedAfterItAlone() throws Exception {
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        AtomicReference<Exception> aErr = new AtomicReference<>();
+        AtomicReference<Thread> admitB = new AtomicReference<>();
+        AtomicReference<Thread.State> bStateWhileSchedulerThrew = new AtomicReference<>();
+        AtomicInteger scheduleAttempts = new AtomicInteger();
+        List<Scheduler.ScheduledCancellable> cancellables = new ArrayList<>();
+        Predictable predictor = model(new AtomicInteger(), null);
+        DynamicBatchingQueue[] queueRef = new DynamicBatchingQueue[1];
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            if (scheduleAttempts.incrementAndGet() == 1) {
+                Thread thread = new Thread(() -> queueRef[0].enqueue(entry(predictor, ActionListener.wrap(b::set, bErr::set), "b")));
+                admitB.set(thread);
+                thread.start();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (thread.getState() != Thread.State.BLOCKED && System.nanoTime() < deadline) {
+                    Thread.onSpinWait();
+                }
+                bStateWhileSchedulerThrew.set(thread.getState());
+                throw new OpenSearchRejectedExecutionException("scheduler rejected");
+            }
+            scheduledFlush.set(invocation.getArgument(0));
+            Scheduler.ScheduledCancellable cancellable = mock(Scheduler.ScheduledCancellable.class);
+            cancellables.add(cancellable);
+            return cancellable;
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        queueRef[0] = queue;
+
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {}, aErr::set), "a"));
+        admitB.get().join(5_000L);
+        assertFalse(admitB.get().isAlive());
+
+        assertEquals(
+            "B could not be admitted while A's scheduling failure was handled",
+            Thread.State.BLOCKED,
+            bStateWhileSchedulerThrew.get()
+        );
+        assertTrue(aErr.get() instanceof OpenSearchRejectedExecutionException);
+        assertNull("B was admitted after A's failed requests were taken", bErr.get());
+        assertEquals("B armed its own timer", 2, scheduleAttempts.get());
+        verify(cancellables.get(0), times(0)).cancel();
+
+        scheduledFlush.get().run();
+        assertEquals(ImmutableList.of("b"), resultNames(b.get()));
+    }
+
+    @Test
+    public void staleThresholdDecisionLeavesALaterRequestsTimerAlone() {
+        AtomicBoolean schedulerFails = new AtomicBoolean();
+        List<Scheduler.ScheduledCancellable> cancellables = new ArrayList<>();
+        when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenAnswer(invocation -> {
+            if (schedulerFails.get()) {
+                throw new OpenSearchRejectedExecutionException("scheduler is shutting down");
+            }
+            scheduledFlush.set(invocation.getArgument(0));
+            Scheduler.ScheduledCancellable cancellable = mock(Scheduler.ScheduledCancellable.class);
+            cancellables.add(cancellable);
+            return cancellable;
+        });
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(2, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            ignored -> {}
+        );
+        AtomicInteger calls = new AtomicInteger();
+        Predictable predictor = model(calls, null);
+
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        QueueEntry entryA = entry(predictor, ActionListener.wrap(a::set, e -> {}), "a1", "a2");
+        assertEquals(DynamicBatchingQueue.EnqueueDecision.FLUSH, queue.offer(entryA));
+        queue.flush(); // another flush sends A first
+        assertEquals(ImmutableList.of("a1", "a2"), resultNames(a.get()));
+
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        AtomicReference<Exception> bErr = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, bErr::set), "b"));
+        assertEquals(1, cancellables.size());
+        schedulerFails.set(true);
+
+        queue.completeEnqueue(entryA, DynamicBatchingQueue.EnqueueDecision.FLUSH); // A's stale decision
+
+        verify(cancellables.get(0), times(0)).cancel();
+        assertNull("B keeps its timer and is not failed", bErr.get());
+        assertEquals(1, calls.get());
+
+        scheduledFlush.get().run();
+        assertEquals(ImmutableList.of("b"), resultNames(b.get()));
+    }
+
+    @Test
+    public void flushTimerThatThrowsGoesThroughOnFailureAndLeavesTheQueueUsable() {
+        AtomicInteger idleCalls = new AtomicInteger();
+        DynamicBatchingQueue queue = new DynamicBatchingQueue(
+            "m",
+            config(100, null, 10_000L),
+            registry,
+            splitter,
+            threadPool,
+            budget,
+            q -> {
+                if (idleCalls.incrementAndGet() == 1) {
+                    throw new IllegalStateException("idle callback failed");
+                }
+            }
+        );
+        Predictable predictor = model(new AtomicInteger(), null);
+        AtomicInteger aNotifications = new AtomicInteger();
+        AtomicReference<MLTaskResponse> a = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(r -> {
+            aNotifications.incrementAndGet();
+            a.set(r);
+        }, e -> aNotifications.incrementAndGet()), "a"));
+
+        Runnable firstTimer = scheduledFlush.get();
+        firstTimer.run(); // the flush sends A, then the idle callback throws inside doRun
+
+        assertEquals(1, aNotifications.get());
+        assertEquals(ImmutableList.of("a"), resultNames(a.get()));
+
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        queue.enqueue(entry(predictor, ActionListener.wrap(b::set, e -> {}), "b"));
+        assertTrue("a fresh timer was armed for the next request", scheduledFlush.get() != firstTimer);
+        scheduledFlush.get().run();
+        assertEquals(ImmutableList.of("b"), resultNames(b.get()));
+        assertTrue(queue.isIdle());
     }
 }
