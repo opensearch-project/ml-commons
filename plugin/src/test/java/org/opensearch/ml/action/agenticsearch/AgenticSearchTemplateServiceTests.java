@@ -57,6 +57,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.RemoteTransportException;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.ClusterAdminClient;
@@ -200,6 +201,29 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         doAnswer((Answer<Void>) inv -> {
             ActionListener<IndexResponse> l = inv.getArgument(1);
             l.onFailure(new org.opensearch.index.engine.VersionConflictEngineException(null, "tmpl", "already exists"));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", "desc", null, null, listener);
+
+        assertStatus(listener, RestStatus.CONFLICT, "already exists");
+    }
+
+    @Test
+    public void register_existingId_remoteWrapped_failsConflict() {
+        stubStoredScript(TEMPLATE_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("title", ImmutableMap.of("type", "text"))));
+        stubRenderSucceeds();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<Boolean> l = inv.getArgument(1);
+            l.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<IndexResponse> l = inv.getArgument(1);
+            l.onFailure(remote(new org.opensearch.index.engine.VersionConflictEngineException(null, "tmpl", "already exists")));
             return null;
         }).when(client).index(any(IndexRequest.class), any());
 
@@ -542,6 +566,15 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void getTemplate_indexNotFound_remoteWrapped_failsNotFound() {
+        stubGetFailure(remote(new IndexNotFoundException("idx")));
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.getTemplate("tmpl", listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "not found");
+    }
+
+    @Test
     public void getTemplate_otherException_propagates() {
         stubGetFailure(new RuntimeException("boom"));
         @SuppressWarnings("unchecked")
@@ -624,6 +657,15 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void deleteTemplate_indexNotFound_remoteWrapped_failsNotFound() {
+        stubDelete(null, remote(new IndexNotFoundException("idx")));
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        service.deleteTemplate("tmpl", listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "not found");
+    }
+
+    @Test
     public void deleteTemplate_otherException_propagates() {
         stubDelete(null, new RuntimeException("del boom"));
         @SuppressWarnings("unchecked")
@@ -651,7 +693,43 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         assertStatus(listener, RestStatus.NOT_FOUND, "not found");
     }
 
+    @Test
+    public void update_noParamSchema_documentMissing_remoteWrapped_failsNotFound() {
+        // Production shape: the shard-level failure arrives wrapped in RemoteTransportException.
+        AgenticSearchTemplate patch = AgenticSearchTemplate.builder().templateId("tmpl").description("d").build();
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<UpdateResponse> l = inv.getArgument(1);
+            l.onFailure(remote(new org.opensearch.index.engine.DocumentMissingException(null, "tmpl")));
+            return null;
+        }).when(client).update(any(UpdateRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        service.updateTemplate("tmpl", patch, listener);
+        assertStatus(listener, RestStatus.NOT_FOUND, "Agentic search template not found: tmpl");
+    }
+
+    @Test
+    public void update_noParamSchema_otherException_propagatesOriginal() {
+        AgenticSearchTemplate patch = AgenticSearchTemplate.builder().templateId("tmpl").description("d").build();
+        RemoteTransportException failure = remote(new RuntimeException("update boom"));
+        doAnswer((Answer<Void>) inv -> {
+            ActionListener<UpdateResponse> l = inv.getArgument(1);
+            l.onFailure(failure);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        service.updateTemplate("tmpl", patch, listener);
+        verify(listener).onFailure(failure);
+    }
+
     // ---- helpers -----------------------------------------------------------
+
+    private static RemoteTransportException remote(Exception cause) {
+        return new RemoteTransportException("[node][127.0.0.1:9300][indices:data/write]", cause);
+    }
 
     // A stored template doc as persisted in the system index (parsed by get/list).
     private static final String TEMPLATE_DOC = "{\"template_id\":\"tmpl\",\"index_binding\":\"my-index\","
