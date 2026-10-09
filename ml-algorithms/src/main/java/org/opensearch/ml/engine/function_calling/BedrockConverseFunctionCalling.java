@@ -27,6 +27,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +39,7 @@ import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.Data;
 import lombok.extern.log4j.Log4j2;
@@ -207,6 +209,40 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    @Override
+    public boolean supportsForcedToolCall() {
+        return true;
+    }
+
+    @Override
+    public String forcedToolConfigs(String toolName, String toolDescription, Map<String, Object> inputSchema) {
+        Map<String, Object> toolSpec = new LinkedHashMap<>();
+        toolSpec.put("name", toolName);
+        toolSpec.put("description", toolDescription);
+        toolSpec.put("inputSchema", Map.of("json", inputSchema));
+        Map<String, Object> toolConfig = new LinkedHashMap<>();
+        toolConfig.put("tools", List.of(Map.of("toolSpec", toolSpec)));
+        toolConfig.put("toolChoice", Map.of("tool", Map.of("name", toolName)));
+        return ", \"toolConfig\": " + StringUtils.toJson(toolConfig);
+    }
+
+    @Override
+    public String extractForcedToolInput(ModelTensorOutput modelTensorOutput, String toolName) {
+        Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        List<?> toolCalls;
+        try {
+            toolCalls = JsonPath.read(dataAsMap, CALL_PATH);
+        } catch (PathNotFoundException e) {
+            return null;
+        }
+        for (Object call : toolCalls) {
+            if (call instanceof Map && toolName.equals(((Map<?, ?>) call).get(NAME))) {
+                return StringUtils.toJson(((Map<?, ?>) call).get(INPUT));
+            }
+        }
+        return null;
     }
 
     @Data

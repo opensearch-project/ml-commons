@@ -27,6 +27,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.core.xcontent.XContentParserUtils;
+import org.opensearch.ml.action.agenticsearch.SearchTemplateFillToolValidator;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateAction;
@@ -83,6 +84,13 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
         String tenantId = mlAgentUpdateInput.getTenantId();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+
+        try {
+            SearchTemplateFillToolValidator.validate(mlAgentUpdateInput.getTools(), mlFeatureEnabledSetting);
+        } catch (Exception e) {
+            actionListener.onFailure(e);
             return;
         }
 
