@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.junit.Test;
+import org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate;
 
 /** Clause-role recovery, description assembly, and enum tables (no cluster; hand-built JSON). */
 public class TemplateStructureAnalyzerTests {
@@ -99,7 +100,7 @@ public class TemplateStructureAnalyzerTests {
     }
 
     @Test
-    public void locate_findsValuesAndKeys_withStablePathFlag() {
+    public void locate_findsValuesAndKeys() {
         Map<String, Object> schema = productSchema();
         TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
         Map<String, Object> rendered = productRendered(markers.renderParams());
@@ -109,9 +110,8 @@ public class TemplateStructureAnalyzerTests {
         assertTrue(located.containsKey("lex_query"));
         assertTrue(located.get("sort_by").asKey); // used as a JSON key -> field selector
         assertFalse(located.get("lex_query").asKey);
-        // A top-level scalar path is stable; one nested in an array is not.
-        assertTrue(located.get("size").isStablePath());
-        assertFalse(located.get("color").isStablePath());
+        assertEquals(List.of("size"), located.get("size").path);
+        assertEquals(List.of("query", "bool", "filter", 1, "term", "color"), located.get("color").path);
     }
 
     @Test
@@ -553,6 +553,162 @@ public class TemplateStructureAnalyzerTests {
         Map<String, Object> rendered = map("query", map("multi_match", map("query", rp.get("q"), "fields", list(rp.get("f1")))));
 
         assertEquals("Full-text search.", TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
+    @Test
+    public void classify_mustNotTerm_describedAsExclusion() {
+        checkSingle(
+            "string",
+            mk -> map("bool", map("must_not", list(map("term", map("brand", mk))))),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Exclude results with this exact brand value."
+        );
+        checkSingle(
+            "string",
+            mk -> map("bool", map("must_not", list(map("match", map("title", mk))))),
+            TemplateStructureAnalyzer.ROLE_FULL_TEXT,
+            "Excludes results that match: full-text query matched against the title field."
+        );
+    }
+
+    @Test
+    public void classify_shouldTerm_describedAsScoringMatch() {
+        checkSingle(
+            "string",
+            mk -> map("bool", map("should", list(map("term", map("brand", mk))))),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Match on exact brand value (should clause, contributes to scoring)."
+        );
+        // The innermost bool governs: a must_not nested under an outer should still excludes.
+        checkSingle(
+            "string",
+            mk -> map("bool", map("should", list(map("bool", map("must_not", list(map("term", map("brand", mk)))))))),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Exclude results with this exact brand value."
+        );
+    }
+
+    @Test
+    public void describeTemplate_groupsMustNotAsExcludes() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("category", spec("string", false));
+        schema.put("brand", spec("string", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rp = markers.renderParams();
+        Map<String, Object> rendered = map(
+            "query",
+            map(
+                "bool",
+                map(
+                    "filter",
+                    list(map("term", map("category", rp.get("category")))),
+                    "must_not",
+                    list(map("term", map("brand", rp.get("brand"))))
+                )
+            )
+        );
+
+        assertEquals("Filters by category; excludes by brand.", TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
+    @Test
+    public void classify_aggregationParams_yieldNoRole() {
+        // terms is an aggregation type here, not a terms filter.
+        checkUnclassified("string", mk -> map("aggs", map("by_brand", map("terms", map("field", mk)))));
+        checkUnclassified("number", mk -> map("aggregations", map("by_brand", map("terms", map("field", "brand", "size", mk)))));
+
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("agg_size", spec("number", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = map(
+            "aggs",
+            map("by_brand", map("terms", map("field", "brand", "size", markers.renderParams().get("agg_size"))))
+        );
+        assertNull(TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
+    @Test
+    public void alignedValueAt_readsOnlyWhenArrayLengthsMatch() {
+        List<Object> path = list("sort", 0, "price", "order");
+        Map<String, Object> rendered = map("sort", list(map("price", map("order", "mk"))));
+
+        assertEquals(
+            "desc",
+            TemplateStructureAnalyzer.alignedValueAt(rendered, map("sort", list(map("price", map("order", "desc")))), path)
+        );
+        assertNull(
+            TemplateStructureAnalyzer
+                .alignedValueAt(rendered, map("sort", list(map("price", map("order", "desc")), map("_score", map("order", "desc")))), path)
+        );
+        // A container at the path, or a missing slot, has no scalar default.
+        assertNull(TemplateStructureAnalyzer.alignedValueAt(rendered, map("sort", list(map("price", map()))), path));
+        assertNull(TemplateStructureAnalyzer.alignedValueAt(rendered, map("sort", list(map("price", map("order", map())))), path));
+    }
+
+    @Test
+    public void withoutMarkers_blanksMarkerScalarsAndKeepsShape() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("q", spec("string", true));
+        schema.put("n", spec("number", true));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rp = markers.renderParams();
+        Map<String, Object> defaults = map("size", rp.get("n"), "sort", list(map("f", map("order", rp.get("q")))), "from", 0L);
+
+        Map<String, Object> scrubbed = TemplateStructureAnalyzer.withoutMarkers(defaults, markers);
+
+        assertNull(scrubbed.get("size"));
+        assertNull(TemplateStructureAnalyzer.valueAt(scrubbed, list("sort", 0, "f", "order")));
+        assertEquals(0L, scrubbed.get("from"));
+        assertNull(TemplateStructureAnalyzer.withoutMarkers(null, markers));
+    }
+
+    @Test
+    public void classify_multiMatchTypeIsEnum() {
+        checkSingle(
+            "string",
+            mk -> map("multi_match", map("query", "x", "fields", list("title"), "type", mk)),
+            TemplateStructureAnalyzer.ROLE_MULTI_MATCH_TYPE,
+            "How the multi_match query combines matches across its fields."
+        );
+        assertEquals(
+            List.of("best_fields", "most_fields", "cross_fields", "phrase", "phrase_prefix", "bool_prefix"),
+            TemplateStructureAnalyzer.vocabEnum(roleFacts(TemplateStructureAnalyzer.ROLE_MULTI_MATCH_TYPE))
+        );
+        // Gated on the multi_match clause: a "type" elsewhere takes another vocabulary.
+        checkUnclassified("string", mk -> map("some_clause", map("type", mk)));
+    }
+
+    @Test
+    public void classify_shippedDefaultTemplateLexTypeGetsMultiMatchTypeEnum() {
+        // QueryPlanningPromptTemplate.DEFAULT_SEARCH_TEMPLATE renders lex_type (quoted, so a
+        // string) at query.bool.should[0].multi_match.type with a body default of best_fields.
+        Map<String, Object> derived = MustacheTemplateAnalyzer.derive(QueryPlanningPromptTemplate.DEFAULT_SEARCH_TEMPLATE);
+        assertEquals("string", ((Map<?, ?>) derived.get("lex_type")).get(MustacheTemplateAnalyzer.TYPE_KEY));
+
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("lex_query", spec("string", true));
+        schema.put("lex_type", spec("string", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rp = markers.renderParams();
+        Map<String, Object> rendered = map(
+            "query",
+            map(
+                "bool",
+                map(
+                    "should",
+                    list(map("multi_match", map("query", rp.get("lex_query"), "fields", list("*^1.0"), "type", rp.get("lex_type")))),
+                    "minimum_should_match",
+                    1
+                )
+            )
+        );
+
+        TemplateStructureAnalyzer.Facts facts = TemplateStructureAnalyzer
+            .classify(TemplateStructureAnalyzer.locate(rendered, markers).get("lex_type"), rendered);
+        assertEquals(TemplateStructureAnalyzer.ROLE_MULTI_MATCH_TYPE, facts.role);
+        assertTrue(TemplateStructureAnalyzer.vocabEnum(facts).contains("best_fields"));
+        // An option slot keeps its wording under should.
+        assertEquals("How the multi_match query combines matches across its fields.", TemplateStructureAnalyzer.describe(facts, null));
     }
 
     /** Builds a one-param schema, renders it via {@code renderWith}, then classifies and describes it. */
